@@ -1,26 +1,14 @@
-# Ralph TUI Configuration for Client Fulfillment App V2 Rebuild
-# Using Beads-BV for intelligent task selection with graph analysis
-
-# Agent to use for execution
 agent = "claude"
+tracker = "beads"
+configVersion = "2.1"
 
-# Tracker configuration
-tracker = "beads-bv"
+[agentOptions]
+model = "opus"
+dangerouslySkipPermissions = false
 
 [trackerOptions]
 beadsDir = ".beads"
 epicId = "client-onboarding-v2-c3y"
-# Uncomment to filter by labels:
-# labels = "backend,frontend"
-
-[agentOptions]
-# Claude Code options
-model = "opus"
-dangerouslySkipPermissions = false
 
 [sandbox]
 enabled = false
-
-[logging]
-level = "info"
-showTimestamps = true
