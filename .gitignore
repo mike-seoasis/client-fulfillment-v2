@@ -1,0 +1,47 @@
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+
+# Google OAuth credentials
+credentials.json
+token.json
+
+# Temporary/intermediate files
+.tmp/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# bv (beads viewer) local config and caches
+.bv/
+
+# Zip files (old app archive)
+*.zip
+
+# Beads local state (keep config, ignore runtime)
+.beads/*.db
+.beads/*.db-*
+.beads/*.sock
+.beads/*.pid
+.beads/*.lock
+.beads/*.log
+.beads/events.jsonl

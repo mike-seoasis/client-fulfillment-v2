@@ -1,0 +1,564 @@
+
+openapi: 3.1.0
+info:
+  title: Client Fulfillment App V2
+  version: 2.0.0
+  description: |
+    A complete rebuild of the SEO content generation pipeline with a modern, modular architecture, a new React-based frontend, and powerful NLP-driven content optimization features.
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development server
+  - url: https://{username}.railway.app/api/v1
+    description: Production server on Railway
+    variables:
+      username:
+        default: your-username
+        description: Your Railway username
+
+tags:
+  - name: Projects
+    description: Manage client projects
+  - name: Phases
+    description: Execute and monitor pipeline phases
+  - name: Content
+    description: Manage and edit generated content
+  - name: NLP
+    description: Access content optimization and analysis tools
+  - name: Standalone Tools
+    description: Access standalone utilities like the Shopify Schema Generator
+
+paths:
+  /projects:
+    get:
+      tags:
+        - Projects
+      summary: List all projects
+      description: Retrieve a list of all client projects with their current status and metadata.
+      operationId: list_projects
+      responses:
+        '200':
+          description: A list of projects.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Project'
+    post:
+      tags:
+        - Projects
+      summary: Create a new project
+      description: Create a new client project and initialize its workflow.
+      operationId: create_project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectCreate'
+      responses:
+        '201':
+          description: The newly created project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          description: Invalid input.
+
+  /projects/{projectId}:
+    get:
+      tags:
+        - Projects
+      summary: Get project by ID
+      description: Retrieve a single project by its unique ID.
+      operationId: get_project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The requested project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '404':
+          description: Project not found.
+    put:
+      tags:
+        - Projects
+      summary: Update a project
+      description: Update the details of an existing project.
+      operationId: update_project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectUpdate'
+      responses:
+        '200':
+          description: The updated project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '404':
+          description: Project not found.
+    delete:
+      tags:
+        - Projects
+      summary: Delete a project
+      description: Delete a project and all its associated data.
+      operationId: delete_project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Project deleted successfully.
+        '404':
+          description: Project not found.
+
+  /projects/{projectId}/phases/{phaseName}/run:
+    post:
+      tags:
+        - Phases
+      summary: Run a specific phase
+      description: Start the execution of a specific phase in the content pipeline for a given project.
+      operationId: run_phase
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: phaseName
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [crawl, categorize, label, keyword_research, paa_enrichment, brand_config, content_generation]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PhaseConfig'
+      responses:
+        '202':
+          description: Phase execution started.
+        '400':
+          description: Invalid configuration.
+        '404':
+          description: Project not found.
+
+  /projects/{projectId}/phases/{phaseName}/status:
+    get:
+      tags:
+        - Phases
+      summary: Get phase status
+      description: Check the current status of a specific phase for a given project.
+      operationId: get_phase_status
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: phaseName
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [crawl, categorize, label, keyword_research, paa_enrichment, brand_config, content_generation]
+      responses:
+        '200':
+          description: The current status of the phase.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhaseStatus'
+        '404':
+          description: Project or phase not found.
+
+  /nlp/analyze-content:
+    post:
+      tags:
+        - NLP
+      summary: Analyze content for SEO optimization
+      description: Run a comprehensive NLP analysis on a piece of content to get an optimization score and recommendations.
+      operationId: analyze_content
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContentAnalysisRequest'
+      responses:
+        '200':
+          description: Content analysis results.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentAnalysisResponse'
+
+  /nlp/analyze-competitors:
+    post:
+      tags:
+        - NLP
+      summary: Analyze competitors for a keyword
+      description: Fetch SERP data for a keyword and analyze the top competitors to extract insights.
+      operationId: analyze_competitors
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompetitorAnalysisRequest'
+      responses:
+        '200':
+          description: Competitor analysis results.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompetitorAnalysisResponse'
+
+  /nlp/recommend-terms:
+    post:
+      tags:
+        - NLP
+      summary: Recommend terms for content
+      description: Get a list of recommended terms and entities to include in your content based on competitor analysis.
+      operationId: recommend_terms
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TermRecommendationRequest'
+      responses:
+        '200':
+          description: A list of recommended terms and entities.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TermRecommendationResponse'
+
+  /projects/{projectId}/content:
+    get:
+      tags:
+        - Content
+      summary: Get all generated content for a project
+      description: Retrieve all the generated content pieces for a specific project.
+      operationId: get_all_content
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: A list of content pieces.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Content'
+        '404':
+          description: Project not found.
+
+  /projects/{projectId}/content/{contentId}:
+    get:
+      tags:
+        - Content
+      summary: Get a single content piece
+      description: Retrieve a single generated content piece by its ID.
+      operationId: get_content_by_id
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: contentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The requested content piece.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Content'
+        '404':
+          description: Content not found.
+    put:
+      tags:
+        - Content
+      summary: Update a content piece
+      description: Update the text or metadata of a generated content piece.
+      operationId: update_content
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: contentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContentUpdate'
+      responses:
+        '200':
+          description: The updated content piece.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Content'
+        '404':
+          description: Content not found.
+
+components:
+  schemas:
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The unique identifier for the project.
+        name:
+          type: string
+          description: The name of the project.
+        website_url:
+          type: string
+          format: url
+          description: The URL of the client's website.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        phase_status:
+          type: object
+          properties:
+            crawl: { $ref: '#/components/schemas/PhaseStatus' }
+            categorize: { $ref: '#/components/schemas/PhaseStatus' }
+            label: { $ref: '#/components/schemas/PhaseStatus' }
+            keyword_research: { $ref: '#/components/schemas/PhaseStatus' }
+            paa_enrichment: { $ref: '#/components/schemas/PhaseStatus' }
+            brand_config: { $ref: '#/components/schemas/PhaseStatus' }
+            content_generation: { $ref: '#/components/schemas/PhaseStatus' }
+
+    ProjectCreate:
+      type: object
+      required:
+        - name
+        - website_url
+      properties:
+        name:
+          type: string
+        website_url:
+          type: string
+          format: url
+
+    ProjectUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        website_url:
+          type: string
+          format: url
+
+    PhaseConfig:
+      type: object
+      description: A flexible object to hold the configuration for any given phase.
+      properties:
+        max_pages:
+          type: integer
+          description: (Crawl) Max pages to crawl.
+        include_patterns:
+          type: string
+          description: (Crawl) Comma-separated URL patterns to include.
+        exclude_patterns:
+          type: string
+          description: (Crawl) Comma-separated URL patterns to exclude.
+
+    PhaseStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, in_progress, completed, failed]
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        progress:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 100
+        message:
+          type: string
+
+    Content:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: url
+        h1:
+          type: string
+        title_tag:
+          type: string
+        meta_description:
+          type: string
+        top_description:
+          type: string
+        bottom_description:
+          type: string
+        word_count:
+          type: integer
+        optimization_score:
+          type: integer
+
+    ContentUpdate:
+      type: object
+      properties:
+        h1:
+          type: string
+        title_tag:
+          type: string
+        meta_description:
+          type: string
+        top_description:
+          type: string
+        bottom_description:
+          type: string
+
+    ContentAnalysisRequest:
+      type: object
+      required:
+        - content
+        - keyword
+      properties:
+        content:
+          type: string
+          description: The HTML content to analyze.
+        keyword:
+          type: string
+          description: The primary keyword for the content.
+
+    ContentAnalysisResponse:
+      type: object
+      properties:
+        score:
+          type: integer
+          description: The overall optimization score (0-100).
+        recommendations:
+          type: array
+          items:
+            type: string
+          description: A list of actionable recommendations.
+        word_count:
+          type: integer
+        readability_score:
+          type: number
+
+    CompetitorAnalysisRequest:
+      type: object
+      required:
+        - keyword
+      properties:
+        keyword:
+          type: string
+
+    CompetitorAnalysisResponse:
+      type: object
+      properties:
+        avg_word_count:
+          type: integer
+        top_terms:
+          type: array
+          items:
+            type: string
+        top_entities:
+          type: array
+          items:
+            type: string
+
+    TermRecommendationRequest:
+      type: object
+      required:
+        - keyword
+      properties:
+        keyword:
+          type: string
+
+    TermRecommendationResponse:
+      type: object
+      properties:
+        terms:
+          type: array
+          items:
+            type: object
+            properties:
+              term:
+                type: string
+              relevance:
+                type: number
+        entities:
+          type: array
+          items:
+            type: object
+            properties:
+              entity:
+                type: string
+              relevance:
+                type: number

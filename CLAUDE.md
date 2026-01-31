@@ -68,4 +68,36 @@ You sit between human intent (directives) and deterministic execution (Python sc
 
 Be pragmatic. Be reliable. Self-anneal.
 
+---
 
+## Design Context
+
+### Users
+Internal operations team onboarding new clients. They need efficiency but also an interface that feels premium—something they're proud to work in daily. The tool should make their job feel elevated, not like data entry.
+
+### Brand Personality
+**Warm, helpful, human.** The interface should feel like a knowledgeable colleague rather than cold software. Approachable but polished. Friendly without being casual. Premium without being pretentious.
+
+### Aesthetic Direction
+- **Visual tone:** Light, airy, sophisticated. Soft neutrals with warm accents. Think feathery, floating, breathing room.
+- **Reference:** Airtable's approachable flexibility, but warmer and more premium
+- **Anti-reference:** Dense enterprise dashboards, cold corporate blues, cluttered interfaces
+- **Theme:** Light mode only—supports the airy, sophisticated aesthetic
+- **Color palette:** Warm palette—golds, creams, soft corals, warm grays. Avoid cold blues and harsh contrasts.
+
+### Design Principles
+
+1. **Breathe** — Generous whitespace. Let elements float. Never crowd the interface. Sophistication lives in what you leave out.
+
+2. **Warm the details** — Soft shadows over hard edges. Rounded corners. Warm grays over cool. Every micro-decision should add warmth.
+
+3. **Guide gently** — Clear visual hierarchy. Obvious next steps. The interface should feel like a helpful hand, not a demanding form.
+
+4. **Elevate the mundane** — Even routine tasks should feel considered. Thoughtful transitions, pleasant feedback, small moments of polish.
+
+5. **Respect the work** — Clean, scannable, efficient. Premium doesn't mean slow. The team should feel capable and fast, not bogged down by decoration.
+
+### Technical Notes
+- Accessibility: Standard best practices (reasonable contrast, keyboard navigation, semantic HTML)
+- Typography: Favor readable, friendly typefaces with good weight variety
+- Motion: Subtle, purposeful—enhance understanding, never distract
