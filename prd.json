@@ -3,23 +3,22 @@
   "description": "Ready tasks batch",
   "userStories": [
     {
-      "id": "client-onboarding-v2-c3y.92",
-      "title": "Implement Flesch-Kincaid readability calculation",
-      "description": "ERROR LOGGING REQUIREMENTS:\n- Log method entry/exit at DEBUG level with parameters (sanitized)\n- Log all exceptions with full stack trace and context\n- Include entity IDs (project_id, page_id) in all service logs\n- Log validation failures with field names and rejected values\n- Log state transitions (phase changes) at INFO level\n- Add timing logs for operations >1 second",
+      "id": "client-onboarding-v2-c3y.93",
+      "title": "Add competitor analysis caching (7d TTL)",
+      "description": "ERROR LOGGING REQUIREMENTS:\n- Log method entry/exit at DEBUG level with parameters (sanitized)\n- Log all exceptions with full stack trace and context\n- Include entity IDs (project_id, page_id) in all service logs\n- Log validation failures with field names and rejected values\n- Log state transitions (phase changes) at INFO level\n- Add timing logs for operations >1 second\n\nRAILWAY DEPLOYMENT REQUIREMENTS:\n- Connect via REDIS_URL environment variable (Railway provides this)\n- Handle Redis connection failures gracefully (cache is optional)\n- Use SSL/TLS for Redis connections in production\n- Implement connection retry logic for cold starts",
       "acceptanceCriteria": [],
       "passes": true,
       "completionNotes": "Completed by agent"
     },
     {
-      "id": "client-onboarding-v2-c3y.128",
-      "title": "Build PAAEnrichmentPanel with question review",
+      "id": "client-onboarding-v2-c3y.129",
+      "title": "Build BrandConfigPanel with document upload and editor",
       "description": "ERROR LOGGING REQUIREMENTS:\n- Implement React Error Boundaries for all route components\n- Log caught errors to console with component stack\n- Set up global window.onerror and unhandledrejection handlers\n- Log API errors with endpoint, status, response body\n- Include user action context in error logs\n- Set up error reporting service integration point (e.g., Sentry stub)\n\nRAILWAY DEPLOYMENT REQUIREMENTS:\n- Build as static assets (npm run build)\n- API URL via VITE_API_URL environment variable\n- Configure for production build (NODE_ENV=production)\n- Can deploy to Railway static hosting or separate service\n- Use relative paths or env-configured absolute URLs",
       "acceptanceCriteria": [],
-      "passes": true,
-      "completionNotes": "Completed by agent"
+      "passes": false
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-01T23:12:46.794Z"
+    "updatedAt": "2026-02-01T23:16:20.368Z"
   }
 }
