@@ -320,3 +320,31 @@ logger = get_logger(__name__)
   - Pre-existing mypy errors in config.py, logging.py, redis.py are known issues
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.52
+- **What was implemented**: SecondaryKeywordService for selecting secondary keywords (Step 6 of keyword research)
+- **Files changed**:
+  - `backend/app/services/secondary_keywords.py` (new) - Full service with specific + broader keyword selection
+  - `backend/app/services/__init__.py` - Added secondary keyword exports
+- **Features**:
+  - Selects 3-5 secondary keywords as a mix of SPECIFIC + BROADER terms
+  - 2-3 specific keywords (lower volume than primary, from Step 4 output)
+  - 1-2 broader terms with volume > 1000 (from all keywords)
+  - Excludes primary keyword from selection
+  - Excludes keywords already used as primary elsewhere (via used_primaries set)
+  - Configurable thresholds (min/max specific, min/max broader, volume threshold)
+  - Comprehensive error logging per requirements
+- **API**:
+  - `SecondaryKeywordService.select_secondary(collection_title, primary_keyword, specific_keywords, all_keywords, used_primaries, ...)`
+  - `SecondaryKeywordRequest` dataclass for structured requests
+  - `SecondaryKeywordResult` with secondary_keywords, specific_count, broader_count, total_count
+  - `get_secondary_keyword_service()` singleton getter
+  - `select_secondary_keywords()` convenience function
+- **Learnings:**
+  - Secondary keywords require two input lists: specific keywords (from Step 4) AND all keywords (for broader terms)
+  - Broader terms are non-specific keywords with volume > 1000 - they capture related, higher-volume searches
+  - used_primaries set prevents cross-collection duplicate primary keywords (important for multi-page projects)
+  - Selection is deterministic (no LLM needed) - just filtering and sorting by volume
+  - Fallback: if not enough broader terms, fill remaining slots with more specific keywords
+  - Service follows established pattern: dataclasses for request/result, singleton with `get_*()` getter
+---
+
