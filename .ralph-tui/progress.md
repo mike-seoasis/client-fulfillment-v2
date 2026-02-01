@@ -240,3 +240,32 @@ logger = get_logger(__name__)
   - Pre-existing mypy errors in config.py, logging.py, redis.py are known issues
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.49
+- **What was implemented**: KeywordVolumeService for batch volume lookup with Redis caching (Step 2 of keyword research)
+- **Files changed**:
+  - `backend/app/services/keyword_volume.py` (new) - Full batch volume lookup service
+  - `backend/app/services/__init__.py` - Added keyword volume exports
+- **Features**:
+  - Cache-first approach: check Redis before API calls
+  - Batch volume lookup via Keywords Everywhere API (uses existing `get_keyword_data_batch`)
+  - Automatic caching of API results for future lookups (30-day TTL)
+  - `VolumeStats` dataclass with cache_hits, cache_misses, api_lookups, api_errors, cache_hit_rate
+  - Graceful degradation when cache or API unavailable
+  - Keyword normalization and deduplication
+  - Comprehensive logging per error logging requirements
+- **API**:
+  - `KeywordVolumeService.lookup_volumes(keywords, country, data_source, project_id, page_id)`
+  - `KeywordVolumeService.lookup_single(keyword, ...)` - convenience for single keyword
+  - `KeywordVolumeData` dataclass with volume, cpc, competition, trend, from_cache flag
+  - `KeywordVolumeResult` with keywords list, stats, credits_used
+  - `get_keyword_volume_service()` singleton getter
+  - `lookup_keyword_volumes()` convenience function
+- **Learnings:**
+  - Cache-first pattern: check cache → batch lookup misses → cache results
+  - Use `from_cache` flag on results to indicate data source for debugging/analytics
+  - Keyword normalization (lowercase, strip, single spaces) ensures cache key consistency
+  - `VolumeStats` tracks complete operation statistics for monitoring
+  - Composing services: KeywordVolumeService uses KeywordCacheService + KeywordsEverywhereClient
+  - Pre-existing mypy errors in config.py, logging.py, redis.py are known issues
+---
+

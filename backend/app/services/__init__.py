@@ -46,6 +46,17 @@ from app.services.keyword_ideas import (
     generate_keyword_ideas,
     get_keyword_idea_service,
 )
+from app.services.keyword_volume import (
+    KeywordVolumeData,
+    KeywordVolumeLookupError,
+    KeywordVolumeResult,
+    KeywordVolumeService,
+    KeywordVolumeServiceError,
+    KeywordVolumeValidationError,
+    VolumeStats,
+    get_keyword_volume_service,
+    lookup_keyword_volumes,
+)
 from app.services.label import (
     BatchLabelResult,
     LabelGenerationError,
@@ -142,4 +153,14 @@ __all__ = [
     "KeywordIdeaResult",
     "generate_keyword_ideas",
     "get_keyword_idea_service",
+    # Keyword volume service
+    "KeywordVolumeService",
+    "KeywordVolumeServiceError",
+    "KeywordVolumeLookupError",
+    "KeywordVolumeValidationError",
+    "KeywordVolumeData",
+    "KeywordVolumeResult",
+    "VolumeStats",
+    "lookup_keyword_volumes",
+    "get_keyword_volume_service",
 ]
