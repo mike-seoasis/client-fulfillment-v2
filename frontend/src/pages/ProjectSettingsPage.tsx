@@ -31,6 +31,7 @@ import {
 } from 'lucide-react'
 import { useApiQuery } from '@/lib/hooks/useApiQuery'
 import { useToastMutation } from '@/lib/hooks/useToastMutation'
+import { useOptimisticMutation } from '@/lib/hooks/useOptimisticMutation'
 import { api } from '@/lib/api'
 import { addBreadcrumb, reportError } from '@/lib/errorReporting'
 import { Button } from '@/components/ui/button'
@@ -336,7 +337,6 @@ function DangerZone({
 export function ProjectSettingsPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
 
   // Form state
   const [name, setName] = useState('')
@@ -384,26 +384,41 @@ export function ProjectSettingsPage() {
     }
   }, [name, description, status, project])
 
-  // Update project mutation
-  const updateMutation = useToastMutation<ProjectDetail, Error, UpdateProjectInput>({
+  // Update project mutation with optimistic updates
+  const updateMutation = useOptimisticMutation<ProjectDetail, UpdateProjectInput, ProjectDetail>({
     mutationFn: (data) =>
       api.patch<ProjectDetail>(`/api/projects/${projectId}`, data, {
         userAction: 'Update project settings',
         component: 'ProjectSettingsPage',
       }),
+    queryKey: ['project', projectId],
+    getOptimisticData: (currentData, data) => {
+      // Current data should always exist since we only render when project is loaded
+      if (!currentData) {
+        console.warn('[ProjectSettingsPage] Optimistic update called without current data')
+        return currentData as unknown as ProjectDetail
+      }
+      return {
+        ...currentData,
+        ...(data.name !== undefined ? { name: data.name } : {}),
+        ...(data.description !== undefined ? { description: data.description } : {}),
+        ...(data.status !== undefined ? { status: data.status } : {}),
+        updated_at: new Date().toISOString(),
+      }
+    },
+    invalidateKeys: [['projects']],
     userAction: 'Update project',
+    component: 'ProjectSettingsPage',
+    entityIds: { projectId },
     successMessage: 'Settings saved',
     successDescription: 'Your changes have been saved successfully.',
     onSuccess: () => {
-      addBreadcrumb('Project settings updated', 'mutation', { projectId })
-      queryClient.invalidateQueries({ queryKey: ['project', projectId] })
-      queryClient.invalidateQueries({ queryKey: ['projects'] })
       setHasChanges(false)
     },
   })
 
-  // Archive mutation
-  const archiveMutation = useToastMutation<ProjectDetail, Error, void>({
+  // Archive mutation with optimistic updates
+  const archiveMutation = useOptimisticMutation<ProjectDetail, void, ProjectDetail>({
     mutationFn: () => {
       const newStatus = project?.status === 'archived' ? 'active' : 'archived'
       return api.patch<ProjectDetail>(
@@ -415,16 +430,28 @@ export function ProjectSettingsPage() {
         }
       )
     },
+    queryKey: ['project', projectId],
+    getOptimisticData: (currentData) => {
+      // Current data should always exist since we only render when project is loaded
+      if (!currentData) {
+        console.warn('[ProjectSettingsPage] Optimistic update called without current data')
+        return currentData as unknown as ProjectDetail
+      }
+      const newStatus = currentData.status === 'archived' ? 'active' : 'archived'
+      return {
+        ...currentData,
+        status: newStatus,
+        updated_at: new Date().toISOString(),
+      }
+    },
+    invalidateKeys: [['projects']],
     userAction: project?.status === 'archived' ? 'Unarchive project' : 'Archive project',
+    component: 'ProjectSettingsPage',
+    entityIds: { projectId },
     successMessage: project?.status === 'archived' ? 'Project unarchived' : 'Project archived',
     successDescription: project?.status === 'archived'
       ? 'Project has been restored.'
       : 'Project has been archived.',
-    onSuccess: () => {
-      addBreadcrumb('Project archive status changed', 'mutation', { projectId })
-      queryClient.invalidateQueries({ queryKey: ['project', projectId] })
-      queryClient.invalidateQueries({ queryKey: ['projects'] })
-    },
   })
 
   // Validation
