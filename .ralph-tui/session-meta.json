@@ -1,8 +1,8 @@
 {
-  "id": "15625871-1db7-4d86-8d41-29b7984422c0",
+  "id": "a570232e-fc08-4197-b903-cc2da20001d2",
   "status": "running",
-  "startedAt": "2026-02-01T21:41:03.249Z",
-  "updatedAt": "2026-02-01T21:41:03.249Z",
+  "startedAt": "2026-02-01T21:46:59.073Z",
+  "updatedAt": "2026-02-01T21:46:59.073Z",
   "agentPlugin": "claude",
   "trackerPlugin": "json",
   "prdPath": "prd.json",
