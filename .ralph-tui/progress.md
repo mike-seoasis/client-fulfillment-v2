@@ -371,3 +371,28 @@ logger = get_logger(__name__)
   - Pre-existing mypy errors in config.py, logging.py, redis.py are known issues
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.54
+- **What was implemented**: Keyword research phase API endpoints at /api/v1/projects/{id}/phases/keyword_research
+- **Files changed**:
+  - `backend/app/schemas/keyword_research.py` (new) - Pydantic schemas for all keyword research operations
+  - `backend/app/schemas/__init__.py` - Added keyword research schema exports
+  - `backend/app/api/v1/endpoints/keyword_research.py` (new) - Full keyword research API endpoints
+  - `backend/app/api/v1/__init__.py` - Added keyword research router registration
+- **Endpoints created**:
+  - POST `/phases/keyword_research/ideas` - Generate 20-30 keyword ideas (Step 1, LLM)
+  - POST `/phases/keyword_research/volumes` - Look up keyword volumes (Step 2, API + cache)
+  - POST `/phases/keyword_research/specificity` - Filter by specificity (Step 4, LLM)
+  - POST `/phases/keyword_research/primary` - Select primary keyword (Step 5)
+  - POST `/phases/keyword_research/secondary` - Select secondary keywords (Step 6)
+  - POST `/phases/keyword_research/full` - Run full pipeline (Steps 1-6)
+  - GET `/phases/keyword_research/stats` - Get keyword research statistics
+- **Learnings:**
+  - Phase endpoints follow established pattern: router at `endpoints/<phase>.py`, registered with prefix `/projects/{project_id}/phases/<phase>`
+  - Service objects (dataclasses) need explicit conversion to/from Pydantic schemas for API responses
+  - Pydantic Field() with default=None still requires explicit default= vs using just None for mypy strict mode
+  - CacheStats from keyword_cache service has `hits`, `misses`, `errors` properties - calculate `total_keywords` as hits+misses
+  - CrawledPage model doesn't have `primary_keyword` column yet - stats endpoint returns placeholder zeros with TODO comment
+  - Full pipeline endpoint orchestrates all 6 steps with step-by-step timing and graceful partial failure handling
+  - Pre-existing mypy errors in config.py, logging.py, redis.py are known issues
+---
+
