@@ -33,6 +33,9 @@ from app.schemas.nlp import (
     AnalyzeContentResponse,
     CompetitorTermItem,
     ContentSignalItem,
+    RecommendedTermItem,
+    RecommendTermsRequest,
+    RecommendTermsResponse,
 )
 from app.services.tfidf_analysis import get_tfidf_analysis_service
 from app.utils.content_signals import (
@@ -414,6 +417,256 @@ async def analyze_competitors(
                 "request_id": request_id,
                 "document_count": len(data.documents),
                 "project_id": data.project_id,
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+                "duration_ms": round(duration_ms, 2),
+            },
+            exc_info=True,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "error": "Internal server error",
+                "code": "INTERNAL_ERROR",
+                "request_id": request_id,
+            },
+        )
+
+
+def _calculate_priority(score: float, doc_frequency: int, total_docs: int) -> str:
+    """Calculate recommendation priority based on score and frequency.
+
+    High priority: score >= 0.7 OR appears in majority of competitor docs
+    Medium priority: score >= 0.4 OR appears in multiple docs
+    Low priority: everything else
+    """
+    doc_ratio = doc_frequency / total_docs if total_docs > 0 else 0
+
+    if score >= 0.7 or doc_ratio >= 0.6:
+        return "high"
+    elif score >= 0.4 or doc_ratio >= 0.3:
+        return "medium"
+    else:
+        return "low"
+
+
+@router.post(
+    "/recommend-terms",
+    response_model=RecommendTermsResponse,
+    summary="Recommend terms for content optimization",
+    description="Analyze competitor content and recommend terms to add to user content. "
+    "Uses TF-IDF analysis to find important terms and filters based on user preferences.",
+    responses={
+        400: {
+            "description": "Validation error",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "user_content: Field required",
+                        "code": "VALIDATION_ERROR",
+                        "request_id": "<request_id>",
+                    }
+                }
+            },
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "Internal server error",
+                        "code": "INTERNAL_ERROR",
+                        "request_id": "<request_id>",
+                    }
+                }
+            },
+        },
+    },
+)
+async def recommend_terms(
+    request: Request,
+    data: RecommendTermsRequest,
+) -> RecommendTermsResponse | JSONResponse:
+    """Recommend terms for content optimization based on competitor analysis.
+
+    This endpoint analyzes competitor content using TF-IDF to identify important
+    terms, then recommends terms that are missing from or underused in the user's
+    content. Use this for:
+
+    - Content gap analysis
+    - SEO optimization recommendations
+    - Identifying key terms competitors use
+    - Improving content comprehensiveness
+
+    Priority scoring:
+    - High: Terms with high TF-IDF scores or appearing in majority of competitor docs
+    - Medium: Terms with moderate scores or appearing in multiple docs
+    - Low: Less prominent terms that may still be worth including
+
+    Missing terms mode (default):
+    - When only_missing=True, only returns terms NOT in user content
+    - When only_missing=False, returns all top terms from competitors
+    """
+    request_id = _get_request_id(request)
+    start_time = time.monotonic()
+
+    logger.debug(
+        "Term recommendation request",
+        extra={
+            "request_id": request_id,
+            "user_content_length": len(data.user_content),
+            "competitor_count": len(data.competitor_documents),
+            "top_n": data.top_n,
+            "include_bigrams": data.include_bigrams,
+            "only_missing": data.only_missing,
+            "project_id": data.project_id,
+            "page_id": data.page_id,
+        },
+    )
+
+    try:
+        tfidf_service = get_tfidf_analysis_service()
+
+        if data.only_missing:
+            # Find terms missing from user content
+            result = await tfidf_service.find_missing_terms(
+                competitor_documents=data.competitor_documents,
+                user_content=data.user_content,
+                top_n=data.top_n,
+                project_id=data.project_id,
+            )
+        else:
+            # Get all top terms from competitors
+            result = await tfidf_service.analyze(
+                documents=data.competitor_documents,
+                top_n=data.top_n,
+                include_bigrams=data.include_bigrams,
+                min_df=data.min_doc_frequency,
+                max_df_ratio=data.max_doc_frequency_ratio,
+                project_id=data.project_id,
+            )
+
+        duration_ms = (time.monotonic() - start_time) * 1000
+
+        if not result.success:
+            logger.warning(
+                "Term recommendation analysis failed",
+                extra={
+                    "request_id": request_id,
+                    "competitor_count": len(data.competitor_documents),
+                    "error_message": result.error,
+                    "project_id": data.project_id,
+                    "page_id": data.page_id,
+                    "duration_ms": round(duration_ms, 2),
+                },
+            )
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "error": result.error or "Analysis failed",
+                    "code": "ANALYSIS_FAILED",
+                    "request_id": request_id,
+                },
+            )
+
+        # Convert terms to recommendations with priority
+        total_docs = result.document_count
+        recommendations: list[RecommendedTermItem] = []
+        high_count = 0
+        medium_count = 0
+        low_count = 0
+
+        for term in result.terms:
+            priority = _calculate_priority(term.score, term.doc_frequency, total_docs)
+
+            if priority == "high":
+                high_count += 1
+            elif priority == "medium":
+                medium_count += 1
+            else:
+                low_count += 1
+
+            recommendations.append(
+                RecommendedTermItem(
+                    term=term.term,
+                    score=round(term.score, 4),
+                    priority=priority,
+                    doc_frequency=term.doc_frequency,
+                    is_missing=data.only_missing,
+                    category=None,
+                )
+            )
+
+        # Sort by priority (high first) then by score (desc)
+        priority_order = {"high": 0, "medium": 1, "low": 2}
+        recommendations.sort(key=lambda r: (priority_order[r.priority], -r.score))
+
+        # Count user terms (approximate via tokenization)
+        user_term_count = len(set(data.user_content.lower().split()))
+
+        logger.info(
+            "Term recommendation complete",
+            extra={
+                "request_id": request_id,
+                "recommendation_count": len(recommendations),
+                "high_priority": high_count,
+                "medium_priority": medium_count,
+                "low_priority": low_count,
+                "competitor_count": result.document_count,
+                "vocabulary_size": result.vocabulary_size,
+                "only_missing": data.only_missing,
+                "project_id": data.project_id,
+                "page_id": data.page_id,
+                "duration_ms": round(duration_ms, 2),
+            },
+        )
+
+        return RecommendTermsResponse(
+            success=True,
+            request_id=request_id,
+            recommendations=recommendations,
+            recommendation_count=len(recommendations),
+            user_term_count=user_term_count,
+            competitor_term_count=result.vocabulary_size,
+            document_count=result.document_count,
+            high_priority_count=high_count,
+            medium_priority_count=medium_count,
+            low_priority_count=low_count,
+            error=None,
+            duration_ms=round(duration_ms, 2),
+            cache_hit=False,
+        )
+
+    except ValueError as e:
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.warning(
+            "Term recommendation validation error",
+            extra={
+                "request_id": request_id,
+                "competitor_count": len(data.competitor_documents),
+                "error_message": str(e),
+                "project_id": data.project_id,
+                "page_id": data.page_id,
+            },
+        )
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "error": str(e),
+                "code": "VALIDATION_ERROR",
+                "request_id": request_id,
+            },
+        )
+
+    except Exception as e:
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.error(
+            "Term recommendation failed",
+            extra={
+                "request_id": request_id,
+                "competitor_count": len(data.competitor_documents),
+                "project_id": data.project_id,
+                "page_id": data.page_id,
                 "error_type": type(e).__name__,
                 "error_message": str(e),
                 "duration_ms": round(duration_ms, 2),
