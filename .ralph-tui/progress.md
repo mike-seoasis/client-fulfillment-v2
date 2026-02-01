@@ -18,6 +18,39 @@ All external API clients (`/backend/app/integrations/`) follow this standard str
 ### Error Response Format
 All endpoints return structured errors: `{"error": str, "code": str, "request_id": str}`
 
+### Frontend Component Pattern
+All frontend components (`/frontend/src/components/`) follow this standard structure:
+1. **TypeScript interfaces** for all props with JSDoc comments
+2. **`cn()` utility** from `@/lib/utils` for class merging (clsx + tailwind-merge)
+3. **`addBreadcrumb()`** from `@/lib/errorReporting` for user action tracking
+4. **Skeleton components** exported alongside main component for loading states
+5. **Keyboard navigation** support (tabIndex, onKeyDown for Enter/Space)
+6. **ARIA attributes** for accessibility (role, aria-label, aria-selected, etc.)
+7. **Warm design tokens** - cream-*, warmgray-*, primary-*, soft shadows
+
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.116
+- **What was implemented**: DataTable component for page listings with sorting, filtering, selection
+- **Files changed**:
+  - `frontend/src/components/DataTable.tsx` (NEW) - Full DataTable implementation (~450 lines)
+- **Implementation includes**:
+  - Generic `<T>` typing for flexible data structures
+  - Sortable columns with visual indicators (asc/desc/none)
+  - Search/filter functionality with customizable filter function
+  - Row selection with select-all checkbox (including indeterminate state)
+  - Click handlers for row interaction
+  - Loading skeleton state with configurable row count
+  - Empty state with icon and customizable messages
+  - DataTableSkeleton component for pre-load state
+  - Full keyboard navigation (Enter/Space on headers and rows)
+  - ARIA attributes (aria-sort, aria-selected, role="button")
+- **Learnings:**
+  - Use `cn()` consistently for all conditional class names
+  - Skeleton states should match the structure of the loaded component
+  - Custom checkbox with ref callback for indeterminate state (`el.indeterminate = true`)
+  - Column definitions use accessor functions for flexibility: `accessor: (row: T) => ReactNode`
+  - Sort function allows custom comparisons via optional `sortFn` property
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.74
