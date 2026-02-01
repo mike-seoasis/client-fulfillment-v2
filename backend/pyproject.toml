@@ -21,6 +21,9 @@ dependencies = [
     "redis>=5.0.0",
     "python-dotenv>=1.0.0",
     "apscheduler>=3.10.0",
+    # Document parsing
+    "pypdf>=4.0.0",
+    "python-docx>=1.1.0",
 ]
 
 [project.optional-dependencies]
