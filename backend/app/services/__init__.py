@@ -66,6 +66,16 @@ from app.services.primary_keyword import (
     get_primary_keyword_service,
     select_primary_keyword,
 )
+from app.services.secondary_keywords import (
+    SecondaryKeywordRequest,
+    SecondaryKeywordResult,
+    SecondaryKeywordSelectionError,
+    SecondaryKeywordService,
+    SecondaryKeywordServiceError,
+    SecondaryKeywordValidationError,
+    get_secondary_keyword_service,
+    select_secondary_keywords,
+)
 from app.services.keyword_volume import (
     KeywordVolumeData,
     KeywordVolumeLookupError,
@@ -201,4 +211,13 @@ __all__ = [
     "PrimaryKeywordResult",
     "select_primary_keyword",
     "get_primary_keyword_service",
+    # Secondary keyword service
+    "SecondaryKeywordService",
+    "SecondaryKeywordServiceError",
+    "SecondaryKeywordSelectionError",
+    "SecondaryKeywordValidationError",
+    "SecondaryKeywordRequest",
+    "SecondaryKeywordResult",
+    "select_secondary_keywords",
+    "get_secondary_keyword_service",
 ]
