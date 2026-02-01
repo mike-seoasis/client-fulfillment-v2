@@ -3,23 +3,22 @@
   "description": "Ready tasks batch",
   "userStories": [
     {
-      "id": "client-onboarding-v2-c3y.91",
-      "title": "Implement content scoring algorithm (word count, semantic, readability, keyword density, entity coverage)",
-      "description": "ERROR LOGGING REQUIREMENTS:\n- Log method entry/exit at DEBUG level with parameters (sanitized)\n- Log all exceptions with full stack trace and context\n- Include entity IDs (project_id, page_id) in all service logs\n- Log validation failures with field names and rejected values\n- Log state transitions (phase changes) at INFO level\n- Add timing logs for operations >1 second\n\nRAILWAY DEPLOYMENT REQUIREMENTS:\n- Tests must work with DATABASE_URL env var\n- Use test database, not production\n- CI should mirror Railway environment where possible",
+      "id": "client-onboarding-v2-c3y.92",
+      "title": "Implement Flesch-Kincaid readability calculation",
+      "description": "ERROR LOGGING REQUIREMENTS:\n- Log method entry/exit at DEBUG level with parameters (sanitized)\n- Log all exceptions with full stack trace and context\n- Include entity IDs (project_id, page_id) in all service logs\n- Log validation failures with field names and rejected values\n- Log state transitions (phase changes) at INFO level\n- Add timing logs for operations >1 second",
       "acceptanceCriteria": [],
       "passes": true,
       "completionNotes": "Completed by agent"
     },
     {
-      "id": "client-onboarding-v2-c3y.127",
-      "title": "Build KeywordResearchPanel with approval workflow",
+      "id": "client-onboarding-v2-c3y.128",
+      "title": "Build PAAEnrichmentPanel with question review",
       "description": "ERROR LOGGING REQUIREMENTS:\n- Implement React Error Boundaries for all route components\n- Log caught errors to console with component stack\n- Set up global window.onerror and unhandledrejection handlers\n- Log API errors with endpoint, status, response body\n- Include user action context in error logs\n- Set up error reporting service integration point (e.g., Sentry stub)\n\nRAILWAY DEPLOYMENT REQUIREMENTS:\n- Build as static assets (npm run build)\n- API URL via VITE_API_URL environment variable\n- Configure for production build (NODE_ENV=production)\n- Can deploy to Railway static hosting or separate service\n- Use relative paths or env-configured absolute URLs",
       "acceptanceCriteria": [],
-      "passes": true,
-      "completionNotes": "Completed by agent"
+      "passes": false
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-01T23:07:04.701Z"
+    "updatedAt": "2026-02-01T23:09:29.286Z"
   }
 }
