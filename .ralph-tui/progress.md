@@ -52,3 +52,24 @@ All phase services follow a consistent structure:
   - The `Collection` dataclass in `related_collections.py` is for label-based similarity, not URL-based validation
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.123
+- What was implemented: ProjectSettingsPage for project configuration
+  - Full settings page for editing project name, description, and status
+  - Danger zone with archive/unarchive and delete functionality
+  - Delete confirmation requiring exact project name match
+  - Form validation with real-time feedback
+  - Loading skeletons and error states matching existing patterns
+  - Wrapped in ErrorBoundary for error isolation
+- Files changed:
+  - `frontend/src/pages/ProjectSettingsPage.tsx` (new) - Full settings page component
+  - `frontend/src/App.tsx` (modified) - Added route `/projects/:projectId/settings`
+- **Learnings:**
+  - Frontend pages follow consistent structure: skeleton, error state, main content
+  - Form fields use FormField wrapper with Input/Textarea/Select from `components/ui/form-field.tsx`
+  - useToastMutation hook handles API mutations with automatic toast notifications
+  - ErrorBoundary wraps each route with `componentName` prop for debugging
+  - addBreadcrumb from errorReporting.ts used for tracking user actions
+  - useApiQuery wraps React Query with built-in error handling and logging
+  - Danger zone pattern: separate section with warning styling for destructive actions
+---
+
