@@ -73,6 +73,17 @@ def substitute(template_str: str, variables: dict[str, Any]) -> str:
     return pattern.sub(replace_var, template_str)
 ```
 
+### Frontend Axios Client Pattern
+For TypeScript/React HTTP clients with resilience:
+1. Request interceptor adds unique `X-Request-ID` header and logs outbound calls
+2. Response interceptor calculates timing and logs with truncated response bodies
+3. Circuit breaker class with `closed → open → half-open` state machine
+4. Exponential backoff retry: `delay = baseDelay * 2^attempt` with jitter
+5. Custom error hierarchy: `ApiTimeoutError`, `ApiRateLimitError`, `ApiAuthError`, `CircuitOpenError`
+6. Sensitive data masking using regex patterns (api_key, token, authorization, bearer, etc.)
+7. Singleton via `getAxiosClient()` with `createAxiosClient()` factory for custom configs
+8. Railway-compatible timeout (max 4.5min to stay under 5min request limit)
+
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.59
@@ -144,5 +155,31 @@ def substitute(template_str: str, variables: dict[str, Any]) -> str:
   - Ruff prefers `contextlib.suppress()` over try/except/pass for suppressing exceptions
   - Ruff prefers builtin `TimeoutError` over `asyncio.TimeoutError`
   - Pre-existing mypy errors in core files (logging.py, redis.py, projects.py) don't affect new files
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.110
+- What was implemented: Axios HTTP client with comprehensive error handling and resilience patterns
+- Files created:
+  - `frontend/src/lib/axiosClient.ts` - Full-featured Axios client with interceptors, retry, and circuit breaker
+- Files modified:
+  - `frontend/package.json` - Added axios dependency
+- **Implementation details:**
+  - Request interceptor logs all outbound API calls with endpoint, method, and unique request ID
+  - Response interceptor logs timing, status, and truncated response bodies at DEBUG level
+  - Exponential backoff retry: `delay = base_delay * (2 ** attempt)` with ±10% jitter
+  - Circuit breaker pattern with 5 failure threshold and 30s recovery timeout
+  - Custom error types: `ApiTimeoutError`, `ApiRateLimitError`, `ApiAuthError`, `CircuitOpenError`
+  - Rate limit (429) handling with `Retry-After` header support
+  - Auth failure (401/403) detection without retry
+  - Sensitive data masking using regex patterns for api_key, token, authorization, etc.
+  - Request timeout capped at 4.5min (Railway has 5min limit)
+  - Response truncation at 2000 chars for large payloads in logs
+  - Singleton pattern with `getAxiosClient()` and `createAxiosClient()` factory
+  - Integrates with existing `errorReporting.ts` for centralized error tracking
+- **Learnings:**
+  - Patterns discovered: Frontend Axios client follows same Integration Client Pattern as backend
+  - Gotchas encountered: TypeScript strict mode catches unused imports - removed `AxiosRequestConfig`
+  - Type narrowing issue: comparing string literal type against incompatible union required simplification
+  - The existing `api.ts` uses native fetch - Axios client provides alternative with more features
 ---
 
