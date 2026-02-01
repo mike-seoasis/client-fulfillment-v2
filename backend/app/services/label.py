@@ -10,6 +10,10 @@ Labels help with:
 - Content organization and grouping
 - SEO and content strategy insights
 
+Features:
+- Parallel processing support with configurable concurrency (max 5 by default)
+- Two-tier labeling: fast pattern-based with optional LLM fallback
+
 ERROR LOGGING REQUIREMENTS:
 - Log method entry/exit at DEBUG level with parameters (sanitized)
 - Log all exceptions with full stack trace and context
@@ -19,6 +23,7 @@ ERROR LOGGING REQUIREMENTS:
 - Add timing logs for operations >1 second
 """
 
+import asyncio
 import re
 import time
 from collections import Counter
@@ -38,6 +43,10 @@ MIN_LABELS = 2
 MAX_LABELS = 5
 MAX_LABEL_LENGTH = 50
 MIN_LABEL_LENGTH = 2
+
+# Parallel processing constraints
+DEFAULT_MAX_CONCURRENT = 5
+MAX_CONCURRENT_LIMIT = 10  # Absolute maximum to prevent resource exhaustion
 
 # =============================================================================
 # LLM PROMPT TEMPLATES FOR LABEL GENERATION
@@ -221,6 +230,38 @@ class LabelResult:
             "llm_labels": self.llm_labels,
             "error": self.error,
             "duration_ms": self.duration_ms,
+        }
+
+
+@dataclass
+class BatchLabelResult:
+    """Result of batch label generation with parallel processing.
+
+    Attributes:
+        success: Whether all requests succeeded
+        results: List of LabelResult for each request (same order as input)
+        total_duration_ms: Total wall-clock time for the batch
+        successful_count: Number of successful label generations
+        failed_count: Number of failed label generations
+        max_concurrent: Concurrency level used
+    """
+
+    success: bool
+    results: list[LabelResult] = field(default_factory=list)
+    total_duration_ms: float = 0.0
+    successful_count: int = 0
+    failed_count: int = 0
+    max_concurrent: int = DEFAULT_MAX_CONCURRENT
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert result to dictionary for serialization."""
+        return {
+            "success": self.success,
+            "results": [r.to_dict() for r in self.results],
+            "total_duration_ms": self.total_duration_ms,
+            "successful_count": self.successful_count,
+            "failed_count": self.failed_count,
+            "max_concurrent": self.max_concurrent,
         }
 
 
@@ -1124,6 +1165,178 @@ class LabelService:
             skip_llm=skip_llm,
         )
 
+    async def generate_labels_batch(
+        self,
+        requests: list[LabelRequest],
+        max_concurrent: int = DEFAULT_MAX_CONCURRENT,
+        force_llm: bool = False,
+        skip_llm: bool = False,
+    ) -> BatchLabelResult:
+        """Generate labels for multiple collections in parallel.
+
+        Processes multiple LabelRequest objects concurrently with a configurable
+        concurrency limit. Results are returned in the same order as input requests.
+
+        Uses asyncio.Semaphore to limit concurrent operations, preventing
+        resource exhaustion when processing large batches.
+
+        Args:
+            requests: List of LabelRequest objects to process
+            max_concurrent: Maximum concurrent operations (default 5, max 10)
+            force_llm: Always use LLM regardless of pattern confidence
+            skip_llm: Never use LLM even if confidence is low
+
+        Returns:
+            BatchLabelResult with results for each request (same order as input)
+
+        Example:
+            >>> requests = [
+            ...     LabelRequest(urls=[...], titles=[...], project_id="proj-1"),
+            ...     LabelRequest(urls=[...], titles=[...], project_id="proj-2"),
+            ... ]
+            >>> batch_result = await service.generate_labels_batch(requests, max_concurrent=5)
+            >>> for result in batch_result.results:
+            ...     print(f"{result.project_id}: {result.labels}")
+        """
+        start_time = time.monotonic()
+
+        # Validate and clamp max_concurrent
+        if max_concurrent < 1:
+            logger.warning(
+                "Validation failed: max_concurrent below minimum",
+                extra={
+                    "field": "max_concurrent",
+                    "rejected_value": max_concurrent,
+                    "clamped_to": 1,
+                },
+            )
+            max_concurrent = 1
+        elif max_concurrent > MAX_CONCURRENT_LIMIT:
+            logger.warning(
+                "Validation failed: max_concurrent above maximum",
+                extra={
+                    "field": "max_concurrent",
+                    "rejected_value": max_concurrent,
+                    "clamped_to": MAX_CONCURRENT_LIMIT,
+                },
+            )
+            max_concurrent = MAX_CONCURRENT_LIMIT
+
+        logger.debug(
+            "generate_labels_batch() called",
+            extra={
+                "request_count": len(requests),
+                "max_concurrent": max_concurrent,
+                "force_llm": force_llm,
+                "skip_llm": skip_llm,
+            },
+        )
+
+        # Handle empty input
+        if not requests:
+            logger.debug("Empty request list, returning empty batch result")
+            return BatchLabelResult(
+                success=True,
+                results=[],
+                total_duration_ms=0.0,
+                successful_count=0,
+                failed_count=0,
+                max_concurrent=max_concurrent,
+            )
+
+        # Create semaphore to limit concurrency
+        semaphore = asyncio.Semaphore(max_concurrent)
+
+        async def process_with_semaphore(
+            index: int, request: LabelRequest
+        ) -> tuple[int, LabelResult]:
+            """Process a single request with semaphore-controlled concurrency."""
+            async with semaphore:
+                logger.debug(
+                    "Processing request in batch",
+                    extra={
+                        "index": index,
+                        "project_id": request.project_id,
+                        "url_count": len(request.urls),
+                    },
+                )
+                try:
+                    result = await self.generate_labels_for_request(
+                        request=request,
+                        force_llm=force_llm,
+                        skip_llm=skip_llm,
+                    )
+                    return (index, result)
+                except Exception as e:
+                    # Catch-all for unexpected exceptions; create error result
+                    logger.error(
+                        "Unexpected error processing batch request",
+                        extra={
+                            "index": index,
+                            "project_id": request.project_id,
+                            "error_type": type(e).__name__,
+                            "error_message": str(e),
+                        },
+                        exc_info=True,
+                    )
+                    return (
+                        index,
+                        LabelResult(
+                            success=False,
+                            error=f"Unexpected error: {str(e)}",
+                            project_id=request.project_id,
+                        ),
+                    )
+
+        # Create tasks for all requests
+        tasks = [
+            process_with_semaphore(i, req)
+            for i, req in enumerate(requests)
+        ]
+
+        # Execute all tasks concurrently (semaphore limits actual concurrency)
+        indexed_results = await asyncio.gather(*tasks)
+
+        # Sort results by original index to maintain order
+        sorted_results = sorted(indexed_results, key=lambda x: x[0])
+        results = [result for _, result in sorted_results]
+
+        # Calculate statistics
+        successful_count = sum(1 for r in results if r.success)
+        failed_count = len(results) - successful_count
+        total_duration_ms = (time.monotonic() - start_time) * 1000
+
+        # Log state transition: batch complete
+        logger.info(
+            "Batch label generation complete",
+            extra={
+                "request_count": len(requests),
+                "successful_count": successful_count,
+                "failed_count": failed_count,
+                "max_concurrent": max_concurrent,
+                "total_duration_ms": round(total_duration_ms, 2),
+            },
+        )
+
+        if total_duration_ms > SLOW_OPERATION_THRESHOLD_MS:
+            logger.warning(
+                "Slow batch label generation",
+                extra={
+                    "request_count": len(requests),
+                    "total_duration_ms": round(total_duration_ms, 2),
+                    "max_concurrent": max_concurrent,
+                },
+            )
+
+        return BatchLabelResult(
+            success=failed_count == 0,
+            results=results,
+            total_duration_ms=round(total_duration_ms, 2),
+            successful_count=successful_count,
+            failed_count=failed_count,
+            max_concurrent=max_concurrent,
+        )
+
     def generate_labels_sync(
         self,
         urls: list[str],
@@ -1216,4 +1429,40 @@ async def generate_collection_labels(
         titles=titles,
         categories=categories,
         project_id=project_id,
+    )
+
+
+async def generate_labels_batch(
+    requests: list[LabelRequest],
+    max_concurrent: int = DEFAULT_MAX_CONCURRENT,
+    force_llm: bool = False,
+    skip_llm: bool = False,
+) -> BatchLabelResult:
+    """Convenience function to generate labels for multiple collections in parallel.
+
+    Uses the default LabelService singleton with configurable concurrency.
+
+    Args:
+        requests: List of LabelRequest objects to process
+        max_concurrent: Maximum concurrent operations (default 5, max 10)
+        force_llm: Always use LLM regardless of pattern confidence
+        skip_llm: Never use LLM even if confidence is low
+
+    Returns:
+        BatchLabelResult with results for each request (same order as input)
+
+    Example:
+        >>> requests = [
+        ...     LabelRequest(urls=["https://example.com/products/..."], project_id="p1"),
+        ...     LabelRequest(urls=["https://example.com/blog/..."], project_id="p2"),
+        ... ]
+        >>> batch_result = await generate_labels_batch(requests, max_concurrent=5)
+        >>> print(f"Success: {batch_result.successful_count}/{len(requests)}")
+    """
+    service = get_label_service()
+    return await service.generate_labels_batch(
+        requests=requests,
+        max_concurrent=max_concurrent,
+        force_llm=force_llm,
+        skip_llm=skip_llm,
     )

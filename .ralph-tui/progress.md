@@ -111,3 +111,16 @@ logger = get_logger(__name__)
   - Railway deployment: Dockerfile builds static assets, nginx serves with SPA routing
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.43
+- **What was implemented**: Parallel processing for label generation with max 5 concurrent operations
+- **Files changed**:
+  - `backend/app/services/label.py` - Added `generate_labels_batch()` method and `BatchLabelResult` dataclass
+  - `backend/app/services/__init__.py` - Added exports for `BatchLabelResult` and `generate_labels_batch`
+- **Learnings:**
+  - `asyncio.Semaphore` is the idiomatic way to limit concurrent async operations in Python
+  - Use `asyncio.gather()` with semaphore-wrapped coroutines for parallel execution with concurrency control
+  - Pattern: return `(index, result)` tuples from parallel tasks, then sort by index to preserve input order
+  - Constants like `DEFAULT_MAX_CONCURRENT = 5` and `MAX_CONCURRENT_LIMIT = 10` should be module-level for configurability
+  - Comprehensive logging for batch operations: entry/exit, per-item progress, and final statistics
+---
+

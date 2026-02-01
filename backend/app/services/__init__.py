@@ -26,6 +26,7 @@ from app.services.crawl import (
     PatternMatcher,
 )
 from app.services.label import (
+    BatchLabelResult,
     LabelGenerationError,
     LabelRequest,
     LabelResult,
@@ -33,6 +34,7 @@ from app.services.label import (
     LabelServiceError,
     LabelValidationError,
     generate_collection_labels,
+    generate_labels_batch,
     get_label_service,
 )
 from app.services.project import (
@@ -86,7 +88,9 @@ __all__ = [
     "LabelValidationError",
     "LabelRequest",
     "LabelResult",
+    "BatchLabelResult",
     "generate_collection_labels",
+    "generate_labels_batch",
     "get_label_service",
     # Related collections service
     "RelatedCollectionsService",
