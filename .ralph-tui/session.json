@@ -1,0 +1,324 @@
+{
+  "version": 1,
+  "sessionId": "bb3029ca-42a8-4fa0-ba63-82fd8e632c12",
+  "status": "running",
+  "startedAt": "2026-02-01T15:01:25.965Z",
+  "updatedAt": "2026-02-01T15:05:27.421Z",
+  "currentIteration": 0,
+  "maxIterations": 10,
+  "tasksCompleted": 0,
+  "isPaused": false,
+  "agentPlugin": "claude",
+  "trackerState": {
+    "plugin": "beads",
+    "epicId": "client-onboarding-v2-c3y",
+    "totalTasks": 50,
+    "tasks": [
+      {
+        "id": "client-onboarding-v2-c3y.55",
+        "title": "Write unit tests for specificity filter and selection logic",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.54",
+        "title": "Create /api/v1/projects/{id}/phases/keyword_research endpoints",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.53",
+        "title": "Add duplicate primary prevention across project",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.52",
+        "title": "Implement Step 6: Secondary keyword selection (specific + broader mix)",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.51",
+        "title": "Implement Step 5: Primary keyword selection (highest volume specific)",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.50",
+        "title": "Implement Step 4: LLM specificity filter (CRITICAL logic)",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.49",
+        "title": "Implement Step 2: Batch volume lookup with caching",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.48",
+        "title": "Implement Step 1: LLM keyword idea generation (20-30 ideas)",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.47",
+        "title": "Implement keyword volume caching in Redis (30d TTL)",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.46",
+        "title": "Create Keywords Everywhere API integration client",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.45",
+        "title": "Write unit tests for related collections algorithm",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.44",
+        "title": "Create /api/v1/projects/{id}/phases/label endpoints",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.43",
+        "title": "Add parallel processing for label generation (max 5 concurrent)",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.42",
+        "title": "Implement related collections algorithm (label overlap scoring)",
+        "status": "in_progress",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.41",
+        "title": "Create LLM prompt template for label generation",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.40",
+        "title": "Implement LabelService for generating 2-5 thematic labels per collection",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.39",
+        "title": "Write unit tests for pattern matching and confidence scoring",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.38",
+        "title": "Create /api/v1/projects/{id}/phases/categorize endpoints",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.37",
+        "title": "Add batch processing for LLM calls (groups of 10)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.36",
+        "title": "Implement CategoryService with two-tier approach (patterns → LLM fallback)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.35",
+        "title": "Create LLM categorization client using Claude Haiku",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.34",
+        "title": "Implement content signal detection for confidence boosting",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.33",
+        "title": "Implement URL pattern rules (collection, product, blog, policy patterns)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.32",
+        "title": "Write unit tests for CrawlService (URL normalization, pattern matching)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.31",
+        "title": "Create /api/v1/projects/{id}/phases/crawl endpoints",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.30",
+        "title": "Implement progress tracking and WebSocket broadcasts",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.29",
+        "title": "Add fetch-only mode for re-crawling specific URLs",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.28",
+        "title": "Implement CrawlRepository for page storage with deduplication",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.27",
+        "title": "Implement CrawlService with include/exclude pattern matching",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.26",
+        "title": "Implement priority queue for URL crawling (homepage=0, include=1, other=2)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.25",
+        "title": "Implement URL normalization utility (fragments, trailing slashes, query params)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.24",
+        "title": "Create crawl4ai integration client with async support",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.23",
+        "title": "Write unit tests for ProjectService (target 80% coverage)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.22",
+        "title": "Add WebSocket endpoint for project status updates",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.21",
+        "title": "Implement /api/v1/projects endpoints (list, create, get, update, delete)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.20",
+        "title": "Create Pydantic schemas for Project create/update/response",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.19",
+        "title": "Implement ProjectService with validation logic",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.18",
+        "title": "Implement ProjectRepository with CRUD operations",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.17",
+        "title": "Generate and run initial Alembic migration",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.16",
+        "title": "Create NLPAnalysisCache model for competitor data",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.15",
+        "title": "Create CrawlSchedule and CrawlHistory models",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.14",
+        "title": "Create GeneratedContent model with QA results",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.13",
+        "title": "Create BrandConfig model with V2 schema JSONB",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.12",
+        "title": "Create PagePAA model for PAA enrichment data",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.11",
+        "title": "Create PageKeywords model with primary/secondary keyword structure",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.10",
+        "title": "Create CrawledPage model with normalized_url, category, labels fields",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.9",
+        "title": "Create Project model with phase_status JSONB field",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.8",
+        "title": "Configure Railway deployment for staging environment",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.7",
+        "title": "Set up GitHub Actions CI pipeline (lint, test, type-check)",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.6",
+        "title": "Create pytest configuration with fixtures for database and Redis mocking",
+        "status": "completed",
+        "completedInSession": false
+      }
+    ]
+  },
+  "iterations": [],
+  "skippedTaskIds": [],
+  "cwd": "/Users/mike/Projects/client-onboarding-v2",
+  "activeTaskIds": [],
+  "subagentPanelVisible": false
+}
