@@ -179,6 +179,37 @@ class Settings(BaseSettings):
         default=60.0, description="Seconds before attempting recovery"
     )
 
+    # Keywords Everywhere API
+    keywords_everywhere_api_key: str | None = Field(
+        default=None,
+        description="Keywords Everywhere API key for keyword data",
+    )
+    keywords_everywhere_timeout: float = Field(
+        default=30.0, description="Keywords Everywhere API request timeout in seconds"
+    )
+    keywords_everywhere_max_retries: int = Field(
+        default=3, description="Maximum retry attempts for Keywords Everywhere API requests"
+    )
+    keywords_everywhere_retry_delay: float = Field(
+        default=1.0, description="Base delay between retries in seconds"
+    )
+    keywords_everywhere_default_country: str = Field(
+        default="us", description="Default country code for keyword data"
+    )
+    keywords_everywhere_default_currency: str = Field(
+        default="USD", description="Default currency for CPC data"
+    )
+    keywords_everywhere_default_data_source: str = Field(
+        default="gkp", description="Default data source (gkp=Google Keyword Planner, cli=clickstream)"
+    )
+    # Circuit breaker settings for Keywords Everywhere
+    keywords_everywhere_circuit_failure_threshold: int = Field(
+        default=5, description="Failures before circuit opens"
+    )
+    keywords_everywhere_circuit_recovery_timeout: float = Field(
+        default=60.0, description="Seconds before attempting recovery"
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:

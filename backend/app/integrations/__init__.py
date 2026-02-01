@@ -33,6 +33,23 @@ from app.integrations.crawl4ai import (
     get_crawl4ai,
     init_crawl4ai,
 )
+from app.integrations.keywords_everywhere import (
+    KeywordData,
+    KeywordDataResult,
+    KeywordsEverywhereAuthError,
+    KeywordsEverywhereCircuitOpenError,
+    KeywordsEverywhereClient,
+    KeywordsEverywhereError,
+    KeywordsEverywhereRateLimitError,
+    KeywordsEverywhereTimeoutError,
+    close_keywords_everywhere,
+    get_keywords_everywhere,
+    init_keywords_everywhere,
+    keywords_everywhere_client,
+)
+from app.integrations.perplexity import (
+    CompletionResult as PerplexityCompletionResult,
+)
 from app.integrations.perplexity import (
     PerplexityAuthError,
     PerplexityCircuitOpenError,
@@ -45,9 +62,6 @@ from app.integrations.perplexity import (
     get_perplexity,
     init_perplexity,
     perplexity_client,
-)
-from app.integrations.perplexity import (
-    CompletionResult as PerplexityCompletionResult,
 )
 
 __all__ = [
@@ -97,4 +111,19 @@ __all__ = [
     "PerplexityRateLimitError",
     "PerplexityAuthError",
     "PerplexityCircuitOpenError",
+    # Keywords Everywhere Client
+    "KeywordsEverywhereClient",
+    "keywords_everywhere_client",
+    "init_keywords_everywhere",
+    "close_keywords_everywhere",
+    "get_keywords_everywhere",
+    # Keywords Everywhere Data classes
+    "KeywordData",
+    "KeywordDataResult",
+    # Keywords Everywhere Exceptions
+    "KeywordsEverywhereError",
+    "KeywordsEverywhereTimeoutError",
+    "KeywordsEverywhereRateLimitError",
+    "KeywordsEverywhereAuthError",
+    "KeywordsEverywhereCircuitOpenError",
 ]

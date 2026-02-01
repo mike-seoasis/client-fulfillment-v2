@@ -168,3 +168,25 @@ logger = get_logger(__name__)
   - Ruff catches f-strings without placeholders (F541) - use regular strings instead
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.46
+- **What was implemented**: Keywords Everywhere API integration client for keyword data lookup
+- **Files changed**:
+  - `backend/app/integrations/keywords_everywhere.py` (new) - Full async client with circuit breaker, retry logic, logging
+  - `backend/app/integrations/__init__.py` - Added Keywords Everywhere exports
+  - `backend/app/core/logging.py` - Added KeywordsEverywhereLogger class
+  - `backend/app/core/config.py` - Added Keywords Everywhere settings (API key, timeouts, default country/currency/data_source, circuit breaker)
+- **API details**:
+  - Endpoint: `POST /v1/get_keyword_data`
+  - Auth: Bearer token in Authorization header
+  - Parameters: `country`, `currency`, `dataSource` (gkp/cli), `kw[]` (array, max 100)
+  - Response fields: `keyword`, `vol`, `cpc` (nested `value`), `competition`, `trend`
+- **Learnings:**
+  - Keywords Everywhere API uses form data format (not JSON) for POST requests
+  - Max 100 keywords per request (API limit) - implemented batch processing for larger lists
+  - API uses credit-based billing (each keyword = 1 credit)
+  - Data sources: `gkp` (Google Keyword Planner) or `cli` (clickstream data)
+  - CPC is returned as nested object `{"value": float}`, not direct float
+  - Integration pattern follows Perplexity: global singleton + `get_*()` dependency function
+  - Logger pattern: service-specific logger class in core/logging.py with singleton instance
+---
+
