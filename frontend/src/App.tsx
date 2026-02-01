@@ -3,6 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ToastProvider } from '@/components/ui/toast-provider'
 import { Home } from '@/pages/Home'
+import { ProjectListPage } from '@/pages/ProjectListPage'
 import { queryClient } from '@/lib/queryClient'
 
 /**
@@ -25,6 +26,14 @@ export function App() {
                 element={
                   <ErrorBoundary componentName="Home">
                     <Home />
+                  </ErrorBoundary>
+                }
+              />
+              <Route
+                path="/projects"
+                element={
+                  <ErrorBoundary componentName="ProjectListPage">
+                    <ProjectListPage />
                   </ErrorBoundary>
                 }
               />
