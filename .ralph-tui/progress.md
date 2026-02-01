@@ -15,6 +15,8 @@ after each iteration and it's included in prompts for context.
 - **Coverage target**: 80% minimum, tests achieve 87% overall
 
 - **Logging extra key gotcha**: Service code using `extra={"filename": ...}` conflicts with Python logging's reserved LogRecord attributes - tests should patch the logger when testing paths that trigger these logs
+- **Logging extra verification**: To check structured logging extra fields, use `hasattr(record, 'field')` and `record.field` on LogRecord objects - `caplog.text` doesn't include extra fields
+- **Slow operation testing**: Use `monkeypatch.setattr(time, "monotonic", mock_fn)` to test slow operation warning paths by simulating elapsed time >1 second
 
 ---
 
@@ -59,5 +61,31 @@ after each iteration and it's included in prompts for context.
     - `urlparse` treats relative paths without leading `/` ambiguously - they should have `/` prefix
     - Use `python3` directly (no poetry wrapper needed in this environment)
     - Coverage module path syntax uses dots not slashes: `--cov=app.services.paa_enrichment`
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.105
+- What was implemented: Comprehensive unit tests for change detection module
+- Files changed:
+  - `backend/tests/utils/test_change_detection.py` - Enhanced test file from 62 to 87 tests covering:
+    - ContentHasher: hash computation, normalization, truncation, dict parsing
+    - PageSnapshot, PageChange, ChangeSummary: dataclasses and serialization
+    - ChangeDetector: page comparison, significance detection, custom thresholds
+    - Convenience functions: singletons, compute_content_hash, detect_changes
+    - Edge cases: unicode, special chars, duplicates, large datasets
+    - ERROR LOGGING REQUIREMENTS: method entry/exit logging, entity IDs, timing
+    - Slow operation warnings: >1 second threshold logging with monkeypatch
+    - Exception handling: full error context logging with stack traces
+    - Singleton reset: module-level singleton isolation for tests
+- **Learnings:**
+  - Patterns discovered:
+    - Logging uses `extra={}` dict for structured fields - not in text output, check LogRecord attributes directly
+    - Use `hasattr(record, 'field')` and `record.field` to verify extra log data
+    - Monkeypatch `time.monotonic` to test slow operation warning paths
+    - Exception handling logs include `error_type`, `error_message`, `stack_trace` fields
+    - Test coverage achieved: 100% for app.utils.change_detection
+  - Gotchas encountered:
+    - caplog.text doesn't include extra={} fields - must check record.__dict__ or record.field_name
+    - Combine context managers: `with caplog.at_level(...), pytest.raises(...)` not nested
+    - Import order matters for ruff: `from datetime import UTC, datetime` (alphabetical)
 ---
 
