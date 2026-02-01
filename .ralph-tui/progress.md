@@ -5,57 +5,45 @@ after each iteration and it's included in prompts for context.
 
 ## Codebase Patterns (Study These First)
 
-### Frontend Page Pattern
-New pages in `frontend/src/pages/` follow this structure:
-1. Use `useApiQuery` hook for data fetching with `userAction` and `component` context
-2. Use `useToastMutation` for mutations with automatic toast notifications
-3. Add breadcrumbs via `addBreadcrumb()` for debugging
-4. Wrap routes in `ErrorBoundary` in `App.tsx`
-5. Follow loading → error → empty → content rendering pattern
-6. Use `cn()` from `@/lib/utils` for conditional Tailwind classes
-7. Keep local form state with `useState`, sync from API data with `useEffect`
+### Scoring Service Test Pattern
+Unit tests for scoring services follow a consistent structure:
+- **Fixtures at module level**: `@pytest.fixture` for service instances and sample content
+- **Debug logging in fixtures**: `logger.debug()` for test setup visibility
+- **Test classes by feature**: Group related tests in classes (e.g., `TestWordCountScoring`, `TestSemanticScoring`)
+- **Async tests**: Use `@pytest.mark.asyncio` decorator for async service methods
+- **Dataclass tests**: Separate classes for testing dataclass creation, serialization, and defaults
+- **Error logging pattern**: Tests document ERROR LOGGING REQUIREMENTS in docstrings for traceability
 
-### NLP Endpoint Pattern
-All NLP endpoints follow a consistent structure in `backend/app/api/v1/endpoints/nlp.py`:
-1. Use `_get_request_id(request)` helper to extract request_id
-2. Log at DEBUG level for request details, INFO for completions
-3. Time operations with `time.monotonic()` and include `duration_ms`
-4. Return structured error responses: `{"error": str, "code": str, "request_id": str}`
-5. Use `JSONResponse` with appropriate status codes for errors
-6. Schemas live in `backend/app/schemas/nlp.py` with Pydantic Field descriptions
-
-### TF-IDF Service Pattern
-The `TFIDFAnalysisService` in `backend/app/services/tfidf_analysis.py`:
-- Uses singleton pattern via `get_tfidf_analysis_service()`
-- Supports both `analyze()` for general TF-IDF and `find_missing_terms()` for gap analysis
-- Returns `TFIDFAnalysisResult` dataclass with `success`, `terms`, `error` fields
-- Handles validation errors internally (returns result with `success=False`)
+### Service Architecture Pattern
+All scoring services follow a consistent architecture:
+1. **Singleton pattern** with `get_*_service()` functions
+2. **Dataclass inputs/outputs** for type safety and serialization
+3. **Comprehensive DEBUG logging** at method entry/exit with sanitized parameters
+4. **INFO logging** for phase transitions (started, completed)
+5. **WARNING logging** for slow operations (>1 second threshold)
+6. **ERROR logging** with full stack traces via `exc_info=True`
+7. **Pure Python implementations** avoiding heavy ML dependencies
 
 ---
 
-## 2026-02-01 - client-onboarding-v2-c3y.132
-- What was implemented: ContentEditorPage with split-view live preview for editing content
-- Files changed:
-  - `frontend/src/pages/ContentEditorPage.tsx` - New page with editor, live preview, metadata editing, status management
-  - `frontend/src/App.tsx` - Added route `/content/:contentId` with ErrorBoundary
-  - `frontend/src/index.css` - Fixed `ease-smooth` → `ease-out` to unblock build
+## 2026-02-01 - client-onboarding-v2-c3y.97
+- **What was implemented:** Verified comprehensive unit tests for scoring algorithm across 3 services:
+  - `ContentScoreService` (content_score.py): Multi-factor content quality scoring
+  - `TFIDFAnalysisService` (tfidf_analysis.py): Term frequency-inverse document frequency analysis
+  - `ContentQualityService` (content_quality.py): AI trope detection and content quality scoring
+- **Files verified:**
+  - `backend/tests/services/test_content_score.py` (1,106 lines)
+  - `backend/tests/services/test_tfidf_analysis.py` (1,067 lines)
+  - `backend/tests/services/test_content_quality.py` (1,480 lines)
+- **Test results:** 207 tests passed, 97% code coverage (target was 80%)
 - **Learnings:**
-  - Custom Tailwind transition timing functions in `transitionTimingFunction` can't be used with `@apply` - need inline values
-  - ContentListPage provides excellent patterns for loading/error/empty states
-  - `useToastMutation` handles both success toasts and API error toasts automatically
-  - Split-view layout works well with `grid grid-cols-1 lg:grid-cols-2` pattern
-  - Simple markdown preview can be done with regex replacements for basic formatting
----
-
-## 2026-02-01 - client-onboarding-v2-c3y.96
-- What was implemented: `/api/v1/nlp/recommend-terms` endpoint for content optimization recommendations
-- Files changed:
-  - `backend/app/schemas/nlp.py` - Added `RecommendedTermItem`, `RecommendTermsRequest`, `RecommendTermsResponse` schemas
-  - `backend/app/api/v1/endpoints/nlp.py` - Added `recommend_terms` endpoint with priority scoring
-- **Learnings:**
-  - NLP endpoints follow a consistent pattern with request_id tracking, timing, and structured error responses
-  - TF-IDF service already has `find_missing_terms()` method which does the heavy lifting
-  - Priority scoring based on TF-IDF score and document frequency provides actionable recommendations
-  - Pre-existing mypy errors in codebase are related to pydantic/fastapi stubs, not actual issues
+  - Tests already existed with comprehensive coverage - no new code needed
+  - Error logging requirements are met through:
+    - `--log-cli-level=DEBUG` captures logs from failed tests
+    - `--tb=long` provides full assertion context
+    - Service logs include timing via `duration_ms` fields
+    - Fixture setup/teardown logging at DEBUG level
+  - pytest configuration in `pyproject.toml` sets `asyncio_mode = "auto"` for async tests
+  - Tests work with DATABASE_URL env var via SQLite in-memory for fast testing
 ---
 
