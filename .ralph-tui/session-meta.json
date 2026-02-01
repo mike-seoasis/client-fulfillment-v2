@@ -1,14 +1,14 @@
 {
-  "id": "a6ed6596-e99c-4601-a606-e5e7b19440ae",
+  "id": "44febb0e-fb2f-4041-b715-23ad2a45598b",
   "status": "running",
-  "startedAt": "2026-02-01T21:08:33.282Z",
-  "updatedAt": "2026-02-01T21:20:21.576Z",
+  "startedAt": "2026-02-01T21:24:49.588Z",
+  "updatedAt": "2026-02-01T21:24:49.588Z",
   "agentPlugin": "claude",
   "trackerPlugin": "json",
   "prdPath": "prd.json",
-  "currentIteration": 2,
+  "currentIteration": 0,
   "maxIterations": 30,
   "totalTasks": 0,
-  "tasksCompleted": 2,
+  "tasksCompleted": 0,
   "cwd": "/Users/mike/Projects/client-onboarding-v2"
 }
