@@ -5,64 +5,45 @@ after each iteration and it's included in prompts for context.
 
 ## Codebase Patterns (Study These First)
 
-### Error Logging Pattern for Services
-All backend services follow a consistent error logging pattern (see `backend/app/services/*.py`):
+### Phase Endpoint Pattern
+All phase endpoints follow a consistent 3-file structure:
+1. **Schema file** (`app/schemas/{phase_name}.py`): Pydantic models for Request/Response
+2. **Service file** (`app/services/{phase_name}.py`): Business logic with dataclasses, singleton pattern
+3. **Endpoint file** (`app/api/v1/endpoints/{phase_name}.py`): FastAPI router with logging and error handling
 
-1. **Method Entry/Exit (DEBUG)**: Log at start with sanitized params, log completion with results
-   ```python
-   logger.debug("Phase 5C content quality check starting", extra={"content_id": content_id, "project_id": project_id, "page_id": page_id})
-   ```
+Key service patterns:
+- `get_{service_name}_service()` singleton factory
+- `{Service}Input` dataclass for service input
+- `{Service}Result` dataclass for service output
+- `{Service}ValidationError` exception class
+- Async `generate_*()` methods with timing and logging
 
-2. **Exception Logging (ERROR)**: Include full stack trace via `exc_info=True` and `traceback.format_exc()`
-   ```python
-   logger.error("Unexpected error", extra={"error": str(e), "error_type": type(e).__name__, "stack_trace": traceback.format_exc()}, exc_info=True)
-   ```
+Key endpoint patterns:
+- `_get_request_id(request)` helper to extract request_id from state
+- `_verify_project_exists()` helper for 404 handling
+- `_convert_request_to_input()` and `_convert_result_to_response()` converters
+- Structured JSON error responses: `{"error": str, "code": str, "request_id": str}`
+- Log 4xx at WARNING, 5xx at ERROR with exc_info=True
 
-3. **Entity IDs**: Always include `project_id`, `page_id`, `content_id` in extra dict
-
-4. **Validation Failures (WARNING)**: Include field name and rejected value
-   ```python
-   logger.warning("Validation failed", extra={"field": "bottom_description", "rejected_value": "", "project_id": project_id})
-   ```
-
-5. **State Transitions (INFO)**: Log phase changes with status
-   ```python
-   logger.info("Phase 5C: Content quality check - in_progress", extra={"phase": "5C", "status": "in_progress"})
-   ```
-
-6. **Slow Operations (WARNING)**: Use `SLOW_OPERATION_THRESHOLD_MS = 1000` constant
-   ```python
-   if duration_ms > SLOW_OPERATION_THRESHOLD_MS:
-       logger.warning("Slow operation", extra={"duration_ms": duration_ms})
-   ```
-
-### Specialized Loggers in core/logging.py
-The codebase has pre-built loggers for external services:
-- `db_logger` - Database operations
-- `redis_logger` - Redis operations
-- `crawl4ai_logger` - Crawl4AI API
-- `claude_logger` - Claude/Anthropic LLM
-- `perplexity_logger` - Perplexity API
-- `scheduler_logger` - APScheduler jobs
-- `keywords_everywhere_logger` - Keywords Everywhere API
-- `dataforseo_logger` - DataForSEO API
+### Router Registration
+In `app/api/v1/__init__.py`:
+- Import the endpoint module in the import block (alphabetical order)
+- Add `router.include_router()` call with prefix and tags
 
 ---
 
-## 2026-02-01 - client-onboarding-v2-c3y.84
-- **What was implemented**: Verified that comprehensive error logging is already implemented across all backend services
-- **Files examined** (no changes needed):
-  - `backend/app/services/project.py` - Full logging implementation
-  - `backend/app/services/content_quality.py` - Full logging implementation
-  - `backend/app/services/content_word_count.py` - Full logging implementation
-  - `backend/app/services/link_validator.py` - Full logging implementation
-  - `backend/app/services/llm_qa_fix.py` - Full logging implementation
-  - `backend/app/core/logging.py` - Comprehensive logging infrastructure (2000+ lines)
+## 2026-02-01 - client-onboarding-v2-c3y.85
+- Implemented content_generation phase endpoints
+- Files changed:
+  - Created `app/schemas/content_generation.py` (request/response models)
+  - Created `app/services/content_generation.py` (service with LLM integration)
+  - Created `app/api/v1/endpoints/content_generation.py` (FastAPI router)
+  - Modified `app/api/v1/__init__.py` (router registration)
 - **Learnings:**
-  - All services already implement the required error logging pattern
-  - The codebase has a well-established logging pattern that should be followed for new services
-  - Specialized loggers exist for external API integrations (Claude, DataForSEO, etc.)
-  - `SLOW_OPERATION_THRESHOLD_MS = 1000` is the standard threshold for timing warnings
-  - Validation errors include both field names and rejected values in logs
+  - Codebase uses `get_claude()` async factory from `app.integrations.claude`
+  - Claude returns `CompletionResult` with `success`, `text`, `input_tokens`, `output_tokens`, `request_id`
+  - All phases support both single item (`/generate` or `/build`) and batch (`/batch`) endpoints
+  - Ruff linting prefers simplified if statements over nested walrus operators
+  - Pre-existing typecheck/lint errors in other files (documents.py) shouldn't block new feature development
 ---
 
