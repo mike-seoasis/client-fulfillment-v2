@@ -24,6 +24,18 @@ All scoring services follow a consistent architecture:
 6. **ERROR logging** with full stack traces via `exc_info=True`
 7. **Pure Python implementations** avoiding heavy ML dependencies
 
+### Frontend Panel Component Pattern
+Panel components (e.g., KeywordResearchPanel, NLPOptimizationPanel) follow a consistent structure:
+1. **Card wrapper** with `.card` class for consistent styling
+2. **Header section** with icon (10x10 rounded-xl bg-*-100), title, subtitle, and action button
+3. **Stats overview** using StatsCard or similar grid-based layouts
+4. **Collapsible sections** with ChevronUp/ChevronDown toggle buttons
+5. **Loading states** via LoadingSpinner with optional labels
+6. **Error boundaries** wrapping route components, not individual panels
+7. **Mutations** via `useToastMutation` for automatic success/error toasts
+8. **Queries** via `useApiQuery` for GET, `useQuery` with `api.post()` for POST
+9. **Breadcrumbs** via `addBreadcrumb()` for debugging context
+
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.97
@@ -45,5 +57,29 @@ All scoring services follow a consistent architecture:
     - Fixture setup/teardown logging at DEBUG level
   - pytest configuration in `pyproject.toml` sets `asyncio_mode = "auto"` for async tests
   - Tests work with DATABASE_URL env var via SQLite in-memory for fast testing
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.133
+- **What was implemented:** Built NLPOptimizationPanel component with comprehensive score breakdown
+  - Multi-factor content quality scoring with visual breakdown (circular gauge + score bars)
+  - 5 score components: word count, semantic depth, readability, keywords, entities
+  - Expandable detail sections for each score component
+  - Term recommendations from competitor analysis with priority badges
+  - Score thresholds with color-coded visual indicators (excellent/good/fair/needs work)
+- **Files created:**
+  - `frontend/src/components/NLPOptimizationPanel.tsx` (~850 lines)
+- **Files verified (error handling already in place):**
+  - `frontend/src/components/ErrorBoundary.tsx` - Class-based error boundary with console logging
+  - `frontend/src/lib/errorReporting.ts` - Sentry stub integration point
+  - `frontend/src/lib/globalErrorHandlers.ts` - window.onerror and unhandledrejection handlers
+  - `frontend/src/main.tsx` - Initializes error handlers before React mounts
+  - `frontend/src/App.tsx` - All route components wrapped in ErrorBoundary
+- **Learnings:**
+  - `useApiQuery` hook only supports GET requests; for POST-based data fetching, use `useQuery` with `api.post()`
+  - Panel components follow a consistent pattern: card wrapper, header with icon, stats overview, collapsible sections
+  - Score visualization uses SVG circles with stroke-dashoffset for circular progress gauges
+  - Error boundary HOC available via `withErrorBoundary<P>()` for wrapping components
+  - Design system uses warm color palette with gold primary, coral accents, and cream backgrounds
+  - API errors include `request_id` for debugging - pass through to error reporting
 ---
 
