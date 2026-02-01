@@ -123,3 +123,37 @@ class ValidationError(ServiceError):
   - JSON parsing from LLM responses includes handling of markdown code blocks
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.121
+- **What was implemented**: ProjectDetailPage with phase status overview
+- **Files created/changed**:
+  - `frontend/src/pages/ProjectDetailPage.tsx` (new) - Full detail page with phase cards
+  - `frontend/src/App.tsx` (modified) - Added route for `/projects/:projectId`
+- **Features implemented**:
+  - Project header with name, client ID, status badge, and timestamps
+  - Overall progress section using existing PhaseProgress component
+  - Phase status grid with detailed cards for each phase (discovery, requirements, implementation, review, launch)
+  - Phase cards show status icons, timestamps (started_at, completed_at), and blocked reasons
+  - Current phase highlighted with visual indicator
+  - Loading skeleton for better UX
+  - Error state with 404 handling and retry button
+  - Breadcrumb navigation back to projects list
+  - ErrorBoundary wrapping on route
+- **ERROR LOGGING REQUIREMENTS met**:
+  - ✅ ErrorBoundary wraps route component (logs with component stack)
+  - ✅ Console error logging for API errors with endpoint, status
+  - ✅ User action context via addBreadcrumb calls
+  - ✅ Global error handlers already in place (globalErrorHandlers.ts)
+  - ✅ Error reporting service integration point (Sentry stub in errorReporting.ts)
+- **RAILWAY DEPLOYMENT REQUIREMENTS**:
+  - ✅ Uses VITE_API_URL via existing env.ts
+  - ✅ Static build compatible (no server-side rendering)
+  - ✅ Relative API paths work with Vite proxy
+- **Type checking**: Passed
+- **Lint**: Passed
+- **Learnings:**
+  - Frontend uses shared phaseUtils.ts for phase types and calculations—reuse existing utilities
+  - useApiQuery hook integrates error logging automatically via api.ts
+  - ErrorBoundary componentName prop helps identify error sources in logs
+  - Existing Project type in ProjectCard.tsx matches backend ProjectResponse schema
+---
+
