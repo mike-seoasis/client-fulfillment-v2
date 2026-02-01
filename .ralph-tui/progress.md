@@ -124,3 +124,25 @@ logger = get_logger(__name__)
   - Comprehensive logging for batch operations: entry/exit, per-item progress, and final statistics
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.44
+- **What was implemented**: Label phase API endpoints at /api/v1/projects/{id}/phases/label
+- **Files changed**:
+  - `backend/app/schemas/label.py` (new) - Pydantic schemas for label requests/responses
+  - `backend/app/schemas/__init__.py` - Added label schema exports
+  - `backend/app/api/v1/endpoints/label.py` (new) - Full label phase API endpoints
+  - `backend/app/api/v1/__init__.py` - Added label router registration
+- **Endpoints created**:
+  - POST `/phases/label` - Generate labels for a collection of URLs
+  - POST `/phases/label/batch` - Batch generate labels for multiple collections in parallel
+  - POST `/phases/label/pages` - Generate labels for existing crawled pages by IDs
+  - POST `/phases/label/all` - Generate labels for all pages in project (background task)
+  - GET `/phases/label/stats` - Get label statistics (total, labeled, unlabeled, counts)
+- **Learnings:**
+  - Phase endpoints follow pattern: router at `endpoints/<phase>.py`, registered with prefix `/projects/{project_id}/phases/<phase>`
+  - Use `_verify_project_exists()` helper to check project before processing (reused pattern from categorize)
+  - Background tasks use `BackgroundTasks.add_task()` for async work, return 202 Accepted immediately
+  - For checking empty JSONB arrays: `(CrawledPage.labels.is_(None)) | (CrawledPage.labels == [])`
+  - Use `zip(..., strict=True)` to satisfy ruff B905 linting rule for explicit strict parameter
+  - Schemas mirror service dataclasses but use Pydantic BaseModel with Field() for API validation
+---
+

@@ -20,6 +20,20 @@ from app.schemas.categorize import (
     UpdateCategoryRequest,
     UpdateCategoryResponse,
 )
+from app.schemas.label import (
+    BatchCollectionRequest,
+    LabelAllRequest,
+    LabelAllResponse,
+    LabelBatchItemResponse,
+    LabelBatchRequest,
+    LabelBatchResponse,
+    LabeledPageResponse,
+    LabelGenerateRequest,
+    LabelGenerateResponse,
+    LabelPageIdsRequest,
+    LabelPageIdsResponse,
+    LabelStatsResponse,
+)
 from app.schemas.crawl import (
     VALID_CRAWL_STATUSES,
     VALID_TRIGGER_TYPES,
@@ -79,4 +93,17 @@ __all__ = [
     "CategorizeStatsResponse",
     "UpdateCategoryRequest",
     "UpdateCategoryResponse",
+    # Label schemas
+    "LabelGenerateRequest",
+    "BatchCollectionRequest",
+    "LabelBatchRequest",
+    "LabelPageIdsRequest",
+    "LabelAllRequest",
+    "LabelGenerateResponse",
+    "LabelBatchItemResponse",
+    "LabelBatchResponse",
+    "LabeledPageResponse",
+    "LabelPageIdsResponse",
+    "LabelAllResponse",
+    "LabelStatsResponse",
 ]
