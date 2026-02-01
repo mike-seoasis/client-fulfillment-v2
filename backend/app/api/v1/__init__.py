@@ -18,6 +18,7 @@ from app.api.v1.endpoints import (
     label,
     link_validator,
     llm_qa_fix,
+    nlp,
     notifications,
     paa_enrichment,
     projects,
@@ -125,4 +126,9 @@ router.include_router(
     documents.router,
     prefix="/projects/{project_id}/documents",
     tags=["Documents"],
+)
+router.include_router(
+    nlp.router,
+    prefix="/nlp",
+    tags=["NLP"],
 )
