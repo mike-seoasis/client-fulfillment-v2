@@ -107,3 +107,36 @@ def _build_cache_key(self, keyword: str, **params) -> str:
   - Structured error responses: {"error": str, "code": str, "request_id": str}
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.108
+- What was implemented: React Router navigation with error handling - **ALREADY COMPLETE**
+- Files verified (implementation already existed):
+  - `frontend/src/App.tsx` - BrowserRouter with nested ErrorBoundary wrappers per route
+  - `frontend/src/components/ErrorBoundary.tsx` - Class component with componentDidCatch, component stack logging
+  - `frontend/src/lib/errorReporting.ts` - Centralized error reporting with Sentry stub integration
+  - `frontend/src/lib/globalErrorHandlers.ts` - window.onerror and onunhandledrejection handlers
+  - `frontend/src/lib/api.ts` - ApiClient with full error context logging (endpoint, status, responseBody)
+  - `frontend/src/lib/env.ts` - VITE_API_URL and VITE_SENTRY_DSN environment config
+  - `frontend/src/main.tsx` - Initializes global error handlers before React mounts
+  - `frontend/vite.config.ts` - Build config for static assets, dev proxy
+- ERROR LOGGING REQUIREMENTS fully implemented:
+  - ✓ React Error Boundaries wrap all route components
+  - ✓ componentDidCatch logs error.message, stack, and componentStack to console
+  - ✓ window.onerror captures uncaught sync errors with source, line, column
+  - ✓ onunhandledrejection captures unhandled promise rejections
+  - ✓ API errors logged with endpoint, method, status, responseBody
+  - ✓ userAction and component context included in all error reports
+  - ✓ Sentry stub with commented integration code (VITE_SENTRY_DSN)
+- RAILWAY DEPLOYMENT REQUIREMENTS fully implemented:
+  - ✓ `npm run build` outputs static assets to `dist/`
+  - ✓ VITE_API_URL env var for API base URL
+  - ✓ NODE_ENV=production handled by Vite automatically
+  - ✓ Relative URLs work when VITE_API_URL is empty
+- **Learnings:**
+  - ErrorBoundary is a class component (required for componentDidCatch lifecycle)
+  - Routes get their own ErrorBoundary to isolate failures
+  - Global handlers catch errors outside React (async code, event handlers)
+  - ApiClient uses empty baseUrl for relative paths (proxied in dev, configurable in prod)
+  - Sentry integration is a stub - uncomment and `npm install @sentry/react` to enable
+  - withErrorBoundary HOC available for wrapping any component
+---
+
