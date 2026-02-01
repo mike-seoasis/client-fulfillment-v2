@@ -175,3 +175,28 @@ after each iteration and it's included in prompts for context.
   - Pre-existing mypy errors in core modules (config.py, logging.py, redis.py) are unrelated to this feature
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.62
+- What was implemented:
+  - Created PAA enrichment API endpoints (`/api/v1/projects/{id}/phases/paa_enrichment`)
+  - Three endpoints:
+    - `POST /enrich` - Enrich single keyword with PAA questions
+    - `POST /batch` - Batch enrich multiple keywords concurrently
+    - `GET /stats` - Get PAA enrichment statistics (placeholder until persistence added)
+  - Created Pydantic schemas for request/response validation
+  - Comprehensive error handling with structured error responses
+  - Full logging per error logging requirements
+
+- Files changed:
+  - `backend/app/schemas/paa_enrichment.py` (new)
+  - `backend/app/api/v1/endpoints/paa_enrichment.py` (new)
+  - `backend/app/api/v1/__init__.py` (modified - registered PAA enrichment router)
+
+- **Learnings:**
+  - API endpoint pattern: use `_get_request_id()` helper and `_verify_project_exists()` for project validation
+  - Convert service dataclasses to Pydantic response models before returning
+  - Cache hit detection heuristic: check if `duration_ms < 100` for cached responses
+  - Stats endpoint returns placeholder data - will need update when PAA results are persisted to database
+  - Pre-existing issues: projects.py has 204 status code with response body error (FastAPI assertion)
+  - Schema location: `app/schemas/` for Pydantic models, endpoints in `app/api/v1/endpoints/`
+---
+
