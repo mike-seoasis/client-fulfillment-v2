@@ -108,13 +108,13 @@
   }
 
   .card-hover {
-    @apply card transition-all duration-250 ease-smooth hover:shadow-soft-lg hover:border-cream-300;
+    @apply card transition-all duration-250 ease-out hover:shadow-soft-lg hover:border-cream-300;
   }
 
   /* Button base styles */
   .btn {
     @apply inline-flex items-center justify-center px-4 py-2.5 rounded-xl font-medium text-sm
-           transition-all duration-250 ease-smooth focus-visible:outline-none
+           transition-all duration-250 ease-out focus-visible:outline-none
            focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-cream-50
            disabled:opacity-50 disabled:cursor-not-allowed;
   }
@@ -144,7 +144,7 @@
   .input {
     @apply w-full px-4 py-2.5 rounded-xl bg-white border border-cream-300 text-warmgray-800
            placeholder:text-warmgray-400
-           transition-all duration-200 ease-smooth
+           transition-all duration-200 ease-out
            focus:border-primary-400 focus:ring-2 focus:ring-primary-100 focus:outline-none
            disabled:bg-cream-100 disabled:cursor-not-allowed;
   }
