@@ -6,6 +6,7 @@ import { Home } from '@/pages/Home'
 import { ProjectListPage } from '@/pages/ProjectListPage'
 import { ProjectDetailPage } from '@/pages/ProjectDetailPage'
 import { ProjectSettingsPage } from '@/pages/ProjectSettingsPage'
+import { ContentListPage } from '@/pages/ContentListPage'
 import { queryClient } from '@/lib/queryClient'
 
 /**
@@ -52,6 +53,14 @@ export function App() {
                 element={
                   <ErrorBoundary componentName="ProjectSettingsPage">
                     <ProjectSettingsPage />
+                  </ErrorBoundary>
+                }
+              />
+              <Route
+                path="/content"
+                element={
+                  <ErrorBoundary componentName="ContentListPage">
+                    <ContentListPage />
                   </ErrorBoundary>
                 }
               />
