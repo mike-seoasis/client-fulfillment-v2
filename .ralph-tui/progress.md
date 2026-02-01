@@ -5,45 +5,39 @@ after each iteration and it's included in prompts for context.
 
 ## Codebase Patterns (Study These First)
 
-### Phase Endpoint Pattern
-All phase endpoints follow a consistent 3-file structure:
-1. **Schema file** (`app/schemas/{phase_name}.py`): Pydantic models for Request/Response
-2. **Service file** (`app/services/{phase_name}.py`): Business logic with dataclasses, singleton pattern
-3. **Endpoint file** (`app/api/v1/endpoints/{phase_name}.py`): FastAPI router with logging and error handling
+### API Endpoint Pattern
+- Endpoints use `_get_request_id(request)` helper to extract request ID from request state
+- Use `_verify_project_exists()` helper to check project exists before processing
+- Return structured error responses: `{"error": str, "code": str, "request_id": str}`
+- Log at DEBUG for request details, INFO for completion, WARNING for 4xx, ERROR for 5xx
+- All responses include `request_id` for debugging
 
-Key service patterns:
-- `get_{service_name}_service()` singleton factory
-- `{Service}Input` dataclass for service input
-- `{Service}Result` dataclass for service output
-- `{Service}ValidationError` exception class
-- Async `generate_*()` methods with timing and logging
+### Page Data Access Pattern
+For operations involving page data:
+1. Query `CrawledPage` by ID and project_id
+2. Query `PageKeywords` by crawled_page_id for keyword info
+3. Page category maps to content_type (e.g., "collection", "product")
+4. URL comes from `page.normalized_url`, keyword from `keywords.primary_keyword`
 
-Key endpoint patterns:
-- `_get_request_id(request)` helper to extract request_id from state
-- `_verify_project_exists()` helper for 404 handling
-- `_convert_request_to_input()` and `_convert_result_to_response()` converters
-- Structured JSON error responses: `{"error": str, "code": str, "request_id": str}`
-- Log 4xx at WARNING, 5xx at ERROR with exc_info=True
-
-### Router Registration
-In `app/api/v1/__init__.py`:
-- Import the endpoint module in the import block (alphabetical order)
-- Add `router.include_router()` call with prefix and tags
+### Batch Operation Pattern
+- Fetch all records in bulk with `select().where().in_(ids)`
+- Build a dict mapping ID to record for O(1) lookups
+- Track failed items separately from successful ones
+- Return both individual results and aggregate statistics
 
 ---
 
-## 2026-02-01 - client-onboarding-v2-c3y.85
-- Implemented content_generation phase endpoints
+## 2026-02-01 - client-onboarding-v2-c3y.86
+- What was implemented:
+  - Added regeneration endpoint for failed pages: `POST /regenerate` (single) and `POST /regenerate_batch` (batch)
+  - Endpoints retrieve page and keyword data, then use existing content generation service
+  - Follows same patterns as existing generate/batch endpoints
 - Files changed:
-  - Created `app/schemas/content_generation.py` (request/response models)
-  - Created `app/services/content_generation.py` (service with LLM integration)
-  - Created `app/api/v1/endpoints/content_generation.py` (FastAPI router)
-  - Modified `app/api/v1/__init__.py` (router registration)
+  - `backend/app/schemas/content_generation.py` - Added Regenerate* request/response schemas
+  - `backend/app/api/v1/endpoints/content_generation.py` - Added regenerate endpoints and `_get_page_data` helper
 - **Learnings:**
-  - Codebase uses `get_claude()` async factory from `app.integrations.claude`
-  - Claude returns `CompletionResult` with `success`, `text`, `input_tokens`, `output_tokens`, `request_id`
-  - All phases support both single item (`/generate` or `/build`) and batch (`/batch`) endpoints
-  - Ruff linting prefers simplified if statements over nested walrus operators
-  - Pre-existing typecheck/lint errors in other files (documents.py) shouldn't block new feature development
+  - Patterns discovered: Page data is split across CrawledPage (URL, category) and PageKeywords (primary_keyword)
+  - Gotchas: mypy needs type assertions after conditional returns to narrow union types
+  - Bulk queries should use `.in_()` for page IDs, then build dict for fast lookup
 ---
 
