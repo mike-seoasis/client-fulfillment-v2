@@ -10,6 +10,7 @@ dangerouslySkipPermissions = false
 [trackerOptions]
 beadsDir = ".beads"
 epicId = "client-onboarding-v2-c3y"
+prdPath = "prd.json"
 
 [sandbox]
 enabled = false

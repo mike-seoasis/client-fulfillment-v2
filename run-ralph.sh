@@ -47,7 +47,7 @@ while true; do
     echo "   Press 'q' to quit early, progress will be saved"
     echo ""
 
-    ralph-tui run --prd prd.json --iterations "$ITERATIONS"
+    ralph-tui run --prd prd.json --iterations "$ITERATIONS" --no-setup --headless
 
     # Check which tasks were completed (passes: true)
     echo ""
