@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "sessionId": "5424374d-7bf0-4b37-ada7-d3a724d8d36d",
+  "sessionId": "8a54e9eb-4a5e-4bb4-a7eb-b58b06804689",
   "status": "running",
-  "startedAt": "2026-02-01T22:04:19.190Z",
-  "updatedAt": "2026-02-01T22:10:38.971Z",
+  "startedAt": "2026-02-01T22:10:42.990Z",
+  "updatedAt": "2026-02-01T22:19:43.538Z",
   "currentIteration": 0,
   "maxIterations": 30,
   "tasksCompleted": 0,
@@ -15,8 +15,8 @@
     "totalTasks": 1,
     "tasks": [
       {
-        "id": "client-onboarding-v2-c3y.86",
-        "title": "Add regeneration endpoint for failed pages",
+        "id": "client-onboarding-v2-c3y.87",
+        "title": "Write unit tests for trope detection and QA logic",
         "status": "open",
         "completedInSession": false
       }

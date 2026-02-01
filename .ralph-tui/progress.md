@@ -5,39 +5,40 @@ after each iteration and it's included in prompts for context.
 
 ## Codebase Patterns (Study These First)
 
-### API Endpoint Pattern
-- Endpoints use `_get_request_id(request)` helper to extract request ID from request state
-- Use `_verify_project_exists()` helper to check project exists before processing
-- Return structured error responses: `{"error": str, "code": str, "request_id": str}`
-- Log at DEBUG for request details, INFO for completion, WARNING for 4xx, ERROR for 5xx
-- All responses include `request_id` for debugging
+### Test File Structure
+- Module docstring with test coverage goals and error logging requirements
+- Enable debug logging: `logger = logging.getLogger(__name__)`
+- Use pytest fixtures with `@pytest.fixture` decorator and DEBUG logging in setup
+- Organize tests into classes by feature area (e.g., `TestBannedWordDetection`, `TestValidation`)
+- Mark async tests with `@pytest.mark.asyncio`
+- Test dataclasses first (creation, serialization via `to_dict()`)
+- Test service initialization, then detection methods, then main method, then edge cases
 
-### Page Data Access Pattern
-For operations involving page data:
-1. Query `CrawledPage` by ID and project_id
-2. Query `PageKeywords` by crawled_page_id for keyword info
-3. Page category maps to content_type (e.g., "collection", "product")
-4. URL comes from `page.normalized_url`, keyword from `keywords.primary_keyword`
+### Testing Services with External Dependencies (LLM/Claude)
+- Create mock client classes with `available` and `success` flags
+- Mock clients should track calls for assertion (e.g., `self.complete_calls: list`)
+- Use `# type: ignore[arg-type]` when passing mock clients to services
+- Test unavailable client, failed client, and successful client scenarios separately
 
-### Batch Operation Pattern
-- Fetch all records in bulk with `select().where().in_(ids)`
-- Build a dict mapping ID to record for O(1) lookups
-- Track failed items separately from successful ones
-- Return both individual results and aggregate statistics
+### Content Quality Service Testing Pattern
+- Create fixture inputs for various scenarios (clean content, banned words, em dashes, etc.)
+- Test detection methods directly: `service._detect_banned_words(text, project_id, page_id)`
+- Test score calculation with controlled `TropeDetectionResult` objects
+- Verify threshold behavior: exactly at threshold should pass, below should fail
 
 ---
 
-## 2026-02-01 - client-onboarding-v2-c3y.86
+## 2026-02-01 - client-onboarding-v2-c3y.87
 - What was implemented:
-  - Added regeneration endpoint for failed pages: `POST /regenerate` (single) and `POST /regenerate_batch` (batch)
-  - Endpoints retrieve page and keyword data, then use existing content generation service
-  - Follows same patterns as existing generate/batch endpoints
+  - Unit tests for ContentQualityService (trope detection) - 83 tests
+  - Unit tests for LLMQAFixService (LLM QA fix) - 50 tests
+  - Total: 133 tests covering dataclasses, detection methods, scoring, validation, batch processing, edge cases
 - Files changed:
-  - `backend/app/schemas/content_generation.py` - Added Regenerate* request/response schemas
-  - `backend/app/api/v1/endpoints/content_generation.py` - Added regenerate endpoints and `_get_page_data` helper
+  - `tests/services/test_content_quality.py` (new - ~870 lines)
+  - `tests/services/test_llm_qa_fix.py` (new - ~1110 lines)
 - **Learnings:**
-  - Patterns discovered: Page data is split across CrawledPage (URL, category) and PageKeywords (primary_keyword)
-  - Gotchas: mypy needs type assertions after conditional returns to narrow union types
-  - Bulk queries should use `.in_()` for page IDs, then build dict for fast lookup
+  - **Pattern: Regex word boundaries split on hyphens** - The `\b\w+\b` pattern captures "game-changer" as two words ("game" and "changer"), not one. Hyphenated word detection requires special handling.
+  - **Pattern: Mock LLM clients with dataclass response** - Create a `MockClaudeResult` dataclass with `success`, `text`, `error`, `input_tokens`, `output_tokens` fields to match real client interface.
+  - **Gotcha: Type checking in tests** - When asserting on optional fields like `result.error` or `result.fixed_bottom_description`, add `is not None` assertion first to satisfy mypy before accessing methods/properties.
+  - **Gotcha: Test file unused imports** - ruff will flag unused imports strictly even in test files. Remove `AsyncMock`, `MagicMock` if not directly used.
 ---
-
