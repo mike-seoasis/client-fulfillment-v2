@@ -77,3 +77,14 @@ async def delete_item(...) -> Response | JSONResponse:
   - Brand config endpoints provide: synthesize (POST), list (GET), get (GET), update (PUT), delete (DELETE)
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.103
+- What was implemented: Schedule endpoints at `/api/v1/projects/{id}/phases/schedule` were already mostly complete; fixed DELETE endpoint to use FastAPI-compliant pattern
+- Files changed:
+  - `backend/app/api/v1/endpoints/schedule.py` - Fixed DELETE endpoint to use `response_model=None`, import `Response`, and return `Response(status_code=204)` instead of `None`
+- **Learnings:**
+  - Schedule endpoints already existed with full CRUD operations (create, list, get, update, delete)
+  - Router was already properly registered in `backend/app/api/v1/__init__.py` at prefix `/projects/{project_id}/phases/schedule`
+  - Endpoints already met error logging requirements with proper structured error responses including `request_id`
+  - The DELETE endpoint pattern discovered in c3y.70 needs to be applied consistently across all endpoints
+---
+
