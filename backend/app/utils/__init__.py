@@ -3,6 +3,19 @@
 This package contains shared utility functions and classes.
 """
 
+from app.utils.change_detection import (
+    VALID_CHANGE_TYPES,
+    ChangeDetector,
+    ChangeSummary,
+    ChangeType,
+    ContentHasher,
+    PageChange,
+    PageSnapshot,
+    compute_content_hash,
+    detect_changes,
+    get_change_detector,
+    get_content_hasher,
+)
 from app.utils.content_signals import (
     VALID_SIGNAL_TYPES,
     ContentAnalysis,
@@ -84,4 +97,16 @@ __all__ = [
     "get_document_parser",
     "parse_document",
     "parse_document_file",
+    # Change detection
+    "ChangeType",
+    "PageSnapshot",
+    "PageChange",
+    "ChangeSummary",
+    "ContentHasher",
+    "ChangeDetector",
+    "get_content_hasher",
+    "get_change_detector",
+    "compute_content_hash",
+    "detect_changes",
+    "VALID_CHANGE_TYPES",
 ]
