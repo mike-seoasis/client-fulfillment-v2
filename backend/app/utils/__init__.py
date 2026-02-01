@@ -20,6 +20,19 @@ from app.utils.crawl_queue import (
     URLPriorityQueue,
     crawl_queue_logger,
 )
+from app.utils.document_parser import (
+    DocumentCorruptedError,
+    DocumentFormat,
+    DocumentMetadata,
+    DocumentParser,
+    DocumentParserError,
+    DocumentParseResult,
+    FileTooLargeError,
+    UnsupportedFormatError,
+    get_document_parser,
+    parse_document,
+    parse_document_file,
+)
 from app.utils.url import (
     URLNormalizationOptions,
     URLNormalizer,
@@ -59,4 +72,16 @@ __all__ = [
     "QueuedURL",
     "CrawlQueueLogger",
     "crawl_queue_logger",
+    # Document parsing
+    "DocumentFormat",
+    "DocumentMetadata",
+    "DocumentParseResult",
+    "DocumentParser",
+    "DocumentParserError",
+    "UnsupportedFormatError",
+    "FileTooLargeError",
+    "DocumentCorruptedError",
+    "get_document_parser",
+    "parse_document",
+    "parse_document_file",
 ]

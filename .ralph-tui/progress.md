@@ -32,6 +32,11 @@ except Exception as e:
     # Continue with existing results, don't fail the whole operation
 ```
 
+### Log Key Naming Convention
+Python's `logging` module reserves certain keys in `LogRecord`. When logging with `extra` dict:
+- **Avoid using**: `filename`, `lineno`, `funcName`, `pathname`, `module`, `name`, `levelname`, `levelno`, `msg`, `args`, `exc_info`, `exc_text`, `created`, `msecs`, `relativeCreated`, `thread`, `threadName`, `processName`, `process`
+- **Use prefixed alternatives**: `document_filename` instead of `filename`, `target_url` instead of `url` if ambiguous
+
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.58
@@ -48,5 +53,29 @@ except Exception as e:
   - Deduplication uses normalized question text (lowercase, strip, remove trailing `?`)
   - Related searches fallback triggers when PAA count < `min_paa_for_fallback`
   - All error logging requirements already satisfied (see docstring lines 9-16)
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.67
+- What was implemented: Document parser utility for PDF, DOCX, TXT brand documents
+- Files changed:
+  - `backend/pyproject.toml` - Added `pypdf>=4.0.0` and `python-docx>=1.1.0` dependencies
+  - `backend/app/utils/document_parser.py` - New module with DocumentParser class
+  - `backend/app/utils/__init__.py` - Exported document parser types and functions
+  - `backend/tests/utils/test_document_parser.py` - 51 comprehensive unit tests
+- **Implementation details:**
+  - `DocumentParser` class with `parse_bytes()` and `parse_file()` methods
+  - Supports PDF (pypdf), DOCX (python-docx), and TXT (with encoding detection)
+  - Returns `DocumentParseResult` with content, metadata, and sections
+  - Metadata includes: filename, format, file_size, page_count, word_count, character_count, author, title, dates
+  - File size validation with configurable `max_file_size` (default 50MB)
+  - Exception hierarchy: `DocumentParserError` -> `UnsupportedFormatError`, `FileTooLargeError`, `DocumentCorruptedError`
+  - Singleton pattern with `get_document_parser()` and convenience functions
+- **Learnings:**
+  - Python logging reserves `filename` key in LogRecord - use `document_filename` instead
+  - pypdf's `reader.metadata` can be `None` - must check before accessing attributes
+  - DOCX doesn't have reliable page count (property is None)
+  - TXT encoding detection: try UTF-8 -> UTF-8-BOM -> Latin-1 -> CP1252 -> UTF-8 with replacements
+  - Tests should handle both "library installed" and "library not installed" cases gracefully
+  - All 51 tests pass, ruff lint clean
 ---
 
