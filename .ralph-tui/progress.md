@@ -5,62 +5,59 @@ after each iteration and it's included in prompts for context.
 
 ## Codebase Patterns (Study These First)
 
-### Integration Client Pattern
-All API integration clients follow a consistent pattern in `/backend/app/integrations/`:
-1. **Configuration**: Settings in `app/core/config.py` with prefix naming (e.g., `google_nlp_api_key`, `google_nlp_timeout`)
-2. **Logger**: Dedicated logger class in `app/core/logging.py` with methods for API calls, errors, circuit breaker events
-3. **Client Class**: Async client with circuit breaker, retry logic, exponential backoff
-4. **Global Instance**: Module-level client with `init_*`, `close_*`, and `get_*` dependency functions
-5. **Error Classes**: Hierarchy of custom exceptions (Base, Timeout, RateLimit, Auth, CircuitOpen)
+### Phase Endpoint Pattern
+New phases follow this structure:
+1. **Model** (`app/models/<name>.py`) - SQLAlchemy model with UUID primary key, project_id FK, JSONB for flexible data, timestamps
+2. **Migration** (`alembic/versions/00XX_<name>.py`) - Create table with indexes, FK constraints
+3. **Repository** (`app/repositories/<name>.py`) - CRUD operations with comprehensive logging, timing, error handling
+4. **Service** (`app/services/<name>.py`) - Business logic, validation, integration orchestration
+5. **Schemas** (`app/schemas/<name>.py`) - Pydantic models for API requests/responses
+6. **Endpoints** (`app/api/v1/endpoints/<name>.py`) - FastAPI router with structured error responses
 
-### Error Logging Requirements
-- Log all outbound API calls with endpoint, method, timing at DEBUG level
-- Log request/response bodies at DEBUG level (truncate large responses)
-- Log 4xx errors at WARNING level, 5xx at ERROR level
-- Include retry attempt number in logs
-- Mask API keys and tokens in all logs
+### Error Response Format
+All endpoints return structured errors:
+```python
+{
+    "error": str,      # Human-readable message
+    "code": str,       # Error code (NOT_FOUND, VALIDATION_ERROR, etc.)
+    "request_id": str  # UUID from request state for tracing
+}
+```
 
-### Frontend Component Pattern
-React components in `/frontend/src/components/` follow consistent patterns:
-1. **Type definitions**: Types/interfaces for props, API responses, and form state at top of file
-2. **Constants**: Default values, status configs, color mappings defined before components
-3. **Utility functions**: Pure helper functions (formatters, validators) before components
-4. **Sub-components**: Internal components (badges, cards, items) before main export
-5. **Main component**: Single named export with comprehensive JSDoc
-6. **Hooks usage**: useApiQuery for data fetching, useToastMutation for mutations with notifications, useProjectSubscription for WebSocket updates
+### Delete Endpoint Pattern
+For 204 NO_CONTENT responses:
+```python
+@router.delete("/{id}", response_model=None, status_code=status.HTTP_204_NO_CONTENT)
+async def delete_thing(...) -> Response | JSONResponse:
+    # ... on success:
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+```
 
-### Error Handling in Frontend
-- Use ErrorBoundary for route-level error catching (see App.tsx pattern)
-- Log API errors with full context: endpoint, status, response body, user action
-- Use addBreadcrumb for tracking user navigation/actions
-- Form validation logged at debug level with field names
-- Toast notifications for mutation success/failure via useToastMutation
+### Integration Pattern (Crawl4AI)
+Use `get_crawl4ai()` dependency to get the global client. Check `.available` before use.
 
 ---
 
-## 2026-02-01 - client-onboarding-v2-c3y.124
-- **What was implemented**: CrawlPhasePanel component with configuration form and progress display
+## 2026-02-01 - client-onboarding-v2-c3y.89
+- **What was implemented**: Competitor content fetching and scraping feature
 - **Files changed**:
-  - `frontend/src/components/CrawlPhasePanel.tsx` - NEW: Complete crawl phase panel component
-- **Learnings:**
-  - Crawl API endpoints follow pattern: `/api/v1/projects/{project_id}/phases/crawl`
-  - Backend crawl schemas in `backend/app/schemas/crawl.py` define: CrawlStartRequest, CrawlHistoryResponse, CrawlProgressResponse
-  - useApiQuery with refetchInterval for polling active crawl progress
-  - useToastMutation wraps mutations with automatic success/error toast notifications
-  - Form state pattern: separate state for values, errors, touched fields
-  - Pattern arrays (include/exclude) stored as newline-separated strings in form, parsed to arrays on submit
----
+  - `backend/app/models/competitor.py` - Competitor model with JSONB content storage
+  - `backend/app/models/__init__.py` - Added Competitor export
+  - `backend/alembic/versions/0011_create_competitors_table.py` - Migration with unique constraint on (project_id, url)
+  - `backend/app/repositories/competitor.py` - CompetitorRepository with full CRUD, status updates, content updates
+  - `backend/app/repositories/__init__.py` - Added CompetitorRepository export
+  - `backend/app/services/competitor.py` - CompetitorService with URL validation, scraping orchestration
+  - `backend/app/schemas/competitor.py` - Request/response schemas with nested content model
+  - `backend/app/api/v1/endpoints/competitor.py` - Full REST API (add, list, get, scrape, progress, delete)
+  - `backend/app/api/v1/__init__.py` - Registered competitor router at /phases/competitor
 
-## 2026-02-01 - client-onboarding-v2-c3y.88
-- **What was implemented**: Google Cloud NLP integration client for entity extraction
-- **Files changed**:
-  - `backend/app/core/config.py` - Added Google Cloud NLP settings (api_key, project_id, timeout, max_retries, retry_delay, circuit breaker settings)
-  - `backend/app/core/logging.py` - Added GoogleNLPLogger class with comprehensive logging methods
-  - `backend/app/integrations/google_nlp.py` - NEW: Complete async client with entity extraction capabilities
 - **Learnings:**
-  - Integration clients follow a strict pattern: config settings -> logger -> client class -> global instance management
-  - Circuit breaker pattern is consistent across all integrations with CLOSED/OPEN/HALF_OPEN states
-  - Google Cloud NLP API uses API key as query parameter (`?key=`) rather than header auth
-  - Entity extraction returns entities with: name, type (EntityType enum), salience score, mentions, metadata
+  - FastAPI delete endpoints with 204 status require `response_model=None` and must return `Response(status_code=...)` not `None`
+  - Background tasks in FastAPI use `BackgroundTasks` and `background_tasks.add_task()`
+  - Repository pattern includes timing logs for slow operations (>1s threshold)
+  - Status transitions logged at INFO level, all other DB ops at DEBUG
+  - URL deduplication via composite unique index on (project_id, url)
+  - Crawl4AI integration returns markdown content, links, and metadata from scraped pages
+
 ---
 
