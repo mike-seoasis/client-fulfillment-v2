@@ -8,14 +8,16 @@
  * - Error handling with toast notifications
  */
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { Plus, Search } from 'lucide-react'
 import { useApiQuery } from '@/lib/hooks/useApiQuery'
 import { addBreadcrumb } from '@/lib/errorReporting'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/form-field'
 import { ProjectCard, ProjectCardSkeleton, type Project } from '@/components/ProjectCard'
+import { CreateProjectModal } from '@/components/CreateProjectModal'
 
 /**
  * Empty state component shown when no projects exist
@@ -112,7 +114,9 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
  */
 export function ProjectListPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState('')
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
   // Fetch projects from API
   const {
@@ -151,11 +155,24 @@ export function ProjectListPage() {
     navigate(`/projects/${project.id}`)
   }
 
-  // Handle create project button click
-  const handleCreateClick = () => {
+  // Handle create project button click - open modal
+  const handleCreateClick = useCallback(() => {
     addBreadcrumb('Click create project button', 'user-action')
-    navigate('/projects/new')
-  }
+    setIsCreateModalOpen(true)
+  }, [])
+
+  // Handle modal close
+  const handleCreateModalClose = useCallback(() => {
+    setIsCreateModalOpen(false)
+  }, [])
+
+  // Handle successful project creation
+  const handleProjectCreated = useCallback((project: { id: string; name: string }) => {
+    // Invalidate projects query to refetch the list
+    queryClient.invalidateQueries({ queryKey: ['projects'] })
+    // Navigate to the new project
+    navigate(`/projects/${project.id}`)
+  }, [queryClient, navigate])
 
   // Handle search input change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -278,6 +295,13 @@ export function ProjectListPage() {
           )}
         </main>
       </div>
+
+      {/* Create Project Modal */}
+      <CreateProjectModal
+        isOpen={isCreateModalOpen}
+        onClose={handleCreateModalClose}
+        onSuccess={handleProjectCreated}
+      />
     </div>
   )
 }
