@@ -925,3 +925,247 @@ class ClaudeLogger:
 
 # Singleton Claude logger
 claude_logger = ClaudeLogger()
+
+
+class PerplexityLogger:
+    """Logger for Perplexity API operations with required error logging.
+
+    Logs all outbound API calls with endpoint, method, timing.
+    Logs request/response bodies at DEBUG level (truncate large responses).
+    Handles timeouts, rate limits (429), auth failures (401/403).
+    Includes retry attempt number in logs.
+    Masks API keys in all logs.
+    Logs circuit breaker state changes.
+    """
+
+    def __init__(self) -> None:
+        self.logger = get_logger("perplexity")
+
+    def api_call_start(
+        self,
+        model: str,
+        prompt_length: int,
+        retry_attempt: int = 0,
+        request_id: str | None = None,
+    ) -> None:
+        """Log outbound API call start at DEBUG level."""
+        self.logger.debug(
+            f"Perplexity API call: {model}",
+            extra={
+                "model": model,
+                "prompt_length": prompt_length,
+                "retry_attempt": retry_attempt,
+                "request_id": request_id,
+            },
+        )
+
+    def api_call_success(
+        self,
+        model: str,
+        duration_ms: float,
+        input_tokens: int | None = None,
+        output_tokens: int | None = None,
+        request_id: str | None = None,
+    ) -> None:
+        """Log successful API call at DEBUG level with token usage."""
+        self.logger.debug(
+            f"Perplexity API call completed: {model}",
+            extra={
+                "model": model,
+                "duration_ms": round(duration_ms, 2),
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "total_tokens": (input_tokens or 0) + (output_tokens or 0),
+                "request_id": request_id,
+                "success": True,
+            },
+        )
+
+    def api_call_error(
+        self,
+        model: str,
+        duration_ms: float,
+        status_code: int | None,
+        error: str,
+        error_type: str,
+        retry_attempt: int = 0,
+        request_id: str | None = None,
+    ) -> None:
+        """Log failed API call at WARNING or ERROR level based on status."""
+        # 4xx at WARNING, 5xx and others at ERROR
+        level = logging.WARNING if status_code and 400 <= status_code < 500 else logging.ERROR
+        self.logger.log(
+            level,
+            f"Perplexity API call failed: {model}",
+            extra={
+                "model": model,
+                "duration_ms": round(duration_ms, 2),
+                "status_code": status_code,
+                "error": error,
+                "error_type": error_type,
+                "retry_attempt": retry_attempt,
+                "request_id": request_id,
+                "success": False,
+            },
+        )
+
+    def timeout(self, model: str, timeout_seconds: float) -> None:
+        """Log request timeout at WARNING level."""
+        self.logger.warning(
+            "Perplexity API request timeout",
+            extra={
+                "model": model,
+                "timeout_seconds": timeout_seconds,
+            },
+        )
+
+    def rate_limit(
+        self,
+        model: str,
+        retry_after: float | None = None,
+        request_id: str | None = None,
+    ) -> None:
+        """Log rate limit (429) at WARNING level."""
+        self.logger.warning(
+            "Perplexity API rate limit hit (429)",
+            extra={
+                "model": model,
+                "retry_after_seconds": retry_after,
+                "request_id": request_id,
+            },
+        )
+
+    def auth_failure(self, status_code: int) -> None:
+        """Log authentication failure (401/403) at WARNING level."""
+        self.logger.warning(
+            f"Perplexity API authentication failed ({status_code})",
+            extra={
+                "status_code": status_code,
+            },
+        )
+
+    def request_body(self, model: str, system_prompt: str, user_prompt: str) -> None:
+        """Log request body at DEBUG level (truncate large values)."""
+        self.logger.debug(
+            "Perplexity API request body",
+            extra={
+                "model": model,
+                "system_prompt": self._truncate_text(system_prompt, 200),
+                "user_prompt": self._truncate_text(user_prompt, 500),
+            },
+        )
+
+    def response_body(
+        self,
+        model: str,
+        response_text: str,
+        duration_ms: float,
+        citations: list[str] | None = None,
+    ) -> None:
+        """Log response body at DEBUG level (truncate large values)."""
+        self.logger.debug(
+            "Perplexity API response body",
+            extra={
+                "model": model,
+                "response_text": self._truncate_text(response_text, 500),
+                "duration_ms": round(duration_ms, 2),
+                "citation_count": len(citations) if citations else 0,
+            },
+        )
+
+    def _truncate_text(self, text: str, max_length: int = 500) -> str:
+        """Truncate text for logging."""
+        if len(text) <= max_length:
+            return text
+        return text[:max_length] + f"... (truncated, {len(text)} chars)"
+
+    def token_usage(
+        self,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+    ) -> None:
+        """Log API token usage at INFO level."""
+        self.logger.info(
+            "Perplexity API token usage",
+            extra={
+                "model": model,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "total_tokens": input_tokens + output_tokens,
+            },
+        )
+
+    def circuit_state_change(
+        self, previous_state: str, new_state: str, failure_count: int
+    ) -> None:
+        """Log circuit breaker state change at WARNING level."""
+        self.logger.warning(
+            "Perplexity circuit breaker state changed",
+            extra={
+                "previous_state": previous_state,
+                "new_state": new_state,
+                "failure_count": failure_count,
+            },
+        )
+
+    def circuit_open(self, failure_count: int, recovery_timeout: float) -> None:
+        """Log circuit breaker opening at ERROR level."""
+        self.logger.error(
+            "Perplexity circuit breaker opened - API calls disabled",
+            extra={
+                "failure_count": failure_count,
+                "recovery_timeout_seconds": recovery_timeout,
+            },
+        )
+
+    def circuit_recovery_attempt(self) -> None:
+        """Log circuit breaker recovery attempt at INFO level."""
+        self.logger.info("Perplexity circuit breaker attempting recovery")
+
+    def circuit_closed(self) -> None:
+        """Log circuit breaker closing at INFO level."""
+        self.logger.info("Perplexity circuit breaker closed - API calls restored")
+
+    def graceful_fallback(self, operation: str, reason: str) -> None:
+        """Log graceful fallback when Perplexity is unavailable."""
+        self.logger.info(
+            "Perplexity unavailable, using fallback",
+            extra={
+                "operation": operation,
+                "reason": reason,
+            },
+        )
+
+    def analysis_start(self, url: str) -> None:
+        """Log website analysis operation start at INFO level."""
+        self.logger.info(
+            "Starting website analysis",
+            extra={
+                "target_url": url[:200],
+            },
+        )
+
+    def analysis_complete(
+        self,
+        url: str,
+        duration_ms: float,
+        success: bool,
+        citation_count: int = 0,
+    ) -> None:
+        """Log website analysis operation completion."""
+        level = logging.INFO if success else logging.WARNING
+        self.logger.log(
+            level,
+            "Website analysis completed" if success else "Website analysis failed",
+            extra={
+                "target_url": url[:200],
+                "duration_ms": round(duration_ms, 2),
+                "success": success,
+                "citation_count": citation_count,
+            },
+        )
+
+
+# Singleton Perplexity logger
+perplexity_logger = PerplexityLogger()

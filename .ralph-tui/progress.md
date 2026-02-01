@@ -45,3 +45,19 @@ logger = get_logger(__name__)
   - Some existing mypy errors in config.py, logging.py, redis.py are pre-existing
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.64
+- **What was implemented**: Perplexity API integration client for website analysis
+- **Files changed**:
+  - `backend/app/integrations/perplexity.py` (new) - Full async client with circuit breaker, retry logic, logging
+  - `backend/app/integrations/__init__.py` - Added Perplexity exports
+  - `backend/app/core/logging.py` - Added PerplexityLogger class
+  - `backend/app/core/config.py` - Added Perplexity settings (API key, model, timeouts, circuit breaker)
+- **Learnings:**
+  - Perplexity API uses OpenAI-compatible format (`/chat/completions` endpoint)
+  - Response includes `citations` array for web sources
+  - Uses Bearer token auth (not x-api-key like Anthropic)
+  - Model names: `sonar` for web-connected queries
+  - Integration pattern: global singleton + `get_*()` dependency function
+  - Logger pattern: service-specific logger class in core/logging.py with singleton instance
+---
+
