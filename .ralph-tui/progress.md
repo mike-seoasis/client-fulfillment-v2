@@ -32,6 +32,43 @@ Brand voice is injected via `VoiceSchema` from `/backend/app/schemas/brand_confi
 - Fields: tone, personality, writing_style, target_audience, value_proposition
 - Format for prompts via `_format_brand_voice()` method in content services
 
+### Frontend UI Component Pattern
+UI components follow a consistent structure in `/frontend/src/components/ui/`:
+1. **Module docstring** with usage examples
+2. **CVA variants** via `class-variance-authority` for styling variants
+3. **Props interface** extending HTML attributes with custom props
+4. **Component exports** with forwardRef when needed
+5. **Separate provider files** for context-based components
+6. **Helper functions** in `/frontend/src/lib/` to avoid Fast Refresh warnings
+
+### Frontend Error Handling Pattern
+Error handling follows a layered approach:
+1. **Global handlers** (`lib/globalErrorHandlers.ts`) - window.onerror, unhandledrejection
+2. **Error reporting** (`lib/errorReporting.ts`) - Sentry-ready centralized logging
+3. **Error boundaries** (`components/ErrorBoundary.tsx`) - React component error catching
+4. **API client** (`lib/axiosClient.ts`) - Circuit breaker, retries, detailed error logging
+5. **Query client** (`lib/queryClient.ts`) - React Query error handling with reporting
+6. **Toast system** (`components/ui/toast-provider.tsx`) - User-visible error notifications
+
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.119
+- What was implemented: Toast notification system with full error handling integration
+- Files created:
+  - `frontend/src/components/ui/toast.tsx` - Toast component with variants (success, error, warning, info)
+  - `frontend/src/components/ui/toast-provider.tsx` - React context provider with useToast hook
+  - `frontend/src/lib/toastHelpers.ts` - Helper function for API error toasts
+  - `frontend/src/lib/hooks/useToastMutation.ts` - React Query mutation wrapper with auto-toast
+- Files modified:
+  - `frontend/src/App.tsx` - Added ToastProvider wrapper
+  - `frontend/src/lib/hooks/index.ts` - Export useToastMutation hook
+- **Learnings:**
+  - Existing error infrastructure was comprehensive: ErrorBoundary, global handlers, error reporting, API client logging
+  - Used `/* eslint-disable react-refresh/only-export-components */` pattern for files exporting hooks alongside components
+  - Toast variants match design system: success (green), error (warm red), warning (amber), info (cream/gold)
+  - Positioned toasts in top-right with max 5 visible at once
+  - API error toasts provide user-friendly messages based on status codes (401, 403, 404, 5xx)
+  - Integrated with breadcrumb system for debugging
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.77

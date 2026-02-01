@@ -7,3 +7,6 @@ export type {
   UseApiQueryOptions,
   UseApiMutationOptions,
 } from './useApiQuery'
+
+export { useToastMutation } from './useToastMutation'
+export type { ToastMutationOptions } from './useToastMutation'
