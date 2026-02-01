@@ -146,8 +146,12 @@ class PatternMatcher:
         logger.debug(
             "PatternMatcher.__init__ called",
             extra={
-                "include_pattern_count": len(include_patterns) if include_patterns else 0,
-                "exclude_pattern_count": len(exclude_patterns) if exclude_patterns else 0,
+                "include_pattern_count": len(include_patterns)
+                if include_patterns
+                else 0,
+                "exclude_pattern_count": len(exclude_patterns)
+                if exclude_patterns
+                else 0,
             },
         )
 
@@ -472,8 +476,12 @@ class CrawlService:
             "filter_urls() called",
             extra={
                 "url_count": len(urls),
-                "include_pattern_count": len(include_patterns) if include_patterns else 0,
-                "exclude_pattern_count": len(exclude_patterns) if exclude_patterns else 0,
+                "include_pattern_count": len(include_patterns)
+                if include_patterns
+                else 0,
+                "exclude_pattern_count": len(exclude_patterns)
+                if exclude_patterns
+                else 0,
             },
         )
 
@@ -1241,11 +1249,13 @@ class CrawlService:
                         )
                     else:
                         progress.pages_failed += 1
-                        progress.errors.append({
-                            "url": queued_url.url,
-                            "error": result.error or "Unknown error",
-                            "timestamp": datetime.now(UTC).isoformat(),
-                        })
+                        progress.errors.append(
+                            {
+                                "url": queued_url.url,
+                                "error": result.error or "Unknown error",
+                                "timestamp": datetime.now(UTC).isoformat(),
+                            }
+                        )
                         logger.warning(
                             "Page crawl failed",
                             extra={
@@ -1257,11 +1267,13 @@ class CrawlService:
 
                 except Exception as e:
                     progress.pages_failed += 1
-                    progress.errors.append({
-                        "url": queued_url.url,
-                        "error": str(e),
-                        "timestamp": datetime.now(UTC).isoformat(),
-                    })
+                    progress.errors.append(
+                        {
+                            "url": queued_url.url,
+                            "error": str(e),
+                            "timestamp": datetime.now(UTC).isoformat(),
+                        }
+                    )
                     logger.error(
                         "Exception during page crawl",
                         extra={
@@ -1304,7 +1316,12 @@ class CrawlService:
             progress.status = "failed"
             progress.completed_at = datetime.now(UTC)
             await self.update_crawl_status(
-                crawl_id, "failed", progress, error_message=str(progress.errors[-1] if progress.errors else "Unknown error")
+                crawl_id,
+                "failed",
+                progress,
+                error_message=str(
+                    progress.errors[-1] if progress.errors else "Unknown error"
+                ),
             )
             # Broadcast failure to WebSocket subscribers
             await self._broadcast_progress(project_id, crawl_id, progress)
@@ -1312,12 +1329,16 @@ class CrawlService:
         except Exception as e:
             progress.status = "failed"
             progress.completed_at = datetime.now(UTC)
-            progress.errors.append({
-                "url": "N/A",
-                "error": str(e),
-                "timestamp": datetime.now(UTC).isoformat(),
-            })
-            await self.update_crawl_status(crawl_id, "failed", progress, error_message=str(e))
+            progress.errors.append(
+                {
+                    "url": "N/A",
+                    "error": str(e),
+                    "timestamp": datetime.now(UTC).isoformat(),
+                }
+            )
+            await self.update_crawl_status(
+                crawl_id, "failed", progress, error_message=str(e)
+            )
             # Broadcast failure to WebSocket subscribers
             await self._broadcast_progress(project_id, crawl_id, progress)
             logger.error(
@@ -1363,8 +1384,12 @@ class CrawlService:
                 "urls_discovered": progress.urls_discovered,
                 "current_depth": progress.current_depth,
                 "status": progress.status,
-                "started_at": progress.started_at.isoformat() if progress.started_at else None,
-                "completed_at": progress.completed_at.isoformat() if progress.completed_at else None,
+                "started_at": progress.started_at.isoformat()
+                if progress.started_at
+                else None,
+                "completed_at": progress.completed_at.isoformat()
+                if progress.completed_at
+                else None,
                 "error_count": len(progress.errors),
             }
 
@@ -1447,11 +1472,22 @@ class CrawlService:
 
     def _validate_crawl_status(self, status: str) -> None:
         """Validate crawl status."""
-        valid_statuses = {"pending", "running", "completed", "failed", "cancelled"}
+        valid_statuses = {
+            "pending",
+            "running",
+            "completed",
+            "failed",
+            "cancelled",
+            "interrupted",
+        }
         if status not in valid_statuses:
             logger.warning(
                 "Validation failed: invalid crawl status",
-                extra={"field": "status", "value": status, "valid": list(valid_statuses)},
+                extra={
+                    "field": "status",
+                    "value": status,
+                    "valid": list(valid_statuses),
+                },
             )
             raise CrawlValidationError(
                 "status", status, f"Must be one of: {', '.join(sorted(valid_statuses))}"
@@ -1555,7 +1591,9 @@ class CrawlService:
                             "project_id": project_id,
                             "url": url[:200],
                             "page_id": existing.id,
-                            "last_crawled_at": existing.last_crawled_at.isoformat() if existing.last_crawled_at else None,
+                            "last_crawled_at": existing.last_crawled_at.isoformat()
+                            if existing.last_crawled_at
+                            else None,
                         },
                     )
                     if not update_existing:
@@ -1568,11 +1606,20 @@ class CrawlService:
                             },
                         )
                         # Return a result indicating we skipped
-                        results.append((url, CrawlResult(
-                            success=True,
-                            url=url,
-                            metadata={"skipped": True, "reason": "update_existing=False"},
-                        ), False))
+                        results.append(
+                            (
+                                url,
+                                CrawlResult(
+                                    success=True,
+                                    url=url,
+                                    metadata={
+                                        "skipped": True,
+                                        "reason": "update_existing=False",
+                                    },
+                                ),
+                                False,
+                            )
+                        )
                         continue
                 else:
                     logger.debug(
@@ -1741,7 +1788,9 @@ class CrawlService:
                         "status_code": result.status_code,
                         "duration_ms": round(attempt_duration_ms, 2),
                         "retry_attempt": attempt,
-                        "request_id": result.metadata.get("request_id") if result.metadata else None,
+                        "request_id": result.metadata.get("request_id")
+                        if result.metadata
+                        else None,
                     },
                 )
 
@@ -1757,7 +1806,9 @@ class CrawlService:
                             "status_code": result.status_code,
                             "error": result.error,
                             "retry_attempt": attempt,
-                            "request_id": result.metadata.get("request_id") if result.metadata else None,
+                            "request_id": result.metadata.get("request_id")
+                            if result.metadata
+                            else None,
                         },
                     )
 
@@ -1767,7 +1818,7 @@ class CrawlService:
 
                     # Retry on 5xx or 429 with exponential backoff
                     if attempt < max_retries - 1:
-                        delay = base_delay * (2 ** attempt)
+                        delay = base_delay * (2**attempt)
                         logger.info(
                             "Retrying API request",
                             extra={
@@ -1804,7 +1855,7 @@ class CrawlService:
 
                 # Retry on network failures with exponential backoff
                 if attempt < max_retries - 1:
-                    delay = base_delay * (2 ** attempt)
+                    delay = base_delay * (2**attempt)
                     logger.info(
                         "Retrying after network failure",
                         extra={

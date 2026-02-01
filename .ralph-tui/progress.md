@@ -46,6 +46,18 @@ When no reviews are available, generate personas from website analysis:
 - Make fallback opt-in via `use_fallback` parameter (default True)
 - Gracefully handle fallback failures (return empty personas, don't fail the overall operation)
 
+### Startup Recovery Pattern
+When implementing background job recovery for interrupted operations:
+- Add a dedicated recovery service (e.g., `CrawlRecoveryService`) separate from the main service
+- Use dataclasses for structured results: `InterruptedCrawl`, `RecoveryResult`, `RecoverySummary`
+- Query for abandoned jobs: `WHERE status IN ('running', 'pending') AND updated_at < cutoff_time`
+- Default stale threshold: 5 minutes (configurable via parameter)
+- Store recovery metadata in existing JSONB stats field: `stats.recovery = {interrupted: true, recovery_reason, ...}`
+- Add new status value (e.g., "interrupted") or mark as "failed" with metadata
+- Integration: Call recovery in main.py lifespan after database init, before scheduler start
+- Don't fail app startup if recovery fails—log error and continue
+- Always include `crawl_id`, `project_id` in recovery logs for traceability
+
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.69
@@ -76,5 +88,23 @@ When no reviews are available, generate personas from website analysis:
   - Categorization uses Claude LLM with temperature=0.0 for deterministic results
   - Integration point: `enrich_keyword()` accepts `categorize_enabled=True` to auto-categorize
   - Confidence scores: 0.8-1.0 (clear), 0.6-0.8 (likely), 0.4-0.6 (unclear)
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.102
+- What was implemented: Startup recovery for interrupted crawls
+- Files changed:
+  - `backend/app/services/crawl_recovery.py` - New service with `CrawlRecoveryService`, dataclasses (`InterruptedCrawl`, `RecoveryResult`, `RecoverySummary`), methods for finding and recovering interrupted crawls
+  - `backend/app/main.py` - Added import and call to `run_startup_recovery()` in lifespan after database/scheduler init
+  - `backend/app/services/crawl.py` - Added "interrupted" to valid crawl statuses in `_validate_crawl_status()`
+  - `backend/app/schemas/crawl.py` - Added "interrupted" to `VALID_CRAWL_STATUSES` frozenset
+  - `backend/tests/services/test_crawl_recovery.py` - 35+ comprehensive tests covering all recovery scenarios
+- **Learnings:**
+  - Crawls left in "running" state during server restart become orphaned—recovery detects via `updated_at < cutoff_time`
+  - Recovery stores metadata in `stats.recovery` JSONB field: interrupted flag, timestamp, previous status, progress at interruption
+  - Setting `mark_as_failed=True` (default) marks recovered crawls as "failed"; `mark_as_failed=False` uses new "interrupted" status
+  - Error message is set on recovery describing the interruption and progress made
+  - Session-scoped service (not singleton) since recovery runs once at startup with a dedicated db session
+  - Recovery is non-blocking: errors are logged but don't prevent app startup
+  - Updated both service validation and schema constants to accept "interrupted" as valid status
 ---
 

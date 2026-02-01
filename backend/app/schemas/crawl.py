@@ -13,20 +13,25 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Valid crawl statuses
-VALID_CRAWL_STATUSES = frozenset({
-    "pending",
-    "running",
-    "completed",
-    "failed",
-    "cancelled",
-})
+VALID_CRAWL_STATUSES = frozenset(
+    {
+        "pending",
+        "running",
+        "completed",
+        "failed",
+        "cancelled",
+        "interrupted",  # Set by startup recovery when crawls are abandoned
+    }
+)
 
 # Valid trigger types
-VALID_TRIGGER_TYPES = frozenset({
-    "manual",
-    "scheduled",
-    "webhook",
-})
+VALID_TRIGGER_TYPES = frozenset(
+    {
+        "manual",
+        "scheduled",
+        "webhook",
+    }
+)
 
 
 class CrawlStartRequest(BaseModel):
@@ -95,7 +100,9 @@ class CrawlHistoryResponse(BaseModel):
     pages_crawled: int = Field(..., description="Number of pages successfully crawled")
     pages_failed: int = Field(..., description="Number of pages that failed")
     stats: dict[str, Any] = Field(default_factory=dict, description="Crawl statistics")
-    error_log: list[dict[str, Any]] = Field(default_factory=list, description="Error entries")
+    error_log: list[dict[str, Any]] = Field(
+        default_factory=list, description="Error entries"
+    )
     error_message: str | None = Field(None, description="Error message if failed")
     created_at: datetime = Field(..., description="Record creation timestamp")
     updated_at: datetime = Field(..., description="Record update timestamp")
@@ -124,7 +131,9 @@ class CrawledPageResponse(BaseModel):
     category: str | None = Field(None, description="Page category")
     labels: list[str] = Field(default_factory=list, description="Page labels/tags")
     title: str | None = Field(None, description="Page title")
-    content_hash: str | None = Field(None, description="Content hash for change detection")
+    content_hash: str | None = Field(
+        None, description="Content hash for change detection"
+    )
     last_crawled_at: datetime | None = Field(None, description="When last crawled")
     created_at: datetime = Field(..., description="Record creation timestamp")
     updated_at: datetime = Field(..., description="Record update timestamp")
