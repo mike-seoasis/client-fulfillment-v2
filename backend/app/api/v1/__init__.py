@@ -6,6 +6,7 @@ from app.api.v1.endpoints import (
     amazon_reviews,
     brand_config,
     categorize,
+    competitor,
     content_generation,
     content_plan,
     content_quality,
@@ -38,6 +39,11 @@ router.include_router(
     categorize.router,
     prefix="/projects/{project_id}/phases/categorize",
     tags=["Categorize Phase"],
+)
+router.include_router(
+    competitor.router,
+    prefix="/projects/{project_id}/phases/competitor",
+    tags=["Competitor Phase"],
 )
 router.include_router(
     label.router,
