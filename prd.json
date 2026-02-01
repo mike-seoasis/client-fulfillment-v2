@@ -3,39 +3,36 @@
   "description": "Ready tasks batch",
   "userStories": [
     {
-      "id": "client-onboarding-v2-c3y.61",
-      "title": "Implement parallel processing with rate limiting (max 5 concurrent)",
-      "description": "ERROR LOGGING REQUIREMENTS:\n- Log method entry/exit at DEBUG level with parameters (sanitized)\n- Log all exceptions with full stack trace and context\n- Include entity IDs (project_id, page_id) in all service logs\n- Log validation failures with field names and rejected values\n- Log state transitions (phase changes) at INFO level\n- Add timing logs for operations >1 second",
-      "acceptanceCriteria": [],
-      "passes": true,
-      "completionNotes": "Completed by agent"
-    },
-    {
-      "id": "client-onboarding-v2-c3y.70",
-      "title": "Create /api/v1/projects/{id}/phases/brand_config endpoints",
+      "id": "client-onboarding-v2-c3y.62",
+      "title": "Create /api/v1/projects/{id}/phases/paa_enrichment endpoints",
       "description": "ERROR LOGGING REQUIREMENTS:\n- Log all incoming requests with method, path, request_id\n- Log request body at DEBUG level (sanitize sensitive fields)\n- Log response status and timing for every request\n- Return structured error responses: {\"error\": str, \"code\": str, \"request_id\": str}\n- Log 4xx errors at WARNING, 5xx at ERROR\n- Include user context if available\n- Log rate limit hits at WARNING level\n\nRAILWAY DEPLOYMENT REQUIREMENTS:\n- CORS must allow frontend domain (configure via FRONTEND_URL env var)\n- Return proper error responses (Railway shows these in logs)\n- Include request_id in all responses for debugging\n- Health check endpoint at /health or /api/v1/health",
       "acceptanceCriteria": [],
       "passes": true,
       "completionNotes": "Completed by agent"
     },
     {
-      "id": "client-onboarding-v2-c3y.103",
-      "title": "Create /api/v1/projects/{id}/schedule endpoints",
+      "id": "client-onboarding-v2-c3y.71",
+      "title": "Add document upload endpoint with S3/local storage",
       "description": "ERROR LOGGING REQUIREMENTS:\n- Log all incoming requests with method, path, request_id\n- Log request body at DEBUG level (sanitize sensitive fields)\n- Log response status and timing for every request\n- Return structured error responses: {\"error\": str, \"code\": str, \"request_id\": str}\n- Log 4xx errors at WARNING, 5xx at ERROR\n- Include user context if available\n- Log rate limit hits at WARNING level\n\nRAILWAY DEPLOYMENT REQUIREMENTS:\n- CORS must allow frontend domain (configure via FRONTEND_URL env var)\n- Return proper error responses (Railway shows these in logs)\n- Include request_id in all responses for debugging\n- Health check endpoint at /health or /api/v1/health",
       "acceptanceCriteria": [],
-      "passes": true,
-      "completionNotes": "Completed by agent"
+      "passes": false
     },
     {
-      "id": "client-onboarding-v2-c3y.112",
-      "title": "Install and configure shadcn/ui component library",
-      "description": "ERROR LOGGING REQUIREMENTS:\n- Implement React Error Boundaries for all route components\n- Log caught errors to console with component stack\n- Set up global window.onerror and unhandledrejection handlers\n- Log API errors with endpoint, status, response body\n- Include user action context in error logs\n- Set up error reporting service integration point (e.g., Sentry stub)\n\nRAILWAY DEPLOYMENT REQUIREMENTS:\n- Build as static assets (npm run build)\n- API URL via VITE_API_URL environment variable\n- Configure for production build (NODE_ENV=production)\n- Can deploy to Railway static hosting or separate service\n- Use relative paths or env-configured absolute URLs",
+      "id": "client-onboarding-v2-c3y.104",
+      "title": "Create /api/v1/projects/{id}/crawl-history endpoints",
+      "description": "ERROR LOGGING REQUIREMENTS:\n- Log all incoming requests with method, path, request_id\n- Log request body at DEBUG level (sanitize sensitive fields)\n- Log response status and timing for every request\n- Return structured error responses: {\"error\": str, \"code\": str, \"request_id\": str}\n- Log 4xx errors at WARNING, 5xx at ERROR\n- Include user context if available\n- Log rate limit hits at WARNING level\n\nRAILWAY DEPLOYMENT REQUIREMENTS:\n- CORS must allow frontend domain (configure via FRONTEND_URL env var)\n- Return proper error responses (Railway shows these in logs)\n- Include request_id in all responses for debugging\n- Health check endpoint at /health or /api/v1/health",
       "acceptanceCriteria": [],
-      "passes": true,
-      "completionNotes": "Completed by agent"
+      "passes": false
+    },
+    {
+      "id": "client-onboarding-v2-c3y.113",
+      "title": "Create AppLayout with navigation sidebar",
+      "description": "ERROR LOGGING REQUIREMENTS:\n- Implement React Error Boundaries for all route components\n- Log caught errors to console with component stack\n- Set up global window.onerror and unhandledrejection handlers\n- Log API errors with endpoint, status, response body\n- Include user action context in error logs\n- Set up error reporting service integration point (e.g., Sentry stub)",
+      "acceptanceCriteria": [],
+      "passes": false
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-01T19:41:09.686Z"
+    "updatedAt": "2026-02-01T19:43:37.603Z"
   }
 }
