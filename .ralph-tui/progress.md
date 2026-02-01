@@ -20,6 +20,13 @@ Phase endpoints follow a consistent structure in `backend/app/api/v1/endpoints/`
 - Always include in error responses and log extra data
 - Timing tracked with `time.monotonic()` for duration_ms
 
+### Frontend Error Logging Pattern
+- Global handlers set up in `frontend/src/lib/globalErrorHandlers.ts` - call `setupGlobalErrorHandlers()` before React mounts
+- Error reporting service integration in `frontend/src/lib/errorReporting.ts` - supports Sentry via `VITE_SENTRY_DSN`
+- `ErrorBoundary` component wraps routes with `componentName` prop for context
+- API client in `frontend/src/lib/api.ts` accepts `userAction` and `component` options for error context
+- All API errors logged with: endpoint, method, status, responseBody, userAction, component
+
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.62
@@ -87,5 +94,30 @@ Phase endpoints follow a consistent structure in `backend/app/api/v1/endpoints/`
   - Pattern: Abstract base class `StorageBackend` allows easy addition of new storage backends
   - Gotcha: Without a document metadata DB table, download/delete require filesystem glob to find files by document_id
   - Pattern: Use `time.monotonic()` for duration tracking, log slow operations (>1000ms)
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.113
+- **What was implemented**: Verified frontend error logging already fully implemented
+- **Files present** (no changes needed):
+  - `frontend/src/components/ErrorBoundary.tsx` - React Error Boundary with component stack logging
+  - `frontend/src/lib/errorReporting.ts` - Centralized error reporting with Sentry stub integration
+  - `frontend/src/lib/globalErrorHandlers.ts` - Global window.onerror and onunhandledrejection handlers
+  - `frontend/src/lib/api.ts` - API client with comprehensive error logging (endpoint, status, response body)
+  - `frontend/src/lib/env.ts` - Environment config including VITE_SENTRY_DSN support
+  - `frontend/src/main.tsx` - Initializes global handlers and error reporting before React mounts
+  - `frontend/src/App.tsx` - Routes wrapped in ErrorBoundary components
+- **Features available**:
+  - ErrorBoundary class component with componentStack logging and retry button
+  - `withErrorBoundary` HOC for wrapping components
+  - Global handlers for uncaught errors and unhandled promise rejections
+  - API client logs errors with endpoint, method, status, responseBody, userAction, component
+  - Sentry integration point ready (just set VITE_SENTRY_DSN and uncomment Sentry.init)
+  - Breadcrumb support for debugging API call traces
+- **Quality checks**: Passed TypeScript typecheck and ESLint
+- **Learnings:**
+  - Pattern: Initialize global error handlers BEFORE React mounts in main.tsx
+  - Pattern: Wrap each route in its own ErrorBoundary with componentName prop for better error context
+  - Pattern: API client accepts `userAction` and `component` options for rich error context
+  - Pattern: Use synthetic Error objects for non-Error throws/rejections to maintain consistent logging
 ---
 
