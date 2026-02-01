@@ -46,6 +46,16 @@ from app.services.keyword_ideas import (
     generate_keyword_ideas,
     get_keyword_idea_service,
 )
+from app.services.keyword_specificity import (
+    KeywordSpecificityFilterError,
+    KeywordSpecificityService,
+    KeywordSpecificityServiceError,
+    KeywordSpecificityValidationError,
+    SpecificityFilterRequest,
+    SpecificityFilterResult,
+    filter_keywords_by_specificity,
+    get_keyword_specificity_service,
+)
 from app.services.keyword_volume import (
     KeywordVolumeData,
     KeywordVolumeLookupError,
@@ -163,4 +173,13 @@ __all__ = [
     "VolumeStats",
     "lookup_keyword_volumes",
     "get_keyword_volume_service",
+    # Keyword specificity service
+    "KeywordSpecificityService",
+    "KeywordSpecificityServiceError",
+    "KeywordSpecificityFilterError",
+    "KeywordSpecificityValidationError",
+    "SpecificityFilterRequest",
+    "SpecificityFilterResult",
+    "filter_keywords_by_specificity",
+    "get_keyword_specificity_service",
 ]
