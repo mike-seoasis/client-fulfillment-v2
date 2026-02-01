@@ -24,7 +24,7 @@ ERROR LOGGING REQUIREMENTS:
 """
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from app.core.logging import get_logger
@@ -73,12 +73,14 @@ class PrimaryKeywordRequest:
     Attributes:
         collection_title: Title of the collection (for logging/context)
         specific_keywords: List of SPECIFIC keywords with volume data (from Step 4)
+        used_primaries: Set of keywords already used as primary elsewhere (to avoid duplicates)
         project_id: Project ID for logging
         page_id: Page ID for logging
     """
 
     collection_title: str
     specific_keywords: list[KeywordVolumeData]
+    used_primaries: set[str] = field(default_factory=set)
     project_id: str | None = None
     page_id: str | None = None
 
@@ -161,6 +163,17 @@ class PrimaryKeywordService:
         logger.debug("PrimaryKeywordService.__init__ called")
         logger.debug("PrimaryKeywordService initialized")
 
+    def _normalize_keyword(self, keyword: str) -> str:
+        """Normalize a keyword for comparison.
+
+        Args:
+            keyword: Keyword to normalize
+
+        Returns:
+            Normalized keyword (lowercase, stripped, single spaces)
+        """
+        return " ".join(keyword.lower().strip().split())
+
     def _sort_key(self, keyword: KeywordVolumeData) -> tuple[int, int]:
         """Generate sort key for keyword selection.
 
@@ -181,6 +194,7 @@ class PrimaryKeywordService:
         self,
         collection_title: str,
         specific_keywords: list[KeywordVolumeData],
+        used_primaries: set[str] | None = None,
         project_id: str | None = None,
         page_id: str | None = None,
     ) -> PrimaryKeywordResult:
@@ -192,6 +206,7 @@ class PrimaryKeywordService:
         Args:
             collection_title: Title of the collection (for logging/context)
             specific_keywords: SPECIFIC keywords with volume data (from Step 4)
+            used_primaries: Set of keywords already used as primary elsewhere (to avoid)
             project_id: Project ID for logging
             page_id: Page ID for logging
 
@@ -201,6 +216,13 @@ class PrimaryKeywordService:
         start_time = time.monotonic()
         candidate_count = len(specific_keywords)
 
+        # Normalize used_primaries for comparison
+        if used_primaries is None:
+            used_primaries = set()
+        normalized_used_primaries = {
+            self._normalize_keyword(kw) for kw in used_primaries
+        }
+
         logger.debug(
             "select_primary() called",
             extra={
@@ -208,6 +230,7 @@ class PrimaryKeywordService:
                 "page_id": page_id,
                 "collection_title": collection_title[:100] if collection_title else "",
                 "candidate_count": candidate_count,
+                "used_primaries_count": len(used_primaries),
             },
         )
 
@@ -249,26 +272,84 @@ class PrimaryKeywordService:
             )
 
         try:
-            # Filter keywords with valid volume data
+            # Filter keywords with valid volume data, excluding used primaries
             keywords_with_volume = [
                 kw for kw in specific_keywords
-                if kw.volume is not None and kw.volume > 0
+                if (
+                    kw.volume is not None
+                    and kw.volume > 0
+                    and self._normalize_keyword(kw.keyword)
+                    not in normalized_used_primaries
+                )
             ]
 
+            # Count how many were skipped due to being used elsewhere
+            skipped_used_primaries = [
+                kw for kw in specific_keywords
+                if (
+                    kw.volume is not None
+                    and kw.volume > 0
+                    and self._normalize_keyword(kw.keyword)
+                    in normalized_used_primaries
+                )
+            ]
+
+            if skipped_used_primaries:
+                logger.debug(
+                    "Skipped keywords already used as primary elsewhere",
+                    extra={
+                        "project_id": project_id,
+                        "page_id": page_id,
+                        "skipped_count": len(skipped_used_primaries),
+                        "skipped_keywords": [kw.keyword for kw in skipped_used_primaries[:5]],
+                    },
+                )
+
             if not keywords_with_volume:
-                # No keywords with volume - fall back to first keyword
+                # No keywords with volume - fall back to first unused keyword
+                # Filter out used primaries from fallback candidates too
+                fallback_candidates = [
+                    kw for kw in specific_keywords
+                    if self._normalize_keyword(kw.keyword)
+                    not in normalized_used_primaries
+                ]
+
+                if not fallback_candidates:
+                    # All keywords are already used as primaries elsewhere
+                    duration_ms = (time.monotonic() - start_time) * 1000
+                    logger.warning(
+                        "No available keywords - all are used as primaries elsewhere",
+                        extra={
+                            "project_id": project_id,
+                            "page_id": page_id,
+                            "collection_title": collection_title[:100],
+                            "candidate_count": candidate_count,
+                            "used_primaries_count": len(used_primaries),
+                            "duration_ms": round(duration_ms, 2),
+                        },
+                    )
+                    return PrimaryKeywordResult(
+                        success=False,
+                        error="No available keywords - all are used as primaries elsewhere",
+                        candidate_count=candidate_count,
+                        duration_ms=round(duration_ms, 2),
+                        project_id=project_id,
+                        page_id=page_id,
+                    )
+
                 logger.warning(
-                    "No keywords with volume data, falling back to first keyword",
+                    "No keywords with volume data, falling back to first unused keyword",
                     extra={
                         "project_id": project_id,
                         "page_id": page_id,
                         "collection_title": collection_title[:100],
                         "candidate_count": candidate_count,
+                        "fallback_candidates": len(fallback_candidates),
                     },
                 )
 
-                # Use first keyword as fallback
-                primary = specific_keywords[0]
+                # Use first unused keyword as fallback
+                primary = fallback_candidates[0]
                 duration_ms = (time.monotonic() - start_time) * 1000
 
                 logger.info(
@@ -385,6 +466,7 @@ class PrimaryKeywordService:
         return await self.select_primary(
             collection_title=request.collection_title,
             specific_keywords=request.specific_keywords,
+            used_primaries=request.used_primaries,
             project_id=request.project_id,
             page_id=request.page_id,
         )
@@ -410,6 +492,7 @@ def get_primary_keyword_service() -> PrimaryKeywordService:
 async def select_primary_keyword(
     collection_title: str,
     specific_keywords: list[KeywordVolumeData],
+    used_primaries: set[str] | None = None,
     project_id: str | None = None,
     page_id: str | None = None,
 ) -> PrimaryKeywordResult:
@@ -420,6 +503,7 @@ async def select_primary_keyword(
     Args:
         collection_title: Title of the collection
         specific_keywords: SPECIFIC keywords with volume data (from Step 4)
+        used_primaries: Set of keywords already used as primary elsewhere (to avoid)
         project_id: Project ID for logging
         page_id: Page ID for logging
 
@@ -436,6 +520,7 @@ async def select_primary_keyword(
         >>> result = await select_primary_keyword(
         ...     collection_title="Coffee Containers",
         ...     specific_keywords=keywords,
+        ...     used_primaries={"espresso machine parts"},  # Exclude already-used primaries
         ...     project_id="abc-123",
         ... )
         >>> print(result.primary_keyword)
@@ -445,6 +530,7 @@ async def select_primary_keyword(
     return await service.select_primary(
         collection_title=collection_title,
         specific_keywords=specific_keywords,
+        used_primaries=used_primaries,
         project_id=project_id,
         page_id=page_id,
     )

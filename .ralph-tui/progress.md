@@ -348,3 +348,26 @@ logger = get_logger(__name__)
   - Service follows established pattern: dataclasses for request/result, singleton with `get_*()` getter
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.53
+- **What was implemented**: Duplicate primary prevention across project in PrimaryKeywordService
+- **Files changed**:
+  - `backend/app/services/primary_keyword.py` - Added `used_primaries` parameter to prevent duplicate primaries
+- **Features**:
+  - Added `used_primaries` set parameter to `select_primary()` method and `PrimaryKeywordRequest` dataclass
+  - Filters out keywords already used as primary elsewhere during selection
+  - Logs skipped keywords at DEBUG level for debugging/auditing
+  - Handles edge case where all keywords are already used as primaries (returns success=False with error message)
+  - Fallback selection also respects `used_primaries` exclusion
+  - Keyword normalization (lowercase, stripped, single spaces) ensures case-insensitive comparison
+  - Updated convenience function `select_primary_keyword()` with `used_primaries` parameter
+- **API**:
+  - `select_primary(..., used_primaries: set[str] | None = None)` - excludes keywords in set from selection
+  - `PrimaryKeywordRequest.used_primaries: set[str]` - default empty set via `field(default_factory=set)`
+- **Learnings:**
+  - Duplicate primary prevention is critical for multi-page projects to avoid SEO keyword cannibalization
+  - Same normalization pattern `_normalize_keyword()` should be used consistently across services (primary + secondary)
+  - Fallback case (no volume data) also needs to respect `used_primaries` exclusion
+  - Edge case: when all keywords are used elsewhere, return success=False with clear error message
+  - Pre-existing mypy errors in config.py, logging.py, redis.py are known issues
+---
+
