@@ -5,6 +5,7 @@ import { ToastProvider } from '@/components/ui/toast-provider'
 import { Home } from '@/pages/Home'
 import { ProjectListPage } from '@/pages/ProjectListPage'
 import { ProjectDetailPage } from '@/pages/ProjectDetailPage'
+import { ProjectSettingsPage } from '@/pages/ProjectSettingsPage'
 import { queryClient } from '@/lib/queryClient'
 
 /**
@@ -43,6 +44,14 @@ export function App() {
                 element={
                   <ErrorBoundary componentName="ProjectDetailPage">
                     <ProjectDetailPage />
+                  </ErrorBoundary>
+                }
+              />
+              <Route
+                path="/projects/:projectId/settings"
+                element={
+                  <ErrorBoundary componentName="ProjectSettingsPage">
+                    <ProjectSettingsPage />
                   </ErrorBoundary>
                 }
               />
