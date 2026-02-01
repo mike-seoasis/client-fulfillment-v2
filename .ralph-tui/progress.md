@@ -51,6 +51,28 @@ For proper Pydantic v2 + mypy strict mode:
 3. Use `default_factory=lambda: SchemaClass()` for nested Pydantic defaults
 4. Use `Field(None, ...)` or `Field(default=None, ...)` for optional fields
 
+### Integration Client Pattern
+External service clients follow this structure:
+1. Circuit breaker with configurable failure threshold and recovery timeout
+2. Lazy HTTP client initialization (`_client: httpx.AsyncClient | None = None`)
+3. Global singleton with `get_client()` / `close_client()` functions
+4. Retry logic with exponential backoff: `delay = base_delay * (2 ** attempt)`
+5. Dataclass result types with `success`, `error`, `duration_ms` fields
+6. Custom exception hierarchy (TimeoutError, RateLimitError, AuthError, CircuitOpenError)
+7. Configuration via Settings with defaults (timeout, max_retries, retry_delay)
+
+### Template Variable Substitution Pattern
+For string/dict templates with `{{variable}}` placeholders:
+```python
+import re
+def substitute(template_str: str, variables: dict[str, Any]) -> str:
+    pattern = re.compile(r"\{\{(\w+)\}\}")
+    def replace_var(match: re.Match[str]) -> str:
+        var_name = match.group(1)
+        return str(variables.get(var_name, match.group(0)))
+    return pattern.sub(replace_var, template_str)
+```
+
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.59
@@ -90,5 +112,37 @@ For proper Pydantic v2 + mypy strict mode:
   - Patterns discovered: LLM synthesis pattern with structured JSON prompts and markdown fence handling
   - Gotchas encountered: mypy strict mode requires pydantic.mypy plugin for proper field default handling
   - Added pypdf and docx to mypy ignore_missing_imports for type checking
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.101
+- What was implemented: Complete notification system with email templates and webhook payloads
+- Files created:
+  - `backend/app/models/notification.py` - SQLAlchemy models (NotificationTemplate, WebhookConfig, NotificationLog)
+  - `backend/app/schemas/notification.py` - Pydantic schemas for all notification operations
+  - `backend/app/repositories/notification.py` - CRUD repositories for all notification entities
+  - `backend/app/services/notification.py` - NotificationService with template rendering and delivery
+  - `backend/app/integrations/email.py` - Async SMTP client with circuit breaker
+  - `backend/app/integrations/webhook.py` - Async HTTP webhook client with circuit breaker and HMAC signing
+  - `backend/app/api/v1/endpoints/notifications.py` - REST API endpoints for templates, webhooks, sending, logs
+  - `backend/alembic/versions/0010_create_notification_tables.py` - Database migration
+- Files modified:
+  - `backend/app/core/config.py` - Added SMTP and webhook configuration settings
+  - `backend/app/models/__init__.py` - Exported notification models
+  - `backend/app/api/v1/__init__.py` - Registered notifications router at `/api/v1/notifications`
+  - `backend/pyproject.toml` - Added aiosmtplib dependency and mypy ignore
+- **Implementation details:**
+  - Email templates support `{{variable}}` substitution in subject, body_html, body_text
+  - Webhook configs support event subscriptions, HMAC-SHA256 signing, custom headers
+  - NotificationLog tracks delivery status with full audit trail
+  - Both email and webhook clients implement circuit breaker pattern with configurable thresholds
+  - Exponential backoff retry logic for transient failures
+  - Event triggering sends to all webhooks subscribed to the event
+  - Comprehensive logging at DEBUG/INFO/WARNING/ERROR levels per requirements
+- **Learnings:**
+  - Patterns discovered: Integration client pattern with circuit breaker is consistent across email/webhook
+  - Gotchas encountered: Database session dependency is `get_session` not `get_db_session`
+  - Ruff prefers `contextlib.suppress()` over try/except/pass for suppressing exceptions
+  - Ruff prefers builtin `TimeoutError` over `asyncio.TimeoutError`
+  - Pre-existing mypy errors in core files (logging.py, redis.py, projects.py) don't affect new files
 ---
 

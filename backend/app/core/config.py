@@ -215,6 +215,76 @@ class Settings(BaseSettings):
         default=30, description="TTL for cached keyword data in days"
     )
 
+    # Email/SMTP Configuration
+    smtp_host: str | None = Field(
+        default=None,
+        description="SMTP server hostname",
+    )
+    smtp_port: int = Field(
+        default=587,
+        description="SMTP server port (587 for TLS, 465 for SSL)",
+    )
+    smtp_username: str | None = Field(
+        default=None,
+        description="SMTP authentication username",
+    )
+    smtp_password: str | None = Field(
+        default=None,
+        description="SMTP authentication password",
+    )
+    smtp_use_tls: bool = Field(
+        default=True,
+        description="Use TLS for SMTP connection",
+    )
+    smtp_use_ssl: bool = Field(
+        default=False,
+        description="Use SSL for SMTP connection (alternative to TLS)",
+    )
+    smtp_timeout: float = Field(
+        default=30.0,
+        description="SMTP connection timeout in seconds",
+    )
+    smtp_from_email: str | None = Field(
+        default=None,
+        description="Default sender email address",
+    )
+    smtp_from_name: str = Field(
+        default="Client Onboarding",
+        description="Default sender display name",
+    )
+    # Circuit breaker settings for email
+    email_circuit_failure_threshold: int = Field(
+        default=5,
+        description="Failures before email circuit opens",
+    )
+    email_circuit_recovery_timeout: float = Field(
+        default=60.0,
+        description="Seconds before attempting email recovery",
+    )
+
+    # Webhook Configuration
+    webhook_timeout: float = Field(
+        default=30.0,
+        description="Webhook request timeout in seconds",
+    )
+    webhook_max_retries: int = Field(
+        default=3,
+        description="Maximum retry attempts for webhook requests",
+    )
+    webhook_retry_delay: float = Field(
+        default=1.0,
+        description="Base delay between webhook retries in seconds",
+    )
+    # Circuit breaker settings for webhooks
+    webhook_circuit_failure_threshold: int = Field(
+        default=5,
+        description="Failures before webhook circuit opens",
+    )
+    webhook_circuit_recovery_timeout: float = Field(
+        default=60.0,
+        description="Seconds before attempting webhook recovery",
+    )
+
     # DataForSEO API (primary SERP/keyword data provider)
     dataforseo_api_login: str | None = Field(
         default=None,

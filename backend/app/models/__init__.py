@@ -11,6 +11,13 @@ from app.models.crawl_schedule import CrawlSchedule
 from app.models.crawled_page import CrawledPage
 from app.models.generated_content import GeneratedContent
 from app.models.nlp_analysis_cache import NLPAnalysisCache
+from app.models.notification import (
+    NotificationChannel,
+    NotificationLog,
+    NotificationStatus,
+    NotificationTemplate,
+    WebhookConfig,
+)
 from app.models.page_keywords import PageKeywords
 from app.models.page_paa import PagePAA
 from app.models.project import Project
@@ -23,7 +30,12 @@ __all__ = [
     "CrawledPage",
     "GeneratedContent",
     "NLPAnalysisCache",
+    "NotificationChannel",
+    "NotificationLog",
+    "NotificationStatus",
+    "NotificationTemplate",
     "PageKeywords",
     "PagePAA",
     "Project",
+    "WebhookConfig",
 ]
