@@ -86,6 +86,21 @@ class AmazonStoreDetectionResult:
 
 
 @dataclass
+class FallbackPersona:
+    """A customer persona generated from website analysis (fallback).
+
+    Used when no reviews are available to generate personas from
+    website content analysis via Perplexity.
+    """
+
+    name: str
+    description: str
+    source: str = "website_analysis"
+    inferred: bool = True
+    characteristics: list[str] = field(default_factory=list)
+
+
+@dataclass
 class AmazonReviewAnalysisResult:
     """Result of Amazon review analysis."""
 
@@ -101,6 +116,10 @@ class AmazonReviewAnalysisResult:
     error: str | None = None
     duration_ms: float = 0.0
     analyzed_at: str = ""
+    # Fallback-related fields
+    needs_review: bool = False
+    fallback_used: bool = False
+    fallback_source: str | None = None
 
 
 # Prompts for Perplexity queries
@@ -152,6 +171,35 @@ Format as JSON:
   "customer_types": ["type of customer 1", "type of customer 2"],
   "product_strengths": ["strength 1", "strength 2"],
   "average_sentiment": "positive/mixed/negative"
+}}
+```
+
+Return ONLY the JSON."""
+
+FALLBACK_PERSONA_PROMPT = """Analyze the brand "{brand_name}" (website: {website_url}) and infer the likely customer personas based on the brand's positioning, products, and target market.
+
+Since we don't have customer reviews to analyze, generate 2-3 customer personas based on:
+1. The type of products/services the brand offers
+2. The brand's positioning and messaging
+3. Typical buyers for this product category
+4. Price point and quality signals
+
+For each persona, provide:
+- A descriptive name (e.g., "Budget-Conscious Parent", "Professional Chef")
+- A brief description of who they are
+- Key characteristics that define their buying behavior
+
+Format as JSON:
+```json
+{{
+  "personas": [
+    {{
+      "name": "Persona Name",
+      "description": "Brief description of this customer type",
+      "characteristics": ["characteristic 1", "characteristic 2", "characteristic 3"]
+    }}
+  ],
+  "confidence_note": "Brief note about the confidence level of these inferences"
 }}
 ```
 
@@ -532,12 +580,167 @@ class AmazonReviewsClient:
             )
             return ReviewInsights()
 
+    async def generate_fallback_personas(
+        self,
+        brand_name: str,
+        website_url: str | None = None,
+        project_id: str | None = None,
+    ) -> list[FallbackPersona]:
+        """Generate customer personas from website analysis when no reviews available.
+
+        Uses Perplexity to analyze the brand's website and infer likely customer
+        personas based on positioning, products, and target market.
+
+        Args:
+            brand_name: The brand/company name
+            website_url: Optional website URL for analysis
+            project_id: Optional project ID for logging
+
+        Returns:
+            List of FallbackPersona objects inferred from website analysis
+        """
+        logger.debug(
+            "generate_fallback_personas entry",
+            extra={
+                "brand_name": brand_name,
+                "website_url": website_url,
+                "project_id": project_id,
+            },
+        )
+
+        start_time = time.monotonic()
+
+        try:
+            perplexity = await self._get_perplexity()
+
+            if not perplexity.available:
+                logger.warning(
+                    "Perplexity not available for fallback persona generation",
+                    extra={"project_id": project_id},
+                )
+                return []
+
+            # Build the prompt
+            url_for_prompt = website_url if website_url else f"{brand_name} official website"
+            prompt = FALLBACK_PERSONA_PROMPT.format(
+                brand_name=brand_name,
+                website_url=url_for_prompt,
+            )
+
+            logger.info(
+                "Generating fallback personas from website analysis",
+                extra={
+                    "brand_name": brand_name,
+                    "website_url": website_url,
+                    "project_id": project_id,
+                },
+            )
+
+            # Query Perplexity
+            result = await perplexity.complete(
+                user_prompt=prompt,
+                temperature=0.3,  # Slightly higher for creative persona generation
+                return_citations=True,
+            )
+
+            duration_ms = (time.monotonic() - start_time) * 1000
+
+            if not result.success:
+                logger.warning(
+                    "Fallback persona generation failed",
+                    extra={
+                        "brand_name": brand_name,
+                        "error": result.error,
+                        "duration_ms": duration_ms,
+                        "project_id": project_id,
+                    },
+                )
+                return []
+
+            # Parse the response
+            try:
+                response_data = _parse_json_from_response(result.text or "{}")
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.warning(
+                    "Failed to parse fallback persona response",
+                    extra={
+                        "brand_name": brand_name,
+                        "error": str(e),
+                        "response_preview": (result.text or "")[:200],
+                        "project_id": project_id,
+                    },
+                )
+                return []
+
+            # Convert to FallbackPersona objects
+            personas: list[FallbackPersona] = []
+            personas_data = response_data.get("personas", [])
+
+            for p in personas_data[:3]:  # Limit to 3 personas
+                if isinstance(p, dict) and p.get("name"):
+                    personas.append(
+                        FallbackPersona(
+                            name=p.get("name", ""),
+                            description=p.get("description", ""),
+                            source="website_analysis",
+                            inferred=True,
+                            characteristics=p.get("characteristics", []),
+                        )
+                    )
+
+            logger.info(
+                "Fallback persona generation complete",
+                extra={
+                    "brand_name": brand_name,
+                    "personas_generated": len(personas),
+                    "duration_ms": duration_ms,
+                    "project_id": project_id,
+                },
+            )
+
+            if duration_ms > 1000:
+                logger.warning(
+                    "Slow fallback persona generation",
+                    extra={
+                        "brand_name": brand_name,
+                        "duration_ms": duration_ms,
+                        "project_id": project_id,
+                    },
+                )
+
+            logger.debug(
+                "generate_fallback_personas exit",
+                extra={
+                    "brand_name": brand_name,
+                    "personas_count": len(personas),
+                    "project_id": project_id,
+                },
+            )
+
+            return personas
+
+        except Exception as e:
+            duration_ms = (time.monotonic() - start_time) * 1000
+            logger.exception(
+                "Exception during fallback persona generation",
+                extra={
+                    "brand_name": brand_name,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "duration_ms": duration_ms,
+                    "project_id": project_id,
+                },
+            )
+            return []
+
     async def analyze_brand_reviews(
         self,
         brand_name: str,
         product_category: str | None = None,
         max_products: int = 3,
         project_id: str | None = None,
+        website_url: str | None = None,
+        use_fallback: bool = True,
     ) -> AmazonReviewAnalysisResult:
         """Perform complete Amazon review analysis for a brand.
 
@@ -545,12 +748,15 @@ class AmazonReviewsClient:
         1. Detect Amazon store and find products
         2. Analyze reviews for top products
         3. Synthesize insights into personas and proof elements
+        4. If no reviews available and use_fallback=True, generate fallback personas
 
         Args:
             brand_name: The brand/company name
             product_category: Optional product category hint
             max_products: Maximum number of products to analyze (default 3)
             project_id: Optional project ID for logging
+            website_url: Optional website URL for fallback persona generation
+            use_fallback: Whether to generate fallback personas when no reviews (default True)
 
         Returns:
             AmazonReviewAnalysisResult with comprehensive review data
@@ -585,19 +791,69 @@ class AmazonReviewsClient:
 
         if not detection_result.has_amazon_store:
             logger.info(
-                "No Amazon store found for brand",
+                "No Amazon store found for brand, triggering fallback",
                 extra={
                     "brand_name": brand_name,
+                    "use_fallback": use_fallback,
                     "project_id": project_id,
                 },
             )
+
+            # Generate fallback personas if enabled
+            fallback_personas: list[dict[str, Any]] = []
+            fallback_used = False
+            fallback_source: str | None = None
+
+            if use_fallback:
+                logger.warning(
+                    "Fallback triggered: generating personas from website analysis",
+                    extra={
+                        "brand_name": brand_name,
+                        "website_url": website_url,
+                        "project_id": project_id,
+                    },
+                )
+
+                generated_personas = await self.generate_fallback_personas(
+                    brand_name=brand_name,
+                    website_url=website_url,
+                    project_id=project_id,
+                )
+
+                if generated_personas:
+                    fallback_used = True
+                    fallback_source = "website_analysis"
+                    for p in generated_personas:
+                        fallback_personas.append(
+                            {
+                                "name": p.name,
+                                "description": p.description,
+                                "source": p.source,
+                                "inferred": p.inferred,
+                                "characteristics": p.characteristics,
+                            }
+                        )
+
+                    logger.info(
+                        "Fallback personas generated successfully",
+                        extra={
+                            "brand_name": brand_name,
+                            "personas_count": len(fallback_personas),
+                            "project_id": project_id,
+                        },
+                    )
+
             duration_ms = (time.monotonic() - start_time) * 1000
             return AmazonReviewAnalysisResult(
                 success=True,
                 brand_name=brand_name,
                 products_analyzed=0,
+                customer_personas=fallback_personas,
                 duration_ms=duration_ms,
                 analyzed_at=datetime.now(UTC).isoformat(),
+                needs_review=fallback_used,  # Flag for user validation
+                fallback_used=fallback_used,
+                fallback_source=fallback_source,
             )
 
         # Step 2: Analyze reviews for top products

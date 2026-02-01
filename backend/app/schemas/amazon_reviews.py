@@ -31,11 +31,13 @@ class AmazonReviewResponse(BaseModel):
 
 
 class CustomerPersonaResponse(BaseModel):
-    """A customer persona inferred from reviews."""
+    """A customer persona inferred from reviews or website analysis (fallback)."""
 
     name: str
+    description: str | None = None
     source: str = "amazon_reviews"
     inferred: bool = True
+    characteristics: list[str] = []
 
 
 class ProofStatResponse(BaseModel):
@@ -93,6 +95,15 @@ class AmazonReviewAnalysisRequest(BaseModel):
         le=5,
         description="Maximum number of products to analyze (1-5)",
     )
+    website_url: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Optional website URL for fallback persona generation",
+    )
+    use_fallback: bool = Field(
+        default=True,
+        description="Whether to generate fallback personas from website when no reviews available",
+    )
 
 
 class AmazonReviewAnalysisResponse(BaseModel):
@@ -109,3 +120,15 @@ class AmazonReviewAnalysisResponse(BaseModel):
     error: str | None = None
     duration_ms: float = 0.0
     analyzed_at: datetime | None = None
+    needs_review: bool = Field(
+        default=False,
+        description="Whether the result needs user validation (fallback was used)",
+    )
+    fallback_used: bool = Field(
+        default=False,
+        description="Whether fallback persona generation from website analysis was used",
+    )
+    fallback_source: str | None = Field(
+        default=None,
+        description="Source of fallback data (e.g., 'website_analysis')",
+    )
