@@ -10,3 +10,12 @@ export type {
 
 export { useToastMutation } from './useToastMutation'
 export type { ToastMutationOptions } from './useToastMutation'
+
+export { useWebSocket, useProjectSubscription } from './useWebSocket'
+export type {
+  ConnectionState,
+  WebSocketConfig,
+  WebSocketMessage,
+  ProjectUpdateMessage,
+  ProgressUpdateMessage,
+} from './useWebSocket'
