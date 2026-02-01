@@ -3,39 +3,36 @@
   "description": "Ready tasks batch",
   "userStories": [
     {
-      "id": "client-onboarding-v2-c3y.58",
-      "title": "Implement fan-out strategy (search initial PAA questions for nested)",
+      "id": "client-onboarding-v2-c3y.59",
+      "title": "Implement Related Searches fallback with LLM semantic filter",
       "description": "ERROR LOGGING REQUIREMENTS:\n- Log method entry/exit at DEBUG level with parameters (sanitized)\n- Log all exceptions with full stack trace and context\n- Include entity IDs (project_id, page_id) in all service logs\n- Log validation failures with field names and rejected values\n- Log state transitions (phase changes) at INFO level\n- Add timing logs for operations >1 second",
       "acceptanceCriteria": [],
       "passes": true,
       "completionNotes": "Completed by agent"
     },
     {
-      "id": "client-onboarding-v2-c3y.67",
-      "title": "Create document parser for PDF, DOCX, TXT brand documents",
+      "id": "client-onboarding-v2-c3y.68",
+      "title": "Implement Claude synthesis for V2 brand config schema",
       "description": "ERROR LOGGING REQUIREMENTS:\n- Log method entry/exit at DEBUG level with parameters (sanitized)\n- Log all exceptions with full stack trace and context\n- Include entity IDs (project_id, page_id) in all service logs\n- Log validation failures with field names and rejected values\n- Log state transitions (phase changes) at INFO level\n- Add timing logs for operations >1 second",
       "acceptanceCriteria": [],
-      "passes": true,
-      "completionNotes": "Completed by agent"
+      "passes": false
     },
     {
-      "id": "client-onboarding-v2-c3y.100",
-      "title": "Implement change detection algorithm (content hash comparison)",
+      "id": "client-onboarding-v2-c3y.101",
+      "title": "Implement notification system (email templates, webhook payloads)",
       "description": "ERROR LOGGING REQUIREMENTS:\n- Log method entry/exit at DEBUG level with parameters (sanitized)\n- Log all exceptions with full stack trace and context\n- Include entity IDs (project_id, page_id) in all service logs\n- Log validation failures with field names and rejected values\n- Log state transitions (phase changes) at INFO level\n- Add timing logs for operations >1 second",
       "acceptanceCriteria": [],
-      "passes": true,
-      "completionNotes": "Completed by agent"
+      "passes": false
     },
     {
-      "id": "client-onboarding-v2-c3y.109",
-      "title": "Configure React Query for data fetching and caching",
-      "description": "ERROR LOGGING REQUIREMENTS:\n- Implement React Error Boundaries for all route components\n- Log caught errors to console with component stack\n- Set up global window.onerror and unhandledrejection handlers\n- Log API errors with endpoint, status, response body\n- Include user action context in error logs\n- Set up error reporting service integration point (e.g., Sentry stub)\n\nRAILWAY DEPLOYMENT REQUIREMENTS:\n- Connect via REDIS_URL environment variable (Railway provides this)\n- Handle Redis connection failures gracefully (cache is optional)\n- Use SSL/TLS for Redis connections in production\n- Implement connection retry logic for cold starts",
+      "id": "client-onboarding-v2-c3y.110",
+      "title": "Set up Axios client with base URL and error interceptors",
+      "description": "ERROR LOGGING REQUIREMENTS:\n- Log all outbound API calls with endpoint, method, timing\n- Log request/response bodies at DEBUG level (truncate large responses)\n- Log and handle: timeouts, rate limits (429), auth failures (401/403)\n- Include retry attempt number in logs\n- Log API quota/credit usage if available\n- Mask API keys and tokens in all logs\n- Log circuit breaker state changes\n\nRAILWAY DEPLOYMENT REQUIREMENTS:\n- All API keys via environment variables (ANTHROPIC_API_KEY, etc.)\n- Never log or expose API keys\n- Handle cold-start latency (first request may be slow)\n- Implement request timeouts (Railway has 5min request limit)",
       "acceptanceCriteria": [],
-      "passes": true,
-      "completionNotes": "Completed by agent"
+      "passes": false
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-01T18:32:10.278Z"
+    "updatedAt": "2026-02-01T18:34:58.816Z"
   }
 }
