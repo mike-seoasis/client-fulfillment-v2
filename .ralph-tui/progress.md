@@ -190,3 +190,26 @@ logger = get_logger(__name__)
   - Logger pattern: service-specific logger class in core/logging.py with singleton instance
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.47
+- **What was implemented**: Keyword volume caching service using Redis with 30-day TTL
+- **Files changed**:
+  - `backend/app/services/keyword_cache.py` (new) - Full caching service with graceful degradation
+  - `backend/app/services/__init__.py` - Added keyword cache exports
+  - `backend/app/core/config.py` - Added `keyword_cache_ttl_days` setting (default: 30)
+- **Features**:
+  - Cache key format: `kw_vol:{country}:{data_source}:{keyword_normalized}`
+  - Single and batch get/set operations
+  - Graceful degradation when Redis unavailable
+  - Cache statistics tracking (hits, misses, errors, hit_rate)
+  - TTL checking and cache deletion
+  - Comprehensive logging per error logging requirements
+- **Learnings:**
+  - Service layer caching uses inline logging via `get_logger(__name__)`, not dedicated logger classes
+  - Dedicated logger classes (like `KeywordsEverywhereLogger`) are for integrations layer, not services
+  - Redis `ttl()` returns -2 if key doesn't exist, -1 if no TTL set
+  - Cache keys should be normalized (lowercase, stripped) to avoid duplicates
+  - `CachedKeywordData` dataclass includes metadata like `cached_at` timestamp and `country`/`data_source`
+  - JSON serialization for complex objects stored in Redis
+  - Pre-existing mypy errors in config.py, logging.py, redis.py are known issues
+---
+

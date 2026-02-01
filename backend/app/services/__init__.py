@@ -55,6 +55,17 @@ from app.services.related_collections import (
     find_related_collections,
     get_related_collections_service,
 )
+from app.services.keyword_cache import (
+    CachedKeywordData,
+    CacheStats,
+    KeywordCacheResult,
+    KeywordCacheService,
+    KeywordCacheServiceError,
+    KeywordCacheValidationError,
+    cache_keyword_data,
+    get_cached_keyword,
+    get_keyword_cache_service,
+)
 
 __all__ = [
     # Project service
@@ -102,4 +113,14 @@ __all__ = [
     "RelatedCollectionsResult",
     "find_related_collections",
     "get_related_collections_service",
+    # Keyword cache service
+    "KeywordCacheService",
+    "KeywordCacheServiceError",
+    "KeywordCacheValidationError",
+    "KeywordCacheResult",
+    "CachedKeywordData",
+    "CacheStats",
+    "cache_keyword_data",
+    "get_cached_keyword",
+    "get_keyword_cache_service",
 ]
