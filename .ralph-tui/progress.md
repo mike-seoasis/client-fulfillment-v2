@@ -5,72 +5,78 @@ after each iteration and it's included in prompts for context.
 
 ## Codebase Patterns (Study These First)
 
-### Integration Client Pattern
-All external API clients (`/backend/app/integrations/`) follow this standard structure:
-1. **Configuration** from `core/config.py` via Pydantic Settings (env vars)
-2. **Circuit Breaker** class with 3 states (CLOSED/OPEN/HALF_OPEN)
-3. **Retry logic** with exponential backoff (`retry_delay * 2^attempt`)
-4. **Lazy initialization** via async `get_*()` dependency functions
-5. **Dedicated logger** from `core/logging.py` (e.g., `perplexity_logger`, `claude_logger`)
-6. **Dataclass result types** for typed responses with success/error/metadata
-7. **Request ID tracking** via `request.state.request_id` passed through all layers
+### Service Pattern
+Services use dataclass results with success/error indicators and comprehensive logging:
+```python
+@dataclass
+class ServiceResult:
+    success: bool
+    data: Any = None
+    error: str | None = None
+    duration_ms: float = 0.0
+    project_id: str | None = None
+    page_id: str | None = None
 
-### Error Response Format
-All endpoints return structured errors: `{"error": str, "code": str, "request_id": str}`
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        ...
+```
 
-### Frontend Component Pattern
-All frontend components (`/frontend/src/components/`) follow this standard structure:
-1. **TypeScript interfaces** for all props with JSDoc comments
-2. **`cn()` utility** from `@/lib/utils` for class merging (clsx + tailwind-merge)
-3. **`addBreadcrumb()`** from `@/lib/errorReporting` for user action tracking
-4. **Skeleton components** exported alongside main component for loading states
-5. **Keyboard navigation** support (tabIndex, onKeyDown for Enter/Space)
-6. **ARIA attributes** for accessibility (role, aria-label, aria-selected, etc.)
-7. **Warm design tokens** - cream-*, warmgray-*, primary-*, soft shadows
+### Error Logging Pattern
+All services follow the error logging requirements:
+- Method entry/exit at DEBUG level with sanitized params
+- Exceptions with full stack trace (`traceback.format_exc()`)
+- Include entity IDs (project_id, page_id) in all logs
+- Validation failures with field names and rejected values
+- State transitions (phase changes) at INFO level
+- Timing logs for operations >1 second (SLOW_OPERATION_THRESHOLD_MS)
+
+### Endpoint Pattern
+Endpoints use `_get_request_id(request)` and `_verify_project_exists()` helpers.
+Return `JSONResponse` for errors with structured format:
+```python
+{"error": str, "code": str, "request_id": str}
+```
+
+### Singleton Factory Pattern
+Services use singleton factory functions:
+```python
+_service: ServiceClass | None = None
+
+def get_service() -> ServiceClass:
+    global _service
+    if _service is None:
+        _service = ServiceClass()
+        logger.info("ServiceClass singleton created")
+    return _service
+```
 
 ---
 
-## 2026-02-01 - client-onboarding-v2-c3y.116
-- **What was implemented**: DataTable component for page listings with sorting, filtering, selection
+## 2026-02-01 - client-onboarding-v2-c3y.75
+- **What was implemented**: Phase 5A Content Plan Builder
+  - Service that combines PAA analysis with Perplexity research
+  - Produces content plan with main angle, benefits, and priority questions
+  - Concurrent execution of PAA enrichment and Perplexity research
+  - Full error logging per requirements
+
+- **Files created**:
+  - `backend/app/schemas/content_plan.py` - Pydantic schemas
+  - `backend/app/services/content_plan.py` - Content plan builder service
+  - `backend/app/api/v1/endpoints/content_plan.py` - API endpoints
+
 - **Files changed**:
-  - `frontend/src/components/DataTable.tsx` (NEW) - Full DataTable implementation (~450 lines)
-- **Implementation includes**:
-  - Generic `<T>` typing for flexible data structures
-  - Sortable columns with visual indicators (asc/desc/none)
-  - Search/filter functionality with customizable filter function
-  - Row selection with select-all checkbox (including indeterminate state)
-  - Click handlers for row interaction
-  - Loading skeleton state with configurable row count
-  - Empty state with icon and customizable messages
-  - DataTableSkeleton component for pre-load state
-  - Full keyboard navigation (Enter/Space on headers and rows)
-  - ARIA attributes (aria-sort, aria-selected, role="button")
-- **Learnings:**
-  - Use `cn()` consistently for all conditional class names
-  - Skeleton states should match the structure of the loaded component
-  - Custom checkbox with ref callback for indeterminate state (`el.indeterminate = true`)
-  - Column definitions use accessor functions for flexibility: `accessor: (row: T) => ReactNode`
-  - Sort function allows custom comparisons via optional `sortFn` property
----
+  - `backend/app/api/v1/__init__.py` - Added content_plan router
 
-## 2026-02-01 - client-onboarding-v2-c3y.74
-- **What was implemented**: Verified Phase 5A Perplexity research integration is ALREADY COMPLETE
-- **Files reviewed** (no changes needed):
-  - `backend/app/integrations/perplexity.py` - Full Perplexity client implementation (809 lines)
-  - `backend/app/core/config.py` - Perplexity settings (lines 153-180)
-  - `backend/app/core/logging.py` - PerplexityLogger class (lines 930-1171)
-- **Implementation includes**:
-  - CircuitBreaker with CLOSED/OPEN/HALF_OPEN states
-  - Retry logic with exponential backoff
-  - Complete error handling (timeouts, 429 rate limits, 401/403 auth failures)
-  - Token usage logging for quota tracking
-  - API key masking (never logged)
-  - Request ID tracking via response headers
-  - Three main methods: `complete()`, `analyze_website()`, `research_query()`
-  - Dependency injection via `get_perplexity()`
+- **API Endpoints**:
+  - `POST /api/v1/projects/{project_id}/phases/content_plan/build` - Build content plan for keyword
+  - `POST /api/v1/projects/{project_id}/phases/content_plan/batch` - Batch build for multiple keywords
+
 - **Learnings:**
-  - Integration clients use lazy initialization (no explicit init in main.py lifespan)
-  - All env var config via Pydantic Settings with sensible defaults
-  - Pre-existing errors in other files (logging.py, redis.py) don't affect perplexity.py
+  - PAA enrichment, categorization, and analysis services already exist and work well together
+  - Perplexity integration uses circuit breaker pattern for fault tolerance
+  - Services should use `asyncio.gather()` for concurrent operations
+  - Benefits extraction from Perplexity requires JSON parsing with fallback handling
+  - The codebase has a pre-existing issue in documents.py (FastAPI return type annotation error) unrelated to this implementation
 ---
 

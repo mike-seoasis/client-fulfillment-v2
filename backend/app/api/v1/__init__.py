@@ -6,6 +6,7 @@ from app.api.v1.endpoints import (
     amazon_reviews,
     brand_config,
     categorize,
+    content_plan,
     crawl,
     documents,
     keyword_research,
@@ -51,6 +52,11 @@ router.include_router(
     paa_enrichment.router,
     prefix="/projects/{project_id}/phases/paa_enrichment",
     tags=["PAA Enrichment Phase"],
+)
+router.include_router(
+    content_plan.router,
+    prefix="/projects/{project_id}/phases/content_plan",
+    tags=["Content Plan Phase"],
 )
 router.include_router(
     review_platforms.router,
