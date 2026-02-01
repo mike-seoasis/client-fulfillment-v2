@@ -25,6 +25,7 @@ import { addBreadcrumb } from '@/lib/errorReporting'
 import { useToast } from '@/components/ui/toast-provider'
 import { Button } from '@/components/ui/button'
 import { PhaseProgress } from '@/components/PhaseProgress'
+import { BrandConfigPanel } from '@/components/BrandConfigPanel'
 import { cn } from '@/lib/utils'
 import {
   type PhaseStatus,
@@ -603,6 +604,14 @@ export function ProjectDetailPage() {
               />
             ))}
           </div>
+        </section>
+
+        {/* Brand Configuration */}
+        <section className="mt-8">
+          <h2 className="text-lg font-semibold text-warmgray-900 mb-4">
+            Brand Configuration
+          </h2>
+          <BrandConfigPanel projectId={projectId || ''} />
         </section>
       </div>
     </div>
