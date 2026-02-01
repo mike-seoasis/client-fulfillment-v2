@@ -9,6 +9,7 @@ from app.api.v1.endpoints import (
     crawl,
     keyword_research,
     label,
+    notifications,
     paa_enrichment,
     projects,
     review_platforms,
@@ -65,4 +66,9 @@ router.include_router(
     brand_config.router,
     prefix="/projects/{project_id}/brand-config",
     tags=["Brand Config"],
+)
+router.include_router(
+    notifications.router,
+    prefix="/notifications",
+    tags=["Notifications"],
 )
