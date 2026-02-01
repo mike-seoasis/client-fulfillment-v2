@@ -3,10 +3,10 @@
   "sessionId": "81f43047-40a7-49be-847f-1239610029a6",
   "status": "running",
   "startedAt": "2026-02-01T19:41:13.764Z",
-  "updatedAt": "2026-02-01T19:50:06.033Z",
-  "currentIteration": 2,
+  "updatedAt": "2026-02-01T19:51:24.429Z",
+  "currentIteration": 3,
   "maxIterations": 30,
-  "tasksCompleted": 2,
+  "tasksCompleted": 3,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -29,8 +29,8 @@
       {
         "id": "client-onboarding-v2-c3y.104",
         "title": "Create /api/v1/projects/{id}/crawl-history endpoints",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "client-onboarding-v2-c3y.113",
@@ -60,6 +60,16 @@
       "durationMs": 330076,
       "startedAt": "2026-02-01T19:43:38.811Z",
       "endedAt": "2026-02-01T19:49:08.887Z"
+    },
+    {
+      "iteration": 3,
+      "status": "completed",
+      "taskId": "client-onboarding-v2-c3y.104",
+      "taskTitle": "Create /api/v1/projects/{id}/crawl-history endpoints",
+      "taskCompleted": true,
+      "durationMs": 55921,
+      "startedAt": "2026-02-01T19:49:10.111Z",
+      "endedAt": "2026-02-01T19:50:06.032Z"
     }
   ],
   "skippedTaskIds": [],
