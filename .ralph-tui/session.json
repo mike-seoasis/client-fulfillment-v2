@@ -1,12 +1,12 @@
 {
   "version": 1,
-  "sessionId": "f8dd55c8-69d3-45cc-b12e-e206710508ac",
+  "sessionId": "1ae5e39e-f28f-483c-81d6-2cdf92622376",
   "status": "running",
-  "startedAt": "2026-02-01T23:22:14.072Z",
-  "updatedAt": "2026-02-01T23:31:11.927Z",
-  "currentIteration": 1,
+  "startedAt": "2026-02-01T23:31:16.033Z",
+  "updatedAt": "2026-02-01T23:34:46.531Z",
+  "currentIteration": 0,
   "maxIterations": 30,
-  "tasksCompleted": 1,
+  "tasksCompleted": 0,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -15,31 +15,20 @@
     "totalTasks": 2,
     "tasks": [
       {
-        "id": "client-onboarding-v2-c3y.94",
-        "title": "Create /api/v1/nlp/analyze-content endpoint",
-        "status": "completed",
-        "completedInSession": true
+        "id": "client-onboarding-v2-c3y.95",
+        "title": "Create /api/v1/nlp/analyze-competitors endpoint",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "client-onboarding-v2-c3y.130",
-        "title": "Build ContentGenerationPanel with 3-phase progress",
+        "id": "client-onboarding-v2-c3y.131",
+        "title": "Build ContentListPage with status filtering",
         "status": "open",
         "completedInSession": false
       }
     ]
   },
-  "iterations": [
-    {
-      "iteration": 1,
-      "status": "completed",
-      "taskId": "client-onboarding-v2-c3y.94",
-      "taskTitle": "Create /api/v1/nlp/analyze-content endpoint",
-      "taskCompleted": true,
-      "durationMs": 249232,
-      "startedAt": "2026-02-01T23:22:14.076Z",
-      "endedAt": "2026-02-01T23:26:23.308Z"
-    }
-  ],
+  "iterations": [],
   "skippedTaskIds": [],
   "cwd": "/Users/mike/Projects/client-onboarding-v2",
   "activeTaskIds": [],
