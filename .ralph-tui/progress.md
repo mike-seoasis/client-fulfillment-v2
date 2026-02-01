@@ -61,3 +61,28 @@ Use `get_crawl4ai()` dependency to get the global client. Check `.available` bef
 
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.125
+- **What was implemented**: CategorizePhasePanel component with page category breakdown
+- **Files changed**:
+  - `frontend/src/components/CategorizePhasePanel.tsx` - New React component (400+ lines)
+    - Stats overview section with total, categorized, and uncategorized page counts
+    - Progress bar showing categorization completion percentage
+    - Category breakdown grid with color-coded badges
+    - Configuration form with LLM options (force_llm, skip_llm, batch_size)
+    - Active progress display during background categorization
+    - WebSocket subscription for real-time updates
+    - Polling fallback for progress tracking
+
+- **Learnings:**
+  - Phase panel components follow a consistent structure: stats overview, active progress section, config form
+  - Use `useApiQuery` for fetching data with proper error logging context
+  - Use `useToastMutation` for mutations with automatic toast notifications
+  - `useProjectSubscription` hook provides WebSocket updates for real-time progress
+  - POST to `/phases/categorize/all` returns 202 Accepted and runs in background
+  - `addBreadcrumb` from errorReporting for tracking user actions
+  - Category color mapping provides visual distinction in breakdown display
+  - Form state with checkbox toggles (forceLlm/skipLlm are mutually exclusive)
+  - Poll stats every 3 seconds during active categorization for progress updates
+
+---
+
