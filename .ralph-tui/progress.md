@@ -28,6 +28,22 @@ after each iteration and it's included in prompts for context.
 - Use `_get_request_id(request)`, `_verify_project_exists()`, `_convert_*` helper functions
 - Structured error responses: `{"error": str, "code": str, "request_id": str}`
 
+### Frontend Modal Pattern
+- Modals use fixed positioning with backdrop blur overlay
+- Handle escape key via useEffect with proper cleanup
+- Prevent body scroll when open via `document.body.style.overflow`
+- Focus trap: auto-focus first input on open
+- Use `useToastMutation` hook for API calls with automatic toast notifications
+- Form validation: track `touched` state per field, validate on blur and submit
+- Button states: disable during pending mutation, show loading text
+
+### Frontend Form Patterns
+- Use `FormField` wrapper with `Input`/`Textarea`/`Select` children
+- Real-time validation with `touched` state tracking
+- Clear errors when user starts typing again
+- Use `addBreadcrumb()` for user action tracking
+- Normalize inputs (trim whitespace, normalize URLs) before submission
+
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.80
@@ -59,5 +75,35 @@ after each iteration and it's included in prompts for context.
     - Import sorting via ruff `--fix` auto-sorts Pydantic imports
     - Pre-existing mypy errors in other files (projects.py, documents.py) - ignore for new code
     - `documents.py` has invalid FastAPI return type annotation causing import chain error
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.122
+- What was implemented: CreateProjectModal with URL validation
+  - Modal dialog for creating new projects
+  - Project name field with 255 char max validation
+  - Client website URL field with comprehensive URL validation
+  - URL normalization (adds https:// if missing, removes trailing slashes)
+  - Real-time form validation with error feedback
+  - Toast notifications on success/error via useToastMutation
+  - Keyboard accessibility (Escape to close)
+  - Auto-focus first input on open
+  - Prevents body scroll when open
+  - Integrated into ProjectListPage (replaced navigation to /projects/new)
+
+- Files changed:
+  - `frontend/src/components/CreateProjectModal.tsx` (NEW - ~310 lines)
+  - `frontend/src/pages/ProjectListPage.tsx` (MODIFIED - added modal integration)
+
+- **Learnings:**
+  - Patterns discovered:
+    - URL validation: use `new URL()` constructor with try/catch for parsing
+    - Auto-prepend `https://` when validating URLs without protocol
+    - Hostname validation regex: `^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*$`
+    - Modal overlay uses `bg-warmgray-900/40 backdrop-blur-sm` for warm aesthetic
+    - Use `useQueryClient().invalidateQueries()` after successful mutation to refresh list
+  - Gotchas encountered:
+    - useEffect dependency array must include all used callbacks (handleClose was missing)
+    - When using callbacks inside useEffect, wrap with useCallback to avoid recreating
+    - Backend expects `client_id` field (not `client_url` or `website_url`)
 ---
 
