@@ -13,6 +13,7 @@ from app.api.v1.endpoints import (
     documents,
     keyword_research,
     label,
+    link_validator,
     notifications,
     paa_enrichment,
     projects,
@@ -69,6 +70,11 @@ router.include_router(
     content_quality.router,
     prefix="/projects/{project_id}/phases/content_quality",
     tags=["Content Quality Phase"],
+)
+router.include_router(
+    link_validator.router,
+    prefix="/projects/{project_id}/phases/link_validator",
+    tags=["Link Validator Phase"],
 )
 router.include_router(
     review_platforms.router,
