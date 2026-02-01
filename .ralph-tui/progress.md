@@ -5,84 +5,43 @@ after each iteration and it's included in prompts for context.
 
 ## Codebase Patterns (Study These First)
 
-### Phase Endpoint Pattern
-New phases follow this structure:
-1. **Model** (`app/models/<name>.py`) - SQLAlchemy model with UUID primary key, project_id FK, JSONB for flexible data, timestamps
-2. **Migration** (`alembic/versions/00XX_<name>.py`) - Create table with indexes, FK constraints
-3. **Repository** (`app/repositories/<name>.py`) - CRUD operations with comprehensive logging, timing, error handling
-4. **Service** (`app/services/<name>.py`) - Business logic, validation, integration orchestration
-5. **Schemas** (`app/schemas/<name>.py`) - Pydantic models for API requests/responses
-6. **Endpoints** (`app/api/v1/endpoints/<name>.py`) - FastAPI router with structured error responses
+### Service Pattern
+Services follow a consistent structure:
+1. **Dataclasses**: Request/Result dataclasses with `to_dict()` methods
+2. **Exception hierarchy**: Base `ServiceError` with specific subclasses like `ValidationError`
+3. **Singleton pattern**: `_service: Service | None = None` with `get_service()` accessor
+4. **Convenience functions**: Module-level async functions that use the singleton
+5. **Comprehensive logging**: DEBUG for entry/exit, INFO for state transitions, WARNING for slow ops
 
-### Error Response Format
-All endpoints return structured errors:
-```python
-{
-    "error": str,      # Human-readable message
-    "code": str,       # Error code (NOT_FOUND, VALIDATION_ERROR, etc.)
-    "request_id": str  # UUID from request state for tracing
-}
-```
+### Error Logging Requirements
+All services must implement:
+- Log method entry/exit at DEBUG level with sanitized parameters
+- Log all exceptions with full stack trace (`exc_info=True`)
+- Include entity IDs (project_id, page_id) in all logs via `extra={}` dict
+- Log validation failures with field names and rejected values
+- Log state transitions (phase changes) at INFO level
+- Log slow operations (>1000ms) at WARNING level with `SLOW_OPERATION_THRESHOLD_MS`
 
-### Delete Endpoint Pattern
-For 204 NO_CONTENT responses:
-```python
-@router.delete("/{id}", response_model=None, status_code=status.HTTP_204_NO_CONTENT)
-async def delete_thing(...) -> Response | JSONResponse:
-    # ... on success:
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
-```
-
-### Integration Pattern (Crawl4AI)
-Use `get_crawl4ai()` dependency to get the global client. Check `.available` before use.
+### Test Pattern
+Tests organized by class with:
+- Fixtures for service instances and sample data
+- Dataclass tests, initialization tests, method tests
+- Validation/error handling tests
+- Edge case tests
+- Constants verification tests
+- Singleton and convenience function tests
 
 ---
 
-## 2026-02-01 - client-onboarding-v2-c3y.89
-- **What was implemented**: Competitor content fetching and scraping feature
-- **Files changed**:
-  - `backend/app/models/competitor.py` - Competitor model with JSONB content storage
-  - `backend/app/models/__init__.py` - Added Competitor export
-  - `backend/alembic/versions/0011_create_competitors_table.py` - Migration with unique constraint on (project_id, url)
-  - `backend/app/repositories/competitor.py` - CompetitorRepository with full CRUD, status updates, content updates
-  - `backend/app/repositories/__init__.py` - Added CompetitorRepository export
-  - `backend/app/services/competitor.py` - CompetitorService with URL validation, scraping orchestration
-  - `backend/app/schemas/competitor.py` - Request/response schemas with nested content model
-  - `backend/app/api/v1/endpoints/competitor.py` - Full REST API (add, list, get, scrape, progress, delete)
-  - `backend/app/api/v1/__init__.py` - Registered competitor router at /phases/competitor
-
+## 2026-02-01 - client-onboarding-v2-c3y.90
+- What was implemented: TF-IDF analysis service for term extraction
+- Files changed:
+  - `backend/app/services/tfidf_analysis.py` (new - 920 lines)
+  - `backend/tests/services/test_tfidf_analysis.py` (new - 62 tests)
 - **Learnings:**
-  - FastAPI delete endpoints with 204 status require `response_model=None` and must return `Response(status_code=...)` not `None`
-  - Background tasks in FastAPI use `BackgroundTasks` and `background_tasks.add_task()`
-  - Repository pattern includes timing logs for slow operations (>1s threshold)
-  - Status transitions logged at INFO level, all other DB ops at DEBUG
-  - URL deduplication via composite unique index on (project_id, url)
-  - Crawl4AI integration returns markdown content, links, and metadata from scraped pages
-
----
-
-## 2026-02-01 - client-onboarding-v2-c3y.125
-- **What was implemented**: CategorizePhasePanel component with page category breakdown
-- **Files changed**:
-  - `frontend/src/components/CategorizePhasePanel.tsx` - New React component (400+ lines)
-    - Stats overview section with total, categorized, and uncategorized page counts
-    - Progress bar showing categorization completion percentage
-    - Category breakdown grid with color-coded badges
-    - Configuration form with LLM options (force_llm, skip_llm, batch_size)
-    - Active progress display during background categorization
-    - WebSocket subscription for real-time updates
-    - Polling fallback for progress tracking
-
-- **Learnings:**
-  - Phase panel components follow a consistent structure: stats overview, active progress section, config form
-  - Use `useApiQuery` for fetching data with proper error logging context
-  - Use `useToastMutation` for mutations with automatic toast notifications
-  - `useProjectSubscription` hook provides WebSocket updates for real-time progress
-  - POST to `/phases/categorize/all` returns 202 Accepted and runs in background
-  - `addBreadcrumb` from errorReporting for tracking user actions
-  - Category color mapping provides visual distinction in breakdown display
-  - Form state with checkbox toggles (forceLlm/skipLlm are mutually exclusive)
-  - Poll stats every 3 seconds during active categorization for progress updates
-
+  - Pure Python TF-IDF implementation avoids scikit-learn dependency
+  - Single document TF-IDF edge case: all terms in 100% of docs, filtered by max_df_ratio - use max_df_ratio=1.0 for single doc
+  - Dict comprehensions `{k: 0 for k in iterable}` trigger C420 lint warning; use `# noqa: C420` to suppress when appropriate
+  - Existing mypy errors in `app/core/logging.py` and `app/core/redis.py` - pre-existing issues, not related to new code
 ---
 
