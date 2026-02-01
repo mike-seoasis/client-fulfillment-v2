@@ -146,3 +146,25 @@ logger = get_logger(__name__)
   - Schemas mirror service dataclasses but use Pydantic BaseModel with Field() for API validation
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.45
+- **What was implemented**: Unit tests for RelatedCollectionsService with 95% code coverage (71 tests)
+- **Files changed**:
+  - `backend/tests/services/test_related_collections.py` (new) - Comprehensive test suite
+- **Test coverage**:
+  - Collection, RelatedCollectionMatch, RelatedCollectionsResult dataclasses
+  - Jaccard similarity coefficient calculation (identical, disjoint, partial overlap, edge cases)
+  - find_related() method (thresholds, exclusions, sorting, filtering)
+  - find_related_by_collection() convenience method
+  - rank_by_similarity() method
+  - find_clusters() greedy clustering algorithm
+  - Singleton pattern and convenience functions
+  - Exception classes and validation
+  - Edge cases: unicode labels, large sets, empty inputs, case sensitivity
+- **Learnings:**
+  - Test patterns follow existing codebase: pytest fixtures, class-based test organization
+  - Use `pytest.approx()` for floating-point comparisons in Jaccard tests
+  - Import module directly to reset singleton state: `import app.services.module as mod; mod._singleton = None`
+  - Pre-existing mypy errors in config.py, logging.py, redis.py are known issues (not from this change)
+  - Ruff catches f-strings without placeholders (F541) - use regular strings instead
+---
+
