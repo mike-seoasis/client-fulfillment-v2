@@ -3,8 +3,8 @@
   "description": "Ready tasks batch",
   "userStories": [
     {
-      "id": "client-onboarding-v2-c3y.83",
-      "title": "Implement Phase 5C: LLM QA fix for minimal corrections",
+      "id": "client-onboarding-v2-c3y.84",
+      "title": "Add parallel processing for all three phases",
       "description": "ERROR LOGGING REQUIREMENTS:\n- Log method entry/exit at DEBUG level with parameters (sanitized)\n- Log all exceptions with full stack trace and context\n- Include entity IDs (project_id, page_id) in all service logs\n- Log validation failures with field names and rejected values\n- Log state transitions (phase changes) at INFO level\n- Add timing logs for operations >1 second",
       "acceptanceCriteria": [],
       "passes": true,
@@ -12,6 +12,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-01T21:54:57.880Z"
+    "updatedAt": "2026-02-01T21:57:43.101Z"
   }
 }
