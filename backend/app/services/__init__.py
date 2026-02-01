@@ -56,6 +56,16 @@ from app.services.keyword_specificity import (
     filter_keywords_by_specificity,
     get_keyword_specificity_service,
 )
+from app.services.primary_keyword import (
+    PrimaryKeywordRequest,
+    PrimaryKeywordResult,
+    PrimaryKeywordSelectionError,
+    PrimaryKeywordService,
+    PrimaryKeywordServiceError,
+    PrimaryKeywordValidationError,
+    get_primary_keyword_service,
+    select_primary_keyword,
+)
 from app.services.keyword_volume import (
     KeywordVolumeData,
     KeywordVolumeLookupError,
@@ -182,4 +192,13 @@ __all__ = [
     "SpecificityFilterResult",
     "filter_keywords_by_specificity",
     "get_keyword_specificity_service",
+    # Primary keyword service
+    "PrimaryKeywordService",
+    "PrimaryKeywordServiceError",
+    "PrimaryKeywordSelectionError",
+    "PrimaryKeywordValidationError",
+    "PrimaryKeywordRequest",
+    "PrimaryKeywordResult",
+    "select_primary_keyword",
+    "get_primary_keyword_service",
 ]

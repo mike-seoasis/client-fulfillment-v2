@@ -295,3 +295,28 @@ logger = get_logger(__name__)
   - Pre-existing mypy errors in config.py, logging.py, redis.py are known issues
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.51
+- **What was implemented**: PrimaryKeywordService for selecting the primary keyword (Step 5 of keyword research)
+- **Files changed**:
+  - `backend/app/services/primary_keyword.py` (new) - Full service with highest-volume selection logic
+  - `backend/app/services/__init__.py` - Added primary keyword exports
+- **Features**:
+  - Selects highest-volume keyword from SPECIFIC keywords (output of Step 4)
+  - Tie-breaker: prefers shorter keywords (more concise)
+  - Fallback to first keyword if no volume data available
+  - Comprehensive error logging per requirements
+- **API**:
+  - `PrimaryKeywordService.select_primary(collection_title, specific_keywords, project_id, page_id)`
+  - `PrimaryKeywordRequest` dataclass for structured requests
+  - `PrimaryKeywordResult` with primary_keyword, primary_volume, candidate_count
+  - `get_primary_keyword_service()` singleton getter
+  - `select_primary_keyword()` convenience function
+- **Learnings:**
+  - Primary keyword = highest-volume SPECIFIC keyword (not generic)
+  - Selection is deterministic (no LLM needed) - just sorting by volume
+  - Tie-breaker by keyword length ensures concise primary keywords
+  - Fallback strategy: if all keywords lack volume data, use first keyword
+  - Service follows established pattern: dataclasses for request/result, singleton with `get_*()` getter
+  - Pre-existing mypy errors in config.py, logging.py, redis.py are known issues
+---
+
