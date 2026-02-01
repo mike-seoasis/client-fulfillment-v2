@@ -1,6 +1,8 @@
+configVersion = "2.1"
 agent = "claude"
 tracker = "beads"
-configVersion = "2.1"
+subagentTracingDetail = "minimal"
+autoCommit = true
 
 [agentOptions]
 model = "opus"
@@ -12,3 +14,6 @@ epicId = "client-onboarding-v2-c3y"
 
 [sandbox]
 enabled = false
+
+[notifications]
+sound = "ralph"
