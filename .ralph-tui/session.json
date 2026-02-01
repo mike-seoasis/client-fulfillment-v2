@@ -3,10 +3,10 @@
   "sessionId": "bb3029ca-42a8-4fa0-ba63-82fd8e632c12",
   "status": "running",
   "startedAt": "2026-02-01T15:01:25.965Z",
-  "updatedAt": "2026-02-01T15:22:32.176Z",
-  "currentIteration": 4,
+  "updatedAt": "2026-02-01T15:28:21.786Z",
+  "currentIteration": 5,
   "maxIterations": 10,
-  "tasksCompleted": 4,
+  "tasksCompleted": 5,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -89,8 +89,8 @@
       {
         "id": "client-onboarding-v2-c3y.43",
         "title": "Add parallel processing for label generation (max 5 concurrent)",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "client-onboarding-v2-c3y.42",
@@ -356,6 +356,16 @@
       "durationMs": 310767,
       "startedAt": "2026-02-01T15:14:34.431Z",
       "endedAt": "2026-02-01T15:19:45.198Z"
+    },
+    {
+      "iteration": 5,
+      "status": "completed",
+      "taskId": "client-onboarding-v2-c3y.43",
+      "taskTitle": "Add parallel processing for label generation (max 5 concurrent)",
+      "taskCompleted": true,
+      "durationMs": 165154,
+      "startedAt": "2026-02-01T15:19:46.817Z",
+      "endedAt": "2026-02-01T15:22:31.971Z"
     }
   ],
   "skippedTaskIds": [],

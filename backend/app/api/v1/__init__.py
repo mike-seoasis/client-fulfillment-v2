@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import categorize, crawl, projects, websocket
+from app.api.v1.endpoints import categorize, crawl, label, projects, websocket
 
 router = APIRouter(tags=["v1"])
 
@@ -17,5 +17,10 @@ router.include_router(
     categorize.router,
     prefix="/projects/{project_id}/phases/categorize",
     tags=["Categorize Phase"],
+)
+router.include_router(
+    label.router,
+    prefix="/projects/{project_id}/phases/label",
+    tags=["Label Phase"],
 )
 router.include_router(websocket.router, tags=["WebSocket"])
