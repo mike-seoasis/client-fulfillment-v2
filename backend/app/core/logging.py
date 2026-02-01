@@ -1418,3 +1418,294 @@ class SchedulerLogger:
 
 # Singleton scheduler logger
 scheduler_logger = SchedulerLogger()
+
+
+class KeywordsEverywhereLogger:
+    """Logger for Keywords Everywhere API operations with required error logging.
+
+    Logs all outbound API calls with endpoint, method, timing.
+    Logs request/response bodies at DEBUG level (truncate large responses).
+    Handles timeouts, rate limits (429), auth failures (401/403).
+    Includes retry attempt number in logs.
+    Masks API keys in all logs.
+    Logs circuit breaker state changes.
+    Logs credit usage for quota tracking.
+    """
+
+    def __init__(self) -> None:
+        self.logger = get_logger("keywords_everywhere")
+
+    def api_call_start(
+        self,
+        endpoint: str,
+        keyword_count: int,
+        retry_attempt: int = 0,
+        request_id: str | None = None,
+    ) -> None:
+        """Log outbound API call start at DEBUG level."""
+        self.logger.debug(
+            f"Keywords Everywhere API call: {endpoint}",
+            extra={
+                "endpoint": endpoint,
+                "keyword_count": keyword_count,
+                "retry_attempt": retry_attempt,
+                "request_id": request_id,
+            },
+        )
+
+    def api_call_success(
+        self,
+        endpoint: str,
+        duration_ms: float,
+        keyword_count: int,
+        credits_used: int | None = None,
+        request_id: str | None = None,
+    ) -> None:
+        """Log successful API call at DEBUG level."""
+        self.logger.debug(
+            f"Keywords Everywhere API call completed: {endpoint}",
+            extra={
+                "endpoint": endpoint,
+                "duration_ms": round(duration_ms, 2),
+                "keyword_count": keyword_count,
+                "credits_used": credits_used,
+                "request_id": request_id,
+                "success": True,
+            },
+        )
+
+    def api_call_error(
+        self,
+        endpoint: str,
+        duration_ms: float,
+        status_code: int | None,
+        error: str,
+        error_type: str,
+        retry_attempt: int = 0,
+        request_id: str | None = None,
+    ) -> None:
+        """Log failed API call at WARNING or ERROR level based on status."""
+        # 4xx at WARNING, 5xx and others at ERROR
+        level = logging.WARNING if status_code and 400 <= status_code < 500 else logging.ERROR
+        self.logger.log(
+            level,
+            f"Keywords Everywhere API call failed: {endpoint}",
+            extra={
+                "endpoint": endpoint,
+                "duration_ms": round(duration_ms, 2),
+                "status_code": status_code,
+                "error": error,
+                "error_type": error_type,
+                "retry_attempt": retry_attempt,
+                "request_id": request_id,
+                "success": False,
+            },
+        )
+
+    def timeout(self, endpoint: str, timeout_seconds: float) -> None:
+        """Log request timeout at WARNING level."""
+        self.logger.warning(
+            "Keywords Everywhere API request timeout",
+            extra={
+                "endpoint": endpoint,
+                "timeout_seconds": timeout_seconds,
+            },
+        )
+
+    def rate_limit(
+        self,
+        endpoint: str,
+        retry_after: float | None = None,
+        request_id: str | None = None,
+    ) -> None:
+        """Log rate limit (429) at WARNING level."""
+        self.logger.warning(
+            "Keywords Everywhere API rate limit hit (429)",
+            extra={
+                "endpoint": endpoint,
+                "retry_after_seconds": retry_after,
+                "request_id": request_id,
+            },
+        )
+
+    def auth_failure(self, status_code: int) -> None:
+        """Log authentication failure (401/403) at WARNING level."""
+        self.logger.warning(
+            f"Keywords Everywhere API authentication failed ({status_code})",
+            extra={
+                "status_code": status_code,
+            },
+        )
+
+    def request_body(
+        self,
+        endpoint: str,
+        keywords: list[str],
+        country: str,
+        data_source: str,
+    ) -> None:
+        """Log request body at DEBUG level (truncate large values)."""
+        # Show first 10 keywords for logging
+        keywords_preview = keywords[:10]
+        if len(keywords) > 10:
+            keywords_preview_str = f"{keywords_preview}... ({len(keywords)} total)"
+        else:
+            keywords_preview_str = str(keywords_preview)
+
+        self.logger.debug(
+            "Keywords Everywhere API request body",
+            extra={
+                "endpoint": endpoint,
+                "keywords": keywords_preview_str,
+                "keyword_count": len(keywords),
+                "country": country,
+                "data_source": data_source,
+            },
+        )
+
+    def response_body(
+        self,
+        endpoint: str,
+        keyword_count: int,
+        duration_ms: float,
+        credits_used: int | None = None,
+    ) -> None:
+        """Log response body at DEBUG level."""
+        self.logger.debug(
+            "Keywords Everywhere API response body",
+            extra={
+                "endpoint": endpoint,
+                "keyword_count": keyword_count,
+                "duration_ms": round(duration_ms, 2),
+                "credits_used": credits_used,
+            },
+        )
+
+    def credit_usage(
+        self,
+        credits_used: int,
+        credits_remaining: int | None = None,
+    ) -> None:
+        """Log API credit usage at INFO level."""
+        self.logger.info(
+            "Keywords Everywhere API credit usage",
+            extra={
+                "credits_used": credits_used,
+                "credits_remaining": credits_remaining,
+            },
+        )
+
+    def circuit_state_change(
+        self, previous_state: str, new_state: str, failure_count: int
+    ) -> None:
+        """Log circuit breaker state change at WARNING level."""
+        self.logger.warning(
+            "Keywords Everywhere circuit breaker state changed",
+            extra={
+                "previous_state": previous_state,
+                "new_state": new_state,
+                "failure_count": failure_count,
+            },
+        )
+
+    def circuit_open(self, failure_count: int, recovery_timeout: float) -> None:
+        """Log circuit breaker opening at ERROR level."""
+        self.logger.error(
+            "Keywords Everywhere circuit breaker opened - API calls disabled",
+            extra={
+                "failure_count": failure_count,
+                "recovery_timeout_seconds": recovery_timeout,
+            },
+        )
+
+    def circuit_recovery_attempt(self) -> None:
+        """Log circuit breaker recovery attempt at INFO level."""
+        self.logger.info("Keywords Everywhere circuit breaker attempting recovery")
+
+    def circuit_closed(self) -> None:
+        """Log circuit breaker closing at INFO level."""
+        self.logger.info("Keywords Everywhere circuit breaker closed - API calls restored")
+
+    def graceful_fallback(self, operation: str, reason: str) -> None:
+        """Log graceful fallback when Keywords Everywhere is unavailable."""
+        self.logger.info(
+            "Keywords Everywhere unavailable, using fallback",
+            extra={
+                "operation": operation,
+                "reason": reason,
+            },
+        )
+
+    def keyword_lookup_start(self, keyword_count: int, country: str) -> None:
+        """Log keyword lookup operation start at INFO level."""
+        self.logger.info(
+            "Starting keyword data lookup",
+            extra={
+                "keyword_count": keyword_count,
+                "country": country,
+            },
+        )
+
+    def keyword_lookup_complete(
+        self,
+        keyword_count: int,
+        duration_ms: float,
+        success: bool,
+        results_count: int = 0,
+    ) -> None:
+        """Log keyword lookup operation completion."""
+        level = logging.INFO if success else logging.WARNING
+        self.logger.log(
+            level,
+            "Keyword lookup completed" if success else "Keyword lookup failed",
+            extra={
+                "keyword_count": keyword_count,
+                "duration_ms": round(duration_ms, 2),
+                "success": success,
+                "results_count": results_count,
+            },
+        )
+
+    def batch_start(
+        self,
+        batch_index: int,
+        batch_size: int,
+        total_batches: int,
+        total_keywords: int,
+    ) -> None:
+        """Log batch processing start at DEBUG level."""
+        self.logger.debug(
+            f"Starting keyword batch {batch_index + 1}/{total_batches}",
+            extra={
+                "batch_index": batch_index,
+                "batch_size": batch_size,
+                "total_batches": total_batches,
+                "total_keywords": total_keywords,
+            },
+        )
+
+    def batch_complete(
+        self,
+        batch_index: int,
+        batch_size: int,
+        total_batches: int,
+        success_count: int,
+        duration_ms: float,
+        credits_used: int | None = None,
+    ) -> None:
+        """Log batch processing completion at INFO level."""
+        self.logger.info(
+            f"Keyword batch {batch_index + 1}/{total_batches} complete",
+            extra={
+                "batch_index": batch_index,
+                "batch_size": batch_size,
+                "total_batches": total_batches,
+                "success_count": success_count,
+                "duration_ms": round(duration_ms, 2),
+                "credits_used": credits_used,
+            },
+        )
+
+
+# Singleton Keywords Everywhere logger
+keywords_everywhere_logger = KeywordsEverywhereLogger()
