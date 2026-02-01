@@ -1169,3 +1169,252 @@ class PerplexityLogger:
 
 # Singleton Perplexity logger
 perplexity_logger = PerplexityLogger()
+
+
+class SchedulerLogger:
+    """Logger for APScheduler operations with required error logging.
+
+    Logs scheduler lifecycle events (start, stop, pause, resume).
+    Logs job execution (start, success, error, missed).
+    Logs job store operations at DEBUG level.
+    Handles graceful degradation when scheduler is unavailable.
+    """
+
+    def __init__(self) -> None:
+        self.logger = get_logger("scheduler")
+
+    def scheduler_start(self, job_count: int) -> None:
+        """Log scheduler start at INFO level."""
+        self.logger.info(
+            "Scheduler started",
+            extra={
+                "job_count": job_count,
+            },
+        )
+
+    def scheduler_stop(self, graceful: bool) -> None:
+        """Log scheduler stop at INFO level."""
+        self.logger.info(
+            "Scheduler stopped",
+            extra={
+                "graceful": graceful,
+            },
+        )
+
+    def scheduler_pause(self) -> None:
+        """Log scheduler pause at INFO level."""
+        self.logger.info("Scheduler paused")
+
+    def scheduler_resume(self) -> None:
+        """Log scheduler resume at INFO level."""
+        self.logger.info("Scheduler resumed")
+
+    def job_added(
+        self,
+        job_id: str,
+        job_name: str | None,
+        trigger: str,
+        next_run: str | None = None,
+    ) -> None:
+        """Log job addition at INFO level."""
+        self.logger.info(
+            "Job added to scheduler",
+            extra={
+                "job_id": job_id,
+                "job_name": job_name,
+                "trigger": trigger,
+                "next_run": next_run,
+            },
+        )
+
+    def job_removed(self, job_id: str, job_name: str | None = None) -> None:
+        """Log job removal at INFO level."""
+        self.logger.info(
+            "Job removed from scheduler",
+            extra={
+                "job_id": job_id,
+                "job_name": job_name,
+            },
+        )
+
+    def job_modified(
+        self,
+        job_id: str,
+        job_name: str | None,
+        changes: dict[str, Any] | None = None,
+    ) -> None:
+        """Log job modification at INFO level."""
+        self.logger.info(
+            "Job modified",
+            extra={
+                "job_id": job_id,
+                "job_name": job_name,
+                "changes": changes,
+            },
+        )
+
+    def job_execution_start(
+        self,
+        job_id: str,
+        job_name: str | None,
+        scheduled_time: str | None = None,
+    ) -> None:
+        """Log job execution start at DEBUG level."""
+        self.logger.debug(
+            "Job execution started",
+            extra={
+                "job_id": job_id,
+                "job_name": job_name,
+                "scheduled_time": scheduled_time,
+            },
+        )
+
+    def job_execution_success(
+        self,
+        job_id: str,
+        job_name: str | None,
+        duration_ms: float,
+        result: Any = None,
+    ) -> None:
+        """Log job execution success at INFO level."""
+        self.logger.info(
+            "Job execution completed",
+            extra={
+                "job_id": job_id,
+                "job_name": job_name,
+                "duration_ms": round(duration_ms, 2),
+                "success": True,
+                "result": str(result)[:200] if result else None,
+            },
+        )
+
+    def job_execution_error(
+        self,
+        job_id: str,
+        job_name: str | None,
+        duration_ms: float,
+        error: str,
+        error_type: str,
+    ) -> None:
+        """Log job execution error at ERROR level."""
+        self.logger.error(
+            "Job execution failed",
+            extra={
+                "job_id": job_id,
+                "job_name": job_name,
+                "duration_ms": round(duration_ms, 2),
+                "success": False,
+                "error": error,
+                "error_type": error_type,
+            },
+        )
+
+    def job_missed(
+        self,
+        job_id: str,
+        job_name: str | None,
+        scheduled_time: str,
+        misfire_grace_time: int,
+    ) -> None:
+        """Log missed job execution at WARNING level."""
+        self.logger.warning(
+            "Job execution missed",
+            extra={
+                "job_id": job_id,
+                "job_name": job_name,
+                "scheduled_time": scheduled_time,
+                "misfire_grace_time": misfire_grace_time,
+            },
+        )
+
+    def job_max_instances_reached(
+        self,
+        job_id: str,
+        job_name: str | None,
+        max_instances: int,
+    ) -> None:
+        """Log when job max instances reached at WARNING level."""
+        self.logger.warning(
+            "Job max instances reached, skipping execution",
+            extra={
+                "job_id": job_id,
+                "job_name": job_name,
+                "max_instances": max_instances,
+            },
+        )
+
+    def jobstore_operation(
+        self,
+        operation: str,
+        store_name: str,
+        job_id: str | None = None,
+        success: bool = True,
+        duration_ms: float | None = None,
+    ) -> None:
+        """Log job store operation at DEBUG level."""
+        level = logging.DEBUG if success else logging.WARNING
+        self.logger.log(
+            level,
+            f"Job store operation: {operation}",
+            extra={
+                "operation": operation,
+                "store_name": store_name,
+                "job_id": job_id,
+                "success": success,
+                "duration_ms": round(duration_ms, 2) if duration_ms else None,
+            },
+        )
+
+    def jobstore_connection_error(
+        self,
+        store_name: str,
+        error: str,
+        error_type: str,
+        connection_string: str | None = None,
+    ) -> None:
+        """Log job store connection error at ERROR level."""
+        self.logger.error(
+            "Job store connection failed",
+            extra={
+                "store_name": store_name,
+                "error": error,
+                "error_type": error_type,
+                "connection_string": (
+                    mask_connection_string(connection_string)
+                    if connection_string
+                    else None
+                ),
+            },
+        )
+
+    def slow_job_execution(
+        self,
+        job_id: str,
+        job_name: str | None,
+        duration_ms: float,
+        threshold_ms: int = 1000,
+    ) -> None:
+        """Log slow job execution at WARNING level."""
+        self.logger.warning(
+            "Slow job execution detected",
+            extra={
+                "job_id": job_id,
+                "job_name": job_name,
+                "duration_ms": round(duration_ms, 2),
+                "threshold_ms": threshold_ms,
+            },
+        )
+
+    def scheduler_not_available(self, operation: str, reason: str) -> None:
+        """Log scheduler unavailable at WARNING level."""
+        self.logger.warning(
+            "Scheduler not available",
+            extra={
+                "operation": operation,
+                "reason": reason,
+            },
+        )
+
+
+# Singleton scheduler logger
+scheduler_logger = SchedulerLogger()

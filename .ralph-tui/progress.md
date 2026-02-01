@@ -61,3 +61,21 @@ logger = get_logger(__name__)
   - Logger pattern: service-specific logger class in core/logging.py with singleton instance
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.98
+- **What was implemented**: APScheduler with SQLAlchemy job store for background task scheduling
+- **Files changed**:
+  - `backend/pyproject.toml` - Added apscheduler>=3.10.0 dependency
+  - `backend/app/core/config.py` - Added scheduler settings (enabled, coalesce, max_instances, misfire_grace_time)
+  - `backend/app/core/logging.py` - Added SchedulerLogger class with comprehensive job logging
+  - `backend/app/core/scheduler.py` (new) - Full scheduler manager with SQLAlchemy job store
+  - `backend/app/main.py` - Integrated scheduler with app lifespan (start/stop) and health check endpoint
+- **Learnings:**
+  - APScheduler uses synchronous SQLAlchemy, so must convert `postgresql+asyncpg://` to `postgresql://` for job store
+  - APScheduler doesn't have type stubs, needs `apscheduler.*` in mypy ignore_missing_imports
+  - Job store table is `apscheduler_jobs` (auto-created by SQLAlchemyJobStore)
+  - Scheduler events: EVENT_JOB_ADDED, EVENT_JOB_EXECUTED, EVENT_JOB_ERROR, EVENT_JOB_MISSED
+  - Pattern: singleton `scheduler_manager` with `get_scheduler()` getter following other services
+  - CronTrigger.from_crontab() for cron expressions, IntervalTrigger for intervals
+  - Health check returns: status, running, state, job_count, pending_jobs
+---
+

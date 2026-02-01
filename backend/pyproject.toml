@@ -20,6 +20,7 @@ dependencies = [
     "httpx>=0.26.0",
     "redis>=5.0.0",
     "python-dotenv>=1.0.0",
+    "apscheduler>=3.10.0",
 ]
 
 [project.optional-dependencies]
@@ -121,6 +122,7 @@ module = [
     "pythonjsonlogger",
     "pythonjsonlogger.*",
     "httpx.*",
+    "apscheduler.*",
 ]
 ignore_missing_imports = true
 

@@ -34,6 +34,7 @@ from app.core.config import get_settings
 from app.core.database import db_manager
 from app.core.logging import get_logger, setup_logging
 from app.core.redis import redis_manager
+from app.core.scheduler import scheduler_manager
 from app.core.websocket import connection_manager
 
 # Set up logging before anything else
@@ -198,6 +199,15 @@ async def lifespan(app: FastAPI) -> Any:
     await connection_manager.start_heartbeat()
     logger.info("WebSocket heartbeat task started")
 
+    # Initialize and start scheduler
+    if scheduler_manager.init_scheduler():
+        if scheduler_manager.start():
+            logger.info("Scheduler started")
+        else:
+            logger.warning("Failed to start scheduler")
+    else:
+        logger.info("Scheduler not initialized (disabled or error)")
+
     # Set up graceful shutdown handler
     shutdown_event = asyncio.Event()
 
@@ -217,6 +227,10 @@ async def lifespan(app: FastAPI) -> Any:
 
     # Shutdown
     logger.info("Shutting down application")
+
+    # Stop scheduler first (allows running jobs to complete)
+    scheduler_manager.stop(wait=True)
+    logger.info("Scheduler stopped")
 
     # Notify WebSocket clients and stop heartbeat
     await connection_manager.broadcast_shutdown(reason="server_shutdown")
@@ -357,6 +371,13 @@ def create_app() -> FastAPI:
             "redis": is_healthy,
             "circuit_breaker": circuit_state,
         }
+
+    # Scheduler health check
+    @app.get("/health/scheduler", tags=["Health"])
+    async def scheduler_health() -> dict[str, Any]:
+        """Check scheduler status."""
+        health = scheduler_manager.check_health()
+        return health
 
     # Import and include API routers
     from app.api.v1 import router as api_v1_router

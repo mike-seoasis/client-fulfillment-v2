@@ -133,6 +133,23 @@ class Settings(BaseSettings):
         default=60.0, description="Seconds before attempting recovery"
     )
 
+    # Scheduler (APScheduler)
+    scheduler_enabled: bool = Field(
+        default=True, description="Enable/disable the scheduler"
+    )
+    scheduler_job_coalesce: bool = Field(
+        default=True, description="Coalesce missed job executions into one"
+    )
+    scheduler_max_instances: int = Field(
+        default=3, description="Max concurrent instances per job"
+    )
+    scheduler_misfire_grace_time: int = Field(
+        default=60, description="Seconds to allow job execution after scheduled time"
+    )
+    scheduler_job_default_max_instances: int = Field(
+        default=1, description="Default max instances for jobs without explicit setting"
+    )
+
     # Perplexity API
     perplexity_api_key: str | None = Field(
         default=None,
