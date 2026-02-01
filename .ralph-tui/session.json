@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "sessionId": "8a54e9eb-4a5e-4bb4-a7eb-b58b06804689",
+  "sessionId": "4908e82a-0206-4abf-8189-0419dfa0777f",
   "status": "running",
-  "startedAt": "2026-02-01T22:10:42.990Z",
-  "updatedAt": "2026-02-01T22:19:43.538Z",
+  "startedAt": "2026-02-01T22:19:47.560Z",
+  "updatedAt": "2026-02-01T22:24:16.310Z",
   "currentIteration": 0,
   "maxIterations": 30,
   "tasksCompleted": 0,
@@ -12,11 +12,17 @@
   "trackerState": {
     "plugin": "json",
     "prdPath": "prd.json",
-    "totalTasks": 1,
+    "totalTasks": 2,
     "tasks": [
       {
-        "id": "client-onboarding-v2-c3y.87",
-        "title": "Write unit tests for trope detection and QA logic",
+        "id": "client-onboarding-v2-c3y.88",
+        "title": "Create Google Cloud NLP integration client for entity extraction",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "client-onboarding-v2-c3y.124",
+        "title": "Build CrawlPhasePanel with config form and progress",
         "status": "open",
         "completedInSession": false
       }

@@ -2072,3 +2072,307 @@ class DataForSEOLogger:
 
 # Singleton DataForSEO logger
 dataforseo_logger = DataForSEOLogger()
+
+
+class GoogleNLPLogger:
+    """Logger for Google Cloud NLP API operations with required error logging.
+
+    Logs all outbound API calls with endpoint, method, timing.
+    Logs request/response bodies at DEBUG level (truncate large responses).
+    Handles timeouts, rate limits (429), auth failures (401/403).
+    Includes retry attempt number in logs.
+    Masks API keys in all logs.
+    Logs circuit breaker state changes.
+    """
+
+    def __init__(self) -> None:
+        self.logger = get_logger("google_nlp")
+
+    def api_call_start(
+        self,
+        endpoint: str,
+        text_length: int,
+        retry_attempt: int = 0,
+        request_id: str | None = None,
+    ) -> None:
+        """Log outbound API call start at DEBUG level."""
+        self.logger.debug(
+            f"Google Cloud NLP API call: {endpoint}",
+            extra={
+                "endpoint": endpoint,
+                "text_length": text_length,
+                "retry_attempt": retry_attempt,
+                "request_id": request_id,
+            },
+        )
+
+    def api_call_success(
+        self,
+        endpoint: str,
+        duration_ms: float,
+        entity_count: int | None = None,
+        request_id: str | None = None,
+    ) -> None:
+        """Log successful API call at DEBUG level."""
+        self.logger.debug(
+            f"Google Cloud NLP API call completed: {endpoint}",
+            extra={
+                "endpoint": endpoint,
+                "duration_ms": round(duration_ms, 2),
+                "entity_count": entity_count,
+                "request_id": request_id,
+                "success": True,
+            },
+        )
+
+    def api_call_error(
+        self,
+        endpoint: str,
+        duration_ms: float,
+        status_code: int | None,
+        error: str,
+        error_type: str,
+        retry_attempt: int = 0,
+        request_id: str | None = None,
+    ) -> None:
+        """Log failed API call at WARNING or ERROR level based on status."""
+        # 4xx at WARNING, 5xx and others at ERROR
+        level = logging.WARNING if status_code and 400 <= status_code < 500 else logging.ERROR
+        self.logger.log(
+            level,
+            f"Google Cloud NLP API call failed: {endpoint}",
+            extra={
+                "endpoint": endpoint,
+                "duration_ms": round(duration_ms, 2),
+                "status_code": status_code,
+                "error": error,
+                "error_type": error_type,
+                "retry_attempt": retry_attempt,
+                "request_id": request_id,
+                "success": False,
+            },
+        )
+
+    def timeout(self, endpoint: str, timeout_seconds: float) -> None:
+        """Log request timeout at WARNING level."""
+        self.logger.warning(
+            "Google Cloud NLP API request timeout",
+            extra={
+                "endpoint": endpoint,
+                "timeout_seconds": timeout_seconds,
+            },
+        )
+
+    def rate_limit(
+        self,
+        endpoint: str,
+        retry_after: float | None = None,
+        request_id: str | None = None,
+    ) -> None:
+        """Log rate limit (429) at WARNING level."""
+        self.logger.warning(
+            "Google Cloud NLP API rate limit hit (429)",
+            extra={
+                "endpoint": endpoint,
+                "retry_after_seconds": retry_after,
+                "request_id": request_id,
+            },
+        )
+
+    def auth_failure(self, status_code: int) -> None:
+        """Log authentication failure (401/403) at WARNING level."""
+        self.logger.warning(
+            f"Google Cloud NLP API authentication failed ({status_code})",
+            extra={
+                "status_code": status_code,
+            },
+        )
+
+    def request_body(
+        self,
+        endpoint: str,
+        text: str,
+        encoding_type: str | None = None,
+    ) -> None:
+        """Log request body at DEBUG level (truncate large values)."""
+        self.logger.debug(
+            "Google Cloud NLP API request body",
+            extra={
+                "endpoint": endpoint,
+                "text": self._truncate_text(text, 500),
+                "text_length": len(text),
+                "encoding_type": encoding_type,
+            },
+        )
+
+    def response_body(
+        self,
+        endpoint: str,
+        entity_count: int,
+        duration_ms: float,
+    ) -> None:
+        """Log response body at DEBUG level."""
+        self.logger.debug(
+            "Google Cloud NLP API response body",
+            extra={
+                "endpoint": endpoint,
+                "entity_count": entity_count,
+                "duration_ms": round(duration_ms, 2),
+            },
+        )
+
+    def _truncate_text(self, text: str, max_length: int = 500) -> str:
+        """Truncate text for logging."""
+        if len(text) <= max_length:
+            return text
+        return text[:max_length] + f"... (truncated, {len(text)} chars)"
+
+    def quota_usage(
+        self,
+        units_used: int | None = None,
+        endpoint: str | None = None,
+    ) -> None:
+        """Log API quota usage at INFO level."""
+        self.logger.info(
+            "Google Cloud NLP API quota usage",
+            extra={
+                "units_used": units_used,
+                "endpoint": endpoint,
+            },
+        )
+
+    def circuit_state_change(
+        self, previous_state: str, new_state: str, failure_count: int
+    ) -> None:
+        """Log circuit breaker state change at WARNING level."""
+        self.logger.warning(
+            "Google Cloud NLP circuit breaker state changed",
+            extra={
+                "previous_state": previous_state,
+                "new_state": new_state,
+                "failure_count": failure_count,
+            },
+        )
+
+    def circuit_open(self, failure_count: int, recovery_timeout: float) -> None:
+        """Log circuit breaker opening at ERROR level."""
+        self.logger.error(
+            "Google Cloud NLP circuit breaker opened - API calls disabled",
+            extra={
+                "failure_count": failure_count,
+                "recovery_timeout_seconds": recovery_timeout,
+            },
+        )
+
+    def circuit_recovery_attempt(self) -> None:
+        """Log circuit breaker recovery attempt at INFO level."""
+        self.logger.info("Google Cloud NLP circuit breaker attempting recovery")
+
+    def circuit_closed(self) -> None:
+        """Log circuit breaker closing at INFO level."""
+        self.logger.info("Google Cloud NLP circuit breaker closed - API calls restored")
+
+    def graceful_fallback(self, operation: str, reason: str) -> None:
+        """Log graceful fallback when Google Cloud NLP is unavailable."""
+        self.logger.info(
+            "Google Cloud NLP unavailable, using fallback",
+            extra={
+                "operation": operation,
+                "reason": reason,
+            },
+        )
+
+    def entity_extraction_start(self, text_length: int) -> None:
+        """Log entity extraction operation start at INFO level."""
+        self.logger.info(
+            "Starting entity extraction",
+            extra={
+                "text_length": text_length,
+            },
+        )
+
+    def entity_extraction_complete(
+        self,
+        text_length: int,
+        duration_ms: float,
+        success: bool,
+        entity_count: int = 0,
+    ) -> None:
+        """Log entity extraction operation completion."""
+        level = logging.INFO if success else logging.WARNING
+        self.logger.log(
+            level,
+            "Entity extraction completed" if success else "Entity extraction failed",
+            extra={
+                "text_length": text_length,
+                "duration_ms": round(duration_ms, 2),
+                "success": success,
+                "entity_count": entity_count,
+            },
+        )
+
+    def batch_start(
+        self,
+        batch_index: int,
+        batch_size: int,
+        total_batches: int,
+        total_texts: int,
+    ) -> None:
+        """Log batch processing start at DEBUG level."""
+        self.logger.debug(
+            f"Starting entity extraction batch {batch_index + 1}/{total_batches}",
+            extra={
+                "batch_index": batch_index,
+                "batch_size": batch_size,
+                "total_batches": total_batches,
+                "total_texts": total_texts,
+            },
+        )
+
+    def batch_complete(
+        self,
+        batch_index: int,
+        batch_size: int,
+        total_batches: int,
+        success_count: int,
+        failure_count: int,
+        duration_ms: float,
+        total_entities: int = 0,
+    ) -> None:
+        """Log batch processing completion at INFO level."""
+        self.logger.info(
+            f"Entity extraction batch {batch_index + 1}/{total_batches} complete",
+            extra={
+                "batch_index": batch_index,
+                "batch_size": batch_size,
+                "total_batches": total_batches,
+                "success_count": success_count,
+                "failure_count": failure_count,
+                "duration_ms": round(duration_ms, 2),
+                "total_entities": total_entities,
+            },
+        )
+
+    def batch_error(
+        self,
+        batch_index: int,
+        total_batches: int,
+        error: str,
+        error_type: str,
+        duration_ms: float,
+    ) -> None:
+        """Log batch processing error at ERROR level."""
+        self.logger.error(
+            f"Entity extraction batch {batch_index + 1}/{total_batches} failed",
+            extra={
+                "batch_index": batch_index,
+                "total_batches": total_batches,
+                "error": error,
+                "error_type": error_type,
+                "duration_ms": round(duration_ms, 2),
+            },
+        )
+
+
+# Singleton Google Cloud NLP logger
+google_nlp_logger = GoogleNLPLogger()

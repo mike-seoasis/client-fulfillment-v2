@@ -285,6 +285,32 @@ class Settings(BaseSettings):
         description="Seconds before attempting webhook recovery",
     )
 
+    # Google Cloud NLP API (entity extraction)
+    google_nlp_api_key: str | None = Field(
+        default=None,
+        description="Google Cloud NLP API key for entity extraction",
+    )
+    google_nlp_project_id: str | None = Field(
+        default=None,
+        description="Google Cloud project ID (required for some operations)",
+    )
+    google_nlp_timeout: float = Field(
+        default=30.0, description="Google Cloud NLP API request timeout in seconds"
+    )
+    google_nlp_max_retries: int = Field(
+        default=3, description="Maximum retry attempts for Google Cloud NLP API requests"
+    )
+    google_nlp_retry_delay: float = Field(
+        default=1.0, description="Base delay between retries in seconds"
+    )
+    # Circuit breaker settings for Google Cloud NLP
+    google_nlp_circuit_failure_threshold: int = Field(
+        default=5, description="Failures before circuit opens"
+    )
+    google_nlp_circuit_recovery_timeout: float = Field(
+        default=60.0, description="Seconds before attempting recovery"
+    )
+
     # DataForSEO API (primary SERP/keyword data provider)
     dataforseo_api_login: str | None = Field(
         default=None,
