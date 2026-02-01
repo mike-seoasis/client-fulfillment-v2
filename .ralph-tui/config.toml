@@ -1,7 +1,6 @@
 configVersion = "2.1"
 agent = "claude"
-tracker = "beads"
-subagentTracingDetail = "minimal"
+tracker = "json"
 autoCommit = true
 
 [agentOptions]

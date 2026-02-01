@@ -1709,3 +1709,366 @@ class KeywordsEverywhereLogger:
 
 # Singleton Keywords Everywhere logger
 keywords_everywhere_logger = KeywordsEverywhereLogger()
+
+
+class DataForSEOLogger:
+    """Logger for DataForSEO API operations with required error logging.
+
+    Logs all outbound API calls with endpoint, method, timing.
+    Logs request/response bodies at DEBUG level (truncate large responses).
+    Handles timeouts, rate limits (429), auth failures (401/403).
+    Includes retry attempt number in logs.
+    Masks API credentials in all logs.
+    Logs circuit breaker state changes.
+    Logs credit/cost usage for quota tracking.
+    """
+
+    def __init__(self) -> None:
+        self.logger = get_logger("dataforseo")
+
+    def api_call_start(
+        self,
+        endpoint: str,
+        method: str = "POST",
+        retry_attempt: int = 0,
+        request_id: str | None = None,
+    ) -> None:
+        """Log outbound API call start at DEBUG level."""
+        self.logger.debug(
+            f"DataForSEO API call: {method} {endpoint}",
+            extra={
+                "endpoint": endpoint,
+                "method": method,
+                "retry_attempt": retry_attempt,
+                "request_id": request_id,
+            },
+        )
+
+    def api_call_success(
+        self,
+        endpoint: str,
+        duration_ms: float,
+        method: str = "POST",
+        cost: float | None = None,
+        tasks_count: int | None = None,
+        request_id: str | None = None,
+    ) -> None:
+        """Log successful API call at DEBUG level."""
+        self.logger.debug(
+            f"DataForSEO API call completed: {method} {endpoint}",
+            extra={
+                "endpoint": endpoint,
+                "method": method,
+                "duration_ms": round(duration_ms, 2),
+                "cost": cost,
+                "tasks_count": tasks_count,
+                "request_id": request_id,
+                "success": True,
+            },
+        )
+
+    def api_call_error(
+        self,
+        endpoint: str,
+        duration_ms: float,
+        status_code: int | None,
+        error: str,
+        error_type: str,
+        method: str = "POST",
+        retry_attempt: int = 0,
+        request_id: str | None = None,
+    ) -> None:
+        """Log failed API call at WARNING or ERROR level based on status."""
+        # 4xx at WARNING, 5xx and others at ERROR
+        level = logging.WARNING if status_code and 400 <= status_code < 500 else logging.ERROR
+        self.logger.log(
+            level,
+            f"DataForSEO API call failed: {method} {endpoint}",
+            extra={
+                "endpoint": endpoint,
+                "method": method,
+                "duration_ms": round(duration_ms, 2),
+                "status_code": status_code,
+                "error": error,
+                "error_type": error_type,
+                "retry_attempt": retry_attempt,
+                "request_id": request_id,
+                "success": False,
+            },
+        )
+
+    def timeout(self, endpoint: str, timeout_seconds: float) -> None:
+        """Log request timeout at WARNING level."""
+        self.logger.warning(
+            "DataForSEO API request timeout",
+            extra={
+                "endpoint": endpoint,
+                "timeout_seconds": timeout_seconds,
+            },
+        )
+
+    def rate_limit(
+        self,
+        endpoint: str,
+        retry_after: float | None = None,
+        request_id: str | None = None,
+    ) -> None:
+        """Log rate limit (429) at WARNING level."""
+        self.logger.warning(
+            "DataForSEO API rate limit hit (429)",
+            extra={
+                "endpoint": endpoint,
+                "retry_after_seconds": retry_after,
+                "request_id": request_id,
+            },
+        )
+
+    def auth_failure(self, status_code: int) -> None:
+        """Log authentication failure (401/403) at WARNING level."""
+        self.logger.warning(
+            f"DataForSEO API authentication failed ({status_code})",
+            extra={
+                "status_code": status_code,
+            },
+        )
+
+    def request_body(
+        self,
+        endpoint: str,
+        body: dict[str, Any] | list[dict[str, Any]],
+    ) -> None:
+        """Log request body at DEBUG level (truncate large values)."""
+        truncated_body = self._truncate_body(body)
+        self.logger.debug(
+            "DataForSEO API request body",
+            extra={
+                "endpoint": endpoint,
+                "request_body": truncated_body,
+            },
+        )
+
+    def response_body(
+        self,
+        endpoint: str,
+        body: dict[str, Any],
+        duration_ms: float,
+        cost: float | None = None,
+    ) -> None:
+        """Log response body at DEBUG level (truncate large values)."""
+        truncated_body = self._truncate_body(body)
+        self.logger.debug(
+            "DataForSEO API response body",
+            extra={
+                "endpoint": endpoint,
+                "response_body": truncated_body,
+                "duration_ms": round(duration_ms, 2),
+                "cost": cost,
+            },
+        )
+
+    def _truncate_body(
+        self, body: dict[str, Any] | list[Any], max_length: int = 500
+    ) -> dict[str, Any] | list[Any] | str:
+        """Truncate large values in body for logging."""
+        if isinstance(body, list):
+            if len(body) > 10:
+                return f"[list with {len(body)} items]"
+            return [self._truncate_body(item, max_length) for item in body[:10]]
+
+        if isinstance(body, dict):
+            result: dict[str, Any] = {}
+            for key, value in body.items():
+                if isinstance(value, str) and len(value) > max_length:
+                    result[key] = value[:max_length] + f"... (truncated, {len(value)} chars)"
+                elif isinstance(value, dict):
+                    result[key] = self._truncate_body(value, max_length)
+                elif isinstance(value, list) and len(value) > 10:
+                    result[key] = f"[list with {len(value)} items]"
+                else:
+                    result[key] = value
+            return result
+
+        return body
+
+    def cost_usage(
+        self,
+        cost: float,
+        endpoint: str | None = None,
+    ) -> None:
+        """Log API cost usage at INFO level."""
+        self.logger.info(
+            "DataForSEO API cost usage",
+            extra={
+                "cost": cost,
+                "endpoint": endpoint,
+            },
+        )
+
+    def circuit_state_change(
+        self, previous_state: str, new_state: str, failure_count: int
+    ) -> None:
+        """Log circuit breaker state change at WARNING level."""
+        self.logger.warning(
+            "DataForSEO circuit breaker state changed",
+            extra={
+                "previous_state": previous_state,
+                "new_state": new_state,
+                "failure_count": failure_count,
+            },
+        )
+
+    def circuit_open(self, failure_count: int, recovery_timeout: float) -> None:
+        """Log circuit breaker opening at ERROR level."""
+        self.logger.error(
+            "DataForSEO circuit breaker opened - API calls disabled",
+            extra={
+                "failure_count": failure_count,
+                "recovery_timeout_seconds": recovery_timeout,
+            },
+        )
+
+    def circuit_recovery_attempt(self) -> None:
+        """Log circuit breaker recovery attempt at INFO level."""
+        self.logger.info("DataForSEO circuit breaker attempting recovery")
+
+    def circuit_closed(self) -> None:
+        """Log circuit breaker closing at INFO level."""
+        self.logger.info("DataForSEO circuit breaker closed - API calls restored")
+
+    def graceful_fallback(self, operation: str, reason: str) -> None:
+        """Log graceful fallback when DataForSEO is unavailable."""
+        self.logger.info(
+            "DataForSEO unavailable, using fallback",
+            extra={
+                "operation": operation,
+                "reason": reason,
+            },
+        )
+
+    def keyword_search_start(
+        self,
+        keywords: list[str],
+        location_code: int,
+    ) -> None:
+        """Log keyword search operation start at INFO level."""
+        keywords_preview = keywords[:5]
+        if len(keywords) > 5:
+            keywords_str = f"{keywords_preview}... ({len(keywords)} total)"
+        else:
+            keywords_str = str(keywords_preview)
+        self.logger.info(
+            "Starting DataForSEO keyword search",
+            extra={
+                "keywords": keywords_str,
+                "keyword_count": len(keywords),
+                "location_code": location_code,
+            },
+        )
+
+    def keyword_search_complete(
+        self,
+        keyword_count: int,
+        duration_ms: float,
+        success: bool,
+        results_count: int = 0,
+        cost: float | None = None,
+    ) -> None:
+        """Log keyword search operation completion."""
+        level = logging.INFO if success else logging.WARNING
+        self.logger.log(
+            level,
+            "DataForSEO keyword search completed" if success else "DataForSEO keyword search failed",
+            extra={
+                "keyword_count": keyword_count,
+                "duration_ms": round(duration_ms, 2),
+                "success": success,
+                "results_count": results_count,
+                "cost": cost,
+            },
+        )
+
+    def serp_search_start(
+        self,
+        keyword: str,
+        location_code: int,
+        search_engine: str = "google",
+    ) -> None:
+        """Log SERP search operation start at INFO level."""
+        self.logger.info(
+            "Starting DataForSEO SERP search",
+            extra={
+                "keyword": keyword[:100],
+                "location_code": location_code,
+                "search_engine": search_engine,
+            },
+        )
+
+    def serp_search_complete(
+        self,
+        keyword: str,
+        duration_ms: float,
+        success: bool,
+        results_count: int = 0,
+        cost: float | None = None,
+    ) -> None:
+        """Log SERP search operation completion."""
+        level = logging.INFO if success else logging.WARNING
+        self.logger.log(
+            level,
+            "DataForSEO SERP search completed" if success else "DataForSEO SERP search failed",
+            extra={
+                "keyword": keyword[:100],
+                "duration_ms": round(duration_ms, 2),
+                "success": success,
+                "results_count": results_count,
+                "cost": cost,
+            },
+        )
+
+    def batch_start(
+        self,
+        batch_index: int,
+        batch_size: int,
+        total_batches: int,
+        total_items: int,
+        operation: str = "keyword_search",
+    ) -> None:
+        """Log batch processing start at DEBUG level."""
+        self.logger.debug(
+            f"Starting DataForSEO batch {batch_index + 1}/{total_batches}",
+            extra={
+                "batch_index": batch_index,
+                "batch_size": batch_size,
+                "total_batches": total_batches,
+                "total_items": total_items,
+                "operation": operation,
+            },
+        )
+
+    def batch_complete(
+        self,
+        batch_index: int,
+        batch_size: int,
+        total_batches: int,
+        success_count: int,
+        duration_ms: float,
+        cost: float | None = None,
+        operation: str = "keyword_search",
+    ) -> None:
+        """Log batch processing completion at INFO level."""
+        self.logger.info(
+            f"DataForSEO batch {batch_index + 1}/{total_batches} complete",
+            extra={
+                "batch_index": batch_index,
+                "batch_size": batch_size,
+                "total_batches": total_batches,
+                "success_count": success_count,
+                "duration_ms": round(duration_ms, 2),
+                "cost": cost,
+                "operation": operation,
+            },
+        )
+
+
+# Singleton DataForSEO logger
+dataforseo_logger = DataForSEOLogger()

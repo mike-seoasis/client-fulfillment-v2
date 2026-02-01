@@ -215,6 +215,38 @@ class Settings(BaseSettings):
         default=30, description="TTL for cached keyword data in days"
     )
 
+    # DataForSEO API (primary SERP/keyword data provider)
+    dataforseo_api_login: str | None = Field(
+        default=None,
+        description="DataForSEO API login (email)",
+    )
+    dataforseo_api_password: str | None = Field(
+        default=None,
+        description="DataForSEO API password",
+    )
+    dataforseo_timeout: float = Field(
+        default=60.0, description="DataForSEO API request timeout in seconds"
+    )
+    dataforseo_max_retries: int = Field(
+        default=3, description="Maximum retry attempts for DataForSEO API requests"
+    )
+    dataforseo_retry_delay: float = Field(
+        default=1.0, description="Base delay between retries in seconds"
+    )
+    dataforseo_default_location_code: int = Field(
+        default=2840, description="Default location code (2840=United States)"
+    )
+    dataforseo_default_language_code: str = Field(
+        default="en", description="Default language code"
+    )
+    # Circuit breaker settings for DataForSEO
+    dataforseo_circuit_failure_threshold: int = Field(
+        default=5, description="Failures before circuit opens"
+    )
+    dataforseo_circuit_recovery_timeout: float = Field(
+        default=60.0, description="Seconds before attempting recovery"
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:
