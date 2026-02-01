@@ -210,6 +210,11 @@ class Settings(BaseSettings):
         default=60.0, description="Seconds before attempting recovery"
     )
 
+    # Keyword cache settings
+    keyword_cache_ttl_days: int = Field(
+        default=30, description="TTL for cached keyword data in days"
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:
