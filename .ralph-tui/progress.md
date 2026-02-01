@@ -18,6 +18,13 @@ after each iteration and it's included in prompts for context.
 - Add `*_cached` methods to integrations that need caching (checks cache first, then API)
 - Import cache services inside methods to avoid circular imports
 
+### PAA Fan-Out Pattern
+- Use `PAAEnrichmentService` for PAA discovery with optional fan-out
+- Fan-out searches initial PAA questions for nested questions (controlled by `fanout_enabled`, `max_fanout_questions`)
+- Rate-limit concurrent fan-out with `max_concurrent_fanout` (default 5)
+- Use `enrich_keyword_paa_cached()` for cache-aware PAA enrichment (24h TTL)
+- Questions are de-duplicated using normalized text (lowercase, stripped)
+
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.57
@@ -37,5 +44,28 @@ after each iteration and it's included in prompts for context.
   - Existing Redis infrastructure already has circuit breaker, SSL/TLS, and connection retry logic
   - Import cache services inside methods to avoid circular imports when cache depends on domain types
   - The mypy errors in core modules are pre-existing (config.py requires database_url, logging imports issue)
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.58
+- What was implemented:
+  - Created PAA enrichment service (`app/services/paa_enrichment.py`) with fan-out strategy
+  - Created PAA cache service (`app/services/paa_cache.py`) with 24h TTL
+  - Fan-out strategy: searches initial PAA questions for nested questions
+  - Uses DataForSEO SERP Advanced endpoint with `people_also_ask_click_depth` parameter (1-4)
+  - Supports rate-limited concurrent fan-out with configurable max_concurrent_fanout
+  - De-duplicates questions using normalized question text
+  - Comprehensive logging per error logging requirements
+
+- Files changed:
+  - `backend/app/services/paa_enrichment.py` (new)
+  - `backend/app/services/paa_cache.py` (new)
+
+- **Learnings:**
+  - DataForSEO SERP Advanced endpoint (`/v3/serp/google/organic/live/advanced`) supports PAA click depth
+  - `people_also_ask_click_depth` param (1-4) expands PAA questions, costs $0.00015 extra per click
+  - PAA items in SERP response have type `people_also_ask` with nested `people_also_ask_element` items
+  - Expanded elements can be `people_also_ask_expanded_element` (standard) or `people_also_ask_ai_overview_expanded_element` (AI-generated)
+  - Fan-out strategy limits to first N questions to control API costs
+  - Question deduplication uses normalized (lowercase, stripped, no trailing ?) comparison
 ---
 

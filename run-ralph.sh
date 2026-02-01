@@ -57,12 +57,11 @@ while true; do
 
     if [ -n "$COMPLETED" ]; then
         for task_id in $COMPLETED; do
-            echo "   Closing: $task_id"
-            bd update "$task_id" --status closed 2>/dev/null
+            ./close-task.sh "$task_id" "Completed by agent"
         done
 
         # Re-export beads to keep JSONL in sync
-        bd export -o .beads/beads.jsonl 2>/dev/null
+        bd export -o .beads/beads.jsonl --no-daemon 2>/dev/null
         echo "   ✅ Synced $(echo "$COMPLETED" | wc -l | tr -d ' ') tasks to beads"
     else
         echo "   No tasks marked complete in this batch"
