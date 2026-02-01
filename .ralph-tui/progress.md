@@ -14,6 +14,35 @@ after each iteration and it's included in prompts for context.
 - **Error logging verification**: Use `caplog` fixture with `caplog.at_level(logging.DEBUG/INFO)`
 - **Coverage target**: 80% minimum, tests achieve 87% overall
 
+- **Logging extra key gotcha**: Service code using `extra={"filename": ...}` conflicts with Python logging's reserved LogRecord attributes - tests should patch the logger when testing paths that trigger these logs
+
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.72
+- What was implemented: Comprehensive unit tests for brand config synthesis service
+- Files changed:
+  - `backend/tests/services/test_brand_config.py` - New test file with 50 tests covering:
+    - SynthesisResult dataclass validation
+    - Exception classes (BrandConfigServiceError, ValidationError, NotFoundError, SynthesisError)
+    - Schema merging (_merge_v2_schemas) with partial overrides
+    - Document parsing (_parse_documents) with base64, failures, exceptions
+    - V2 schema synthesis (synthesize_v2_schema) success, validation, Claude errors, JSON parsing
+    - Synthesize and save (synthesize_and_save) create/update flows, DB errors
+    - CRUD operations (get, list, update, delete) with ownership validation
+    - Service factory function (get_brand_config_service)
+    - Service initialization and helper methods
+- **Learnings:**
+  - Patterns discovered:
+    - Brand config service uses dependency injection for Claude client and document parser
+    - Synthesis result includes token usage metrics (input_tokens, output_tokens, request_id)
+    - Schema merging uses deep merge for nested dicts (colors, typography, etc.)
+    - Test coverage achieved: 93% for app.services.brand_config
+  - Gotchas encountered:
+    - Service logs use `extra={"filename": ...}` which conflicts with Python's reserved LogRecord attribute
+    - Must patch `app.services.brand_config.logger` in tests that trigger warning/debug paths using filename
+    - BrandConfigSynthesisRequest requires brand_name, tests with empty string need to use pydantic validation path
+    - Markdown code block handling (`\`\`\`json`) is tested for Claude responses
+
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.63
