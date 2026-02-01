@@ -51,6 +51,44 @@ def get_service() -> ServiceClass:
     return _service
 ```
 
+### Frontend Component Pattern
+Form components use forwardRef with class-variance-authority (cva) for variants:
+```tsx
+const inputVariants = cva('base-classes', {
+  variants: {
+    variant: { default: '...', error: '...', success: '...' },
+    size: { default: '...', sm: '...', lg: '...' },
+  },
+  defaultVariants: { variant: 'default', size: 'default' },
+})
+
+const Input = React.forwardRef<HTMLInputElement, InputProps>(
+  ({ className, variant, size, ...props }, ref) => (
+    <input className={cn(inputVariants({ variant, size, className }))} ref={ref} {...props} />
+  )
+)
+Input.displayName = 'Input'
+```
+
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.117
+- **What was implemented**: FormField components with validation display
+  - Input, Textarea, Select components with variant states (default/error/success)
+  - Checkbox component with label support
+  - Label component with required/optional indicators
+  - HelperText component for validation messages (error/success/warning/default)
+  - FormField composite component that wraps inputs with labels and validation feedback
+  - Proper aria attributes for accessibility (aria-invalid, aria-describedby, role="alert")
+
+- **Files created**:
+  - `frontend/src/components/ui/form-field.tsx` - All form field components
+
+- **Learnings:**
+  - React hooks must be called unconditionally - use `const generatedId = React.useId(); const inputId = id || generatedId;` not `const inputId = id || React.useId()`
+  - Files exporting both components and variants (cva) need `/* eslint-disable react-refresh/only-export-components */` at the top
+  - Error logging infrastructure already exists in frontend (ErrorBoundary, globalErrorHandlers, errorReporting, api client with error logging)
+  - Design system uses warm colors (cream, warmgray, primary/gold, coral, error, success, warning) with soft shadows and rounded-xl borders
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.75
