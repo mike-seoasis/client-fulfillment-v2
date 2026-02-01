@@ -12,6 +12,7 @@ ERROR LOGGING REQUIREMENTS:
 - Add timing logs for operations >1 second
 """
 
+import asyncio
 import hashlib
 import time
 from dataclasses import dataclass, field
@@ -32,7 +33,7 @@ from app.integrations.crawl4ai import (
 )
 from app.models.crawl_history import CrawlHistory
 from app.models.crawled_page import CrawledPage
-from app.utils.crawl_queue import URLPriority, URLPriorityQueue
+from app.utils.crawl_queue import QueuedURL, URLPriority, URLPriorityQueue
 from app.utils.url import normalize_url
 from app.utils.url_categorizer import get_url_categorizer
 
@@ -40,6 +41,9 @@ logger = get_logger(__name__)
 
 # Threshold for logging slow operations
 SLOW_OPERATION_THRESHOLD_MS = 1000  # 1 second
+
+# Maximum concurrent crawl operations for parallel processing
+MAX_CONCURRENT_CRAWLS = 5
 
 
 class CrawlServiceError(Exception):
@@ -1128,30 +1132,36 @@ class CrawlService:
         self,
         crawl_id: str,
         config: CrawlConfig,
+        max_concurrent: int = MAX_CONCURRENT_CRAWLS,
     ) -> CrawlProgress:
-        """Execute a crawl job.
+        """Execute a crawl job with parallel processing.
 
         Uses the URLPriorityQueue for URL management and Crawl4AI for crawling.
+        Processes up to max_concurrent URLs in parallel using semaphore-based
+        rate limiting.
 
         Args:
             crawl_id: Crawl history UUID
             config: Crawl configuration
+            max_concurrent: Maximum concurrent crawl operations (default: 5)
 
         Returns:
             Final CrawlProgress
         """
         start_time = time.monotonic()
         logger.debug(
-            "Running crawl",
+            "run_crawl() entry",
             extra={
                 "crawl_id": crawl_id,
                 "start_url": config.start_url[:200],
                 "max_pages": config.max_pages,
                 "max_depth": config.max_depth,
+                "max_concurrent": max_concurrent,
             },
         )
 
         progress = CrawlProgress(started_at=datetime.now(UTC))
+        project_id: str | None = None
 
         try:
             # Validate inputs
@@ -1161,6 +1171,17 @@ class CrawlService:
             # Get crawl history to extract project_id
             history = await self.get_crawl_history(crawl_id)
             project_id = history.project_id
+
+            # Log state transition: pending -> running
+            logger.info(
+                "Crawl state transition",
+                extra={
+                    "crawl_id": crawl_id,
+                    "project_id": project_id,
+                    "from_status": "pending",
+                    "to_status": "running",
+                },
+            )
 
             # Mark as running
             progress.status = "running"
@@ -1184,33 +1205,148 @@ class CrawlService:
             # Get Crawl4AI client
             crawl4ai = await self._get_crawl4ai()
 
-            # Crawl loop
+            # Create semaphore for rate limiting parallel crawls
+            semaphore = asyncio.Semaphore(max_concurrent)
+
+            logger.info(
+                "Starting parallel crawl with rate limiting",
+                extra={
+                    "crawl_id": crawl_id,
+                    "project_id": project_id,
+                    "max_concurrent": max_concurrent,
+                    "max_pages": config.max_pages,
+                },
+            )
+
+            # Crawl loop with parallel processing
+            # Process URLs in batches for better parallelism while maintaining
+            # URL discovery from previous batches
+            batch_number = 0
             while not queue.empty() and progress.pages_crawled < config.max_pages:
-                queued_url = queue.pop()
-                if queued_url is None:
+                batch_start_time = time.monotonic()
+                batch_number += 1
+
+                # Collect a batch of URLs to process in parallel
+                batch_urls: list[QueuedURL] = []
+                remaining_capacity = config.max_pages - progress.pages_crawled
+                batch_size = min(max_concurrent, remaining_capacity)
+
+                while len(batch_urls) < batch_size and not queue.empty():
+                    queued_url = queue.pop()
+                    if queued_url is None:
+                        break
+
+                    # Check depth limit
+                    if queued_url.depth > config.max_depth:
+                        progress.pages_skipped += 1
+                        logger.debug(
+                            "Skipping URL (max depth exceeded)",
+                            extra={
+                                "crawl_id": crawl_id,
+                                "project_id": project_id,
+                                "url": queued_url.url[:200],
+                                "depth": queued_url.depth,
+                                "max_depth": config.max_depth,
+                            },
+                        )
+                        continue
+
+                    batch_urls.append(queued_url)
+                    progress.current_depth = max(
+                        progress.current_depth, queued_url.depth
+                    )
+
+                if not batch_urls:
                     break
 
-                # Check depth limit
-                if queued_url.depth > config.max_depth:
-                    progress.pages_skipped += 1
-                    logger.debug(
-                        "Skipping URL (max depth exceeded)",
-                        extra={
-                            "url": queued_url.url[:200],
-                            "depth": queued_url.depth,
-                            "max_depth": config.max_depth,
-                        },
-                    )
-                    continue
+                logger.debug(
+                    "Processing crawl batch",
+                    extra={
+                        "crawl_id": crawl_id,
+                        "project_id": project_id,
+                        "batch_number": batch_number,
+                        "batch_size": len(batch_urls),
+                        "pages_crawled_so_far": progress.pages_crawled,
+                    },
+                )
 
-                progress.current_depth = max(progress.current_depth, queued_url.depth)
+                # Define the crawl task with semaphore control
+                async def crawl_url_with_semaphore(
+                    queued_url: QueuedURL,
+                ) -> tuple[QueuedURL, CrawlResult | None, Exception | None]:
+                    """Crawl a single URL with semaphore-controlled concurrency."""
+                    async with semaphore:
+                        url_start_time = time.monotonic()
+                        logger.debug(
+                            "Crawling URL (parallel)",
+                            extra={
+                                "crawl_id": crawl_id,
+                                "project_id": project_id,
+                                "url": queued_url.url[:200],
+                                "depth": queued_url.depth,
+                            },
+                        )
+                        try:
+                            result = await crawl4ai.crawl(
+                                queued_url.url,
+                                options=config.crawl_options,
+                            )
+                            url_duration_ms = (time.monotonic() - url_start_time) * 1000
 
-                # Crawl the URL
-                try:
-                    result = await crawl4ai.crawl(
-                        queued_url.url,
-                        options=config.crawl_options,
-                    )
+                            if url_duration_ms > SLOW_OPERATION_THRESHOLD_MS:
+                                logger.warning(
+                                    "Slow URL crawl",
+                                    extra={
+                                        "crawl_id": crawl_id,
+                                        "project_id": project_id,
+                                        "url": queued_url.url[:200],
+                                        "duration_ms": round(url_duration_ms, 2),
+                                    },
+                                )
+
+                            return (queued_url, result, None)
+                        except Exception as e:
+                            logger.error(
+                                "Exception during parallel page crawl",
+                                extra={
+                                    "crawl_id": crawl_id,
+                                    "project_id": project_id,
+                                    "url": queued_url.url[:200],
+                                    "error_type": type(e).__name__,
+                                    "error_message": str(e),
+                                },
+                                exc_info=True,
+                            )
+                            return (queued_url, None, e)
+
+                # Execute batch in parallel
+                tasks = [crawl_url_with_semaphore(url) for url in batch_urls]
+                batch_results = await asyncio.gather(*tasks)
+
+                # Process results and update progress
+                for queued_url, result, error in batch_results:
+                    if error is not None:
+                        progress.pages_failed += 1
+                        progress.errors.append(
+                            {
+                                "url": queued_url.url,
+                                "error": str(error),
+                                "error_type": type(error).__name__,
+                                "timestamp": datetime.now(UTC).isoformat(),
+                            }
+                        )
+                        continue
+
+                    if result is None:
+                        progress.pages_failed += 1
+                        progress.errors.append(
+                            {
+                                "url": queued_url.url,
+                                "error": "No result returned",
+                                "timestamp": datetime.now(UTC).isoformat(),
+                            }
+                        )
+                        continue
 
                     if result.success:
                         # Save the page
@@ -1243,6 +1379,7 @@ class CrawlService:
                             "Page crawled successfully",
                             extra={
                                 "crawl_id": crawl_id,
+                                "project_id": project_id,
                                 "url": queued_url.url[:200],
                                 "pages_crawled": progress.pages_crawled,
                             },
@@ -1253,6 +1390,7 @@ class CrawlService:
                             {
                                 "url": queued_url.url,
                                 "error": result.error or "Unknown error",
+                                "status_code": result.status_code,
                                 "timestamp": datetime.now(UTC).isoformat(),
                             }
                         )
@@ -1260,36 +1398,53 @@ class CrawlService:
                             "Page crawl failed",
                             extra={
                                 "crawl_id": crawl_id,
+                                "project_id": project_id,
                                 "url": queued_url.url[:200],
                                 "error": result.error,
+                                "status_code": result.status_code,
                             },
                         )
 
-                except Exception as e:
-                    progress.pages_failed += 1
-                    progress.errors.append(
-                        {
-                            "url": queued_url.url,
-                            "error": str(e),
-                            "timestamp": datetime.now(UTC).isoformat(),
-                        }
-                    )
-                    logger.error(
-                        "Exception during page crawl",
+                batch_duration_ms = (time.monotonic() - batch_start_time) * 1000
+                logger.debug(
+                    "Batch complete",
+                    extra={
+                        "crawl_id": crawl_id,
+                        "project_id": project_id,
+                        "batch_number": batch_number,
+                        "batch_size": len(batch_urls),
+                        "duration_ms": round(batch_duration_ms, 2),
+                        "pages_crawled": progress.pages_crawled,
+                        "pages_failed": progress.pages_failed,
+                    },
+                )
+
+                if batch_duration_ms > SLOW_OPERATION_THRESHOLD_MS:
+                    logger.warning(
+                        "Slow batch processing",
                         extra={
                             "crawl_id": crawl_id,
-                            "url": queued_url.url[:200],
-                            "error_type": type(e).__name__,
-                            "error_message": str(e),
+                            "project_id": project_id,
+                            "batch_number": batch_number,
+                            "batch_size": len(batch_urls),
+                            "duration_ms": round(batch_duration_ms, 2),
                         },
-                        exc_info=True,
                     )
 
-                # Periodically update progress and broadcast via WebSocket
-                if (progress.pages_crawled + progress.pages_failed) % 10 == 0:
-                    await self.update_crawl_status(crawl_id, "running", progress)
-                    # Broadcast progress to WebSocket subscribers
-                    await self._broadcast_progress(project_id, crawl_id, progress)
+                # Update progress and broadcast after each batch
+                await self.update_crawl_status(crawl_id, "running", progress)
+                await self._broadcast_progress(project_id, crawl_id, progress)
+
+            # Log state transition: running -> completed
+            logger.info(
+                "Crawl state transition",
+                extra={
+                    "crawl_id": crawl_id,
+                    "project_id": project_id,
+                    "from_status": "running",
+                    "to_status": "completed",
+                },
+            )
 
             # Mark as completed
             progress.status = "completed"
@@ -1300,15 +1455,29 @@ class CrawlService:
 
             duration_ms = (time.monotonic() - start_time) * 1000
             logger.info(
-                "Crawl completed",
+                "run_crawl() exit - completed",
                 extra={
                     "crawl_id": crawl_id,
+                    "project_id": project_id,
                     "pages_crawled": progress.pages_crawled,
                     "pages_failed": progress.pages_failed,
                     "urls_discovered": progress.urls_discovered,
+                    "batch_count": batch_number,
+                    "max_concurrent": max_concurrent,
                     "duration_ms": round(duration_ms, 2),
                 },
             )
+
+            if duration_ms > SLOW_OPERATION_THRESHOLD_MS:
+                logger.warning(
+                    "Slow crawl operation",
+                    extra={
+                        "crawl_id": crawl_id,
+                        "project_id": project_id,
+                        "duration_ms": round(duration_ms, 2),
+                        "pages_crawled": progress.pages_crawled,
+                    },
+                )
 
             return progress
 
@@ -1324,7 +1493,8 @@ class CrawlService:
                 ),
             )
             # Broadcast failure to WebSocket subscribers
-            await self._broadcast_progress(project_id, crawl_id, progress)
+            if project_id:
+                await self._broadcast_progress(project_id, crawl_id, progress)
             raise
         except Exception as e:
             progress.status = "failed"
@@ -1333,6 +1503,7 @@ class CrawlService:
                 {
                     "url": "N/A",
                     "error": str(e),
+                    "error_type": type(e).__name__,
                     "timestamp": datetime.now(UTC).isoformat(),
                 }
             )
@@ -1340,11 +1511,13 @@ class CrawlService:
                 crawl_id, "failed", progress, error_message=str(e)
             )
             # Broadcast failure to WebSocket subscribers
-            await self._broadcast_progress(project_id, crawl_id, progress)
+            if project_id:
+                await self._broadcast_progress(project_id, crawl_id, progress)
             logger.error(
-                "Crawl failed with exception",
+                "run_crawl() exit - failed with exception",
                 extra={
                     "crawl_id": crawl_id,
+                    "project_id": project_id,
                     "error_type": type(e).__name__,
                     "error_message": str(e),
                 },
@@ -1526,11 +1699,13 @@ class CrawlService:
         urls: list[str],
         crawl_options: CrawlOptions | None = None,
         update_existing: bool = True,
+        max_concurrent: int = MAX_CONCURRENT_CRAWLS,
     ) -> list[tuple[str, CrawlResult, bool]]:
         """Fetch specific URLs without full crawl discovery.
 
         This is a "fetch-only" mode that re-crawls specific URLs without
-        using the URLPriorityQueue or discovering new links. Useful for:
+        using the URLPriorityQueue or discovering new links. Uses parallel
+        processing with semaphore-based rate limiting. Useful for:
         - Re-crawling pages that may have changed
         - Refreshing content for specific URLs
         - Updating metadata for existing pages
@@ -1540,6 +1715,7 @@ class CrawlService:
             urls: List of URLs to fetch
             crawl_options: Optional crawl options to apply
             update_existing: If True, update existing pages; if False, skip them
+            max_concurrent: Maximum concurrent fetch operations (default: 5)
 
         Returns:
             List of tuples: (url, CrawlResult, was_updated)
@@ -1553,12 +1729,23 @@ class CrawlService:
         - Log cache hits/misses at DEBUG level
         """
         start_time = time.monotonic()
-        logger.info(
-            "Starting fetch-only crawl",
+        logger.debug(
+            "fetch_urls() entry",
             extra={
                 "project_id": project_id,
                 "url_count": len(urls),
                 "update_existing": update_existing,
+                "max_concurrent": max_concurrent,
+            },
+        )
+
+        logger.info(
+            "Starting parallel fetch-only crawl",
+            extra={
+                "project_id": project_id,
+                "url_count": len(urls),
+                "update_existing": update_existing,
+                "max_concurrent": max_concurrent,
             },
         )
 
@@ -1575,104 +1762,167 @@ class CrawlService:
             for url in urls:
                 self._validate_url(url, "urls[]")
 
-            results: list[tuple[str, CrawlResult, bool]] = []
             crawl4ai = await self._get_crawl4ai()
 
-            for url in urls:
-                fetch_start_time = time.monotonic()
-                normalized = normalize_url(url)
+            # Create semaphore for rate limiting parallel fetches
+            semaphore = asyncio.Semaphore(max_concurrent)
 
-                # Check if page exists (for cache hit/miss logging)
-                existing = await self._get_existing_page(project_id, normalized)
-                if existing:
+            async def fetch_single_url(
+                index: int, url: str
+            ) -> tuple[int, str, CrawlResult, bool]:
+                """Fetch a single URL with semaphore-controlled concurrency."""
+                async with semaphore:
+                    fetch_start_time = time.monotonic()
+                    normalized = normalize_url(url)
+
                     logger.debug(
-                        "Cache HIT: page exists in database",
+                        "Fetching URL (parallel)",
                         extra={
                             "project_id": project_id,
                             "url": url[:200],
-                            "page_id": existing.id,
-                            "last_crawled_at": existing.last_crawled_at.isoformat()
-                            if existing.last_crawled_at
-                            else None,
+                            "index": index,
                         },
                     )
-                    if not update_existing:
+
+                    try:
+                        # Check if page exists (for cache hit/miss logging)
+                        existing = await self._get_existing_page(project_id, normalized)
+                        if existing:
+                            logger.debug(
+                                "Cache HIT: page exists in database",
+                                extra={
+                                    "project_id": project_id,
+                                    "url": url[:200],
+                                    "page_id": existing.id,
+                                    "last_crawled_at": existing.last_crawled_at.isoformat()
+                                    if existing.last_crawled_at
+                                    else None,
+                                },
+                            )
+                            if not update_existing:
+                                logger.debug(
+                                    "Skipping existing page (update_existing=False)",
+                                    extra={
+                                        "project_id": project_id,
+                                        "url": url[:200],
+                                        "page_id": existing.id,
+                                    },
+                                )
+                                # Return a result indicating we skipped
+                                return (
+                                    index,
+                                    url,
+                                    CrawlResult(
+                                        success=True,
+                                        url=url,
+                                        metadata={
+                                            "skipped": True,
+                                            "reason": "update_existing=False",
+                                        },
+                                    ),
+                                    False,
+                                )
+                        else:
+                            logger.debug(
+                                "Cache MISS: page not in database",
+                                extra={
+                                    "project_id": project_id,
+                                    "url": url[:200],
+                                },
+                            )
+
+                        # Fetch the URL with retry logic
+                        result = await self._fetch_url_with_retry(
+                            crawl4ai,
+                            url,
+                            crawl_options,
+                        )
+
+                        was_updated = False
+                        if result.success:
+                            # Save the page
+                            await self.save_crawled_page(
+                                project_id=project_id,
+                                url=url,
+                                crawl_result=result,
+                            )
+                            was_updated = True
+
+                        fetch_duration_ms = (time.monotonic() - fetch_start_time) * 1000
+
+                        if fetch_duration_ms > SLOW_OPERATION_THRESHOLD_MS:
+                            logger.warning(
+                                "Slow URL fetch",
+                                extra={
+                                    "project_id": project_id,
+                                    "url": url[:200],
+                                    "duration_ms": round(fetch_duration_ms, 2),
+                                },
+                            )
+
                         logger.debug(
-                            "Skipping existing page (update_existing=False)",
+                            "Fetch completed for URL",
                             extra={
                                 "project_id": project_id,
                                 "url": url[:200],
-                                "page_id": existing.id,
+                                "success": result.success,
+                                "was_updated": was_updated,
+                                "duration_ms": round(fetch_duration_ms, 2),
+                                "status_code": result.status_code,
                             },
                         )
-                        # Return a result indicating we skipped
-                        results.append(
-                            (
-                                url,
-                                CrawlResult(
-                                    success=True,
-                                    url=url,
-                                    metadata={
-                                        "skipped": True,
-                                        "reason": "update_existing=False",
-                                    },
-                                ),
-                                False,
-                            )
+
+                        return (index, url, result, was_updated)
+
+                    except Exception as e:
+                        logger.error(
+                            "Exception during parallel URL fetch",
+                            extra={
+                                "project_id": project_id,
+                                "url": url[:200],
+                                "error_type": type(e).__name__,
+                                "error_message": str(e),
+                            },
+                            exc_info=True,
                         )
-                        continue
-                else:
-                    logger.debug(
-                        "Cache MISS: page not in database",
-                        extra={
-                            "project_id": project_id,
-                            "url": url[:200],
-                        },
-                    )
+                        # Return error result
+                        return (
+                            index,
+                            url,
+                            CrawlResult(
+                                success=False,
+                                url=url,
+                                error=str(e),
+                                metadata={"error_type": type(e).__name__},
+                            ),
+                            False,
+                        )
 
-                # Fetch the URL with retry logic
-                result = await self._fetch_url_with_retry(
-                    crawl4ai,
-                    url,
-                    crawl_options,
-                )
+            # Execute all fetches in parallel (semaphore limits actual concurrency)
+            tasks = [fetch_single_url(i, url) for i, url in enumerate(urls)]
+            indexed_results = await asyncio.gather(*tasks)
 
-                was_updated = False
-                if result.success:
-                    # Save the page
-                    await self.save_crawled_page(
-                        project_id=project_id,
-                        url=url,
-                        crawl_result=result,
-                    )
-                    was_updated = True
-
-                fetch_duration_ms = (time.monotonic() - fetch_start_time) * 1000
-                logger.info(
-                    "Fetch completed for URL",
-                    extra={
-                        "project_id": project_id,
-                        "url": url[:200],
-                        "success": result.success,
-                        "was_updated": was_updated,
-                        "duration_ms": round(fetch_duration_ms, 2),
-                        "status_code": result.status_code,
-                    },
-                )
-
-                results.append((url, result, was_updated))
+            # Sort by original index to maintain order
+            sorted_results = sorted(indexed_results, key=lambda x: x[0])
+            results: list[tuple[str, CrawlResult, bool]] = [
+                (url, result, was_updated)
+                for _, url, result, was_updated in sorted_results
+            ]
 
             total_duration_ms = (time.monotonic() - start_time) * 1000
             success_count = sum(1 for _, r, _ in results if r.success)
             updated_count = sum(1 for _, _, was_updated in results if was_updated)
+            failed_count = len(results) - success_count
 
             logger.info(
-                "Fetch-only crawl completed",
+                "fetch_urls() exit - completed",
                 extra={
                     "project_id": project_id,
                     "url_count": len(urls),
                     "success_count": success_count,
+                    "failed_count": failed_count,
                     "updated_count": updated_count,
+                    "max_concurrent": max_concurrent,
                     "duration_ms": round(total_duration_ms, 2),
                 },
             )
@@ -1693,7 +1943,7 @@ class CrawlService:
             raise
         except Exception as e:
             logger.error(
-                "Fetch-only crawl failed with exception",
+                "fetch_urls() exit - failed with exception",
                 extra={
                     "project_id": project_id,
                     "url_count": len(urls),

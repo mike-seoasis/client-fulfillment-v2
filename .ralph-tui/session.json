@@ -1,12 +1,12 @@
 {
   "version": 1,
-  "sessionId": "dcf043b7-15d6-4fec-97a7-e3c0121f9620",
+  "sessionId": "2ea7278c-5b34-4c41-8bf9-cec84907b6e6",
   "status": "running",
-  "startedAt": "2026-02-01T18:59:00.068Z",
-  "updatedAt": "2026-02-01T19:24:45.836Z",
-  "currentIteration": 3,
+  "startedAt": "2026-02-01T19:24:49.847Z",
+  "updatedAt": "2026-02-01T19:30:51.133Z",
+  "currentIteration": 0,
   "maxIterations": 30,
-  "tasksCompleted": 3,
+  "tasksCompleted": 0,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -15,63 +15,32 @@
     "totalTasks": 4,
     "tasks": [
       {
-        "id": "client-onboarding-v2-c3y.60",
-        "title": "Add PAA question categorization by intent (buying, usage, care, comparison)",
-        "status": "completed",
-        "completedInSession": true
+        "id": "client-onboarding-v2-c3y.61",
+        "title": "Implement parallel processing with rate limiting (max 5 concurrent)",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "client-onboarding-v2-c3y.69",
-        "title": "Add fallback persona generation when no reviews available",
-        "status": "completed",
-        "completedInSession": true
+        "id": "client-onboarding-v2-c3y.70",
+        "title": "Create /api/v1/projects/{id}/phases/brand_config endpoints",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "client-onboarding-v2-c3y.102",
-        "title": "Add startup recovery for interrupted crawls",
-        "status": "completed",
-        "completedInSession": true
+        "id": "client-onboarding-v2-c3y.103",
+        "title": "Create /api/v1/projects/{id}/schedule endpoints",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "client-onboarding-v2-c3y.111",
-        "title": "Add WebSocket client for real-time updates",
+        "id": "client-onboarding-v2-c3y.112",
+        "title": "Install and configure shadcn/ui component library",
         "status": "open",
         "completedInSession": false
       }
     ]
   },
-  "iterations": [
-    {
-      "iteration": 1,
-      "status": "completed",
-      "taskId": "client-onboarding-v2-c3y.60",
-      "taskTitle": "Add PAA question categorization by intent (buying, usage, care, comparison)",
-      "taskCompleted": true,
-      "durationMs": 148481,
-      "startedAt": "2026-02-01T18:59:00.072Z",
-      "endedAt": "2026-02-01T19:01:28.553Z"
-    },
-    {
-      "iteration": 2,
-      "status": "completed",
-      "taskId": "client-onboarding-v2-c3y.69",
-      "taskTitle": "Add fallback persona generation when no reviews available",
-      "taskCompleted": true,
-      "durationMs": 421599,
-      "startedAt": "2026-02-01T19:01:29.749Z",
-      "endedAt": "2026-02-01T19:08:31.348Z"
-    },
-    {
-      "iteration": 3,
-      "status": "completed",
-      "taskId": "client-onboarding-v2-c3y.102",
-      "taskTitle": "Add startup recovery for interrupted crawls",
-      "taskCompleted": true,
-      "durationMs": 387499,
-      "startedAt": "2026-02-01T19:08:32.574Z",
-      "endedAt": "2026-02-01T19:15:00.073Z"
-    }
-  ],
+  "iterations": [],
   "skippedTaskIds": [],
   "cwd": "/Users/mike/Projects/client-onboarding-v2",
   "activeTaskIds": [],
