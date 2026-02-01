@@ -37,6 +37,14 @@ Python's `logging` module reserves certain keys in `LogRecord`. When logging wit
 - **Avoid using**: `filename`, `lineno`, `funcName`, `pathname`, `module`, `name`, `levelname`, `levelno`, `msg`, `args`, `exc_info`, `exc_text`, `created`, `msecs`, `relativeCreated`, `thread`, `threadName`, `processName`, `process`
 - **Use prefixed alternatives**: `document_filename` instead of `filename`, `target_url` instead of `url` if ambiguous
 
+### React Query Error Integration Pattern
+When configuring React Query with error handling:
+- Use `QueryCache` and `MutationCache` `onError` callbacks for global error handling
+- Integrate with existing error reporting service (reportApiError, reportError)
+- Add breadcrumbs for debugging context
+- Custom retry logic: don't retry 4xx client errors (except 408 timeout, 429 rate limit)
+- React Query v5 `onSuccess` callback takes 4 arguments: `(data, variables, context, mutation)`
+
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.58
@@ -107,5 +115,33 @@ Python's `logging` module reserves certain keys in `LogRecord`. When logging wit
   - MD5 is appropriate for change detection (fast, collision-resistant enough for this use case)
   - Text normalization (lowercase, whitespace) ensures minor formatting changes don't trigger false changes
   - All 62 tests pass, ruff lint clean
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.109
+- What was implemented: React Query configuration for data fetching and caching with error handling integration
+- Files changed:
+  - `frontend/package.json` - Added `@tanstack/react-query@^5.90.20` dependency
+  - `frontend/src/lib/queryClient.ts` - New QueryClient with error handling integration
+  - `frontend/src/lib/hooks/useApiQuery.ts` - Custom hooks for typed API queries and mutations
+  - `frontend/src/lib/hooks/index.ts` - Export file for hooks
+  - `frontend/src/App.tsx` - Added QueryClientProvider wrapper
+- **Implementation details:**
+  - `queryClient.ts`:
+    - QueryCache/MutationCache with `onError` callbacks tied to error reporting service
+    - Custom `shouldRetry` logic: no retry on 4xx (except 408/429), retry 5xx and network errors
+    - Default staleTime: 30s, gcTime: 5min
+    - Exponential backoff for retries (max 30s)
+    - offlineFirst network mode for graceful offline handling
+  - `useApiQuery.ts`:
+    - `useApiQuery<T>` - Type-safe GET queries with API client integration
+    - `useApiMutation<T, V>` - Type-safe mutations with auto-invalidation support
+    - `usePrefetch<T>` - Prefetch data on hover/transitions
+    - Dynamic endpoint support for mutations via function
+  - Error boundaries and global handlers were already implemented (c3y.108)
+- **Learnings:**
+  - React Query v5 `onSuccess` callback signature is `(data, variables, context, mutation)` - 4 args not 3
+  - Use `QueryCache`/`MutationCache` for global error handling, not defaultOptions
+  - npm cache permission issues can be bypassed with `--cache /tmp/npm-cache-$USER`
+  - Typecheck and lint pass
 ---
 
