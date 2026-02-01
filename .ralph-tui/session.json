@@ -3,10 +3,10 @@
   "sessionId": "44febb0e-fb2f-4041-b715-23ad2a45598b",
   "status": "running",
   "startedAt": "2026-02-01T21:24:49.811Z",
-  "updatedAt": "2026-02-01T21:36:01.675Z",
-  "currentIteration": 1,
+  "updatedAt": "2026-02-01T21:40:59.442Z",
+  "currentIteration": 2,
   "maxIterations": 30,
-  "tasksCompleted": 1,
+  "tasksCompleted": 2,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -23,8 +23,8 @@
       {
         "id": "client-onboarding-v2-c3y.123",
         "title": "Build ProjectSettingsPage for configuration",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "client-onboarding-v2-c3y.138",
@@ -44,6 +44,16 @@
       "durationMs": 387183,
       "startedAt": "2026-02-01T21:24:49.815Z",
       "endedAt": "2026-02-01T21:31:16.998Z"
+    },
+    {
+      "iteration": 2,
+      "status": "completed",
+      "taskId": "client-onboarding-v2-c3y.123",
+      "taskTitle": "Build ProjectSettingsPage for configuration",
+      "taskCompleted": true,
+      "durationMs": 283477,
+      "startedAt": "2026-02-01T21:31:18.196Z",
+      "endedAt": "2026-02-01T21:36:01.673Z"
     }
   ],
   "skippedTaskIds": [],

@@ -11,6 +11,9 @@ export type {
 export { useToastMutation } from './useToastMutation'
 export type { ToastMutationOptions } from './useToastMutation'
 
+export { useOptimisticMutation } from './useOptimisticMutation'
+export type { UseOptimisticMutationOptions } from './useOptimisticMutation'
+
 export { useWebSocket, useProjectSubscription } from './useWebSocket'
 export type {
   ConnectionState,

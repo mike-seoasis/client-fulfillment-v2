@@ -31,6 +31,24 @@ All phase services follow a consistent structure:
 - Import module in alphabetical order
 - Register with: `router.include_router(module.router, prefix="/projects/{project_id}/phases/phase_name", tags=["Phase Name Phase"])`
 
+### Optimistic Update Pattern
+Use `useOptimisticMutation` hook for mutations that should feel instant:
+1. **mutationFn**: Standard API call function
+2. **queryKey**: The query to update optimistically
+3. **getOptimisticData**: `(currentData, variables) => newData` - applies update immediately
+4. **invalidateKeys**: Additional queries to invalidate on success (optional)
+5. **updateCacheWithResult**: `(currentData, result, variables) => newData` - sync with server response (optional, defaults to invalidation)
+6. **entityIds**: Include `{ projectId }` etc for logging context
+7. **userAction**: Description for logging and toasts
+8. **component**: Component name for error context
+
+The hook automatically:
+- Snapshots current data for rollback
+- Cancels in-flight queries to avoid race conditions
+- Logs all state transitions per ERROR LOGGING REQUIREMENTS
+- Reports slow operations (>1s) as warnings
+- Rolls back on error with error toast
+
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.81
@@ -71,5 +89,28 @@ All phase services follow a consistent structure:
   - addBreadcrumb from errorReporting.ts used for tracking user actions
   - useApiQuery wraps React Query with built-in error handling and logging
   - Danger zone pattern: separate section with warning styling for destructive actions
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.138
+- What was implemented: Optimistic updates for approval workflows
+  - New `useOptimisticMutation` hook for reusable optimistic update pattern
+  - Integrated with existing toast and error reporting infrastructure
+  - Automatic rollback on error with cache snapshot restoration
+  - Slow operation warnings (>1s) per ERROR LOGGING REQUIREMENTS
+  - Full breadcrumb and error reporting integration
+  - Updated `ProjectSettingsPage` to use optimistic updates for:
+    - Project settings updates (name, description, status)
+    - Archive/unarchive operations
+- Files changed:
+  - `frontend/src/lib/hooks/useOptimisticMutation.ts` (new) - Reusable optimistic mutation hook
+  - `frontend/src/lib/hooks/index.ts` (modified) - Export new hook
+  - `frontend/src/pages/ProjectSettingsPage.tsx` (modified) - Use optimistic mutations
+- **Learnings:**
+  - React Query's `onMutate` callback is where optimistic updates are applied
+  - `queryClient.cancelQueries()` prevents race conditions with in-flight queries
+  - Return a context object from `onMutate` containing the snapshot for rollback in `onError`
+  - TypeScript requires explicit handling of undefined cache data - use `as unknown as T` pattern with a warning log
+  - The hook can optionally update cache with server response via `updateCacheWithResult`, otherwise it invalidates
+  - Existing `useToastMutation` remains for mutations that don't need optimistic updates
 ---
 
