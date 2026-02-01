@@ -3,10 +3,10 @@
   "sessionId": "a39f3d57-597f-4ec8-8d8c-537a3a50b54b",
   "status": "running",
   "startedAt": "2026-02-01T18:05:00.058Z",
-  "updatedAt": "2026-02-01T18:09:33.336Z",
-  "currentIteration": 1,
+  "updatedAt": "2026-02-01T18:11:34.343Z",
+  "currentIteration": 2,
   "maxIterations": 30,
-  "tasksCompleted": 1,
+  "tasksCompleted": 2,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -23,8 +23,8 @@
       {
         "id": "client-onboarding-v2-c3y.66",
         "title": "Implement on-site review platform detection (Yotpo, Judge.me)",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "client-onboarding-v2-c3y.99",
@@ -50,6 +50,16 @@
       "durationMs": 168692,
       "startedAt": "2026-02-01T18:05:00.062Z",
       "endedAt": "2026-02-01T18:07:48.754Z"
+    },
+    {
+      "iteration": 2,
+      "status": "completed",
+      "taskId": "client-onboarding-v2-c3y.66",
+      "taskTitle": "Implement on-site review platform detection (Yotpo, Judge.me)",
+      "taskCompleted": true,
+      "durationMs": 103375,
+      "startedAt": "2026-02-01T18:07:49.959Z",
+      "endedAt": "2026-02-01T18:09:33.334Z"
     }
   ],
   "skippedTaskIds": [],

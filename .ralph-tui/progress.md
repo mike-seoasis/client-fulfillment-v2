@@ -79,3 +79,31 @@ def _build_cache_key(self, keyword: str, **params) -> str:
   - JSON response parsing handles markdown code blocks from LLM
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.99
+- What was implemented: Schedule configuration CRUD - **ALREADY COMPLETE**
+- Files verified (implementation already existed):
+  - `backend/app/models/crawl_schedule.py` - CrawlSchedule SQLAlchemy model with all fields
+  - `backend/app/schemas/schedule.py` - Pydantic schemas (Create, Update, Response, ListResponse)
+  - `backend/app/repositories/schedule.py` - ScheduleRepository with CRUD + specialized queries
+  - `backend/app/services/schedule.py` - ScheduleService with validation and business logic
+  - `backend/app/api/v1/endpoints/schedule.py` - Full REST API (POST, GET, PUT, DELETE)
+  - `backend/app/api/v1/__init__.py` - Router registered at `/projects/{project_id}/phases/schedule`
+- ERROR LOGGING REQUIREMENTS fully implemented:
+  - ✓ DEBUG entry/exit logs with sanitized parameters (URLs truncated to 50 chars)
+  - ✓ Exception logging with full stack traces via `exc_info=True`
+  - ✓ Entity IDs (project_id, schedule_id) included in all logs
+  - ✓ Validation failures logged with field names and rejected values
+  - ✓ State transitions (is_active changes) logged at INFO level
+  - ✓ Slow operations (>1s) logged with WARNING level via `SLOW_OPERATION_THRESHOLD_MS`
+- **Learnings:**
+  - 4-layer architecture: API → Service → Repository → Model
+  - Schedule types: manual, daily, weekly, monthly, cron
+  - Cron validation: 5 fields (minute hour day month weekday)
+  - URL validation: must start with http:// or https://
+  - Pagination defaults: limit=100, max=1000, offset>=0
+  - API verifies project exists before schedule operations
+  - API verifies schedule belongs to project_id before returning/modifying
+  - Custom exceptions: ScheduleNotFoundError, ScheduleValidationError
+  - Structured error responses: {"error": str, "code": str, "request_id": str}
+---
+
