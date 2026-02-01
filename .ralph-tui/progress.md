@@ -31,6 +31,16 @@ after each iteration and it's included in prompts for context.
 - **Routing**: Each route wrapped in `<ErrorBoundary componentName="PageName">`
 - **Design**: `bg-cream-50`, `text-warmgray-*`, `rounded-xl`, warm palette, lucide-react icons
 
+### WebSocket Connection Manager Architecture
+- **Server Manager**: `ConnectionManager` singleton in `app/core/websocket.py`
+- **Client**: `WebSocketClient` in `app/clients/websocket_client.py` with circuit breaker and polling fallback
+- **Endpoint**: `/ws/projects` route in `app/api/v1/endpoints/websocket.py`
+- **Heartbeat**: 30s interval, 90s timeout, sends `{"type": "ping"}` to keep Railway connections alive
+- **Reconnection Advice**: Exponential backoff (1s initial, 30s max, 2x multiplier)
+- **Message Protocol**: `subscribe/unsubscribe/ping/pong` + server events (`connected/project_update/shutdown`)
+- **Logging**: `WebSocketLogger` class with all connection/message/error logging per requirements
+- **Railway**: Heartbeat keeps connections alive; `shutdown` broadcast on deploy; client polling fallback
+
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.78
@@ -60,5 +70,30 @@ after each iteration and it's included in prompts for context.
   - UI components: `Button` (shadcn pattern), `Input` from form-field, `ProjectCard/ProjectCardSkeleton`
   - Design system: warm palette (cream-50 bg, warmgray text), soft shadows, rounded corners (rounded-xl/2xl)
   - lucide-react for icons (Plus, Search)
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.135
+- **What was implemented**: WebSocket connection manager - ALREADY COMPLETE
+- **Files verified**:
+  - `backend/app/core/websocket.py` - Full `ConnectionManager` with heartbeat, broadcast, subscriptions
+  - `backend/app/api/v1/endpoints/websocket.py` - `/ws/projects` endpoint with documented protocol
+  - `backend/app/clients/websocket_client.py` - Full async client with circuit breaker, reconnection, polling fallback
+  - `backend/tests/clients/test_websocket_client.py` - 42 tests covering all features
+  - `backend/app/main.py` - Integration: heartbeat starts on startup, shutdown broadcasts on SIGTERM
+  - `backend/app/api/v1/__init__.py` - WebSocket router included
+- **Learnings:**
+  - All ERROR LOGGING REQUIREMENTS met:
+    - `connection_opened/connection_closed` at INFO with connection_id and client_host
+    - `message_sent/message_received` at DEBUG with connection_id, message_type, payload_size
+    - `connection_error` at ERROR with exc_info=True and context
+    - `heartbeat_timeout` at WARNING with last_pong_seconds_ago
+    - `broadcast_failure` at WARNING per-client with connection_id, project_id
+  - All RAILWAY DEPLOYMENT REQUIREMENTS met:
+    - 30s heartbeat interval (Railway idle timeout is ~60s)
+    - `broadcast_shutdown()` sends reconnect advice before deploy disconnect
+    - Client implements exponential backoff (1s-30s) for reconnection
+    - Polling fallback via HTTP when WebSocket unavailable (circuit breaker triggers fallback)
+  - Tests: 42 tests all passing covering circuit breaker, reconnection, heartbeat, polling
+  - Lint (ruff): All WebSocket files pass
 ---
 

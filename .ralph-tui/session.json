@@ -3,10 +3,10 @@
   "sessionId": "03db6d8d-fb3f-4243-bb5c-705820f79d81",
   "status": "running",
   "startedAt": "2026-02-01T20:50:19.228Z",
-  "updatedAt": "2026-02-01T20:56:12.379Z",
-  "currentIteration": 1,
+  "updatedAt": "2026-02-01T20:57:43.907Z",
+  "currentIteration": 2,
   "maxIterations": 30,
-  "tasksCompleted": 1,
+  "tasksCompleted": 2,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -23,8 +23,8 @@
       {
         "id": "client-onboarding-v2-c3y.120",
         "title": "Build ProjectListPage with create button and search",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "client-onboarding-v2-c3y.135",
@@ -44,6 +44,16 @@
       "durationMs": 162133,
       "startedAt": "2026-02-01T20:50:19.232Z",
       "endedAt": "2026-02-01T20:53:01.365Z"
+    },
+    {
+      "iteration": 2,
+      "status": "completed",
+      "taskId": "client-onboarding-v2-c3y.120",
+      "taskTitle": "Build ProjectListPage with create button and search",
+      "taskCompleted": true,
+      "durationMs": 189810,
+      "startedAt": "2026-02-01T20:53:02.568Z",
+      "endedAt": "2026-02-01T20:56:12.378Z"
     }
   ],
   "skippedTaskIds": [],
