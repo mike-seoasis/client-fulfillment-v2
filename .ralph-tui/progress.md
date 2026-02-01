@@ -222,3 +222,32 @@ after each iteration and it's included in prompts for context.
   - Pre-existing mypy errors in core modules (config.py, logging.py, redis.py) are known issues
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.66
+- What was implemented:
+  - Created on-site review platform detection integration (`app/integrations/review_platforms.py`)
+  - Created review platform service layer (`app/services/review_platforms.py`)
+  - Created Pydantic schemas (`app/schemas/review_platforms.py`)
+  - Created API endpoint (`POST /api/v1/projects/{id}/phases/review_platforms/detect`)
+  - Supports detection of: Yotpo, Judge.me, Stamped.io, Loox, Okendo, Reviews.io, Trustpilot, Bazaarvoice, PowerReviews
+  - Uses Perplexity API for web-based detection (avoids direct scraping)
+  - Returns confidence scores, evidence, widget locations, and API hints
+  - Comprehensive logging per error logging requirements
+
+- Files changed:
+  - `backend/app/integrations/review_platforms.py` (new)
+  - `backend/app/services/review_platforms.py` (new)
+  - `backend/app/schemas/review_platforms.py` (new)
+  - `backend/app/api/v1/endpoints/review_platforms.py` (new)
+  - `backend/app/api/v1/__init__.py` (modified - registered review_platforms router)
+
+- **Learnings:**
+  - Pattern follows Amazon reviews integration: Integration -> Service -> Schema -> API layers
+  - Platform detection uses LLM with structured JSON output (same pattern as PAA categorization)
+  - Platform signatures (script URLs, widget classes, data attributes) guide LLM detection
+  - Enum with string value (`ReviewPlatform.YOTPO = "yotpo"`) allows easy serialization
+  - Use dict lookup pattern for enum parsing (consistent with ruff SIM116 recommendation)
+  - Display names separate from enum values enables clean API responses
+  - URL validation at service layer catches malformed inputs early
+  - Pre-existing mypy errors in core modules (config.py, logging.py, redis.py, projects.py) are unrelated
+---
+
