@@ -135,6 +135,19 @@ export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProject
     },
   })
 
+  // Handle close (defined before effects that use it)
+  const handleClose = useCallback(() => {
+    if (createMutation.isPending) return // Don't close while submitting
+    addBreadcrumb('Close create project modal', 'user-action')
+    onClose()
+  }, [onClose, createMutation.isPending])
+
+  const handleOverlayClick = useCallback((e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) {
+      handleClose()
+    }
+  }, [handleClose])
+
   // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -175,18 +188,6 @@ export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProject
       document.body.style.overflow = ''
     }
   }, [isOpen])
-
-  const handleClose = useCallback(() => {
-    if (createMutation.isPending) return // Don't close while submitting
-    addBreadcrumb('Close create project modal', 'user-action')
-    onClose()
-  }, [onClose, createMutation.isPending])
-
-  const handleOverlayClick = useCallback((e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      handleClose()
-    }
-  }, [handleClose])
 
   const validateForm = useCallback((): boolean => {
     const newErrors: FormErrors = {}
