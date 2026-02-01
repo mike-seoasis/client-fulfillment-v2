@@ -33,6 +33,22 @@ from app.integrations.crawl4ai import (
     get_crawl4ai,
     init_crawl4ai,
 )
+from app.integrations.perplexity import (
+    PerplexityAuthError,
+    PerplexityCircuitOpenError,
+    PerplexityClient,
+    PerplexityError,
+    PerplexityRateLimitError,
+    PerplexityTimeoutError,
+    WebsiteAnalysisResult,
+    close_perplexity,
+    get_perplexity,
+    init_perplexity,
+    perplexity_client,
+)
+from app.integrations.perplexity import (
+    CompletionResult as PerplexityCompletionResult,
+)
 
 __all__ = [
     # Crawl4AI Client
@@ -66,4 +82,19 @@ __all__ = [
     "ClaudeRateLimitError",
     "ClaudeAuthError",
     "ClaudeCircuitOpenError",
+    # Perplexity Client
+    "PerplexityClient",
+    "perplexity_client",
+    "init_perplexity",
+    "close_perplexity",
+    "get_perplexity",
+    # Perplexity Data classes
+    "WebsiteAnalysisResult",
+    "PerplexityCompletionResult",
+    # Perplexity Exceptions
+    "PerplexityError",
+    "PerplexityTimeoutError",
+    "PerplexityRateLimitError",
+    "PerplexityAuthError",
+    "PerplexityCircuitOpenError",
 ]

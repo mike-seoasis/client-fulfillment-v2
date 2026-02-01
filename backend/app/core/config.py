@@ -133,6 +133,35 @@ class Settings(BaseSettings):
         default=60.0, description="Seconds before attempting recovery"
     )
 
+    # Perplexity API
+    perplexity_api_key: str | None = Field(
+        default=None,
+        description="Perplexity API key for website analysis",
+    )
+    perplexity_model: str = Field(
+        default="sonar",
+        description="Perplexity model to use (sonar for web-connected queries)",
+    )
+    perplexity_timeout: float = Field(
+        default=60.0, description="Perplexity API request timeout in seconds"
+    )
+    perplexity_max_retries: int = Field(
+        default=3, description="Maximum retry attempts for Perplexity API requests"
+    )
+    perplexity_retry_delay: float = Field(
+        default=1.0, description="Base delay between retries in seconds"
+    )
+    perplexity_max_tokens: int = Field(
+        default=2048, description="Maximum tokens in Perplexity response"
+    )
+    # Circuit breaker settings for Perplexity
+    perplexity_circuit_failure_threshold: int = Field(
+        default=5, description="Failures before circuit opens"
+    )
+    perplexity_circuit_recovery_timeout: float = Field(
+        default=60.0, description="Seconds before attempting recovery"
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:
