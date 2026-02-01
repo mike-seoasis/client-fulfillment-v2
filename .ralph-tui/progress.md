@@ -200,3 +200,25 @@ after each iteration and it's included in prompts for context.
   - Schema location: `app/schemas/` for Pydantic models, endpoints in `app/api/v1/endpoints/`
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.63
+- What was implemented:
+  - Created comprehensive unit tests for PAA enrichment fan-out logic (38 tests)
+  - Created comprehensive unit tests for PAA categorization logic (32 tests)
+  - Total: 70 new tests, all passing
+  - Tests cover: dataclasses, validation, basic operations, fan-out strategy, related searches fallback, categorization integration, batch processing, error handling, and logging
+
+- Files changed:
+  - `backend/tests/services/test_paa_enrichment.py` (new - 38 tests)
+  - `backend/tests/services/test_paa_categorization.py` (new - 32 tests)
+
+- **Learnings:**
+  - When mocking services imported inside method bodies, patch at the source module (e.g., `app.services.related_searches.get_related_searches_service`) not at the calling module
+  - The `_normalize_question()` method uses `rstrip("?")` which removes ALL trailing question marks, not just one
+  - Test pattern: Use AsyncMock for async methods, MagicMock for sync services/classes
+  - For batching tests, counting calls is more reliable than parsing prompt content
+  - Error propagation varies by implementation: some methods propagate errors to top-level result, others only mark success=False with errors in sub-results
+  - Mypy in tests: Always check for `result.error is not None` before doing string operations on potentially None values
+  - Pre-existing test failures in codebase (test_fixtures.py, test_url_categorizer.py) are unrelated to new code
+  - Pre-existing mypy errors in core modules (config.py, logging.py, redis.py) are known issues
+---
+
