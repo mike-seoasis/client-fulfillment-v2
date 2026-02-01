@@ -546,6 +546,7 @@ class PAAEnrichmentService:
         max_fanout_questions: int = DEFAULT_MAX_FANOUT_QUESTIONS,
         fallback_enabled: bool = True,
         min_paa_for_fallback: int = DEFAULT_MIN_PAA_FOR_FALLBACK,
+        categorize_enabled: bool = False,
         project_id: str | None = None,
         page_id: str | None = None,
     ) -> PAAEnrichmentResult:
@@ -559,6 +560,7 @@ class PAAEnrichmentService:
             max_fanout_questions: Max initial questions to fan-out on
             fallback_enabled: Whether to use related searches fallback
             min_paa_for_fallback: Minimum PAA questions before fallback triggers
+            categorize_enabled: Whether to categorize questions by intent
             project_id: Project ID for logging context
             page_id: Page ID for logging context
 
@@ -747,6 +749,57 @@ class PAAEnrichmentService:
                         },
                     )
                     # Continue with existing results, don't fail the whole operation
+
+            # Step 4: Categorize questions by intent (if enabled)
+            if categorize_enabled and all_questions:
+                logger.info(
+                    "Categorizing PAA questions by intent",
+                    extra={
+                        "keyword": keyword[:50],
+                        "question_count": len(all_questions),
+                        "project_id": project_id,
+                        "page_id": page_id,
+                    },
+                )
+
+                try:
+                    # Import here to avoid circular imports
+                    from app.services.paa_categorization import (
+                        get_paa_categorization_service,
+                    )
+
+                    cat_service = get_paa_categorization_service()
+                    all_questions = await cat_service.categorize_paa_questions(
+                        paa_questions=all_questions,
+                        keyword=keyword,
+                        project_id=project_id,
+                        page_id=page_id,
+                    )
+
+                    logger.info(
+                        "PAA question categorization complete",
+                        extra={
+                            "keyword": keyword[:50],
+                            "categorized_count": len(
+                                [q for q in all_questions if q.intent != PAAQuestionIntent.UNKNOWN]
+                            ),
+                            "project_id": project_id,
+                            "page_id": page_id,
+                        },
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "PAA question categorization failed",
+                        extra={
+                            "keyword": keyword[:50],
+                            "error": str(e),
+                            "error_type": type(e).__name__,
+                            "project_id": project_id,
+                            "page_id": page_id,
+                            "stack_trace": traceback.format_exc(),
+                        },
+                    )
+                    # Continue with uncategorized results, don't fail the whole operation
 
             duration_ms = (time.monotonic() - start_time) * 1000
 
@@ -950,6 +1003,7 @@ async def enrich_keyword_paa(
     max_fanout_questions: int = DEFAULT_MAX_FANOUT_QUESTIONS,
     fallback_enabled: bool = True,
     min_paa_for_fallback: int = DEFAULT_MIN_PAA_FOR_FALLBACK,
+    categorize_enabled: bool = False,
     project_id: str | None = None,
     page_id: str | None = None,
 ) -> PAAEnrichmentResult:
@@ -963,6 +1017,7 @@ async def enrich_keyword_paa(
         max_fanout_questions: Max questions for fan-out
         fallback_enabled: Whether to use related searches fallback
         min_paa_for_fallback: Minimum PAA questions before fallback triggers
+        categorize_enabled: Whether to categorize questions by intent
         project_id: Project ID for logging
         page_id: Page ID for logging
 
@@ -978,6 +1033,7 @@ async def enrich_keyword_paa(
         max_fanout_questions=max_fanout_questions,
         fallback_enabled=fallback_enabled,
         min_paa_for_fallback=min_paa_for_fallback,
+        categorize_enabled=categorize_enabled,
         project_id=project_id,
         page_id=page_id,
     )
@@ -991,6 +1047,7 @@ async def enrich_keyword_paa_cached(
     max_fanout_questions: int = DEFAULT_MAX_FANOUT_QUESTIONS,
     fallback_enabled: bool = True,
     min_paa_for_fallback: int = DEFAULT_MIN_PAA_FOR_FALLBACK,
+    categorize_enabled: bool = False,
     project_id: str | None = None,
     page_id: str | None = None,
 ) -> PAAEnrichmentResult:
@@ -1008,6 +1065,7 @@ async def enrich_keyword_paa_cached(
         max_fanout_questions: Max questions for fan-out
         fallback_enabled: Whether to use related searches fallback
         min_paa_for_fallback: Minimum PAA questions before fallback triggers
+        categorize_enabled: Whether to categorize questions by intent
         project_id: Project ID for logging
         page_id: Page ID for logging
 
@@ -1078,6 +1136,7 @@ async def enrich_keyword_paa_cached(
         max_fanout_questions=max_fanout_questions,
         fallback_enabled=fallback_enabled,
         min_paa_for_fallback=min_paa_for_fallback,
+        categorize_enabled=categorize_enabled,
         project_id=project_id,
         page_id=page_id,
     )

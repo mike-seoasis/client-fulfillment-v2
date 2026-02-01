@@ -35,6 +35,15 @@ after each iteration and it's included in prompts for context.
 - Gracefully degrades if LLM filter fails (returns raw results)
 - Question conversion: uses LLM question_form or simple heuristic conversion
 
+### PAA Intent Categorization Pattern
+- Use `PAACategorizationService` to classify PAA questions by user intent
+- Intent categories: buying (purchase decisions), usage (how-to), care (maintenance), comparison (alternatives)
+- Enable via `categorize_enabled=True` in `enrich_keyword()` or `enrich_keyword_paa()`
+- Uses Claude LLM with structured JSON output, `temperature=0.0` for consistency
+- Batch processing (default 10 questions/batch) with rate-limited concurrency (default 5)
+- Confidence scores 0.0-1.0: 0.8+ = clear intent, 0.6-0.8 = likely, <0.6 = ambiguous
+- Questions retain `UNKNOWN` intent if categorization fails (graceful degradation)
+
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.57
@@ -101,5 +110,28 @@ after each iteration and it's included in prompts for context.
   - Variable scoping in Python: must be careful when same variable name used in try/except blocks and conditional blocks (mypy catches this with `no-redef`)
   - Fallback triggers when `len(all_questions) < min_paa_for_fallback` (default 3)
   - Question conversion heuristic: detect existing question starters, else wrap with "What is/are"
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.60
+- What was implemented:
+  - Created PAA question categorization service (`app/services/paa_categorization.py`) with LLM-based intent classification
+  - Categorizes PAA questions by user intent: buying, usage, care, comparison
+  - Uses Claude LLM with structured JSON output for consistent categorization
+  - Batch processing for efficient LLM usage (default 10 questions per batch)
+  - Rate-limited concurrent processing (default max 5 concurrent batches)
+  - Integrated as optional step in PAA enrichment (`categorize_enabled=True`)
+  - Added `categorize_paa_questions()` convenience method for PAAQuestion objects
+
+- Files changed:
+  - `backend/app/services/paa_categorization.py` (new)
+  - `backend/app/services/paa_enrichment.py` (modified - added `categorize_enabled` parameter)
+
+- **Learnings:**
+  - Intent categorization prompt should include: category definitions, confidence scoring guidelines, and explicit JSON format
+  - Existing `PAAQuestionIntent` enum already defined in paa_enrichment.py with all required categories
+  - Use dictionary lookup pattern instead of if-elif chains for enum parsing (ruff SIM116)
+  - LLM question-intent lookup requires normalized matching (lowercase, stripped)
+  - Graceful degradation: if LLM categorization fails, questions retain UNKNOWN intent without failing the whole enrichment
+  - Batch processing reduces LLM calls: 100 questions = 10 LLM calls instead of 100
 ---
 
