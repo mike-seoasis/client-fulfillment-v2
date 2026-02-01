@@ -269,3 +269,29 @@ logger = get_logger(__name__)
   - Pre-existing mypy errors in config.py, logging.py, redis.py are known issues
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.50
+- **What was implemented**: KeywordSpecificityService for LLM-based keyword specificity filtering (Step 4 of keyword research)
+- **Files changed**:
+  - `backend/app/services/keyword_specificity.py` (new) - Full service with LLM specificity filter
+  - `backend/app/services/__init__.py` - Added keyword specificity exports
+- **Features**:
+  - LLM-based specificity analysis via Claude
+  - Filters keywords to only SPECIFIC ones (vs generic/broad keywords)
+  - Preserves volume data for filtered keywords via keyword_map lookup
+  - System + user prompt templates for specificity determination
+  - Comprehensive error logging per requirements
+- **API**:
+  - `KeywordSpecificityService.filter_keywords(collection_title, url, content_excerpt, keywords, project_id, page_id)`
+  - `SpecificityFilterRequest` dataclass for structured requests
+  - `SpecificityFilterResult` with specific_keywords, filter_rate, token usage
+  - `get_keyword_specificity_service()` singleton getter
+  - `filter_keywords_by_specificity()` convenience function
+- **Learnings:**
+  - SPECIFIC vs GENERIC keywords: specific keywords reference exact product types, generic are too broad
+  - Temperature 0.0 for deterministic filtering (vs 0.7 for creative keyword generation)
+  - Keyword normalization (lowercase, strip, single spaces) is essential for matching LLM output to input keywords
+  - filter_rate metric = (original - filtered) / original, useful for monitoring filter quality
+  - Composing services: KeywordSpecificityService uses KeywordVolumeData from keyword_volume service
+  - Pre-existing mypy errors in config.py, logging.py, redis.py are known issues
+---
+
