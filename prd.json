@@ -3,39 +3,22 @@
   "description": "Ready tasks batch",
   "userStories": [
     {
-      "id": "client-onboarding-v2-c3y.63",
-      "title": "Write unit tests for fan-out and categorization logic",
-      "description": "ERROR LOGGING REQUIREMENTS:\n- Ensure test failures include full assertion context\n- Log test setup/teardown at DEBUG level\n- Capture and display logs from failed tests\n- Include timing information in test reports\n- Log mock/stub invocations for debugging\n\nRAILWAY DEPLOYMENT REQUIREMENTS:\n- Tests must work with DATABASE_URL env var\n- Use test database, not production\n- CI should mirror Railway environment where possible",
+      "id": "client-onboarding-v2-c3y.73",
+      "title": "Implement Phase 5A: PAA analysis by intent categorization",
+      "description": "ERROR LOGGING REQUIREMENTS:\n- Log method entry/exit at DEBUG level with parameters (sanitized)\n- Log all exceptions with full stack trace and context\n- Include entity IDs (project_id, page_id) in all service logs\n- Log validation failures with field names and rejected values\n- Log state transitions (phase changes) at INFO level\n- Add timing logs for operations >1 second",
       "acceptanceCriteria": [],
       "passes": true,
       "completionNotes": "Completed by agent"
     },
     {
-      "id": "client-onboarding-v2-c3y.72",
-      "title": "Write unit tests for brand config synthesis",
-      "description": "ERROR LOGGING REQUIREMENTS:\n- Ensure test failures include full assertion context\n- Log test setup/teardown at DEBUG level\n- Capture and display logs from failed tests\n- Include timing information in test reports\n- Log mock/stub invocations for debugging\n\nRAILWAY DEPLOYMENT REQUIREMENTS:\n- Tests must work with DATABASE_URL env var\n- Use test database, not production\n- CI should mirror Railway environment where possible",
-      "acceptanceCriteria": [],
-      "passes": true,
-      "completionNotes": "Completed by agent"
-    },
-    {
-      "id": "client-onboarding-v2-c3y.105",
-      "title": "Write unit tests for change detection",
-      "description": "ERROR LOGGING REQUIREMENTS:\n- Ensure test failures include full assertion context\n- Log test setup/teardown at DEBUG level\n- Capture and display logs from failed tests\n- Include timing information in test reports\n- Log mock/stub invocations for debugging\n\nRAILWAY DEPLOYMENT REQUIREMENTS:\n- Tests must work with DATABASE_URL env var\n- Use test database, not production\n- CI should mirror Railway environment where possible",
-      "acceptanceCriteria": [],
-      "passes": true,
-      "completionNotes": "Completed by agent"
-    },
-    {
-      "id": "client-onboarding-v2-c3y.114",
-      "title": "Create ProjectCard component for project list",
+      "id": "client-onboarding-v2-c3y.115",
+      "title": "Create PhaseProgress component with status indicators",
       "description": "ERROR LOGGING REQUIREMENTS:\n- Implement React Error Boundaries for all route components\n- Log caught errors to console with component stack\n- Set up global window.onerror and unhandledrejection handlers\n- Log API errors with endpoint, status, response body\n- Include user action context in error logs\n- Set up error reporting service integration point (e.g., Sentry stub)\n\nRAILWAY DEPLOYMENT REQUIREMENTS:\n- Build as static assets (npm run build)\n- API URL via VITE_API_URL environment variable\n- Configure for production build (NODE_ENV=production)\n- Can deploy to Railway static hosting or separate service\n- Use relative paths or env-configured absolute URLs",
       "acceptanceCriteria": [],
-      "passes": true,
-      "completionNotes": "Completed by agent"
+      "passes": false
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-01T20:07:26.748Z"
+    "updatedAt": "2026-02-01T20:12:25.486Z"
   }
 }
