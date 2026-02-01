@@ -3,10 +3,10 @@
   "sessionId": "f4716125-1155-486f-88d3-a0191a7594dc",
   "status": "running",
   "startedAt": "2026-02-01T22:28:15.662Z",
-  "updatedAt": "2026-02-01T22:39:25.724Z",
-  "currentIteration": 0,
+  "updatedAt": "2026-02-01T22:43:06.752Z",
+  "currentIteration": 1,
   "maxIterations": 30,
-  "tasksCompleted": 0,
+  "tasksCompleted": 1,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -17,8 +17,8 @@
       {
         "id": "client-onboarding-v2-c3y.89",
         "title": "Implement competitor content fetching and scraping",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "client-onboarding-v2-c3y.125",
@@ -28,7 +28,18 @@
       }
     ]
   },
-  "iterations": [],
+  "iterations": [
+    {
+      "iteration": 1,
+      "status": "completed",
+      "taskId": "client-onboarding-v2-c3y.89",
+      "taskTitle": "Implement competitor content fetching and scraping",
+      "taskCompleted": true,
+      "durationMs": 670056,
+      "startedAt": "2026-02-01T22:28:15.666Z",
+      "endedAt": "2026-02-01T22:39:25.722Z"
+    }
+  ],
   "skippedTaskIds": [],
   "cwd": "/Users/mike/Projects/client-onboarding-v2",
   "activeTaskIds": [],
