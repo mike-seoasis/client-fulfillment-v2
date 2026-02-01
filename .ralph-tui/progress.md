@@ -5,193 +5,59 @@ after each iteration and it's included in prompts for context.
 
 ## Codebase Patterns (Study These First)
 
-### Error Logging Pattern for Service Methods
-Follow this structured logging pattern in all service files:
+### Service Layer Pattern (Phase 5B/5C)
+- Services live in `backend/app/services/`
+- Use `@dataclass` for input/output data structures with `to_dict()` methods
+- Singleton pattern via `_service: Service | None = None` and `get_service()` function
+- Convenience functions wrap singleton for simple usage
+- All async methods with `async def`
+- Custom exceptions inherit from base `ServiceError` with `project_id`, `page_id` context
 
-```python
-# Entry (DEBUG level)
-logger.debug(
-    "Phase X: [operation] starting",
-    extra={
-        "keyword": input_data.keyword[:50],  # Truncate long strings
-        "project_id": project_id,
-        "page_id": page_id,
-    },
-)
+### Logging Requirements
+- DEBUG: Method entry/exit with sanitized parameters
+- INFO: State transitions (phase changes), operation completion
+- WARNING: Validation failures, slow operations (>1s threshold)
+- ERROR: Exceptions with full stack trace via `traceback.format_exc()`
+- Always include: `project_id`, `page_id`, `duration_ms` in `extra={}` dict
 
-# State transition (INFO level)
-logger.info(
-    "Phase X: [service] - in_progress",
-    extra={
-        "phase": "X",
-        "status": "in_progress",
-        "project_id": project_id,
-        "page_id": page_id,
-    },
-)
-
-# Completion (INFO level)
-logger.info(
-    "Phase X: [service] - completed",
-    extra={
-        "phase": "X",
-        "status": "completed",
-        "duration_ms": round(duration_ms, 2),
-        "project_id": project_id,
-        "page_id": page_id,
-    },
-)
-
-# Slow operation warning (WARNING level)
-if duration_ms > SLOW_OPERATION_THRESHOLD_MS:
-    logger.warning(
-        "Slow Phase X operation",
-        extra={
-            "duration_ms": round(duration_ms, 2),
-            "threshold_ms": SLOW_OPERATION_THRESHOLD_MS,
-            "project_id": project_id,
-            "page_id": page_id,
-        },
-    )
-
-# Validation failure (WARNING level)
-logger.warning(
-    "Validation failed: [field_name]",
-    extra={
-        "project_id": project_id,
-        "page_id": page_id,
-        "field": "field_name",
-        "rejected_value": value[:100],  # Truncate
-    },
-)
-
-# Exception (ERROR level with stack trace)
-except Exception as e:
-    logger.error(
-        "Phase X unexpected error",
-        extra={
-            "error": str(e),
-            "error_type": type(e).__name__,
-            "project_id": project_id,
-            "page_id": page_id,
-            "stack_trace": traceback.format_exc(),
-        },
-        exc_info=True,
-    )
-```
-
-### Custom Exception Pattern
-Define service-specific exceptions with entity IDs:
-
-```python
-class ServiceError(Exception):
-    def __init__(self, message: str, project_id: str | None = None, page_id: str | None = None):
-        super().__init__(message)
-        self.project_id = project_id
-        self.page_id = page_id
-
-class ValidationError(ServiceError):
-    def __init__(self, field_name: str, value: Any, message: str, ...):
-        super().__init__(f"Validation error for {field_name}: {message}", ...)
-        self.field_name = field_name
-        self.value = value
-```
+### API Endpoint Pattern
+- Endpoints in `backend/app/api/v1/endpoints/`
+- Schemas in `backend/app/schemas/` (Pydantic BaseModel)
+- Register in `backend/app/api/v1/__init__.py` with import + `router.include_router()`
+- Return `Response | JSONResponse` union for error handling
+- Use `_get_request_id(request)`, `_verify_project_exists()`, `_convert_*` helper functions
+- Structured error responses: `{"error": str, "code": str, "request_id": str}`
 
 ---
 
-## 2026-02-01 - client-onboarding-v2-c3y.79
-- **What was implemented**: Verified that Phase 5B: Structured content generation is already complete
-- **Files reviewed**:
-  - `backend/app/services/content_writer.py` (959 lines) - Full service implementation
-  - `backend/app/api/v1/endpoints/content_writer.py` (465 lines) - API endpoints
-  - `backend/app/schemas/content_writer.py` (322 lines) - Pydantic schemas
-- **Verification Results**:
-  - All ERROR LOGGING REQUIREMENTS met:
-    - ✅ Method entry/exit at DEBUG level with sanitized parameters
-    - ✅ Exceptions logged with full stack trace and context
-    - ✅ Entity IDs (project_id, page_id) in all service logs
-    - ✅ Validation failures logged with field names and rejected values
-    - ✅ State transitions (phase changes) at INFO level
-    - ✅ Timing logs for operations >1 second (SLOW_OPERATION_THRESHOLD_MS = 1000)
-  - Type checking: No errors in content_writer files
-  - Lint: All checks passed
-- **Learnings:**
-  - Phase 5B service follows a complete prompt-based content generation pipeline
-  - SKILL_BIBLE_SYSTEM_PROMPT template contains comprehensive copywriting rules to avoid AI-sounding content
-  - Content validation happens at both schema level (Pydantic) and service level
-  - The service uses a dataclass-based approach for input/output (ContentWriterInput, GeneratedContent, ContentWriterResult)
-  - JSON parsing from LLM responses includes handling of markdown code blocks
----
+## 2026-02-01 - client-onboarding-v2-c3y.80
+- What was implemented: Phase 5C AI Trope Detection service
+  - Detects banned words (17 words: delve, unlock, unleash, journey, game-changer, etc.)
+  - Detects banned phrases (6 phrases: "In today's fast-paced world", etc.)
+  - Detects em dashes (—) - strong AI indicator
+  - Detects triplet patterns ("Fast. Simple. Powerful.")
+  - Detects negation patterns ("aren't just X, they're Y")
+  - Detects rhetorical questions as openers
+  - Tracks limited-use words (max 1 per page: indeed, furthermore, robust, etc.)
+  - Calculates quality score (0-100, pass threshold: 80)
+  - Generates actionable improvement suggestions
 
-## 2026-02-01 - client-onboarding-v2-c3y.121
-- **What was implemented**: ProjectDetailPage with phase status overview
-- **Files created/changed**:
-  - `frontend/src/pages/ProjectDetailPage.tsx` (new) - Full detail page with phase cards
-  - `frontend/src/App.tsx` (modified) - Added route for `/projects/:projectId`
-- **Features implemented**:
-  - Project header with name, client ID, status badge, and timestamps
-  - Overall progress section using existing PhaseProgress component
-  - Phase status grid with detailed cards for each phase (discovery, requirements, implementation, review, launch)
-  - Phase cards show status icons, timestamps (started_at, completed_at), and blocked reasons
-  - Current phase highlighted with visual indicator
-  - Loading skeleton for better UX
-  - Error state with 404 handling and retry button
-  - Breadcrumb navigation back to projects list
-  - ErrorBoundary wrapping on route
-- **ERROR LOGGING REQUIREMENTS met**:
-  - ✅ ErrorBoundary wraps route component (logs with component stack)
-  - ✅ Console error logging for API errors with endpoint, status
-  - ✅ User action context via addBreadcrumb calls
-  - ✅ Global error handlers already in place (globalErrorHandlers.ts)
-  - ✅ Error reporting service integration point (Sentry stub in errorReporting.ts)
-- **RAILWAY DEPLOYMENT REQUIREMENTS**:
-  - ✅ Uses VITE_API_URL via existing env.ts
-  - ✅ Static build compatible (no server-side rendering)
-  - ✅ Relative API paths work with Vite proxy
-- **Type checking**: Passed
-- **Lint**: Passed
-- **Learnings:**
-  - Frontend uses shared phaseUtils.ts for phase types and calculations—reuse existing utilities
-  - useApiQuery hook integrates error logging automatically via api.ts
-  - ErrorBoundary componentName prop helps identify error sources in logs
-  - Existing Project type in ProjectCard.tsx matches backend ProjectResponse schema
----
+- Files changed:
+  - `backend/app/services/content_quality.py` (NEW - 762 lines)
+  - `backend/app/schemas/content_quality.py` (NEW - 173 lines)
+  - `backend/app/api/v1/endpoints/content_quality.py` (NEW - 299 lines)
+  - `backend/app/api/v1/__init__.py` (MODIFIED - added content_quality router)
 
-## 2026-02-01 - client-onboarding-v2-c3y.136
-- **What was implemented**: Phase progress real-time updates via WebSocket
-- **Files created/changed**:
-  - `frontend/src/lib/hooks/useWebSocket.ts` (new) - React hook for WebSocket connection
-  - `frontend/src/lib/hooks/index.ts` (modified) - Export new hooks
-  - `frontend/src/pages/ProjectDetailPage.tsx` (modified) - Added real-time updates
-- **Features implemented**:
-  - `useWebSocket` hook with full WebSocket lifecycle management
-  - `useProjectSubscription` convenience hook for project-specific subscriptions
-  - Connection state management (disconnected, connecting, connected, reconnecting, fallback_polling)
-  - Heartbeat/ping mechanism for Railway deployment keepalive (30s interval, 90s timeout)
-  - Automatic reconnection with exponential backoff (1s initial, 2x multiplier, 30s max)
-  - Polling fallback when WebSocket unavailable (5s interval)
-  - Circuit breaker pattern for fault tolerance (via backend)
-  - Real-time connection status indicator in ProjectDetailPage UI
-  - Integration with React Query for cache invalidation on updates
-- **ERROR LOGGING REQUIREMENTS met**:
-  - ✅ Log connection open/close with client info (WebSocketLogger class)
-  - ✅ Log message send/receive at DEBUG level (console.debug in dev)
-  - ✅ Log connection errors and reconnection attempts
-  - ✅ Include connection_id in all WebSocket logs
-  - ✅ Log broadcast failures per-client (backend handles this)
-  - ✅ Log heartbeat timeouts at WARNING level
-- **RAILWAY DEPLOYMENT REQUIREMENTS met**:
-  - ✅ Railway supports WebSocket connections
-  - ✅ Heartbeat/ping keeps connections alive (30s interval)
-  - ✅ Handle reconnection gracefully (exponential backoff)
-  - ✅ Fallback to polling for reliability
-- **Type checking**: Passed
-- **Lint**: Passed
 - **Learnings:**
-  - Backend WebSocket infrastructure was already implemented (c3y.135)—frontend just needed the React hook
-  - useCallback with circular dependencies (scheduleReconnect ↔ connect) requires using refs to break the cycle
-  - React Query's `invalidateQueries` integrates well with WebSocket updates for seamless cache refresh
-  - Connection status indicators help users understand real-time state (Live, Reconnecting, Polling, Offline)
-  - buildWebSocketUrl() needs to handle both HTTPS (wss:) and HTTP (ws:) protocols
+  - Patterns discovered:
+    - Pre-compile regex patterns in `__init__` for performance (stored as instance vars)
+    - Skill Bible rules from Phase 5B system prompt define what to detect
+    - Use `frozenset` for O(1) word lookups instead of lists
+    - Quality scoring uses weighted deductions from base 100
+  - Gotchas encountered:
+    - Loop variable `word` unused in iteration → rename to `_word` for ruff compliance
+    - Import sorting via ruff `--fix` auto-sorts Pydantic imports
+    - Pre-existing mypy errors in other files (projects.py, documents.py) - ignore for new code
+    - `documents.py` has invalid FastAPI return type annotation causing import chain error
 ---
 
