@@ -30,6 +30,15 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 ```
 
+### Frontend Structure (React 18 + TypeScript + Vite)
+- Frontend lives in `frontend/` with standard Vite structure
+- Path alias `@/*` maps to `src/*` (configured in tsconfig.json and vite.config.ts)
+- Error boundaries wrap route components: `<ErrorBoundary componentName="..."><Component /></ErrorBoundary>`
+- Global error handlers in `lib/globalErrorHandlers.ts` (window.onerror, onunhandledrejection)
+- Error reporting stub in `lib/errorReporting.ts` with Sentry integration points
+- API client in `lib/api.ts` with automatic error logging (endpoint, status, response body)
+- Environment config in `lib/env.ts` for type-safe access to VITE_* vars
+
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.42
@@ -77,5 +86,28 @@ logger = get_logger(__name__)
   - Pattern: singleton `scheduler_manager` with `get_scheduler()` getter following other services
   - CronTrigger.from_crontab() for cron expressions, IntervalTrigger for intervals
   - Health check returns: status, running, state, job_count, pending_jobs
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.106
+- **What was implemented**: React 18 + TypeScript + Vite frontend with error handling infrastructure
+- **Files changed**:
+  - `frontend/package.json` - Project config with React 18, react-router-dom, TypeScript, Vite
+  - `frontend/tsconfig.json`, `frontend/tsconfig.node.json` - Strict TypeScript config with path aliases
+  - `frontend/vite.config.ts` - Vite config with path alias and API proxy
+  - `frontend/src/main.tsx` - Entry point with error handler initialization
+  - `frontend/src/App.tsx` - Router with error boundary-wrapped routes
+  - `frontend/src/components/ErrorBoundary.tsx` - React error boundary with component stack logging
+  - `frontend/src/lib/globalErrorHandlers.ts` - window.onerror and onunhandledrejection handlers
+  - `frontend/src/lib/errorReporting.ts` - Sentry stub with reportError, reportApiError
+  - `frontend/src/lib/api.ts` - API client with full error context logging
+  - `frontend/src/lib/env.ts` - Type-safe environment config
+  - `frontend/Dockerfile`, `frontend/nginx.conf`, `frontend/railway.json` - Railway deployment config
+- **Learnings:**
+  - Vite build uses `tsc -b` which requires node types for vite.config.ts (add @types/node)
+  - React router v6 uses `<Routes>` and `<Route>` pattern (not Switch)
+  - ErrorBoundary componentDidCatch provides componentStack in errorInfo
+  - window.onerror signature: (message, source, lineno, colno, error)
+  - VITE_* env vars accessed via import.meta.env (typed in vite-env.d.ts)
+  - Railway deployment: Dockerfile builds static assets, nginx serves with SPA routing
 ---
 
