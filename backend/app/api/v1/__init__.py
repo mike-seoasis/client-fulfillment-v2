@@ -7,6 +7,7 @@ from app.api.v1.endpoints import (
     brand_config,
     categorize,
     crawl,
+    documents,
     keyword_research,
     label,
     notifications,
@@ -71,4 +72,9 @@ router.include_router(
     notifications.router,
     prefix="/notifications",
     tags=["Notifications"],
+)
+router.include_router(
+    documents.router,
+    prefix="/projects/{project_id}/documents",
+    tags=["Documents"],
 )
