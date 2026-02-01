@@ -18,6 +18,14 @@ after each iteration and it's included in prompts for context.
 - **Logging extra verification**: To check structured logging extra fields, use `hasattr(record, 'field')` and `record.field` on LogRecord objects - `caplog.text` doesn't include extra fields
 - **Slow operation testing**: Use `monkeypatch.setattr(time, "monotonic", mock_fn)` to test slow operation warning paths by simulating elapsed time >1 second
 
+### Frontend Component Patterns
+- **Component file structure**: Components in `src/components/`, pages in `src/pages/`
+- **Styling pattern**: Use Tailwind CSS with `cn()` utility for class merging, prefer `.card` and `.card-hover` CSS component classes from index.css
+- **Error handling**: Use `addBreadcrumb()` from `@/lib/errorReporting` for user action logging
+- **Type definitions**: Define types matching backend schemas (e.g., `ProjectStatus`, `PhaseStatus`)
+- **Accessibility**: Include `role`, `tabIndex`, `aria-label` for interactive cards, keyboard navigation with Enter/Space
+- **Loading states**: Create companion `*Skeleton` component for loading states with `animate-pulse-soft` class
+
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.72
@@ -87,5 +95,31 @@ after each iteration and it's included in prompts for context.
     - caplog.text doesn't include extra={} fields - must check record.__dict__ or record.field_name
     - Combine context managers: `with caplog.at_level(...), pytest.raises(...)` not nested
     - Import order matters for ruff: `from datetime import UTC, datetime` (alphabetical)
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.114
+- What was implemented: ProjectCard component for project list display
+- Files changed:
+  - `frontend/src/components/ProjectCard.tsx` - New component with:
+    - ProjectCard: Main card component with project name, client, status badge, phase progress, timestamps
+    - ProjectCardSkeleton: Loading skeleton for async data fetching
+    - Type definitions matching backend ProjectResponse schema
+    - Status badge color coding (active=green, completed=gold, on_hold=warning, etc.)
+    - Phase progress visualization with 5-segment indicator bar
+    - Completion percentage calculation
+    - Current phase detection
+    - Keyboard accessibility (Enter/Space triggers onClick)
+    - Breadcrumb logging for user action tracking
+- **Learnings:**
+  - Patterns discovered:
+    - Frontend uses shadcn/ui patterns with Tailwind CSS custom classes in index.css
+    - Design system has warm color palette (cream, warmgray, primary=gold, coral accents)
+    - Error handling infrastructure already complete: ErrorBoundary, globalErrorHandlers, errorReporting
+    - API client uses reportApiError for comprehensive API error logging
+    - React Query hooks (`useApiQuery`, `useApiMutation`) available for data fetching
+  - Gotchas encountered:
+    - Use `card-hover` class from index.css for hover effects, not custom hover styles
+    - Phase status is Record<string, PhaseStatusEntry> with optional fields
+    - Backend uses snake_case (`phase_status`, `client_id`, `created_at`), matching in frontend types
 ---
 
