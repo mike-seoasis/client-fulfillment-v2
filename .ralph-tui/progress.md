@@ -56,4 +56,26 @@ def _build_cache_key(self, keyword: str, **params) -> str:
   - CacheStats dataclass tracks hits/misses/errors with hit_rate property
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.66
+- What was implemented: On-site review platform detection (Yotpo, Judge.me) - **ALREADY COMPLETE**
+- Files verified (implementation already existed from commit 3f68e8b):
+  - `backend/app/integrations/review_platforms.py` - ReviewPlatformClient with Perplexity integration
+  - `backend/app/services/review_platforms.py` - ReviewPlatformService orchestration layer
+  - `backend/app/schemas/review_platforms.py` - Pydantic request/response schemas
+  - `backend/app/api/v1/endpoints/review_platforms.py` - API endpoint at `/detect`
+  - `backend/app/api/v1/__init__.py` - Router registered at `/projects/{project_id}/phases/review_platforms`
+- **Learnings:**
+  - Supports 9 platforms: Yotpo, Judge.me, Stamped.io, Loox, Okendo, Reviews.io, Trustpilot, Bazaarvoice, PowerReviews
+  - Uses Perplexity API to analyze websites (avoids direct scraping)
+  - Returns confidence scores (0.0-1.0), evidence, widget locations, and API hints
+  - Comprehensive ERROR LOGGING REQUIREMENTS fully implemented:
+    - DEBUG entry/exit logs with sanitized parameters
+    - Exception logging with full stack traces via `logger.exception()`
+    - project_id included in all log entries
+    - Validation failures logged with field names and values
+    - State transitions logged at INFO level
+    - Slow operations (>1s) logged with timing
+  - Graceful degradation when Perplexity unavailable
+  - JSON response parsing handles markdown code blocks from LLM
+---
 
