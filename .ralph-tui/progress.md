@@ -5,41 +5,45 @@ after each iteration and it's included in prompts for context.
 
 ## Codebase Patterns (Study These First)
 
-### External API Integration Pattern
-All external API clients in `backend/app/integrations/` follow this consistent pattern:
-1. **Circuit Breaker**: Each client has its own `CircuitBreaker` class (CLOSED → OPEN → HALF_OPEN states)
-2. **Lazy HTTP Client**: `httpx.AsyncClient` created on first use via `_get_client()` method
-3. **Retry Logic**: Exponential backoff with configurable `max_retries` and `retry_delay`
-4. **Exception Hierarchy**: Base error class + specific exceptions (Timeout, RateLimit, Auth, CircuitOpen)
-5. **Result Dataclasses**: `success: bool`, `error: str | None`, `duration_ms: float`, `request_id: str | None`
-6. **Global Instance Pattern**: Module-level client + `init_*()`, `close_*()`, `get_*()` functions
+### Integration Client Pattern
+New integrations in `backend/app/integrations/` should follow these patterns:
+- Use dataclasses for result types (e.g., `AmazonStoreDetectionResult`)
+- Global singleton pattern with `init_*`, `get_*`, and `close_*` functions
+- If relying on another integration (like Perplexity), delegate to it rather than implementing circuit breakers directly
+- Log method entry/exit at DEBUG level
+- Log slow operations (>1s) at INFO level
+- Include `project_id` in all log extras for traceability
 
-### Logger Pattern
-Each integration gets a dedicated logger class in `app/core/logging.py`:
-- Singleton instance at module level (e.g., `dataforseo_logger = DataForSEOLogger()`)
-- Standard methods: `api_call_start`, `api_call_success`, `api_call_error`, `timeout`, `rate_limit`, `auth_failure`
-- Circuit breaker logging: `circuit_state_change`, `circuit_open`, `circuit_recovery_attempt`, `circuit_closed`
-- Body logging at DEBUG with truncation: `request_body`, `response_body`
+### Service Layer Pattern
+Services in `backend/app/services/` should:
+- Create custom exception classes (e.g., `ValidationError`, `LookupError`)
+- Include `field_name`, `value`, `message` in validation errors
+- Accept optional `project_id` parameter for logging context
+- Call integration's `get_*` function to get singleton client
+- Validate inputs before calling integration
 
-### Config Pattern
-Settings in `app/core/config.py` use Pydantic `BaseSettings`:
-- All API credentials via env vars
-- Sensible defaults for timeouts (30-60s), retries (3), delays (1s)
-- Circuit breaker defaults: `failure_threshold=5`, `recovery_timeout=60.0`
+### API Endpoint Pattern
+Endpoints in `backend/app/api/v1/endpoints/` should:
+- Use `_get_request_id(request)` helper to extract request ID
+- Call `_verify_project_exists()` early to return 404 if needed
+- Log requests at INFO level with request_id, project_id
+- Return `JSONResponse` with `{"error", "code", "request_id"}` for errors
+- Use `contextlib.suppress()` instead of try/except/pass (ruff SIM105)
 
 ---
 
-## 2026-02-01 - client-onboarding-v2-c3y.56
-- What was implemented: DataForSEO API integration client with full feature parity to other integrations
+## 2026-02-01 - client-onboarding-v2-c3y.65
+- What was implemented: Amazon store auto-detection and review fetching using Perplexity AI
 - Files changed:
-  - `backend/app/core/config.py` - Added DataForSEO settings (api_login, api_password, timeout, retries, location_code, language_code, circuit breaker)
-  - `backend/app/core/logging.py` - Added `DataForSEOLogger` class with all standard logging methods + singleton
-  - `backend/app/integrations/dataforseo.py` - New file with complete async client
+  - `backend/app/integrations/amazon_reviews.py` - New integration client that uses Perplexity to search Amazon and analyze reviews
+  - `backend/app/services/amazon_reviews.py` - Service layer with validation and error handling
+  - `backend/app/schemas/amazon_reviews.py` - Pydantic request/response schemas
+  - `backend/app/api/v1/endpoints/amazon_reviews.py` - API endpoints for detect and analyze operations
+  - `backend/app/api/v1/__init__.py` - Registered new routes at `/projects/{project_id}/phases/amazon_reviews`
 - **Learnings:**
-  - DataForSEO uses HTTP Basic Auth (login/password) vs Bearer token used by others
-  - DataForSEO API expects `json=payload` (JSON body) vs `data=payload` (form data) used by Keywords Everywhere
-  - DataForSEO batch limit is 1000 keywords vs 100 for Keywords Everywhere
-  - Response structure: `tasks[].result[]` pattern for accessing data
-  - Location codes: 2840 = United States (default)
+  - Perplexity API can be used to avoid direct Amazon scraping while still getting product and review data
+  - The existing Perplexity integration has robust circuit breaker and retry logic - new integrations can delegate to it
+  - Ruff enforces `contextlib.suppress()` over try/except/pass (rule SIM105)
+  - Type annotations need `dict[str, Any]` not just `dict` for mypy strict mode
 ---
 
