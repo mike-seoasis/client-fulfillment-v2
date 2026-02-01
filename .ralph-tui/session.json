@@ -3,10 +3,10 @@
   "sessionId": "5cf5af5c-c2b1-4cd0-aebc-e4dcbc7a9c66",
   "status": "running",
   "startedAt": "2026-02-01T23:07:08.832Z",
-  "updatedAt": "2026-02-01T23:09:29.287Z",
-  "currentIteration": 0,
+  "updatedAt": "2026-02-01T23:12:46.796Z",
+  "currentIteration": 1,
   "maxIterations": 30,
-  "tasksCompleted": 0,
+  "tasksCompleted": 1,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -17,8 +17,8 @@
       {
         "id": "client-onboarding-v2-c3y.92",
         "title": "Implement Flesch-Kincaid readability calculation",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "client-onboarding-v2-c3y.128",
@@ -28,7 +28,18 @@
       }
     ]
   },
-  "iterations": [],
+  "iterations": [
+    {
+      "iteration": 1,
+      "status": "completed",
+      "taskId": "client-onboarding-v2-c3y.92",
+      "taskTitle": "Implement Flesch-Kincaid readability calculation",
+      "taskCompleted": true,
+      "durationMs": 140449,
+      "startedAt": "2026-02-01T23:07:08.836Z",
+      "endedAt": "2026-02-01T23:09:29.285Z"
+    }
+  ],
   "skippedTaskIds": [],
   "cwd": "/Users/mike/Projects/client-onboarding-v2",
   "activeTaskIds": [],
