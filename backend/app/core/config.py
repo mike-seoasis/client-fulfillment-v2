@@ -215,6 +215,11 @@ class Settings(BaseSettings):
         default=30, description="TTL for cached keyword data in days"
     )
 
+    # Competitor analysis cache settings
+    competitor_analysis_cache_ttl_days: int = Field(
+        default=7, description="TTL for cached competitor analysis data in days"
+    )
+
     # Email/SMTP Configuration
     smtp_host: str | None = Field(
         default=None,
