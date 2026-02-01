@@ -36,6 +36,7 @@ from app.core.logging import get_logger, setup_logging
 from app.core.redis import redis_manager
 from app.core.scheduler import scheduler_manager
 from app.core.websocket import connection_manager
+from app.services.crawl_recovery import run_startup_recovery
 
 # Set up logging before anything else
 setup_logging()
@@ -207,6 +208,33 @@ async def lifespan(app: FastAPI) -> Any:
             logger.warning("Failed to start scheduler")
     else:
         logger.info("Scheduler not initialized (disabled or error)")
+
+    # Run startup recovery for interrupted crawls
+    try:
+        async with db_manager.session_factory() as session:
+            recovery_summary = await run_startup_recovery(session)
+            if recovery_summary.total_found > 0:
+                logger.info(
+                    "Crawl recovery completed",
+                    extra={
+                        "total_found": recovery_summary.total_found,
+                        "total_recovered": recovery_summary.total_recovered,
+                        "total_failed": recovery_summary.total_failed,
+                        "duration_ms": round(recovery_summary.duration_ms, 2),
+                    },
+                )
+            else:
+                logger.debug("No interrupted crawls found during startup recovery")
+    except Exception as e:
+        # Don't fail startup if recovery fails, but log the error
+        logger.error(
+            "Crawl recovery failed during startup",
+            extra={
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+            },
+            exc_info=True,
+        )
 
     # Set up graceful shutdown handler
     shutdown_event = asyncio.Event()
