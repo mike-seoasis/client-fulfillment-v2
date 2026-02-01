@@ -35,6 +35,22 @@ When primary data source is insufficient:
 4. Results are cached with TTL (typically 24h)
 5. Log fallback usage at INFO level
 
+### LLM Synthesis Pattern
+For Claude-based content synthesis from documents:
+1. Parse documents using `DocumentParser` (PDF, DOCX, TXT)
+2. Combine content with truncation (15k chars max to avoid token limits)
+3. Use structured JSON response format with system prompt defining schema
+4. Temperature 0.3 for structured output, 0.7 for creative content
+5. Handle markdown code blocks in response (```json extraction)
+6. Merge user-provided partial schema with LLM-synthesized results
+
+### Pydantic Schema with mypy
+For proper Pydantic v2 + mypy strict mode:
+1. Add `plugins = ["pydantic.mypy"]` to pyproject.toml [tool.mypy]
+2. Add `[tool.pydantic-mypy]` section with `init_forbid_extra = true`, `init_typed = true`
+3. Use `default_factory=lambda: SchemaClass()` for nested Pydantic defaults
+4. Use `Field(None, ...)` or `Field(default=None, ...)` for optional fields
+
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.59
@@ -53,5 +69,26 @@ When primary data source is insufficient:
   - Patterns discovered: Comprehensive logging pattern with entity IDs in all log statements
   - Gotchas encountered: mypy shows errors in dependency files (config.py, logging.py, redis.py) but target files type-check successfully
   - Both files pass ruff linting and Python syntax validation
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.68
+- What was implemented: Claude synthesis for V2 brand config schema
+- Files created/modified:
+  - `backend/app/schemas/brand_config.py` - Pydantic schemas for V2 brand config (ColorsSchema, TypographySchema, LogoSchema, VoiceSchema, SocialSchema, V2SchemaModel, request/response models)
+  - `backend/app/repositories/brand_config.py` - CRUD repository for BrandConfig model
+  - `backend/app/services/brand_config.py` - Claude-based synthesis service with document parsing
+  - `backend/app/api/v1/endpoints/brand_config.py` - REST API endpoints (synthesize, CRUD)
+  - `backend/app/api/v1/__init__.py` - Registered brand_config router
+  - `backend/pyproject.toml` - Added pydantic.mypy plugin, pypdf/docx to ignore_missing_imports
+- **Implementation details:**
+  - Uses existing `DocumentParser` for PDF/DOCX/TXT parsing
+  - Claude synthesis with structured JSON output for V2 schema
+  - Supports partial schema merging (user values override synthesized)
+  - Upsert pattern: updates existing config if same project+brand_name exists
+  - All operations follow service logging pattern with entity IDs
+- **Learnings:**
+  - Patterns discovered: LLM synthesis pattern with structured JSON prompts and markdown fence handling
+  - Gotchas encountered: mypy strict mode requires pydantic.mypy plugin for proper field default handling
+  - Added pypdf and docx to mypy ignore_missing_imports for type checking
 ---
 

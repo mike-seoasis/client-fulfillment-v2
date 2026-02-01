@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     amazon_reviews,
+    brand_config,
     categorize,
     crawl,
     keyword_research,
@@ -60,3 +61,8 @@ router.include_router(
     tags=["Schedule Configuration"],
 )
 router.include_router(websocket.router, tags=["WebSocket"])
+router.include_router(
+    brand_config.router,
+    prefix="/projects/{project_id}/brand-config",
+    tags=["Brand Config"],
+)
