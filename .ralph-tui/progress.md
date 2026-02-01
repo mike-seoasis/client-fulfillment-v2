@@ -79,3 +79,33 @@ Python's `logging` module reserves certain keys in `LogRecord`. When logging wit
   - All 51 tests pass, ruff lint clean
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.100
+- What was implemented: Change detection algorithm for comparing crawl results using content hash comparison
+- Files changed:
+  - `backend/app/utils/change_detection.py` - New module with ContentHasher, ChangeDetector, and related classes
+  - `backend/app/utils/__init__.py` - Exported change detection types and functions
+  - `backend/tests/utils/test_change_detection.py` - 62 comprehensive unit tests
+- **Implementation details:**
+  - `ContentHasher` class: Computes semantic content hashes from title, h1, meta_description, body_text
+    - Uses MD5 for fast comparison (not cryptographic security)
+    - Normalizes text (lowercase, whitespace normalization) for consistent hashing
+    - Configurable `max_content_length` for body text truncation (default 5000 chars)
+    - `compute_hash()` and `compute_hash_from_dict()` methods
+  - `ChangeDetector` class: Compares page snapshots between crawls
+    - Classifies pages as NEW, REMOVED, CHANGED, or UNCHANGED
+    - Matches by normalized URL, compares by content_hash
+    - Configurable significance thresholds: `new_page_threshold` (default 5), `change_percentage_threshold` (default 10%)
+    - `compare()` and `compare_from_dicts()` methods
+  - Data classes: `PageSnapshot`, `PageChange`, `ChangeSummary`
+  - `ChangeSummary.to_dict()` matches the JSON schema from scheduled-crawls spec
+  - Singleton pattern with `get_content_hasher()`, `get_change_detector()`
+  - Convenience functions: `compute_content_hash()`, `detect_changes()`
+- **Learnings:**
+  - The existing `CrawlService.save_crawled_page()` uses a simple SHA256 of markdown content
+  - The spec requires semantic hashing: `title|h1|meta_description|content_text[:1000]`
+  - Significance = 5+ new pages OR 10%+ content changes (from spec)
+  - MD5 is appropriate for change detection (fast, collision-resistant enough for this use case)
+  - Text normalization (lowercase, whitespace) ensures minor formatting changes don't trigger false changes
+  - All 62 tests pass, ruff lint clean
+---
+
