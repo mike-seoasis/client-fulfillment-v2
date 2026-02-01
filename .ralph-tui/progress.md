@@ -39,6 +39,31 @@ Phase endpoints follow a consistent structure in `backend/app/api/v1/endpoints/`
   - Gotcha: mypy errors in other files (projects.py, logging.py, redis.py) are pre-existing - PAA files are clean
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.104
+- **What was implemented**: Verified crawl-history endpoints already fully implemented
+- **Files present** (no changes needed):
+  - `backend/app/api/v1/endpoints/crawl.py` - Full endpoint implementation (873 lines)
+  - `backend/app/schemas/crawl.py` - Pydantic request/response schemas
+  - `backend/app/api/v1/__init__.py` - Router registration at `/projects/{project_id}/phases/crawl`
+  - `backend/app/services/crawl.py` - Service layer for crawl operations
+  - `backend/app/models/crawl_history.py` - CrawlHistory model
+  - `backend/app/models/crawled_page.py` - CrawledPage model
+- **Endpoints available**:
+  - `POST /api/v1/projects/{id}/phases/crawl` - Start a new crawl (202 Accepted, runs in background)
+  - `GET /api/v1/projects/{id}/phases/crawl` - List crawl history (paginated, filterable by status)
+  - `GET /api/v1/projects/{id}/phases/crawl/{crawl_id}` - Get crawl details
+  - `GET /api/v1/projects/{id}/phases/crawl/{crawl_id}/progress` - Get crawl progress
+  - `POST /api/v1/projects/{id}/phases/crawl/{crawl_id}/stop` - Stop a running crawl
+  - `GET /api/v1/projects/{id}/phases/crawl/pages` - List crawled pages (paginated, filterable by category)
+  - `GET /api/v1/projects/{id}/phases/crawl/pages/{page_id}` - Get crawled page details
+- **Quality checks**: Passed ruff lint; mypy errors are in pre-existing files only (logging.py, redis.py, projects.py)
+- **Learnings:**
+  - Pattern: Background crawl execution uses FastAPI BackgroundTasks with `_run_crawl_background()` helper
+  - Pattern: Crawl supports filter query params with `alias` for cleaner API (`status_filter` → `status`)
+  - Pattern: Project verification is reusable across endpoints via `_verify_project_exists()` helper
+  - Pattern: CrawlProgress aggregates data from history.stats dict plus error_log count
+---
+
 ## 2026-02-01 - client-onboarding-v2-c3y.71
 - **What was implemented**: Document upload endpoint with S3/local storage support
 - **Files created**:
