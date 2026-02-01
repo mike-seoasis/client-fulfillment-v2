@@ -44,6 +44,27 @@ after each iteration and it's included in prompts for context.
 - Confidence scores 0.0-1.0: 0.8+ = clear intent, 0.6-0.8 = likely, <0.6 = ambiguous
 - Questions retain `UNKNOWN` intent if categorization fails (graceful degradation)
 
+### Parallel Processing with Rate Limiting Pattern
+- Use `asyncio.Semaphore(max_concurrent)` for rate-limited parallel processing
+- Standard default: `DEFAULT_MAX_CONCURRENT = 5` across all services
+- Pattern: wrap async task in semaphore context manager
+  ```python
+  semaphore = asyncio.Semaphore(max_concurrent)
+  async def process_item(item):
+      async with semaphore:
+          return await do_work(item)
+  tasks = [process_item(x) for x in items]
+  results = await asyncio.gather(*tasks)
+  ```
+- Services using this pattern:
+  - `paa_enrichment.py`: fan-out (5) and batch enrichment (5)
+  - `paa_categorization.py`: batch LLM calls (5)
+  - `label.py`: batch label generation (5, max 10)
+  - `dataforseo.py`: batch SERP requests (5)
+  - `keywords_everywhere.py`: batch keyword data (5)
+- Each service exposes `max_concurrent` parameter for configurability
+- Label service adds validation: clamps to 1-10 range with logging
+
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.57
@@ -133,5 +154,24 @@ after each iteration and it's included in prompts for context.
   - LLM question-intent lookup requires normalized matching (lowercase, stripped)
   - Graceful degradation: if LLM categorization fails, questions retain UNKNOWN intent without failing the whole enrichment
   - Batch processing reduces LLM calls: 100 questions = 10 LLM calls instead of 100
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.61
+- What was implemented:
+  - Verified parallel processing with rate limiting (max 5 concurrent) is already comprehensively implemented
+  - Pattern is consistent across all services that need batch/parallel processing
+  - Added "Parallel Processing with Rate Limiting Pattern" to Codebase Patterns section
+
+- Files changed:
+  - No code changes required - feature was already implemented in previous stories (c3y.58, c3y.59, c3y.60)
+  - `.ralph-tui/progress.md` (updated - added pattern documentation)
+
+- **Learnings:**
+  - Parallel processing was already implemented as part of fan-out (c3y.58), related searches (c3y.59), and categorization (c3y.60)
+  - The `asyncio.Semaphore` pattern is the idiomatic Python approach for rate-limited concurrency
+  - Services that batch work include: paa_enrichment, paa_categorization, label, dataforseo, keywords_everywhere
+  - All use consistent `max_concurrent: int = 5` default parameter
+  - Label service additionally validates max_concurrent within 1-10 range with warning logs
+  - Pre-existing mypy errors in core modules (config.py, logging.py, redis.py) are unrelated to this feature
 ---
 
