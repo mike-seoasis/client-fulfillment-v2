@@ -213,3 +213,30 @@ logger = get_logger(__name__)
   - Pre-existing mypy errors in config.py, logging.py, redis.py are known issues
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.48
+- **What was implemented**: KeywordIdeaService for LLM-based keyword idea generation (Step 1 of keyword research)
+- **Files changed**:
+  - `backend/app/services/keyword_ideas.py` (new) - Full service with Claude LLM integration
+  - `backend/app/services/__init__.py` - Added keyword idea exports
+- **Features**:
+  - Generates 20-30 keyword ideas per collection page using Claude LLM
+  - Prompt templates for keyword generation (system + user prompts)
+  - Includes long-tail variations (3-5 words)
+  - Includes question-based keywords ("best X for Y", "how to choose X")
+  - Includes comparison keywords ("X vs Y")
+  - Keyword validation and normalization
+  - Comprehensive error logging per requirements
+- **API**:
+  - `KeywordIdeaService.generate_ideas(collection_title, url, content_excerpt, project_id, page_id)`
+  - `KeywordIdeaRequest` dataclass for structured requests
+  - `KeywordIdeaResult` dataclass with keywords, timing, token usage
+  - `get_keyword_idea_service()` singleton getter
+  - `generate_keyword_ideas()` convenience function
+- **Learnings:**
+  - Temperature 0.7 used for LLM to encourage creative keyword diversity (vs 0.0 for deterministic categorization)
+  - Content excerpt truncated to 1500 chars for token efficiency
+  - LLM may wrap JSON in code fences - need to handle `\`\`\`json` extraction
+  - Service pattern: dataclasses for request/result, singleton with `get_*()` getter
+  - Pre-existing mypy errors in config.py, logging.py, redis.py are known issues
+---
+

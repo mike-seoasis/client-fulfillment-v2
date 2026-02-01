@@ -25,6 +25,27 @@ from app.services.crawl import (
     CrawlValidationError,
     PatternMatcher,
 )
+from app.services.keyword_cache import (
+    CachedKeywordData,
+    CacheStats,
+    KeywordCacheResult,
+    KeywordCacheService,
+    KeywordCacheServiceError,
+    KeywordCacheValidationError,
+    cache_keyword_data,
+    get_cached_keyword,
+    get_keyword_cache_service,
+)
+from app.services.keyword_ideas import (
+    KeywordIdeaGenerationError,
+    KeywordIdeaRequest,
+    KeywordIdeaResult,
+    KeywordIdeaService,
+    KeywordIdeaServiceError,
+    KeywordIdeaValidationError,
+    generate_keyword_ideas,
+    get_keyword_idea_service,
+)
 from app.services.label import (
     BatchLabelResult,
     LabelGenerationError,
@@ -54,17 +75,6 @@ from app.services.related_collections import (
     RelatedCollectionsService,
     find_related_collections,
     get_related_collections_service,
-)
-from app.services.keyword_cache import (
-    CachedKeywordData,
-    CacheStats,
-    KeywordCacheResult,
-    KeywordCacheService,
-    KeywordCacheServiceError,
-    KeywordCacheValidationError,
-    cache_keyword_data,
-    get_cached_keyword,
-    get_keyword_cache_service,
 )
 
 __all__ = [
@@ -123,4 +133,13 @@ __all__ = [
     "cache_keyword_data",
     "get_cached_keyword",
     "get_keyword_cache_service",
+    # Keyword idea service
+    "KeywordIdeaService",
+    "KeywordIdeaServiceError",
+    "KeywordIdeaGenerationError",
+    "KeywordIdeaValidationError",
+    "KeywordIdeaRequest",
+    "KeywordIdeaResult",
+    "generate_keyword_ideas",
+    "get_keyword_idea_service",
 ]
