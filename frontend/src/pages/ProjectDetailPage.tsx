@@ -4,15 +4,23 @@
  * Features:
  * - Project header with name, status, and actions
  * - Phase status overview with detailed progress for each phase
+ * - Real-time updates via WebSocket connection
  * - Error handling with ErrorBoundary integration
  * - Loading states with skeletons
  * - Breadcrumb navigation back to projects list
+ *
+ * RAILWAY DEPLOYMENT:
+ * - WebSocket connection with heartbeat for keepalive
+ * - Automatic reconnection with exponential backoff
+ * - Fallback to polling when WebSocket unavailable
  */
 
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Clock, Calendar, AlertCircle, CheckCircle2, Circle, SkipForward, Loader2 } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
+import { ArrowLeft, Clock, Calendar, AlertCircle, CheckCircle2, Circle, SkipForward, Loader2, Wifi, WifiOff } from 'lucide-react'
 import { useApiQuery } from '@/lib/hooks/useApiQuery'
+import { useProjectSubscription } from '@/lib/hooks/useWebSocket'
 import { addBreadcrumb } from '@/lib/errorReporting'
 import { Button } from '@/components/ui/button'
 import { PhaseProgress } from '@/components/PhaseProgress'
@@ -331,6 +339,7 @@ function ErrorState({
 export function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   // Fetch project details
   const {
@@ -347,6 +356,34 @@ export function ProjectDetailPage() {
       component: 'ProjectDetailPage',
     },
     enabled: !!projectId,
+  })
+
+  // Handle real-time updates via WebSocket
+  const handleUpdate = useCallback((data: Record<string, unknown>, event: string) => {
+    console.info('[ProjectDetailPage] Real-time update received:', {
+      projectId,
+      event,
+      dataKeys: Object.keys(data),
+    })
+    addBreadcrumb('Project update received', 'websocket', { projectId, event })
+
+    // Invalidate and refetch project data
+    queryClient.invalidateQueries({ queryKey: ['project', projectId] })
+  }, [projectId, queryClient])
+
+  const handleProgress = useCallback((progress: Record<string, unknown>) => {
+    console.debug('[ProjectDetailPage] Progress update received:', {
+      projectId,
+      progress,
+    })
+    addBreadcrumb('Progress update received', 'websocket', { projectId })
+  }, [projectId])
+
+  // Subscribe to real-time updates for this project
+  const { isConnected, state: wsState } = useProjectSubscription(projectId, {
+    onUpdate: handleUpdate,
+    onProgress: handleProgress,
+    enabled: !!projectId && !isLoading,
   })
 
   // Calculate phase progress
@@ -430,8 +467,8 @@ export function ProjectDetailPage() {
             </span>
           </div>
 
-          {/* Timestamps */}
-          <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4 text-sm text-warmgray-500">
+          {/* Timestamps and connection status */}
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mt-4 text-sm text-warmgray-500">
             <div className="flex items-center gap-1.5">
               <Calendar className="w-4 h-4 text-warmgray-400" />
               <span>Created: {formatDate(project.created_at)}</span>
@@ -439,6 +476,49 @@ export function ProjectDetailPage() {
             <div className="flex items-center gap-1.5">
               <Clock className="w-4 h-4 text-warmgray-400" />
               <span>Updated: {formatDate(project.updated_at)}</span>
+            </div>
+            {/* Real-time connection indicator */}
+            <div
+              className={cn(
+                'flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium',
+                isConnected
+                  ? 'bg-success-100 text-success-700'
+                  : wsState === 'reconnecting' || wsState === 'connecting'
+                    ? 'bg-warning-100 text-warning-700'
+                    : wsState === 'fallback_polling'
+                      ? 'bg-primary-100 text-primary-700'
+                      : 'bg-warmgray-100 text-warmgray-600'
+              )}
+              title={
+                isConnected
+                  ? 'Real-time updates active'
+                  : wsState === 'reconnecting'
+                    ? 'Reconnecting...'
+                    : wsState === 'connecting'
+                      ? 'Connecting...'
+                      : wsState === 'fallback_polling'
+                        ? 'Using polling for updates'
+                        : 'Updates paused'
+              }
+            >
+              {isConnected ? (
+                <Wifi className="w-3 h-3" />
+              ) : wsState === 'reconnecting' || wsState === 'connecting' ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <WifiOff className="w-3 h-3" />
+              )}
+              <span>
+                {isConnected
+                  ? 'Live'
+                  : wsState === 'reconnecting'
+                    ? 'Reconnecting'
+                    : wsState === 'connecting'
+                      ? 'Connecting'
+                      : wsState === 'fallback_polling'
+                        ? 'Polling'
+                        : 'Offline'}
+              </span>
             </div>
           </div>
         </header>

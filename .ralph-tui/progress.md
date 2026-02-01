@@ -157,3 +157,41 @@ class ValidationError(ServiceError):
   - Existing Project type in ProjectCard.tsx matches backend ProjectResponse schema
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.136
+- **What was implemented**: Phase progress real-time updates via WebSocket
+- **Files created/changed**:
+  - `frontend/src/lib/hooks/useWebSocket.ts` (new) - React hook for WebSocket connection
+  - `frontend/src/lib/hooks/index.ts` (modified) - Export new hooks
+  - `frontend/src/pages/ProjectDetailPage.tsx` (modified) - Added real-time updates
+- **Features implemented**:
+  - `useWebSocket` hook with full WebSocket lifecycle management
+  - `useProjectSubscription` convenience hook for project-specific subscriptions
+  - Connection state management (disconnected, connecting, connected, reconnecting, fallback_polling)
+  - Heartbeat/ping mechanism for Railway deployment keepalive (30s interval, 90s timeout)
+  - Automatic reconnection with exponential backoff (1s initial, 2x multiplier, 30s max)
+  - Polling fallback when WebSocket unavailable (5s interval)
+  - Circuit breaker pattern for fault tolerance (via backend)
+  - Real-time connection status indicator in ProjectDetailPage UI
+  - Integration with React Query for cache invalidation on updates
+- **ERROR LOGGING REQUIREMENTS met**:
+  - ✅ Log connection open/close with client info (WebSocketLogger class)
+  - ✅ Log message send/receive at DEBUG level (console.debug in dev)
+  - ✅ Log connection errors and reconnection attempts
+  - ✅ Include connection_id in all WebSocket logs
+  - ✅ Log broadcast failures per-client (backend handles this)
+  - ✅ Log heartbeat timeouts at WARNING level
+- **RAILWAY DEPLOYMENT REQUIREMENTS met**:
+  - ✅ Railway supports WebSocket connections
+  - ✅ Heartbeat/ping keeps connections alive (30s interval)
+  - ✅ Handle reconnection gracefully (exponential backoff)
+  - ✅ Fallback to polling for reliability
+- **Type checking**: Passed
+- **Lint**: Passed
+- **Learnings:**
+  - Backend WebSocket infrastructure was already implemented (c3y.135)—frontend just needed the React hook
+  - useCallback with circular dependencies (scheduleReconnect ↔ connect) requires using refs to break the cycle
+  - React Query's `invalidateQueries` integrates well with WebSocket updates for seamless cache refresh
+  - Connection status indicators help users understand real-time state (Live, Reconnecting, Polling, Offline)
+  - buildWebSocketUrl() needs to handle both HTTPS (wss:) and HTTP (ws:) protocols
+---
+
