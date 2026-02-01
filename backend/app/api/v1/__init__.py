@@ -7,6 +7,7 @@ from app.api.v1.endpoints import (
     brand_config,
     categorize,
     content_plan,
+    content_writer,
     crawl,
     documents,
     keyword_research,
@@ -57,6 +58,11 @@ router.include_router(
     content_plan.router,
     prefix="/projects/{project_id}/phases/content_plan",
     tags=["Content Plan Phase"],
+)
+router.include_router(
+    content_writer.router,
+    prefix="/projects/{project_id}/phases/content_writer",
+    tags=["Content Writer Phase"],
 )
 router.include_router(
     review_platforms.router,
