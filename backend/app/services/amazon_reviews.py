@@ -113,6 +113,9 @@ class ReviewAnalysisResult:
         error: Error message if operation failed
         duration_ms: Operation duration in milliseconds
         analyzed_at: Timestamp of analysis
+        needs_review: Whether the result needs user validation (fallback used)
+        fallback_used: Whether fallback persona generation was used
+        fallback_source: Source of fallback data (e.g., "website_analysis")
     """
 
     success: bool
@@ -126,6 +129,9 @@ class ReviewAnalysisResult:
     error: str | None = None
     duration_ms: float = 0.0
     analyzed_at: str = ""
+    needs_review: bool = False
+    fallback_used: bool = False
+    fallback_source: str | None = None
 
 
 class AmazonReviewsService:
@@ -305,6 +311,8 @@ class AmazonReviewsService:
         product_category: str | None = None,
         max_products: int = 3,
         project_id: str | None = None,
+        website_url: str | None = None,
+        use_fallback: bool = True,
     ) -> ReviewAnalysisResult:
         """Analyze Amazon reviews for a brand.
 
@@ -312,12 +320,15 @@ class AmazonReviewsService:
         1. Detects Amazon store and products
         2. Analyzes reviews for top products
         3. Extracts insights, personas, and proof stats
+        4. If no reviews found and use_fallback=True, generates fallback personas
 
         Args:
             brand_name: The brand/company name
             product_category: Optional category hint
             max_products: Max products to analyze (1-5)
             project_id: Optional project ID for logging
+            website_url: Optional website URL for fallback persona generation
+            use_fallback: Whether to use fallback persona generation (default True)
 
         Returns:
             ReviewAnalysisResult with comprehensive review data
@@ -332,6 +343,8 @@ class AmazonReviewsService:
                 "product_category": product_category,
                 "max_products": max_products,
                 "project_id": project_id,
+                "website_url": website_url,
+                "use_fallback": use_fallback,
             },
         )
 
@@ -372,6 +385,8 @@ class AmazonReviewsService:
                 product_category=product_category,
                 max_products=max_products,
                 project_id=project_id,
+                website_url=website_url,
+                use_fallback=use_fallback,
             )
 
             duration_ms = (time.monotonic() - start_time) * 1000
@@ -394,6 +409,8 @@ class AmazonReviewsService:
                     "products_analyzed": result.products_analyzed,
                     "reviews_found": len(result.reviews),
                     "personas_generated": len(result.customer_personas),
+                    "fallback_used": result.fallback_used,
+                    "needs_review": result.needs_review,
                     "duration_ms": duration_ms,
                     "project_id": project_id,
                 },
@@ -404,6 +421,7 @@ class AmazonReviewsService:
                 extra={
                     "brand_name": brand_name,
                     "success": result.success,
+                    "fallback_used": result.fallback_used,
                     "project_id": project_id,
                 },
             )
@@ -420,6 +438,9 @@ class AmazonReviewsService:
                 error=result.error,
                 duration_ms=duration_ms,
                 analyzed_at=result.analyzed_at,
+                needs_review=result.needs_review,
+                fallback_used=result.fallback_used,
+                fallback_source=result.fallback_source,
             )
 
         except AmazonReviewsValidationError:

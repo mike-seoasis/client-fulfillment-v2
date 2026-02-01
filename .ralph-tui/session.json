@@ -3,10 +3,10 @@
   "sessionId": "dcf043b7-15d6-4fec-97a7-e3c0121f9620",
   "status": "running",
   "startedAt": "2026-02-01T18:59:00.068Z",
-  "updatedAt": "2026-02-01T19:01:28.554Z",
-  "currentIteration": 0,
+  "updatedAt": "2026-02-01T19:08:31.350Z",
+  "currentIteration": 1,
   "maxIterations": 30,
-  "tasksCompleted": 0,
+  "tasksCompleted": 1,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -17,8 +17,8 @@
       {
         "id": "client-onboarding-v2-c3y.60",
         "title": "Add PAA question categorization by intent (buying, usage, care, comparison)",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "client-onboarding-v2-c3y.69",
@@ -40,7 +40,18 @@
       }
     ]
   },
-  "iterations": [],
+  "iterations": [
+    {
+      "iteration": 1,
+      "status": "completed",
+      "taskId": "client-onboarding-v2-c3y.60",
+      "taskTitle": "Add PAA question categorization by intent (buying, usage, care, comparison)",
+      "taskCompleted": true,
+      "durationMs": 148481,
+      "startedAt": "2026-02-01T18:59:00.072Z",
+      "endedAt": "2026-02-01T19:01:28.553Z"
+    }
+  ],
   "skippedTaskIds": [],
   "cwd": "/Users/mike/Projects/client-onboarding-v2",
   "activeTaskIds": [],

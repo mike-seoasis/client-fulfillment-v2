@@ -37,6 +37,31 @@ All services implement these logging patterns:
 - ERROR: Exceptions with full stack trace, API failures
 - Always include `project_id` and `page_id` in log extra for traceability
 
+### Fallback Persona Generation Pattern
+When no reviews are available, generate personas from website analysis:
+- Add `needs_review` and `fallback_used` flags to result dataclasses
+- Use Perplexity to analyze brand website/positioning for persona inference
+- Limit generated personas to 3 maximum
+- Flag results with `needs_review=True` when fallback is used (for user validation)
+- Make fallback opt-in via `use_fallback` parameter (default True)
+- Gracefully handle fallback failures (return empty personas, don't fail the overall operation)
+
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.69
+- What was implemented: Fallback persona generation when no reviews available
+- Files changed:
+  - `backend/app/integrations/amazon_reviews.py` - Added `FallbackPersona` dataclass, `FALLBACK_PERSONA_PROMPT`, `generate_fallback_personas()` method, updated `analyze_brand_reviews()` to use fallback
+  - `backend/app/services/amazon_reviews.py` - Added `needs_review`, `fallback_used`, `fallback_source` fields to `ReviewAnalysisResult`, updated `analyze_reviews()` method signature
+  - `backend/app/schemas/amazon_reviews.py` - Updated `CustomerPersonaResponse`, `AmazonReviewAnalysisRequest`, `AmazonReviewAnalysisResponse` with new fields
+  - `backend/tests/integrations/test_amazon_reviews_fallback.py` - 20 comprehensive tests (all passing)
+- **Learnings:**
+  - Per brand-config spec: when no reviews available, generate fallback persona from website analysis and flag as "needs_review"
+  - FallbackPersona includes: name, description, source ("website_analysis"), inferred (True), characteristics (list)
+  - Perplexity temperature 0.3 for slightly creative but grounded persona generation
+  - Fallback personas are converted to dict format matching existing persona structure for API consistency
+  - Test integration directory needed `__init__.py` file creation
+  - The `_parse_json_from_response()` helper handles markdown code block wrapping in LLM responses
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.60
