@@ -8,6 +8,7 @@ from app.api.v1.endpoints import (
     crawl,
     keyword_research,
     label,
+    paa_enrichment,
     projects,
     schedule,
     websocket,
@@ -41,6 +42,11 @@ router.include_router(
     amazon_reviews.router,
     prefix="/projects/{project_id}/phases/amazon_reviews",
     tags=["Amazon Reviews Phase"],
+)
+router.include_router(
+    paa_enrichment.router,
+    prefix="/projects/{project_id}/phases/paa_enrichment",
+    tags=["PAA Enrichment Phase"],
 )
 router.include_router(
     schedule.router,
