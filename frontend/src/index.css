@@ -2,8 +2,55 @@
 @tailwind components;
 @tailwind utilities;
 
+/* shadcn/ui CSS Variables - Warm theme based on our design system */
+@layer base {
+  :root {
+    /* Background colors - cream tones */
+    --background: 40 33% 99%;      /* cream-50 */
+    --foreground: 20 14% 10%;      /* warmgray-900 */
+
+    /* Card and popover surfaces */
+    --card: 0 0% 100%;             /* white */
+    --card-foreground: 20 14% 10%; /* warmgray-900 */
+    --popover: 0 0% 100%;          /* white */
+    --popover-foreground: 20 14% 10%;
+
+    /* Primary - warm gold */
+    --primary: 45 93% 47%;         /* primary-500 (#eab308) */
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary - cream tones */
+    --secondary: 40 40% 96%;       /* cream-100 */
+    --secondary-foreground: 20 6% 31%; /* warmgray-700 */
+
+    /* Muted - subtle backgrounds */
+    --muted: 40 26% 94%;           /* cream-200 */
+    --muted-foreground: 25 6% 45%; /* warmgray-500 */
+
+    /* Accent - coral */
+    --accent: 25 95% 53%;          /* coral-500 */
+    --accent-foreground: 0 0% 100%;
+
+    /* Destructive - warm red */
+    --destructive: 0 84% 60%;      /* error-500 */
+    --destructive-foreground: 0 0% 100%;
+
+    /* Borders and inputs */
+    --border: 40 26% 94%;          /* cream-200 */
+    --input: 35 16% 83%;           /* cream-300 */
+    --ring: 45 93% 47%;            /* primary-500 */
+
+    /* Radius - matches our soft, warm design */
+    --radius: 0.75rem;
+  }
+}
+
 /* Base layer customizations */
 @layer base {
+  * {
+    @apply border-border;
+  }
+
   /* Set default background to cream-50 for light, airy feel */
   html {
     @apply bg-cream-50 text-warmgray-800 antialiased;

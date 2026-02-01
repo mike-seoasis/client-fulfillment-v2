@@ -51,6 +51,21 @@ async def delete_item(...) -> Response | JSONResponse:
 - Return `Response(status_code=204)` for success (not `None`)
 - Can still return `JSONResponse` for error cases
 
+### shadcn/ui Component Pattern
+When adding shadcn/ui components, disable the `react-refresh/only-export-components` ESLint rule:
+```tsx
+/* eslint-disable react-refresh/only-export-components */
+```
+- shadcn/ui components export both the component and its variants (e.g., `Button` and `buttonVariants`)
+- This triggers the react-refresh warning but is standard practice for shadcn/ui
+
+### shadcn/ui + Existing Tailwind Colors
+When integrating shadcn/ui with an existing Tailwind color palette:
+- Use `primary-ui` instead of `primary` for shadcn semantic colors to avoid conflicts
+- Add CSS variables in `:root` with HSL values (without `hsl()` wrapper)
+- Tailwind config maps to CSS variables: `"hsl(var(--primary))"`
+- Required colors: `border`, `input`, `ring`, `background`, `foreground`, `destructive`, `muted`, `accent`, `popover`, `card`
+
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.61
@@ -86,5 +101,24 @@ async def delete_item(...) -> Response | JSONResponse:
   - Router was already properly registered in `backend/app/api/v1/__init__.py` at prefix `/projects/{project_id}/phases/schedule`
   - Endpoints already met error logging requirements with proper structured error responses including `request_id`
   - The DELETE endpoint pattern discovered in c3y.70 needs to be applied consistently across all endpoints
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.112
+- What was implemented: shadcn/ui component library installation and configuration, verified existing error logging infrastructure
+- Files changed:
+  - `frontend/package.json` - Added dependencies: clsx, tailwind-merge, class-variance-authority, lucide-react, @radix-ui/react-slot, tailwindcss-animate
+  - `frontend/components.json` - Created shadcn/ui configuration file
+  - `frontend/src/lib/utils.ts` - Created `cn()` utility function for class merging
+  - `frontend/tailwind.config.js` - Added darkMode, container config, shadcn/ui semantic colors (border, input, ring, etc.), border-radius CSS variables, tailwindcss-animate plugin
+  - `frontend/src/index.css` - Added CSS variables for shadcn/ui theming (warm palette mapped to HSL values)
+  - `frontend/src/components/ui/button.tsx` - Added sample Button component with variants
+- **Learnings:**
+  - Error logging infrastructure was already complete: ErrorBoundary, globalErrorHandlers, errorReporting (Sentry stub), api client with error context
+  - Railway deployment config already in place: Dockerfile, nginx.conf, railway.json, VITE_API_URL env var support
+  - When adding shadcn/ui to project with existing `primary` color palette, use `primary-ui` for shadcn semantic colors
+  - CSS variables must be defined as HSL values without the `hsl()` wrapper (e.g., `--primary: 45 93% 47%;`)
+  - tailwindcss-animate plugin required for shadcn/ui animations
+  - `@apply border-border` requires `border` color to be defined in Tailwind config mapping to CSS variable
+  - npm cache permission issues can be bypassed with `--cache=/tmp/npm-cache-$USER`
 ---
 
