@@ -4,6 +4,7 @@ Implements fan-out strategy for PAA question discovery:
 1. Fetch initial PAA questions for a keyword using DataForSEO SERP API
 2. Optionally search each initial PAA question for nested questions (fan-out)
 3. De-duplicate and collect all discovered questions
+4. Fall back to Related Searches (with LLM semantic filter) if PAA results insufficient
 
 ERROR LOGGING REQUIREMENTS:
 - Log method entry/exit at DEBUG level with parameters (sanitized)
@@ -35,6 +36,9 @@ SLOW_OPERATION_THRESHOLD_MS = 1000
 DEFAULT_PAA_CLICK_DEPTH = 2  # 1-4, each click costs $0.00015
 DEFAULT_MAX_CONCURRENT_FANOUT = 5
 DEFAULT_MAX_FANOUT_QUESTIONS = 10  # Limit fanout to first N initial questions
+DEFAULT_MIN_PAA_FOR_FALLBACK = (
+    3  # Trigger fallback if fewer than this many PAA questions
+)
 
 
 class PAAQuestionIntent(Enum):
@@ -87,6 +91,8 @@ class PAAEnrichmentResult:
     questions: list[PAAQuestion] = field(default_factory=list)
     initial_count: int = 0  # Count from initial search
     nested_count: int = 0  # Count from fan-out
+    related_search_count: int = 0  # Count from related searches fallback
+    used_fallback: bool = False  # True if related searches fallback was used
     error: str | None = None
     cost: float | None = None
     duration_ms: float = 0.0
@@ -123,7 +129,9 @@ class PAAValidationError(PAAEnrichmentServiceError):
         project_id: str | None = None,
         page_id: str | None = None,
     ) -> None:
-        super().__init__(f"Validation error for {field_name}: {message}", project_id, page_id)
+        super().__init__(
+            f"Validation error for {field_name}: {message}", project_id, page_id
+        )
         self.field_name = field_name
         self.value = value
 
@@ -250,7 +258,10 @@ class PAAEnrichmentService:
                         source_url = first_expanded.get("url")
                         source_domain = first_expanded.get("domain")
                     # Handle AI overview expanded element
-                    elif first_expanded.get("type") == "people_also_ask_ai_overview_expanded_element":
+                    elif (
+                        first_expanded.get("type")
+                        == "people_also_ask_ai_overview_expanded_element"
+                    ):
                         ai_items = first_expanded.get("items", [])
                         if ai_items:
                             answer_snippet = ai_items[0].get("text")
@@ -386,6 +397,146 @@ class PAAEnrichmentService:
             )
             raise
 
+    async def _fetch_related_searches_fallback(
+        self,
+        keyword: str,
+        location_code: int,
+        language_code: str,
+        project_id: str | None = None,
+        page_id: str | None = None,
+    ) -> list[PAAQuestion]:
+        """Fetch related searches and convert to PAA questions.
+
+        This is a fallback when PAA results are insufficient.
+
+        Args:
+            keyword: Keyword to search
+            location_code: Location code
+            language_code: Language code
+            project_id: Project ID for logging
+            page_id: Page ID for logging
+
+        Returns:
+            List of PAAQuestion objects from related searches
+        """
+        # Import here to avoid circular imports
+        from app.services.related_searches import get_related_searches_service
+
+        logger.info(
+            "Using related searches fallback",
+            extra={
+                "keyword": keyword[:50],
+                "project_id": project_id,
+                "page_id": page_id,
+            },
+        )
+
+        service = get_related_searches_service()
+        result = await service.get_related_searches(
+            keyword=keyword,
+            location_code=location_code,
+            language_code=language_code,
+            skip_llm_filter=False,  # Use LLM filter
+            use_cache=True,
+            project_id=project_id,
+            page_id=page_id,
+        )
+
+        if not result.success or not result.filtered_searches:
+            logger.debug(
+                "Related searches fallback returned no results",
+                extra={
+                    "keyword": keyword[:50],
+                    "success": result.success,
+                    "error": result.error,
+                    "project_id": project_id,
+                    "page_id": page_id,
+                },
+            )
+            return []
+
+        # Convert filtered related searches to PAA questions
+        questions: list[PAAQuestion] = []
+        for search in result.filtered_searches:
+            # Use question_form if available, otherwise convert to question
+            question_text = search.question_form or self._to_question_form(
+                search.search_term
+            )
+
+            # Skip if already seen (dedup with existing PAA)
+            if self._is_duplicate(question_text):
+                continue
+
+            self._mark_seen(question_text)
+
+            questions.append(
+                PAAQuestion(
+                    question=question_text,
+                    answer_snippet=None,
+                    source_url=None,
+                    source_domain=None,
+                    position=search.position,
+                    is_nested=False,
+                    parent_question=None,
+                    intent=PAAQuestionIntent.UNKNOWN,
+                )
+            )
+
+        logger.info(
+            "Related searches fallback complete",
+            extra={
+                "keyword": keyword[:50],
+                "questions_added": len(questions),
+                "project_id": project_id,
+                "page_id": page_id,
+            },
+        )
+
+        return questions
+
+    def _to_question_form(self, search_term: str) -> str:
+        """Convert a search term to question form.
+
+        Args:
+            search_term: Raw search term
+
+        Returns:
+            Search term converted to question format
+        """
+        term = search_term.strip()
+
+        # If already a question, return as-is
+        if term.endswith("?"):
+            return term
+
+        # Common question starters
+        question_starters = [
+            "what",
+            "how",
+            "why",
+            "when",
+            "where",
+            "which",
+            "who",
+            "is",
+            "are",
+            "can",
+            "do",
+            "does",
+            "should",
+            "will",
+        ]
+
+        lower_term = term.lower()
+        if any(lower_term.startswith(starter) for starter in question_starters):
+            return term + "?"
+
+        # Convert to "What is/are" question
+        if " " in term:
+            return f"What are {term}?"
+        else:
+            return f"What is {term}?"
+
     async def enrich_keyword(
         self,
         keyword: str,
@@ -393,6 +544,8 @@ class PAAEnrichmentService:
         language_code: str = "en",
         fanout_enabled: bool = True,
         max_fanout_questions: int = DEFAULT_MAX_FANOUT_QUESTIONS,
+        fallback_enabled: bool = True,
+        min_paa_for_fallback: int = DEFAULT_MIN_PAA_FOR_FALLBACK,
         project_id: str | None = None,
         page_id: str | None = None,
     ) -> PAAEnrichmentResult:
@@ -404,6 +557,8 @@ class PAAEnrichmentService:
             language_code: Language code (e.g., 'en')
             fanout_enabled: Whether to search initial questions for nested
             max_fanout_questions: Max initial questions to fan-out on
+            fallback_enabled: Whether to use related searches fallback
+            min_paa_for_fallback: Minimum PAA questions before fallback triggers
             project_id: Project ID for logging context
             page_id: Page ID for logging context
 
@@ -505,7 +660,9 @@ class PAAEnrichmentService:
                 # Use semaphore for rate limiting
                 semaphore = asyncio.Semaphore(self._max_concurrent_fanout)
 
-                async def fanout_search(question: PAAQuestion) -> tuple[list[PAAQuestion], float]:
+                async def fanout_search(
+                    question: PAAQuestion,
+                ) -> tuple[list[PAAQuestion], float]:
                     """Search a question for nested PAA."""
                     async with semaphore:
                         try:
@@ -550,6 +707,47 @@ class PAAEnrichmentService:
                     },
                 )
 
+            # Step 3: Fall back to related searches if insufficient PAA results
+            related_search_count = 0
+            used_fallback = False
+
+            if fallback_enabled and len(all_questions) < min_paa_for_fallback:
+                logger.info(
+                    "Triggering related searches fallback",
+                    extra={
+                        "keyword": keyword[:50],
+                        "current_count": len(all_questions),
+                        "min_required": min_paa_for_fallback,
+                        "project_id": project_id,
+                        "page_id": page_id,
+                    },
+                )
+
+                try:
+                    fallback_questions = await self._fetch_related_searches_fallback(
+                        keyword=keyword,
+                        location_code=location_code,
+                        language_code=language_code,
+                        project_id=project_id,
+                        page_id=page_id,
+                    )
+                    all_questions.extend(fallback_questions)
+                    related_search_count = len(fallback_questions)
+                    used_fallback = True
+                except Exception as e:
+                    logger.warning(
+                        "Related searches fallback failed",
+                        extra={
+                            "keyword": keyword[:50],
+                            "error": str(e),
+                            "error_type": type(e).__name__,
+                            "project_id": project_id,
+                            "page_id": page_id,
+                            "stack_trace": traceback.format_exc(),
+                        },
+                    )
+                    # Continue with existing results, don't fail the whole operation
+
             duration_ms = (time.monotonic() - start_time) * 1000
 
             logger.info(
@@ -558,7 +756,9 @@ class PAAEnrichmentService:
                     "keyword": keyword[:50],
                     "initial_count": initial_count,
                     "nested_count": nested_count,
+                    "related_search_count": related_search_count,
                     "total_count": len(all_questions),
+                    "used_fallback": used_fallback,
                     "duration_ms": round(duration_ms, 2),
                     "total_cost": total_cost,
                     "project_id": project_id,
@@ -582,6 +782,8 @@ class PAAEnrichmentService:
                 questions=all_questions,
                 initial_count=initial_count,
                 nested_count=nested_count,
+                related_search_count=related_search_count,
+                used_fallback=used_fallback,
                 cost=total_cost if total_cost > 0 else None,
                 duration_ms=duration_ms,
             )
@@ -638,6 +840,8 @@ class PAAEnrichmentService:
         language_code: str = "en",
         fanout_enabled: bool = True,
         max_fanout_questions: int = DEFAULT_MAX_FANOUT_QUESTIONS,
+        fallback_enabled: bool = True,
+        min_paa_for_fallback: int = DEFAULT_MIN_PAA_FOR_FALLBACK,
         max_concurrent: int = 5,
         project_id: str | None = None,
     ) -> list[PAAEnrichmentResult]:
@@ -649,6 +853,8 @@ class PAAEnrichmentService:
             language_code: Language code
             fanout_enabled: Whether to enable fan-out
             max_fanout_questions: Max questions to fan-out per keyword
+            fallback_enabled: Whether to use related searches fallback
+            min_paa_for_fallback: Minimum PAA questions before fallback triggers
             max_concurrent: Max concurrent keyword enrichments
             project_id: Project ID for logging
 
@@ -662,6 +868,7 @@ class PAAEnrichmentService:
             extra={
                 "keyword_count": len(keywords),
                 "fanout_enabled": fanout_enabled,
+                "fallback_enabled": fallback_enabled,
                 "max_concurrent": max_concurrent,
                 "project_id": project_id,
             },
@@ -680,6 +887,8 @@ class PAAEnrichmentService:
                     language_code=language_code,
                     fanout_enabled=fanout_enabled,
                     max_fanout_questions=max_fanout_questions,
+                    fallback_enabled=fallback_enabled,
+                    min_paa_for_fallback=min_paa_for_fallback,
                     project_id=project_id,
                 )
 
@@ -739,6 +948,8 @@ async def enrich_keyword_paa(
     language_code: str = "en",
     fanout_enabled: bool = True,
     max_fanout_questions: int = DEFAULT_MAX_FANOUT_QUESTIONS,
+    fallback_enabled: bool = True,
+    min_paa_for_fallback: int = DEFAULT_MIN_PAA_FOR_FALLBACK,
     project_id: str | None = None,
     page_id: str | None = None,
 ) -> PAAEnrichmentResult:
@@ -750,6 +961,8 @@ async def enrich_keyword_paa(
         language_code: Language code
         fanout_enabled: Whether to enable fan-out
         max_fanout_questions: Max questions for fan-out
+        fallback_enabled: Whether to use related searches fallback
+        min_paa_for_fallback: Minimum PAA questions before fallback triggers
         project_id: Project ID for logging
         page_id: Page ID for logging
 
@@ -763,6 +976,8 @@ async def enrich_keyword_paa(
         language_code=language_code,
         fanout_enabled=fanout_enabled,
         max_fanout_questions=max_fanout_questions,
+        fallback_enabled=fallback_enabled,
+        min_paa_for_fallback=min_paa_for_fallback,
         project_id=project_id,
         page_id=page_id,
     )
@@ -774,6 +989,8 @@ async def enrich_keyword_paa_cached(
     language_code: str = "en",
     fanout_enabled: bool = True,
     max_fanout_questions: int = DEFAULT_MAX_FANOUT_QUESTIONS,
+    fallback_enabled: bool = True,
+    min_paa_for_fallback: int = DEFAULT_MIN_PAA_FOR_FALLBACK,
     project_id: str | None = None,
     page_id: str | None = None,
 ) -> PAAEnrichmentResult:
@@ -789,6 +1006,8 @@ async def enrich_keyword_paa_cached(
         language_code: Language code
         fanout_enabled: Whether to enable fan-out
         max_fanout_questions: Max questions for fan-out
+        fallback_enabled: Whether to use related searches fallback
+        min_paa_for_fallback: Minimum PAA questions before fallback triggers
         project_id: Project ID for logging
         page_id: Page ID for logging
 
@@ -857,6 +1076,8 @@ async def enrich_keyword_paa_cached(
         language_code=language_code,
         fanout_enabled=fanout_enabled,
         max_fanout_questions=max_fanout_questions,
+        fallback_enabled=fallback_enabled,
+        min_paa_for_fallback=min_paa_for_fallback,
         project_id=project_id,
         page_id=page_id,
     )
