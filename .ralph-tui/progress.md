@@ -31,6 +31,29 @@ Tests organized by class with:
 - Constants verification tests
 - Singleton and convenience function tests
 
+### Frontend Phase Panel Pattern
+Phase panel components (CrawlPhasePanel, CategorizePhasePanel, LabelPhasePanel) follow:
+1. **Types section**: Interfaces for API requests, responses, and form state
+2. **Constants section**: Default values, color mappings, status configurations
+3. **Utility Functions**: Validation, formatting, parsing logic
+4. **Sub-components**: Reusable smaller components (StatusBadge, ProgressBar, StatsCard, Checkbox)
+5. **Main Component**: Exported with `{PanelName}Props` interface
+6. **Hooks pattern**: `useApiQuery` for data fetching, `useToastMutation` for mutations, `useProjectSubscription` for WebSocket updates
+7. **Error logging**: `console.error` with endpoint, status, responseBody, userAction context; `addBreadcrumb` for debug trails
+
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.126
+- What was implemented: LabelPhasePanel component with label visualization
+- Files changed:
+  - `frontend/src/components/LabelPhasePanel.tsx` (new - 495 lines)
+- **Learnings:**
+  - Phase panels follow consistent structure: Types → Constants → Sub-components → Main Component
+  - Label coloring uses index-based color selection from a warm palette for consistent visual distinction
+  - `useToastMutation` wraps mutation calls with automatic toast notifications
+  - Error boundary infrastructure already in place via `ErrorBoundary.tsx` component and `globalErrorHandlers.ts`
+  - API error logging pattern: log to console.error with endpoint, status, responseBody, userAction fields
+  - WebSocket subscription via `useProjectSubscription` hook for real-time progress updates
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.90

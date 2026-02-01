@@ -3,10 +3,10 @@
   "sessionId": "61c7a925-98c8-4fc0-bb1d-4b5f9af2b0f4",
   "status": "running",
   "startedAt": "2026-02-01T22:43:10.905Z",
-  "updatedAt": "2026-02-01T22:50:09.407Z",
-  "currentIteration": 0,
+  "updatedAt": "2026-02-01T22:54:07.146Z",
+  "currentIteration": 1,
   "maxIterations": 30,
-  "tasksCompleted": 0,
+  "tasksCompleted": 1,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -17,8 +17,8 @@
       {
         "id": "client-onboarding-v2-c3y.90",
         "title": "Implement TF-IDF analysis for term extraction",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "client-onboarding-v2-c3y.126",
@@ -28,7 +28,18 @@
       }
     ]
   },
-  "iterations": [],
+  "iterations": [
+    {
+      "iteration": 1,
+      "status": "completed",
+      "taskId": "client-onboarding-v2-c3y.90",
+      "taskTitle": "Implement TF-IDF analysis for term extraction",
+      "taskCompleted": true,
+      "durationMs": 418495,
+      "startedAt": "2026-02-01T22:43:10.910Z",
+      "endedAt": "2026-02-01T22:50:09.405Z"
+    }
+  ],
   "skippedTaskIds": [],
   "cwd": "/Users/mike/Projects/client-onboarding-v2",
   "activeTaskIds": [],
