@@ -17,7 +17,7 @@ Error Logging Requirements:
 - Log rate limit hits at WARNING level
 """
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -520,10 +520,12 @@ async def update_schedule(
 
 @router.delete(
     "/{schedule_id}",
+    response_model=None,
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a schedule configuration",
     description="Delete an existing schedule configuration by its ID.",
     responses={
+        204: {"description": "Schedule deleted successfully"},
         404: {
             "description": "Project or schedule not found",
             "content": {
@@ -543,7 +545,7 @@ async def delete_schedule(
     project_id: str,
     schedule_id: str,
     session: AsyncSession = Depends(get_session),
-) -> None | JSONResponse:
+) -> Response | JSONResponse:
     """Delete a schedule configuration."""
     request_id = _get_request_id(request)
     logger.info(
@@ -610,7 +612,7 @@ async def delete_schedule(
                 "schedule_id": schedule_id,
             },
         )
-        return None  # 204 No Content
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     except ScheduleNotFoundError as e:
         logger.warning(
             "Schedule not found",
