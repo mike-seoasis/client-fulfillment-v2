@@ -3,23 +3,22 @@
   "description": "Ready tasks batch",
   "userStories": [
     {
-      "id": "client-onboarding-v2-c3y.73",
-      "title": "Implement Phase 5A: PAA analysis by intent categorization",
-      "description": "ERROR LOGGING REQUIREMENTS:\n- Log method entry/exit at DEBUG level with parameters (sanitized)\n- Log all exceptions with full stack trace and context\n- Include entity IDs (project_id, page_id) in all service logs\n- Log validation failures with field names and rejected values\n- Log state transitions (phase changes) at INFO level\n- Add timing logs for operations >1 second",
+      "id": "client-onboarding-v2-c3y.74",
+      "title": "Implement Phase 5A: Perplexity research integration",
+      "description": "ERROR LOGGING REQUIREMENTS:\n- Log all outbound API calls with endpoint, method, timing\n- Log request/response bodies at DEBUG level (truncate large responses)\n- Log and handle: timeouts, rate limits (429), auth failures (401/403)\n- Include retry attempt number in logs\n- Log API quota/credit usage if available\n- Mask API keys and tokens in all logs\n- Log circuit breaker state changes\n\nRAILWAY DEPLOYMENT REQUIREMENTS:\n- All API keys via environment variables (ANTHROPIC_API_KEY, etc.)\n- Never log or expose API keys\n- Handle cold-start latency (first request may be slow)\n- Implement request timeouts (Railway has 5min request limit)",
       "acceptanceCriteria": [],
       "passes": true,
       "completionNotes": "Completed by agent"
     },
     {
-      "id": "client-onboarding-v2-c3y.115",
-      "title": "Create PhaseProgress component with status indicators",
+      "id": "client-onboarding-v2-c3y.116",
+      "title": "Create DataTable component for page listings",
       "description": "ERROR LOGGING REQUIREMENTS:\n- Implement React Error Boundaries for all route components\n- Log caught errors to console with component stack\n- Set up global window.onerror and unhandledrejection handlers\n- Log API errors with endpoint, status, response body\n- Include user action context in error logs\n- Set up error reporting service integration point (e.g., Sentry stub)\n\nRAILWAY DEPLOYMENT REQUIREMENTS:\n- Build as static assets (npm run build)\n- API URL via VITE_API_URL environment variable\n- Configure for production build (NODE_ENV=production)\n- Can deploy to Railway static hosting or separate service\n- Use relative paths or env-configured absolute URLs",
       "acceptanceCriteria": [],
-      "passes": true,
-      "completionNotes": "Completed by agent"
+      "passes": false
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-01T20:15:58.749Z"
+    "updatedAt": "2026-02-01T20:18:58.362Z"
   }
 }
