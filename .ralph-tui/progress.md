@@ -39,3 +39,28 @@ Phase endpoints follow a consistent structure in `backend/app/api/v1/endpoints/`
   - Gotcha: mypy errors in other files (projects.py, logging.py, redis.py) are pre-existing - PAA files are clean
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.71
+- **What was implemented**: Document upload endpoint with S3/local storage support
+- **Files created**:
+  - `backend/app/schemas/document.py` - Pydantic schemas for document upload/download/delete
+  - `backend/app/services/storage.py` - Storage service with LocalStorageBackend and S3StorageBackend
+  - `backend/app/api/v1/endpoints/documents.py` - REST endpoints for document operations
+  - `backend/app/api/v1/__init__.py` - Router registration at `/projects/{project_id}/documents`
+- **Endpoints available**:
+  - `POST /api/v1/projects/{id}/documents/upload` - Upload a document (multipart/form-data)
+  - `GET /api/v1/projects/{id}/documents/{document_id}/download` - Download a document
+  - `DELETE /api/v1/projects/{id}/documents/{document_id}` - Delete a document
+- **Storage features**:
+  - Auto-detects backend: S3 if `STORAGE_S3_BUCKET` env var set, otherwise local filesystem
+  - Local storage default path: `./uploads` (configurable via `STORAGE_LOCAL_PATH`)
+  - S3 storage key prefix: `documents/{project_id}/{document_id}_{filename}`
+  - File validation: max 50MB, supported types (PDF, DOCX, TXT, PNG, JPEG, GIF, WebP)
+  - MD5 checksum computed for uploads
+- **Quality checks**: Passed ruff lint; mypy errors are in pre-existing files only
+- **Learnings:**
+  - Pattern: Document endpoints follow similar structure to phase endpoints but under `/documents` not `/phases`
+  - Pattern: Abstract base class `StorageBackend` allows easy addition of new storage backends
+  - Gotcha: Without a document metadata DB table, download/delete require filesystem glob to find files by document_id
+  - Pattern: Use `time.monotonic()` for duration tracking, log slow operations (>1000ms)
+---
+
