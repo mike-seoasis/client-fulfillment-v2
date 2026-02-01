@@ -26,6 +26,8 @@ dependencies = [
     "python-docx>=1.1.0",
     # Email
     "aiosmtplib>=3.0.0",
+    # WebSocket client
+    "websockets>=12.0",
 ]
 
 [project.optional-dependencies]
@@ -140,6 +142,8 @@ module = [
     "docx.*",
     "aiosmtplib",
     "aiosmtplib.*",
+    "websockets",
+    "websockets.*",
 ]
 ignore_missing_imports = true
 

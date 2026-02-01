@@ -31,10 +31,11 @@
       "title": "Add WebSocket client for real-time updates",
       "description": "ERROR LOGGING REQUIREMENTS:\n- Log all outbound API calls with endpoint, method, timing\n- Log request/response bodies at DEBUG level (truncate large responses)\n- Log and handle: timeouts, rate limits (429), auth failures (401/403)\n- Include retry attempt number in logs\n- Log API quota/credit usage if available\n- Mask API keys and tokens in all logs\n- Log circuit breaker state changes\n\nRAILWAY DEPLOYMENT REQUIREMENTS:\n- Railway supports WebSocket connections\n- Implement heartbeat/ping to keep connections alive\n- Handle reconnection gracefully (deploys will disconnect clients)\n- Consider fallback to polling for reliability",
       "acceptanceCriteria": [],
-      "passes": false
+      "passes": true,
+      "completionNotes": "Completed by agent"
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-01T19:15:00.073Z"
+    "updatedAt": "2026-02-01T19:24:45.835Z"
   }
 }

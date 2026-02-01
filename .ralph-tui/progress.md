@@ -58,6 +58,20 @@ When implementing background job recovery for interrupted operations:
 - Don't fail app startup if recovery fails—log error and continue
 - Always include `crawl_id`, `project_id` in recovery logs for traceability
 
+### WebSocket Client Pattern
+When building WebSocket clients for real-time updates:
+- Use `websockets` library for async WebSocket connections
+- Implement connection state machine: DISCONNECTED → CONNECTING → CONNECTED → RECONNECTING → CLOSED
+- Use dataclasses for configuration: `WebSocketClientConfig`, `ReconnectConfig`, `CircuitBreakerConfig`
+- Implement heartbeat/ping mechanism to keep connections alive (Railway idle timeout is ~60s)
+- Use exponential backoff for reconnection: `delay = min(initial * (backoff ** attempt), max_delay)`
+- Add circuit breaker with failure_threshold and recovery_timeout
+- Implement polling fallback when WebSocket unavailable (for Railway deploy resilience)
+- Re-subscribe to projects automatically on reconnection
+- Mask sensitive data (tokens, keys) in all log messages using regex
+- Use `type: ignore[attr-defined]` for websockets imports (library has incomplete stubs)
+- Test async iterators must block (not return immediately) to prevent receive_loop completion
+
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.69
@@ -106,5 +120,23 @@ When implementing background job recovery for interrupted operations:
   - Session-scoped service (not singleton) since recovery runs once at startup with a dedicated db session
   - Recovery is non-blocking: errors are logged but don't prevent app startup
   - Updated both service validation and schema constants to accept "interrupted" as valid status
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.111
+- What was implemented: WebSocket client for real-time updates
+- Files changed:
+  - `backend/app/clients/__init__.py` - New module for client connections
+  - `backend/app/clients/websocket_client.py` - Full WebSocket client implementation with connection management, heartbeat, reconnection, circuit breaker, and polling fallback
+  - `backend/tests/clients/__init__.py` - Tests module
+  - `backend/tests/clients/test_websocket_client.py` - 42 comprehensive tests (all passing)
+  - `backend/pyproject.toml` - Added `websockets>=12.0` dependency and mypy override
+- **Learnings:**
+  - websockets library returns an async context manager from `connect()`, mock with `side_effect` returning coroutine
+  - Receive loop completes immediately with empty async iterator, use blocking iterator in tests
+  - Heartbeat loop sleeps first, then sends ping—wait longer than heartbeat_interval in tests
+  - Use `lambda _self: iter()` pattern to mock `__aiter__` with underscore prefix to satisfy ARG005
+  - Circuit breaker state machine: CLOSED → OPEN (after failures) → HALF_OPEN (after recovery timeout) → CLOSED (on success)
+  - Polling fallback converts WebSocket URL to HTTP by replacing ws:// with http://
+  - Railway deployment: implement heartbeat (30s default), handle reconnection gracefully during deploys
 ---
 
