@@ -1,11 +1,11 @@
 """Brand Config API endpoints.
 
 Provides endpoints for brand configuration synthesis and management:
-- POST /api/v1/projects/{project_id}/brand-config/synthesize - Synthesize brand config from documents
-- GET /api/v1/projects/{project_id}/brand-config - List brand configs for a project
-- GET /api/v1/projects/{project_id}/brand-config/{brand_config_id} - Get a brand config
-- PUT /api/v1/projects/{project_id}/brand-config/{brand_config_id} - Update a brand config
-- DELETE /api/v1/projects/{project_id}/brand-config/{brand_config_id} - Delete a brand config
+- POST /api/v1/projects/{project_id}/phases/brand_config/synthesize - Synthesize brand config from documents
+- GET /api/v1/projects/{project_id}/phases/brand_config - List brand configs for a project
+- GET /api/v1/projects/{project_id}/phases/brand_config/{brand_config_id} - Get a brand config
+- PUT /api/v1/projects/{project_id}/phases/brand_config/{brand_config_id} - Update a brand config
+- DELETE /api/v1/projects/{project_id}/phases/brand_config/{brand_config_id} - Delete a brand config
 
 Error Logging Requirements:
 - Log all incoming requests with method, path, request_id
@@ -17,7 +17,7 @@ Error Logging Requirements:
 - Log rate limit hits at WARNING level
 """
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -335,10 +335,12 @@ async def update_brand_config(
 
 @router.delete(
     "/{brand_config_id}",
+    response_model=None,
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a brand config",
     description="Delete an existing brand configuration.",
     responses={
+        204: {"description": "Brand config deleted successfully"},
         404: {
             "description": "Brand config not found",
             "content": {
@@ -358,7 +360,7 @@ async def delete_brand_config(
     project_id: str,
     brand_config_id: str,
     session: AsyncSession = Depends(get_session),
-) -> None | JSONResponse:
+) -> Response | JSONResponse:
     """Delete a brand config."""
     request_id = _get_request_id(request)
     logger.debug(
@@ -373,7 +375,7 @@ async def delete_brand_config(
     service = BrandConfigService(session)
     try:
         await service.delete_brand_config(brand_config_id, project_id)
-        return None  # 204 No Content
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     except BrandConfigNotFoundError as e:
         logger.warning(
