@@ -9,6 +9,7 @@ from app.api.v1.endpoints import (
     keyword_research,
     label,
     projects,
+    schedule,
     websocket,
 )
 
@@ -40,5 +41,10 @@ router.include_router(
     amazon_reviews.router,
     prefix="/projects/{project_id}/phases/amazon_reviews",
     tags=["Amazon Reviews Phase"],
+)
+router.include_router(
+    schedule.router,
+    prefix="/projects/{project_id}/phases/schedule",
+    tags=["Schedule Configuration"],
 )
 router.include_router(websocket.router, tags=["WebSocket"])
