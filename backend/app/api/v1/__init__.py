@@ -8,6 +8,7 @@ from app.api.v1.endpoints import (
     categorize,
     content_plan,
     content_quality,
+    content_word_count,
     content_writer,
     crawl,
     documents,
@@ -70,6 +71,11 @@ router.include_router(
     content_quality.router,
     prefix="/projects/{project_id}/phases/content_quality",
     tags=["Content Quality Phase"],
+)
+router.include_router(
+    content_word_count.router,
+    prefix="/projects/{project_id}/phases/word_count",
+    tags=["Word Count Phase"],
 )
 router.include_router(
     link_validator.router,

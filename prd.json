@@ -3,24 +3,8 @@
   "description": "Ready tasks batch",
   "userStories": [
     {
-      "id": "client-onboarding-v2-c3y.81",
-      "title": "Implement Phase 5C: Link validation against collection registry",
-      "description": "ERROR LOGGING REQUIREMENTS:\n- Log method entry/exit at DEBUG level with parameters (sanitized)\n- Log all exceptions with full stack trace and context\n- Include entity IDs (project_id, page_id) in all service logs\n- Log validation failures with field names and rejected values\n- Log state transitions (phase changes) at INFO level\n- Add timing logs for operations >1 second",
-      "acceptanceCriteria": [],
-      "passes": true,
-      "completionNotes": "Completed by agent"
-    },
-    {
-      "id": "client-onboarding-v2-c3y.123",
-      "title": "Build ProjectSettingsPage for configuration",
-      "description": "ERROR LOGGING REQUIREMENTS:\n- Implement React Error Boundaries for all route components\n- Log caught errors to console with component stack\n- Set up global window.onerror and unhandledrejection handlers\n- Log API errors with endpoint, status, response body\n- Include user action context in error logs\n- Set up error reporting service integration point (e.g., Sentry stub)\n\nRAILWAY DEPLOYMENT REQUIREMENTS:\n- Build as static assets (npm run build)\n- API URL via VITE_API_URL environment variable\n- Configure for production build (NODE_ENV=production)\n- Can deploy to Railway static hosting or separate service\n- Use relative paths or env-configured absolute URLs",
-      "acceptanceCriteria": [],
-      "passes": true,
-      "completionNotes": "Completed by agent"
-    },
-    {
-      "id": "client-onboarding-v2-c3y.138",
-      "title": "Implement optimistic updates for approval workflows",
+      "id": "client-onboarding-v2-c3y.82",
+      "title": "Implement Phase 5C: Word count validation (300-450 required)",
       "description": "ERROR LOGGING REQUIREMENTS:\n- Log method entry/exit at DEBUG level with parameters (sanitized)\n- Log all exceptions with full stack trace and context\n- Include entity IDs (project_id, page_id) in all service logs\n- Log validation failures with field names and rejected values\n- Log state transitions (phase changes) at INFO level\n- Add timing logs for operations >1 second",
       "acceptanceCriteria": [],
       "passes": true,
@@ -28,6 +12,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-01T21:40:59.441Z"
+    "updatedAt": "2026-02-01T21:46:55.300Z"
   }
 }
