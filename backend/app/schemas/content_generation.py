@@ -303,3 +303,200 @@ class ContentGenerationBatchResponse(BaseModel):
     error: str | None = Field(None, description="Error if batch failed")
     duration_ms: float = Field(..., description="Total processing time")
     request_id: str | None = Field(None, description="Request ID for debugging")
+
+
+# =============================================================================
+# REGENERATION ENDPOINTS
+# =============================================================================
+
+
+class RegenerateRequest(BaseModel):
+    """Request schema for regenerating content for a failed page."""
+
+    page_id: str = Field(
+        ...,
+        min_length=1,
+        description="ID of the page to regenerate content for",
+    )
+    brand_name: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="Brand name for title tag and content",
+        examples=["Acme Co", "Premium Goods"],
+    )
+    tone: str = Field(
+        "professional",
+        max_length=100,
+        description="Desired tone for the content",
+        examples=["professional", "friendly", "casual", "luxury"],
+    )
+    target_word_count: int = Field(
+        400,
+        ge=100,
+        le=2000,
+        description="Target word count for body content",
+    )
+    context: dict[str, Any] | None = Field(
+        None,
+        description="Additional context for content generation",
+    )
+
+    @field_validator("page_id")
+    @classmethod
+    def validate_page_id(cls, v: str) -> str:
+        """Validate and normalize page ID."""
+        v = v.strip()
+        if not v:
+            raise ValueError("Page ID cannot be empty")
+        return v
+
+    @field_validator("brand_name")
+    @classmethod
+    def validate_brand_name(cls, v: str) -> str:
+        """Validate and normalize brand name."""
+        v = v.strip()
+        if not v:
+            raise ValueError("Brand name cannot be empty")
+        return v
+
+
+class RegenerateResponse(BaseModel):
+    """Response schema for single page regeneration."""
+
+    success: bool = Field(
+        ...,
+        description="Whether regeneration was successful",
+    )
+    page_id: str = Field(
+        ...,
+        description="ID of the page that was regenerated",
+    )
+    keyword: str | None = Field(
+        None,
+        description="The keyword this content is for",
+    )
+    content_type: str | None = Field(
+        None,
+        description="Type of content generated",
+    )
+
+    # Generated content
+    content: GeneratedContentOutput | None = Field(
+        None,
+        description="Generated content (null if failed)",
+    )
+
+    # Error handling
+    error: str | None = Field(
+        None,
+        description="Error message if failed",
+    )
+
+    # Performance and metadata
+    duration_ms: float = Field(
+        ...,
+        description="Processing time in milliseconds",
+    )
+    input_tokens: int | None = Field(
+        None,
+        description="LLM input tokens used",
+    )
+    output_tokens: int | None = Field(
+        None,
+        description="LLM output tokens used",
+    )
+    request_id: str | None = Field(
+        None,
+        description="Request ID for debugging",
+    )
+
+
+class RegenerateBatchItemRequest(BaseModel):
+    """Single item in batch regeneration request."""
+
+    page_id: str = Field(
+        ...,
+        min_length=1,
+        description="ID of the page to regenerate",
+    )
+    target_word_count: int = Field(
+        400,
+        ge=100,
+        le=2000,
+        description="Target word count",
+    )
+    context: dict[str, Any] | None = Field(
+        None,
+        description="Additional context for this item",
+    )
+
+
+class RegenerateBatchRequest(BaseModel):
+    """Request schema for batch regeneration of failed pages."""
+
+    brand_name: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="Brand name (shared for all items)",
+    )
+    tone: str = Field(
+        "professional",
+        max_length=100,
+        description="Desired tone (shared for all items)",
+    )
+    items: list[RegenerateBatchItemRequest] = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description="Pages to regenerate content for",
+    )
+    max_concurrent: int = Field(
+        5,
+        ge=1,
+        le=10,
+        description="Maximum concurrent regenerations",
+    )
+
+    @field_validator("items")
+    @classmethod
+    def validate_items(
+        cls, v: list[RegenerateBatchItemRequest]
+    ) -> list[RegenerateBatchItemRequest]:
+        """Validate items list."""
+        if not v:
+            raise ValueError("At least one item is required")
+        return v
+
+
+class RegenerateBatchItemResponse(BaseModel):
+    """Response for a single item in batch regeneration."""
+
+    page_id: str = Field(..., description="The page ID")
+    keyword: str | None = Field(None, description="The keyword")
+    url: str | None = Field(None, description="The URL path")
+    content_type: str | None = Field(None, description="Content type generated")
+    success: bool = Field(..., description="Whether regeneration succeeded")
+    h1: str | None = Field(None, description="Generated H1 if successful")
+    word_count: int | None = Field(None, description="Body content word count")
+    error: str | None = Field(None, description="Error message if failed")
+
+
+class RegenerateBatchResponse(BaseModel):
+    """Response schema for batch regeneration."""
+
+    success: bool = Field(
+        ...,
+        description="Whether batch completed (some may have failed)",
+    )
+    results: list[RegenerateBatchItemResponse] = Field(
+        default_factory=list,
+        description="Results for each item",
+    )
+    total_items: int = Field(0, description="Total items in request")
+    successful_items: int = Field(0, description="Items with regenerated content")
+    failed_items: int = Field(0, description="Items that failed")
+    error: str | None = Field(None, description="Error if batch failed")
+    duration_ms: float = Field(..., description="Total processing time")
+    request_id: str | None = Field(None, description="Request ID for debugging")
