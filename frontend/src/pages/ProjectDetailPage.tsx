@@ -15,13 +15,14 @@
  * - Fallback to polling when WebSocket unavailable
  */
 
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useRef, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Clock, Calendar, AlertCircle, CheckCircle2, Circle, SkipForward, Loader2, Wifi, WifiOff } from 'lucide-react'
 import { useApiQuery } from '@/lib/hooks/useApiQuery'
 import { useProjectSubscription } from '@/lib/hooks/useWebSocket'
 import { addBreadcrumb } from '@/lib/errorReporting'
+import { useToast } from '@/components/ui/toast-provider'
 import { Button } from '@/components/ui/button'
 import { PhaseProgress } from '@/components/PhaseProgress'
 import { cn } from '@/lib/utils'
@@ -340,6 +341,10 @@ export function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { success } = useToast()
+
+  // Track previous phase status to detect completions
+  const previousPhaseStatusRef = useRef<Record<string, PhaseStatusEntry> | null>(null)
 
   // Fetch project details
   const {
@@ -357,6 +362,48 @@ export function ProjectDetailPage() {
     },
     enabled: !!projectId,
   })
+
+  // Detect phase completions and show toast notifications
+  useEffect(() => {
+    if (!project?.phase_status) return
+
+    const previousStatus = previousPhaseStatusRef.current
+    const currentStatus = project.phase_status
+
+    // Only check for completions if we have a previous state to compare
+    if (previousStatus) {
+      for (const phase of PHASE_ORDER) {
+        const prevPhase = previousStatus[phase]
+        const currPhase = currentStatus[phase]
+
+        // Detect transition to 'completed' status
+        if (
+          currPhase?.status === 'completed' &&
+          prevPhase?.status !== 'completed'
+        ) {
+          const phaseName = phaseLabels[phase]
+          console.info('[ProjectDetailPage] Phase completed:', {
+            projectId,
+            phase,
+            phaseName,
+          })
+          addBreadcrumb('Phase completed', 'phase_transition', {
+            projectId,
+            phase,
+            phaseName,
+          })
+
+          success(
+            `${phaseName} Complete`,
+            `The ${phaseName.toLowerCase()} phase has been completed successfully.`
+          )
+        }
+      }
+    }
+
+    // Update the ref with current status for next comparison
+    previousPhaseStatusRef.current = { ...currentStatus }
+  }, [project?.phase_status, projectId, success])
 
   // Handle real-time updates via WebSocket
   const handleUpdate = useCallback((data: Record<string, unknown>, event: string) => {

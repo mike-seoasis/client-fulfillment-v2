@@ -107,3 +107,28 @@ after each iteration and it's included in prompts for context.
     - Backend expects `client_id` field (not `client_url` or `website_url`)
 ---
 
+## 2026-02-01 - client-onboarding-v2-c3y.137
+- What was implemented: Toast notifications for phase completion
+  - Detects when any phase transitions to "completed" status
+  - Shows success toast with phase name ("Discovery Complete", etc.)
+  - Uses ref to track previous phase status for comparison
+  - Integrates with existing WebSocket real-time updates
+  - Logs phase completions at INFO level with breadcrumbs
+
+- Files changed:
+  - `frontend/src/pages/ProjectDetailPage.tsx` (MODIFIED - added phase completion detection)
+  - `frontend/src/components/CreateProjectModal.tsx` (MODIFIED - fixed pre-existing bug)
+
+- **Learnings:**
+  - Patterns discovered:
+    - Phase completion detection pattern: use `useRef` to store previous state, compare in `useEffect`
+    - Toast context provides `success()`, `error()`, `warning()`, `info()` convenience methods
+    - WebSocket updates trigger React Query cache invalidation, which triggers data refetch
+    - Comparing phase status objects: iterate PHASE_ORDER and check status transitions
+  - Gotchas encountered:
+    - Pre-existing bug in CreateProjectModal: `handleClose` used in useEffect before definition
+    - Fix: Define useCallback hooks before useEffect hooks that depend on them
+    - CSS build error with `ease-smooth` class - pre-existing issue unrelated to this task
+    - TypeScript compile passes even when Vite build fails (CSS issues are post-tsc)
+---
+
