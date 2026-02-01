@@ -25,6 +25,36 @@ after each iteration and it's included in prompts for context.
 - Use `field_validator` for input validation
 - Always include `description` in Field()
 
+### Frontend Component Pattern
+- Component files should only export React components (functions returning JSX)
+- Utility functions and constants go in `lib/` directory to satisfy `react-refresh/only-export-components` lint rule
+- Use `cn()` from `@/lib/utils` for conditional Tailwind class merging
+- Include JSDoc comments with `@example` usage patterns
+- Provide skeleton loading states as companion exports (e.g., `PhaseProgressSkeleton`)
+- Accessibility: include `aria-*` attributes and `title` tooltips
+
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.115
+- What was implemented:
+  - PhaseProgress component for visualizing project phase status
+  - Color-coded status indicators (pending, in_progress, completed, blocked, skipped)
+  - Three size variants (sm, md, lg)
+  - Optional labels showing current phase and completion percentage
+  - Animated pulse effect for active (in_progress) phases
+  - PhaseProgressSkeleton loading state component
+  - Shared phase utilities (types, constants, helper functions)
+
+- Files changed:
+  - `frontend/src/components/PhaseProgress.tsx` (NEW) - Main component with skeleton
+  - `frontend/src/lib/phaseUtils.ts` (NEW) - Shared phase types and utility functions
+
+- **Learnings:**
+  - ESLint `react-refresh/only-export-components` rule prevents mixing component and utility exports in same file
+  - Solution: Create separate `lib/*.ts` files for shared utilities, import into components
+  - `role="progressbar"` with `aria-valuenow/min/max` provides screen reader accessibility
+  - Re-exporting utilities from component files still triggers the lint warning; import directly from utils instead
+
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.73
