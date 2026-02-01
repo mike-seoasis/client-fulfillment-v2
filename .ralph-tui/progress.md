@@ -5,6 +5,16 @@ after each iteration and it's included in prompts for context.
 
 ## Codebase Patterns (Study These First)
 
+### Frontend Page Pattern
+New pages in `frontend/src/pages/` follow this structure:
+1. Use `useApiQuery` hook for data fetching with `userAction` and `component` context
+2. Use `useToastMutation` for mutations with automatic toast notifications
+3. Add breadcrumbs via `addBreadcrumb()` for debugging
+4. Wrap routes in `ErrorBoundary` in `App.tsx`
+5. Follow loading → error → empty → content rendering pattern
+6. Use `cn()` from `@/lib/utils` for conditional Tailwind classes
+7. Keep local form state with `useState`, sync from API data with `useEffect`
+
 ### NLP Endpoint Pattern
 All NLP endpoints follow a consistent structure in `backend/app/api/v1/endpoints/nlp.py`:
 1. Use `_get_request_id(request)` helper to extract request_id
@@ -21,6 +31,20 @@ The `TFIDFAnalysisService` in `backend/app/services/tfidf_analysis.py`:
 - Returns `TFIDFAnalysisResult` dataclass with `success`, `terms`, `error` fields
 - Handles validation errors internally (returns result with `success=False`)
 
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.132
+- What was implemented: ContentEditorPage with split-view live preview for editing content
+- Files changed:
+  - `frontend/src/pages/ContentEditorPage.tsx` - New page with editor, live preview, metadata editing, status management
+  - `frontend/src/App.tsx` - Added route `/content/:contentId` with ErrorBoundary
+  - `frontend/src/index.css` - Fixed `ease-smooth` → `ease-out` to unblock build
+- **Learnings:**
+  - Custom Tailwind transition timing functions in `transitionTimingFunction` can't be used with `@apply` - need inline values
+  - ContentListPage provides excellent patterns for loading/error/empty states
+  - `useToastMutation` handles both success toasts and API error toasts automatically
+  - Split-view layout works well with `grid grid-cols-1 lg:grid-cols-2` pattern
+  - Simple markdown preview can be done with regex replacements for basic formatting
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.96
