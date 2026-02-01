@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "sessionId": "45dac13e-4832-4c15-bfa7-cb1d7bb29c24",
+  "sessionId": "c45b0f47-885d-4d80-bf34-7c5e2f267a99",
   "status": "running",
-  "startedAt": "2026-02-01T21:55:01.887Z",
-  "updatedAt": "2026-02-01T21:57:43.103Z",
+  "startedAt": "2026-02-01T21:57:47.129Z",
+  "updatedAt": "2026-02-01T22:04:15.160Z",
   "currentIteration": 0,
   "maxIterations": 30,
   "tasksCompleted": 0,
@@ -15,8 +15,8 @@
     "totalTasks": 1,
     "tasks": [
       {
-        "id": "client-onboarding-v2-c3y.84",
-        "title": "Add parallel processing for all three phases",
+        "id": "client-onboarding-v2-c3y.85",
+        "title": "Create /api/v1/projects/{id}/phases/content_generation endpoints",
         "status": "open",
         "completedInSession": false
       }

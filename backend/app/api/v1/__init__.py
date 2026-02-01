@@ -6,6 +6,7 @@ from app.api.v1.endpoints import (
     amazon_reviews,
     brand_config,
     categorize,
+    content_generation,
     content_plan,
     content_quality,
     content_word_count,
@@ -62,6 +63,11 @@ router.include_router(
     content_plan.router,
     prefix="/projects/{project_id}/phases/content_plan",
     tags=["Content Plan Phase"],
+)
+router.include_router(
+    content_generation.router,
+    prefix="/projects/{project_id}/phases/content_generation",
+    tags=["Content Generation Phase"],
 )
 router.include_router(
     content_writer.router,
