@@ -10,6 +10,7 @@ from app.api.v1.endpoints import (
     label,
     paa_enrichment,
     projects,
+    review_platforms,
     schedule,
     websocket,
 )
@@ -47,6 +48,11 @@ router.include_router(
     paa_enrichment.router,
     prefix="/projects/{project_id}/phases/paa_enrichment",
     tags=["PAA Enrichment Phase"],
+)
+router.include_router(
+    review_platforms.router,
+    prefix="/projects/{project_id}/phases/review_platforms",
+    tags=["Review Platforms Phase"],
 )
 router.include_router(
     schedule.router,
