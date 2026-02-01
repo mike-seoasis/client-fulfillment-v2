@@ -39,6 +39,40 @@ Endpoints in `backend/app/api/v1/endpoints/`:
 - Return `ResponseModel | JSONResponse` union type
 - Log request at DEBUG, response at INFO
 
+### Frontend Error Handling Pattern
+Frontend error handling follows a multi-layer approach in `frontend/src/`:
+- **ErrorBoundary** (`components/ErrorBoundary.tsx`): React class component with `componentDidCatch`, logs component stack
+- **Global handlers** (`lib/globalErrorHandlers.ts`): `window.onerror` and `onunhandledrejection`, called before React mounts in `main.tsx`
+- **Error reporting** (`lib/errorReporting.ts`): Centralized service with Sentry integration point, `reportError()` and `reportApiError()` functions
+- **API clients** (`lib/api.ts`, `lib/axiosClient.ts`): Include `userAction` and `component` context, call `reportApiError` on failures
+- **React Query** (`lib/queryClient.ts`): Global error handlers in QueryCache/MutationCache
+
+### Frontend Loading State Pattern
+Loading states use skeletons matching component structure:
+- Skeleton components co-located with main component (e.g., `ProjectCardSkeleton` in `ProjectCard.tsx`)
+- Use `animate-pulse-soft` animation from tailwind config
+- `bg-cream-200` for skeleton backgrounds matching warm design system
+- Generic `LoadingSpinner` (`components/ui/loading-spinner.tsx`) for inline/page-level loading
+- Size variants: `sm`, `md`, `lg`, `xl` with appropriate border widths
+
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.118
+- Verified comprehensive error handling implementation already exists
+- Created missing `LoadingSpinner` component for generic loading states
+- Files created:
+  - `frontend/src/components/ui/loading-spinner.tsx` - Generic spinner with size variants, plus `FullPageSpinner` and `ButtonSpinner` helpers
+- **Error handling features verified:**
+  - React Error Boundaries wrap all route components in `App.tsx`
+  - Global `window.onerror` and `onunhandledrejection` handlers in `globalErrorHandlers.ts`
+  - API errors logged with endpoint, status, response body via `reportApiError()`
+  - User action context included via `userAction` field in `ErrorContext`
+  - Sentry integration point fully stubbed with commented initialization code
+- **Learnings:**
+  - Frontend error handling was already implemented in previous iterations
+  - Skeleton loading states exist for domain components (`ProjectCardSkeleton`, `PhaseProgressSkeleton`, `DataTable` loading)
+  - Design system uses `primary-500` (gold) for spinner accent, `cream-300` for background track
+  - `sr-only` class provides accessible labels without visual display
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.76
