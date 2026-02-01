@@ -312,3 +312,174 @@ class AnalyzeCompetitorsResponse(BaseModel):
         False,
         description="Whether results were served from cache",
     )
+
+
+# =============================================================================
+# RECOMMEND TERMS REQUEST/RESPONSE
+# =============================================================================
+
+
+class RecommendedTermItem(BaseModel):
+    """A recommended term with priority and context."""
+
+    term: str = Field(
+        ...,
+        description="The recommended term (unigram or bigram)",
+        examples=["vacuum sealed", "airtight container", "freshness"],
+    )
+    score: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Normalized importance score (0.0-1.0)",
+    )
+    priority: str = Field(
+        ...,
+        description="Recommendation priority: high, medium, or low",
+        examples=["high", "medium", "low"],
+    )
+    doc_frequency: int = Field(
+        0,
+        ge=0,
+        description="Number of competitor documents containing this term",
+    )
+    is_missing: bool = Field(
+        True,
+        description="Whether the term is missing from user content",
+    )
+    category: str | None = Field(
+        None,
+        description="Optional category/theme for this term",
+        examples=["product_feature", "benefit", "material"],
+    )
+
+
+class RecommendTermsRequest(BaseModel):
+    """Request schema for term recommendations."""
+
+    user_content: str = Field(
+        ...,
+        min_length=1,
+        max_length=50000,
+        description="User's content to analyze for missing terms",
+        examples=["Coffee containers keep beans fresh in your kitchen."],
+    )
+    competitor_documents: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description="List of competitor content documents (1-50 documents)",
+        examples=[
+            [
+                "Vacuum sealed coffee storage with CO2 valve",
+                "Airtight containers preserve aroma for months",
+            ]
+        ],
+    )
+    top_n: int = Field(
+        20,
+        ge=1,
+        le=100,
+        description="Number of recommended terms to return (1-100)",
+    )
+    include_bigrams: bool = Field(
+        True,
+        description="Whether to include two-word phrases in recommendations",
+    )
+    only_missing: bool = Field(
+        True,
+        description="Only recommend terms missing from user content (default: True)",
+    )
+    min_doc_frequency: int = Field(
+        1,
+        ge=1,
+        description="Minimum number of competitor docs a term must appear in",
+    )
+    max_doc_frequency_ratio: float = Field(
+        0.85,
+        gt=0.0,
+        le=1.0,
+        description="Maximum ratio of docs a term can appear in (filters common terms)",
+    )
+    project_id: str | None = Field(
+        None,
+        description="Optional project ID for logging and caching context",
+    )
+    page_id: str | None = Field(
+        None,
+        description="Optional page ID for logging context",
+    )
+
+
+class RecommendTermsResponse(BaseModel):
+    """Response schema for term recommendations."""
+
+    success: bool = Field(
+        ...,
+        description="Whether analysis completed successfully",
+    )
+    request_id: str = Field(
+        ...,
+        description="Request ID for debugging and tracing",
+    )
+
+    # Recommendations
+    recommendations: list[RecommendedTermItem] = Field(
+        default_factory=list,
+        description="List of recommended terms, sorted by priority and score",
+    )
+    recommendation_count: int = Field(
+        0,
+        ge=0,
+        description="Total number of recommendations returned",
+    )
+
+    # Analysis metadata
+    user_term_count: int = Field(
+        0,
+        ge=0,
+        description="Number of unique terms found in user content",
+    )
+    competitor_term_count: int = Field(
+        0,
+        ge=0,
+        description="Total unique terms across competitor documents",
+    )
+    document_count: int = Field(
+        0,
+        ge=0,
+        description="Number of competitor documents analyzed",
+    )
+
+    # Summary stats
+    high_priority_count: int = Field(
+        0,
+        ge=0,
+        description="Number of high priority recommendations",
+    )
+    medium_priority_count: int = Field(
+        0,
+        ge=0,
+        description="Number of medium priority recommendations",
+    )
+    low_priority_count: int = Field(
+        0,
+        ge=0,
+        description="Number of low priority recommendations",
+    )
+
+    # Error handling
+    error: str | None = Field(
+        None,
+        description="Error message if analysis failed",
+    )
+
+    # Performance
+    duration_ms: float = Field(
+        ...,
+        description="Processing time in milliseconds",
+    )
+    cache_hit: bool = Field(
+        False,
+        description="Whether results were served from cache",
+    )

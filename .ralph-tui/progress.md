@@ -6,52 +6,32 @@ after each iteration and it's included in prompts for context.
 ## Codebase Patterns (Study These First)
 
 ### NLP Endpoint Pattern
-- NLP endpoints are grouped under `/api/v1/nlp/` in `backend/app/api/v1/endpoints/nlp.py`
-- Schemas live in `backend/app/schemas/nlp.py`
-- Use `_get_request_id(request)` helper for extracting request_id from state
-- All endpoints follow structured error response: `{"error": str, "code": str, "request_id": str}`
-- Log DEBUG on request entry, INFO on success, WARNING on 4xx, ERROR on 5xx
-- Include `duration_ms` in all response logs
+All NLP endpoints follow a consistent structure in `backend/app/api/v1/endpoints/nlp.py`:
+1. Use `_get_request_id(request)` helper to extract request_id
+2. Log at DEBUG level for request details, INFO for completions
+3. Time operations with `time.monotonic()` and include `duration_ms`
+4. Return structured error responses: `{"error": str, "code": str, "request_id": str}`
+5. Use `JSONResponse` with appropriate status codes for errors
+6. Schemas live in `backend/app/schemas/nlp.py` with Pydantic Field descriptions
 
-### TF-IDF Analysis Pattern
-- Use `get_tfidf_analysis_service()` singleton from `app/services/tfidf_analysis`
-- `analyze()` for standard term extraction
-- `find_missing_terms()` for content gap analysis (terms missing from user content)
-- Results include `TermScore` objects with term, score, doc_frequency, term_frequency
-
-### Frontend List Page Pattern
-- List pages live in `frontend/src/pages/` and follow `ProjectListPage.tsx` as the template
-- Use `useApiQuery` hook for data fetching with `queryKey` and `endpoint`
-- All routes in `App.tsx` wrap pages with `<ErrorBoundary componentName="PageName">`
-- Status filtering: define `STATUS_FILTER_OPTIONS` array with value/label/icon, manage state with `useState<StatusFilter>`
-- Status colors: define `STATUS_COLORS` record mapping status to `{ bg, text }` Tailwind classes
-- Memoize derived arrays with `useMemo` and include dependencies properly - avoid inline `|| []` in dependency arrays
-- Card components include: main component + skeleton loader following `ProjectCardSkeleton` pattern
-- Empty states: provide `EmptyState`, `NoSearchResults`, and `ErrorState` components
+### TF-IDF Service Pattern
+The `TFIDFAnalysisService` in `backend/app/services/tfidf_analysis.py`:
+- Uses singleton pattern via `get_tfidf_analysis_service()`
+- Supports both `analyze()` for general TF-IDF and `find_missing_terms()` for gap analysis
+- Returns `TFIDFAnalysisResult` dataclass with `success`, `terms`, `error` fields
+- Handles validation errors internally (returns result with `success=False`)
 
 ---
 
-## 2026-02-01 - client-onboarding-v2-c3y.95
-- What was implemented: `/api/v1/nlp/analyze-competitors` endpoint for TF-IDF competitor analysis
+## 2026-02-01 - client-onboarding-v2-c3y.96
+- What was implemented: `/api/v1/nlp/recommend-terms` endpoint for content optimization recommendations
 - Files changed:
-  - `backend/app/api/v1/endpoints/nlp.py` - Added `analyze_competitors` endpoint
-  - `backend/app/schemas/nlp.py` - Added `AnalyzeCompetitorsRequest`, `AnalyzeCompetitorsResponse`, `CompetitorTermItem` schemas
+  - `backend/app/schemas/nlp.py` - Added `RecommendedTermItem`, `RecommendTermsRequest`, `RecommendTermsResponse` schemas
+  - `backend/app/api/v1/endpoints/nlp.py` - Added `recommend_terms` endpoint with priority scoring
 - **Learnings:**
-  - NLP endpoints follow a consistent pattern with request_id logging and structured error responses
-  - TF-IDF service already exists with both standard analysis and missing terms modes
-  - The competitor phase endpoints at `/projects/{project_id}/phases/competitor/` are separate from NLP - they handle competitor CRUD and scraping, while NLP handles content analysis
----
-
-## 2026-02-01 - client-onboarding-v2-c3y.131
-- What was implemented: ContentListPage with status filtering for viewing all generated content
-- Files changed:
-  - `frontend/src/pages/ContentListPage.tsx` - New list page component with status filtering (All, Pending Review, Approved, Rejected)
-  - `frontend/src/App.tsx` - Added route `/content` with ErrorBoundary wrapper
-- **Learnings:**
-  - When memoizing derived arrays from API data, avoid inline `|| []` fallbacks in useMemo dependencies - wrap the fallback itself in useMemo to avoid ESLint warnings
-  - Content status uses `pending_review`, `approved`, `rejected` - different from project status values
-  - Follow ProjectListPage pattern: header with nav + title, status filter tabs, search input, content grid with card/skeleton components
-  - StatusCount component pattern: button with icon, label, and count badge - useful for filtering UX
-  - Content types are stored as snake_case (`blog_post`) and need display labels for UI
+  - NLP endpoints follow a consistent pattern with request_id tracking, timing, and structured error responses
+  - TF-IDF service already has `find_missing_terms()` method which does the heavy lifting
+  - Priority scoring based on TF-IDF score and document frequency provides actionable recommendations
+  - Pre-existing mypy errors in codebase are related to pydantic/fastapi stubs, not actual issues
 ---
 
