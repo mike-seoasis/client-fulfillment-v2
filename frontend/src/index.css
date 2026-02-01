@@ -1,0 +1,170 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base layer customizations */
+@layer base {
+  /* Set default background to cream-50 for light, airy feel */
+  html {
+    @apply bg-cream-50 text-warmgray-800 antialiased;
+  }
+
+  body {
+    @apply min-h-screen font-sans;
+  }
+
+  /* Heading styles with display font */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display font-semibold text-warmgray-900;
+  }
+
+  h1 {
+    @apply text-4xl tracking-tight;
+  }
+
+  h2 {
+    @apply text-3xl tracking-tight;
+  }
+
+  h3 {
+    @apply text-2xl;
+  }
+
+  h4 {
+    @apply text-xl;
+  }
+
+  h5 {
+    @apply text-lg;
+  }
+
+  h6 {
+    @apply text-base font-medium;
+  }
+
+  /* Focus styles with warm accent */
+  :focus-visible {
+    @apply outline-none ring-2 ring-primary-400 ring-offset-2 ring-offset-cream-50;
+  }
+
+  /* Selection color */
+  ::selection {
+    @apply bg-primary-200 text-warmgray-900;
+  }
+}
+
+/* Component layer for reusable patterns */
+@layer components {
+  /* Card component */
+  .card {
+    @apply bg-white rounded-2xl shadow-soft p-6 border border-cream-200;
+  }
+
+  .card-hover {
+    @apply card transition-all duration-250 ease-smooth hover:shadow-soft-lg hover:border-cream-300;
+  }
+
+  /* Button base styles */
+  .btn {
+    @apply inline-flex items-center justify-center px-4 py-2.5 rounded-xl font-medium text-sm
+           transition-all duration-250 ease-smooth focus-visible:outline-none
+           focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-cream-50
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary-500 text-white shadow-warm
+           hover:bg-primary-600 hover:shadow-warm-lg
+           focus-visible:ring-primary-400
+           active:bg-primary-700;
+  }
+
+  .btn-secondary {
+    @apply btn bg-cream-100 text-warmgray-700 border border-cream-300
+           hover:bg-cream-200 hover:border-cream-400
+           focus-visible:ring-primary-400
+           active:bg-cream-300;
+  }
+
+  .btn-ghost {
+    @apply btn bg-transparent text-warmgray-600
+           hover:bg-cream-100 hover:text-warmgray-800
+           focus-visible:ring-primary-400
+           active:bg-cream-200;
+  }
+
+  /* Input styles */
+  .input {
+    @apply w-full px-4 py-2.5 rounded-xl bg-white border border-cream-300 text-warmgray-800
+           placeholder:text-warmgray-400
+           transition-all duration-200 ease-smooth
+           focus:border-primary-400 focus:ring-2 focus:ring-primary-100 focus:outline-none
+           disabled:bg-cream-100 disabled:cursor-not-allowed;
+  }
+
+  .input-error {
+    @apply input border-error-400 focus:border-error-500 focus:ring-error-100;
+  }
+
+  /* Label styles */
+  .label {
+    @apply block text-sm font-medium text-warmgray-700 mb-1.5;
+  }
+
+  /* Badge styles */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-medium;
+  }
+
+  .badge-primary {
+    @apply badge bg-primary-100 text-primary-800;
+  }
+
+  .badge-success {
+    @apply badge bg-success-100 text-success-800;
+  }
+
+  .badge-warning {
+    @apply badge bg-warning-100 text-warning-800;
+  }
+
+  .badge-error {
+    @apply badge bg-error-100 text-error-800;
+  }
+
+  .badge-neutral {
+    @apply badge bg-cream-200 text-warmgray-700;
+  }
+}
+
+/* Utility layer for custom utilities */
+@layer utilities {
+  /* Text balance for better readability */
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Gradient backgrounds */
+  .bg-gradient-warm {
+    @apply bg-gradient-to-br from-cream-50 via-white to-cream-100;
+  }
+
+  .bg-gradient-gold {
+    @apply bg-gradient-to-r from-primary-400 to-primary-600;
+  }
+
+  /* Subtle divider */
+  .divider {
+    @apply border-t border-cream-200;
+  }
+
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}

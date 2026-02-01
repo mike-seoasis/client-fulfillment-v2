@@ -30,6 +30,14 @@ Endpoints in `backend/app/api/v1/endpoints/` should:
 - Return `JSONResponse` with `{"error", "code", "request_id"}` for errors
 - Use `contextlib.suppress()` instead of try/except/pass (ruff SIM105)
 
+### Frontend Tailwind Configuration Pattern
+Tailwind CSS setup in `frontend/` should:
+- Use `tailwind.config.js` with ES modules (`export default`)
+- Define custom design tokens in `theme.extend.colors` for brand colors
+- Use `@layer` directives in CSS for base, components, and utilities
+- Import CSS in `src/main.tsx` (after React imports, before component)
+- PostCSS config uses `postcss.config.js` with ES modules
+
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.65
@@ -45,5 +53,21 @@ Endpoints in `backend/app/api/v1/endpoints/` should:
   - The existing Perplexity integration has robust circuit breaker and retry logic - new integrations can delegate to it
   - Ruff enforces `contextlib.suppress()` over try/except/pass (rule SIM105)
   - Type annotations need `dict[str, Any]` not just `dict` for mypy strict mode
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.107
+- What was implemented: Tailwind CSS configuration with custom design tokens matching brand guidelines
+- Files changed:
+  - `frontend/package.json` - Added tailwindcss and autoprefixer as dev dependencies
+  - `frontend/tailwind.config.js` - Custom design tokens (primary/gold, coral, cream, warmgray colors), soft shadows, typography
+  - `frontend/postcss.config.js` - PostCSS configuration for Tailwind and autoprefixer
+  - `frontend/src/index.css` - Base CSS with Tailwind directives, component classes (btn, card, input, badge)
+  - `frontend/src/main.tsx` - Added CSS import
+- **Learnings:**
+  - npm cache permissions issues can be bypassed with `--cache /tmp/npm-cache`
+  - Vite already includes postcss as a transitive dependency, no need to install separately
+  - Tailwind config should use `export default` for ES modules compatibility with Vite
+  - Component classes (`@apply`) should be defined in `@layer components` for proper ordering
+  - Design tokens for a "warm, airy" aesthetic: cream backgrounds, warm grays, gold accents, soft shadows
 ---
 

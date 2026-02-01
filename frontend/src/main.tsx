@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { initErrorReporting } from './lib/errorReporting'
 import { setupGlobalErrorHandlers } from './lib/globalErrorHandlers'
+import './index.css'
 
 // Initialize error handling before React mounts
 setupGlobalErrorHandlers()
