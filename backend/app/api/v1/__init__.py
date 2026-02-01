@@ -64,8 +64,8 @@ router.include_router(
 router.include_router(websocket.router, tags=["WebSocket"])
 router.include_router(
     brand_config.router,
-    prefix="/projects/{project_id}/brand-config",
-    tags=["Brand Config"],
+    prefix="/projects/{project_id}/phases/brand_config",
+    tags=["Brand Config Phase"],
 )
 router.include_router(
     notifications.router,

@@ -28,6 +28,29 @@ results = await asyncio.gather(*tasks)
 - Slow operations (>1s): WARNING level with duration_ms
 - Include entity IDs (project_id, page_id, crawl_id) in all logs
 
+### FastAPI DELETE Endpoint Pattern
+For DELETE endpoints that return 204 on success but need error responses (404, 400):
+```python
+@router.delete(
+    "/{item_id}",
+    response_model=None,  # Required to disable automatic response model
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        204: {"description": "Item deleted successfully"},
+        404: {"description": "Item not found", ...},
+    },
+)
+async def delete_item(...) -> Response | JSONResponse:
+    try:
+        await service.delete_item(item_id)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    except NotFoundError as e:
+        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={...})
+```
+- Must use `response_model=None` to disable response model validation
+- Return `Response(status_code=204)` for success (not `None`)
+- Can still return `JSONResponse` for error cases
+
 ---
 
 ## 2026-02-01 - client-onboarding-v2-c3y.61
@@ -40,5 +63,17 @@ results = await asyncio.gather(*tasks)
   - Import `QueuedURL` type from crawl_queue for proper type annotations
   - Use `MAX_CONCURRENT_CRAWLS = 5` constant for consistency
   - Inner async functions with semaphore need proper exception handling to return error results instead of raising
+---
+
+## 2026-02-01 - client-onboarding-v2-c3y.70
+- What was implemented: Brand config endpoints at `/api/v1/projects/{id}/phases/brand_config`
+- Files changed:
+  - `backend/app/api/v1/__init__.py` - Updated router prefix from `/brand-config` to `/phases/brand_config` to match phase endpoint convention
+  - `backend/app/api/v1/endpoints/brand_config.py` - Updated docstring paths and fixed DELETE endpoint to use FastAPI-compliant pattern
+- **Learnings:**
+  - FastAPI 0.104+ enforces strict 204 No Content rules - cannot use `status_code=204` with union return types
+  - For DELETE endpoints, must use `response_model=None` and return `Response(status_code=204)` instead of `None`
+  - Phase endpoints follow pattern: `/projects/{project_id}/phases/{phase_name}`
+  - Brand config endpoints provide: synthesize (POST), list (GET), get (GET), update (PUT), delete (DELETE)
 ---
 
