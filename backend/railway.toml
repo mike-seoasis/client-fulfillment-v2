@@ -34,7 +34,8 @@ healthcheckTimeout = 120
 # - Migration execution with step-by-step logging
 # - Post-migration data integrity validation
 # - Rollback trigger logging on failure
-startCommand = "python -m app.deploy && uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1"
+# TEMPORARY: Skip deploy script to test uvicorn directly
+startCommand = "uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1"
 
 # Restart policy for resilience
 restartPolicyType = "ON_FAILURE"
