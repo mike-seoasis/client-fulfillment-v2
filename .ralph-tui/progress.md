@@ -489,3 +489,20 @@ When creating new SQLAlchemy models in `backend/app/models/`:
   - Router registration follows alphabetical pattern in imports but logical grouping in include_router calls
 ---
 
+## 2026-02-02 - US-026
+- Verified routers already registered in `backend/app/api/v1/__init__.py`:
+  - `content_brief.router` imported and registered with prefix `/projects/{project_id}/phases/content_brief`
+  - `pop_content_score.router` imported and registered with prefix `/projects/{project_id}/phases/content_score`
+- All acceptance criteria met:
+  - ✓ Add content_brief router to app/api/v1/api.py (done in US-024)
+  - ✓ Add pop_content_score router to app/api/v1/api.py (done in US-025)
+  - ✓ Endpoints accessible at /api/v1/projects/{project_id}/phases/...
+  - ✓ OpenAPI docs show new endpoints (via router registration)
+- Quality checks passed: ruff check, ruff format
+- Files: No changes needed - implementation complete from US-024 and US-025
+- **Learnings:**
+  - Router registration is in `backend/app/api/v1/__init__.py`, not a separate `api.py` file
+  - Both content_brief and pop_content_score routers were registered as part of their endpoint creation stories (US-024, US-025)
+  - This story was effectively already complete when endpoint files were created
+---
+
