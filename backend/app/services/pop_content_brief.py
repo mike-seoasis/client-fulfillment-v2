@@ -16,7 +16,11 @@ ERROR LOGGING REQUIREMENTS:
 import time
 import traceback
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
 from app.integrations.pop import (
@@ -25,6 +29,7 @@ from app.integrations.pop import (
     POPTaskStatus,
     get_pop_client,
 )
+from app.models.content_brief import ContentBrief
 
 logger = get_logger(__name__)
 
@@ -40,6 +45,7 @@ class POPContentBriefResult:
     keyword: str
     target_url: str
     task_id: str | None = None
+    brief_id: str | None = None  # Database record ID after persistence
     word_count_target: int | None = None
     word_count_min: int | None = None
     word_count_max: int | None = None
@@ -110,19 +116,24 @@ class POPContentBriefService:
 
     def __init__(
         self,
+        session: AsyncSession | None = None,
         client: POPClient | None = None,
     ) -> None:
         """Initialize POP content brief service.
 
         Args:
+            session: Optional async SQLAlchemy session for persistence.
+                     If None, persistence operations will not be available.
             client: POP client instance. If None, uses global instance.
         """
+        self._session = session
         self._client = client
 
         logger.debug(
             "POPContentBriefService initialized",
             extra={
                 "client_provided": client is not None,
+                "session_provided": session is not None,
             },
         )
 
@@ -131,6 +142,166 @@ class POPContentBriefService:
         if self._client is None:
             self._client = await get_pop_client()
         return self._client
+
+    async def save_brief(
+        self,
+        page_id: str,
+        keyword: str,
+        result: POPContentBriefResult,
+        project_id: str | None = None,
+    ) -> ContentBrief:
+        """Save a content brief to the database.
+
+        Creates or updates a content brief for the given page. If a brief already
+        exists for the same page, it will be replaced (upsert behavior).
+
+        Args:
+            page_id: UUID of the crawled page this brief is for
+            keyword: Target keyword for content optimization
+            result: POPContentBriefResult from fetch_brief()
+            project_id: Optional project ID for logging context
+
+        Returns:
+            The created or updated ContentBrief model instance
+
+        Raises:
+            POPContentBriefServiceError: If session is not available or save fails
+        """
+        start_time = time.monotonic()
+
+        logger.debug(
+            "Saving content brief to database",
+            extra={
+                "page_id": page_id,
+                "project_id": project_id,
+                "keyword": keyword[:50] if keyword else "",
+                "task_id": result.task_id,
+            },
+        )
+
+        if self._session is None:
+            raise POPContentBriefServiceError(
+                "Database session not available - cannot save brief",
+                project_id=project_id,
+                page_id=page_id,
+            )
+
+        try:
+            # Check if a brief already exists for this page
+            stmt = select(ContentBrief).where(ContentBrief.page_id == page_id)
+            db_result = await self._session.execute(stmt)
+            existing = db_result.scalar_one_or_none()
+
+            if existing:
+                # Update existing brief (replace)
+                existing.keyword = keyword
+                existing.pop_task_id = result.task_id
+                existing.word_count_target = result.word_count_target
+                existing.word_count_min = result.word_count_min
+                existing.word_count_max = result.word_count_max
+                existing.heading_targets = result.heading_targets
+                existing.keyword_targets = result.keyword_targets
+                existing.lsi_terms = result.lsi_terms
+                existing.entities = result.entities
+                existing.related_questions = result.related_questions
+                existing.related_searches = result.related_searches
+                existing.competitors = result.competitors
+                existing.page_score_target = result.page_score_target
+                existing.raw_response = result.raw_response
+                existing.updated_at = datetime.now(UTC)
+
+                brief = existing
+
+                logger.info(
+                    "Updated existing content brief",
+                    extra={
+                        "brief_id": brief.id,
+                        "page_id": page_id,
+                        "project_id": project_id,
+                        "keyword": keyword[:50],
+                        "pop_task_id": result.task_id,
+                    },
+                )
+            else:
+                # Create new brief
+                brief = ContentBrief(
+                    page_id=page_id,
+                    keyword=keyword,
+                    pop_task_id=result.task_id,
+                    word_count_target=result.word_count_target,
+                    word_count_min=result.word_count_min,
+                    word_count_max=result.word_count_max,
+                    heading_targets=result.heading_targets,
+                    keyword_targets=result.keyword_targets,
+                    lsi_terms=result.lsi_terms,
+                    entities=result.entities,
+                    related_questions=result.related_questions,
+                    related_searches=result.related_searches,
+                    competitors=result.competitors,
+                    page_score_target=result.page_score_target,
+                    raw_response=result.raw_response,
+                )
+                self._session.add(brief)
+
+                logger.info(
+                    "Created new content brief",
+                    extra={
+                        "page_id": page_id,
+                        "project_id": project_id,
+                        "keyword": keyword[:50],
+                        "pop_task_id": result.task_id,
+                    },
+                )
+
+            await self._session.flush()
+            await self._session.refresh(brief)
+
+            duration_ms = (time.monotonic() - start_time) * 1000
+
+            logger.debug(
+                "Content brief saved successfully",
+                extra={
+                    "brief_id": brief.id,
+                    "page_id": page_id,
+                    "project_id": project_id,
+                    "duration_ms": round(duration_ms, 2),
+                },
+            )
+
+            if duration_ms > SLOW_OPERATION_THRESHOLD_MS:
+                logger.warning(
+                    "Slow content brief save operation",
+                    extra={
+                        "brief_id": brief.id,
+                        "page_id": page_id,
+                        "project_id": project_id,
+                        "duration_ms": round(duration_ms, 2),
+                        "threshold_ms": SLOW_OPERATION_THRESHOLD_MS,
+                    },
+                )
+
+            return brief
+
+        except Exception as e:
+            duration_ms = (time.monotonic() - start_time) * 1000
+            logger.error(
+                "Failed to save content brief",
+                extra={
+                    "page_id": page_id,
+                    "project_id": project_id,
+                    "keyword": keyword[:50] if keyword else "",
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "duration_ms": round(duration_ms, 2),
+                    "stack_trace": traceback.format_exc(),
+                },
+                exc_info=True,
+            )
+            raise POPContentBriefServiceError(
+                f"Failed to save content brief: {e}",
+                project_id=project_id,
+                page_id=page_id,
+            ) from e
 
     def _parse_brief_data(
         self,
@@ -874,6 +1045,110 @@ class POPContentBriefService:
                 duration_ms=duration_ms,
             )
 
+    async def fetch_and_save_brief(
+        self,
+        project_id: str,
+        page_id: str,
+        keyword: str,
+        target_url: str,
+    ) -> POPContentBriefResult:
+        """Fetch a content brief from POP API and save it to the database.
+
+        This is a convenience method that combines fetch_brief() and save_brief()
+        into a single operation. After successful fetch, the brief is automatically
+        persisted to the database. If a brief already exists for the same page,
+        it will be replaced.
+
+        Args:
+            project_id: Project ID for logging context
+            page_id: Page ID (FK to crawled_pages) - required for persistence
+            keyword: Target keyword for content optimization
+            target_url: URL of the page to optimize
+
+        Returns:
+            POPContentBriefResult with brief data and brief_id (if saved) or error
+
+        Raises:
+            POPContentBriefValidationError: If validation fails
+            POPContentBriefServiceError: If persistence fails (session not available)
+        """
+        logger.debug(
+            "Fetching and saving content brief",
+            extra={
+                "project_id": project_id,
+                "page_id": page_id,
+                "keyword": keyword[:50] if keyword else "",
+                "target_url": target_url[:100] if target_url else "",
+            },
+        )
+
+        # Step 1: Fetch the brief from POP API
+        result = await self.fetch_brief(
+            project_id=project_id,
+            page_id=page_id,
+            keyword=keyword,
+            target_url=target_url,
+        )
+
+        # Step 2: If fetch was successful and we have a session, save to database
+        if result.success and self._session is not None:
+            try:
+                brief = await self.save_brief(
+                    page_id=page_id,
+                    keyword=keyword,
+                    result=result,
+                    project_id=project_id,
+                )
+
+                # Update result with the database record ID
+                result.brief_id = brief.id
+
+                logger.info(
+                    "Content brief fetched and saved successfully",
+                    extra={
+                        "project_id": project_id,
+                        "page_id": page_id,
+                        "brief_id": brief.id,
+                        "keyword": keyword[:50],
+                        "task_id": result.task_id,
+                    },
+                )
+
+            except POPContentBriefServiceError:
+                # Re-raise persistence errors
+                raise
+            except Exception as e:
+                logger.error(
+                    "Failed to save content brief after successful fetch",
+                    extra={
+                        "project_id": project_id,
+                        "page_id": page_id,
+                        "keyword": keyword[:50],
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "stack_trace": traceback.format_exc(),
+                    },
+                    exc_info=True,
+                )
+                raise POPContentBriefServiceError(
+                    f"Failed to save content brief: {e}",
+                    project_id=project_id,
+                    page_id=page_id,
+                ) from e
+
+        elif result.success and self._session is None:
+            logger.warning(
+                "Content brief fetched but not saved - no database session",
+                extra={
+                    "project_id": project_id,
+                    "page_id": page_id,
+                    "keyword": keyword[:50],
+                    "task_id": result.task_id,
+                },
+            )
+
+        return result
+
 
 # Global singleton instance
 _pop_content_brief_service: POPContentBriefService | None = None
@@ -918,6 +1193,50 @@ async def fetch_content_brief(
     """
     service = get_pop_content_brief_service()
     return await service.fetch_brief(
+        project_id=project_id,
+        page_id=page_id,
+        keyword=keyword,
+        target_url=target_url,
+    )
+
+
+async def fetch_and_save_content_brief(
+    session: AsyncSession,
+    project_id: str,
+    page_id: str,
+    keyword: str,
+    target_url: str,
+) -> POPContentBriefResult:
+    """Convenience function for fetching and saving a content brief.
+
+    This function creates a new service instance with the provided session,
+    fetches the content brief from POP API, and saves it to the database.
+    If a brief already exists for the same page, it will be replaced.
+
+    Args:
+        session: Async SQLAlchemy session for database operations
+        project_id: Project ID for logging context
+        page_id: Page ID (FK to crawled_pages) - required for persistence
+        keyword: Target keyword for content optimization
+        target_url: URL of the page to optimize
+
+    Returns:
+        POPContentBriefResult with brief data and brief_id (if saved) or error
+
+    Example:
+        async with get_session() as session:
+            result = await fetch_and_save_content_brief(
+                session=session,
+                project_id="uuid",
+                page_id="uuid",
+                keyword="hiking boots",
+                target_url="https://example.com/hiking-boots",
+            )
+            if result.success:
+                print(f"Brief saved with ID: {result.brief_id}")
+    """
+    service = POPContentBriefService(session=session)
+    return await service.fetch_and_save_brief(
         project_id=project_id,
         page_id=page_id,
         keyword=keyword,
