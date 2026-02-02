@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "sessionId": "1454614a-adc6-471d-8d25-d4c714c8488e",
+  "sessionId": "eccbdd0d-fb19-4c53-958e-bb948857077a",
   "status": "running",
-  "startedAt": "2026-02-02T00:57:09.453Z",
-  "updatedAt": "2026-02-02T01:01:38.130Z",
+  "startedAt": "2026-02-02T01:01:42.304Z",
+  "updatedAt": "2026-02-02T01:08:04.216Z",
   "currentIteration": 0,
   "maxIterations": 30,
   "tasksCompleted": 0,
@@ -15,8 +15,8 @@
     "totalTasks": 1,
     "tasks": [
       {
-        "id": "client-onboarding-v2-c3y.146",
-        "title": "Test migration on staging with production data snapshot",
+        "id": "client-onboarding-v2-c3y.147",
+        "title": "Validate data integrity post-migration",
         "status": "open",
         "completedInSession": false
       }

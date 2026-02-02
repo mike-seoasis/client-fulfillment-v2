@@ -5,6 +5,7 @@ This script runs before the application starts and handles:
 - Migration execution with step-by-step logging
 - Environment variable validation (with masked values)
 - Health check verification during deployment
+- Post-migration data integrity validation
 - Rollback trigger logging
 
 Run this via: python -m app.deploy
@@ -18,6 +19,7 @@ import time
 from typing import Any
 
 from app.core.config import get_settings
+from app.core.data_integrity import validate_data_integrity
 from app.core.logging import (
     db_logger,
     get_logger,
@@ -323,6 +325,84 @@ async def run_health_checks() -> bool:
     return db_healthy
 
 
+async def run_data_integrity_validation() -> bool:
+    """Run post-migration data integrity validation.
+
+    Validates:
+    - Foreign key integrity (all references exist)
+    - Data type validation (UUID format, JSONB parsing, enum values)
+    - Constraint validation (NOT NULL, ranges, timestamp ordering)
+    - Orphan record detection
+
+    Returns:
+        True if all validations pass, False otherwise
+    """
+    logger.info("Running post-migration data integrity validation")
+    start_time = time.monotonic()
+
+    try:
+        from app.core.database import db_manager
+
+        # Ensure database is initialized
+        if db_manager._engine is None:
+            db_manager.init_db()
+
+        async with db_manager.session_factory() as session:
+            report = await validate_data_integrity(session)
+
+        duration_s = time.monotonic() - start_time
+
+        if report.success:
+            logger.info(
+                "Data integrity validation passed",
+                extra={
+                    "total_checks": report.total_checks,
+                    "passed_checks": report.passed_checks,
+                    "duration_seconds": round(duration_s, 2),
+                },
+            )
+            return True
+        else:
+            # Log detailed failure info
+            failed_checks = [r for r in report.results if not r.success]
+            logger.error(
+                "Data integrity validation failed",
+                extra={
+                    "total_checks": report.total_checks,
+                    "failed_checks": report.failed_checks,
+                    "total_issues": report.total_issues,
+                    "failed_check_names": [r.check_name for r in failed_checks],
+                    "duration_seconds": round(duration_s, 2),
+                },
+            )
+
+            # Log each failed check
+            for check in failed_checks:
+                logger.error(
+                    f"Failed check: {check.check_name}",
+                    extra={
+                        "table": check.table_name,
+                        "issues_found": check.issues_found,
+                        "sample_issues": check.details[:3],
+                    },
+                )
+
+            return False
+
+    except Exception as e:
+        duration_s = time.monotonic() - start_time
+        logger.error(
+            "Data integrity validation error",
+            extra={
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+                "duration_seconds": round(duration_s, 2),
+            },
+            exc_info=True,
+        )
+        return False
+
+
 async def async_main() -> int:
     """Async entry point for deployment."""
     start_time = time.monotonic()
@@ -343,6 +423,18 @@ async def async_main() -> int:
 
         # Step 3: Run migrations
         if not run_migrations():
+            log_deployment_end(False, deployment_info, time.monotonic() - start_time)
+            return 1
+
+        # Step 4: Run data integrity validation post-migration
+        if not await run_data_integrity_validation():
+            logger.error(
+                "Data integrity validation failed - deployment blocked",
+                extra={
+                    "step": "data_integrity_validation",
+                    "action": "deployment_blocked",
+                },
+            )
             log_deployment_end(False, deployment_info, time.monotonic() - start_time)
             return 1
 
