@@ -1,0 +1,71 @@
+# Pre-commit hooks configuration
+# See https://pre-commit.com for more information
+# Install: pip install pre-commit && pre-commit install
+
+repos:
+  # General hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  # Python: Ruff (linting + formatting, replaces black/isort/flake8)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.3.0
+    hooks:
+      # Linter
+      - id: ruff
+        args: [--fix]
+        files: ^backend/
+      # Formatter (replaces black)
+      - id: ruff-format
+        files: ^backend/
+
+  # Python: Type checking with mypy
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        files: ^backend/app/
+        additional_dependencies:
+          - pydantic>=2.5.0
+          - fastapi>=0.109.0
+          - sqlalchemy>=2.0.0
+        args: [--config-file=backend/pyproject.toml]
+
+  # Frontend: ESLint
+  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint
+        entry: npm run lint --prefix frontend
+        language: system
+        files: ^frontend/.*\.(ts|tsx|js|jsx)$
+        pass_filenames: false
+
+  # Frontend: Prettier
+  - repo: local
+    hooks:
+      - id: prettier
+        name: prettier
+        entry: npx --prefix frontend prettier --write --ignore-unknown
+        language: system
+        files: ^frontend/.*\.(ts|tsx|js|jsx|json|css|md)$
+        exclude: ^frontend/node_modules/
+
+  # Frontend: TypeScript type checking
+  - repo: local
+    hooks:
+      - id: tsc
+        name: typescript
+        entry: npm run typecheck --prefix frontend
+        language: system
+        files: ^frontend/.*\.(ts|tsx)$
+        pass_filenames: false
