@@ -424,3 +424,30 @@ When creating new SQLAlchemy models in `backend/app/models/`:
   - Follow same logging pattern as content brief service: method entry/exit at DEBUG, phase transitions at INFO
 ---
 
+## 2026-02-02 - US-022
+- Implemented comprehensive logging in content scoring service for traceability:
+  - Verified existing logging already met most acceptance criteria from previous stories
+  - Added `scoring_results` INFO log with: page_score, passed, recommendation_count, fallback_used
+  - Added `scoring_api_cost` INFO log for credits_used and credits_remaining (when available in response)
+  - Added logging to fallback path so scoring_results is logged for both POP and legacy service paths
+- Logging checklist verified:
+  - ✓ Method entry at DEBUG level with sanitized parameters
+  - ✓ Method exit at DEBUG level with result summary (score, passed, fallback_used)
+  - ✓ Exceptions with full stack trace, project_id, page_id, and context
+  - ✓ Entity IDs in ALL log messages (project_id, page_id, score_id, task_id)
+  - ✓ Validation failures with field name and rejected value
+  - ✓ Phase state transitions at INFO level (scoring_started, scoring_completed)
+  - ✓ Timing logs for operations >1 second
+  - ✓ Fallback events at WARNING level with reason
+  - ✓ Scoring results at INFO level (new)
+  - ✓ API cost per scoring request (new)
+- Files changed:
+  - `backend/app/services/pop_content_score.py` - Added scoring_results and scoring_api_cost logs
+- **Learnings:**
+  - Much of the logging was already implemented in previous stories (US-016, US-019, US-020)
+  - `scoring_results` log should include both recommendation_count (total) and prioritized_recommendation_count
+  - API cost fields (creditsUsed, creditsRemaining) may be at top level of response - check both camelCase and snake_case
+  - Fallback path needs explicit logging since it bypasses the normal API flow
+  - When adding new logging to existing code, verify you're not creating duplicate variable assignments
+---
+
