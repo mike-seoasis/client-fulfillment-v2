@@ -3,10 +3,10 @@
   "sessionId": "507aa4d0-6ebf-4607-82ff-4b567e5d9704",
   "status": "running",
   "startedAt": "2026-02-02T19:14:04.679Z",
-  "updatedAt": "2026-02-02T20:08:18.256Z",
-  "currentIteration": 20,
+  "updatedAt": "2026-02-02T20:09:15.342Z",
+  "currentIteration": 21,
   "maxIterations": 10,
-  "tasksCompleted": 20,
+  "tasksCompleted": 21,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -161,8 +161,8 @@
       {
         "id": "US-025",
         "title": "Create content scoring API endpoints",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-026",
@@ -408,6 +408,16 @@
       "durationMs": 181763,
       "startedAt": "2026-02-02T20:01:54.655Z",
       "endedAt": "2026-02-02T20:04:56.418Z"
+    },
+    {
+      "iteration": 21,
+      "status": "completed",
+      "taskId": "US-025",
+      "taskTitle": "Create content scoring API endpoints",
+      "taskCompleted": true,
+      "durationMs": 200613,
+      "startedAt": "2026-02-02T20:04:57.641Z",
+      "endedAt": "2026-02-02T20:08:18.254Z"
     }
   ],
   "skippedTaskIds": [],
