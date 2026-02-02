@@ -233,6 +233,7 @@ export function useWebSocket({
   // State
   const [state, setState] = useState<ConnectionState>('disconnected')
   const [connectionId, setConnectionId] = useState<string | null>(null)
+  const [reconnectAttempt, setReconnectAttempt] = useState(0)
 
   // Refs for stable references
   const wsRef = useRef<WebSocket | null>(null)
@@ -419,6 +420,7 @@ export function useWebSocket({
 
     setState('reconnecting')
     reconnectAttemptRef.current += 1
+    setReconnectAttempt(reconnectAttemptRef.current)
 
     const delay = getReconnectDelay(reconnectAttemptRef.current - 1)
     loggerRef.current.reconnectionAttempt(reconnectAttemptRef.current, delay)
@@ -449,6 +451,7 @@ export function useWebSocket({
       wsRef.current.onopen = () => {
         setState('connected')
         reconnectAttemptRef.current = 0
+        setReconnectAttempt(0)
         startHeartbeat()
       }
 
@@ -542,6 +545,8 @@ export function useWebSocket({
     isConnected: state === 'connected',
     /** Whether in polling fallback mode */
     isPolling: state === 'fallback_polling',
+    /** Current reconnection attempt count (0 when connected) */
+    reconnectAttempt,
     /** Connect to WebSocket server */
     connect,
     /** Disconnect from WebSocket server */
@@ -599,7 +604,7 @@ export function useProjectSubscription(
     }
   }, [projectId])
 
-  const { state, isConnected, subscribe, unsubscribe } = useWebSocket({
+  const { state, isConnected, reconnectAttempt, subscribe, unsubscribe } = useWebSocket({
     onProjectUpdate: handleProjectUpdate,
     onProgressUpdate: handleProgressUpdate,
   })
@@ -616,6 +621,8 @@ export function useProjectSubscription(
     state,
     /** Whether WebSocket is connected */
     isConnected,
+    /** Current reconnection attempt count (0 when connected) */
+    reconnectAttempt,
     /** Latest update data received */
     latestUpdate,
     /** Latest progress data received */

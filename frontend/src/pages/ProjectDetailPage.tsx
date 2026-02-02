@@ -428,11 +428,14 @@ export function ProjectDetailPage() {
   }, [projectId])
 
   // Subscribe to real-time updates for this project
-  const { isConnected, state: wsState } = useProjectSubscription(projectId, {
+  const { isConnected, reconnectAttempt } = useProjectSubscription(projectId, {
     onUpdate: handleUpdate,
     onProgress: handleProgress,
     enabled: !!projectId && !isLoading,
   })
+
+  // Only show connection issues after 3+ failed reconnection attempts
+  const showConnectionIssue = !isConnected && reconnectAttempt >= 3
 
   // Calculate phase progress
   const { completionPercentage, currentPhase } = useMemo(() => {
@@ -525,49 +528,31 @@ export function ProjectDetailPage() {
               <Clock className="w-4 h-4 text-warmgray-400" />
               <span>Updated: {formatDate(project.updated_at)}</span>
             </div>
-            {/* Real-time connection indicator */}
-            <div
-              className={cn(
-                'flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium',
-                isConnected
-                  ? 'bg-success-100 text-success-700'
-                  : wsState === 'reconnecting' || wsState === 'connecting'
-                    ? 'bg-warning-100 text-warning-700'
-                    : wsState === 'fallback_polling'
-                      ? 'bg-primary-100 text-primary-700'
-                      : 'bg-warmgray-100 text-warmgray-600'
-              )}
-              title={
-                isConnected
-                  ? 'Real-time updates active'
-                  : wsState === 'reconnecting'
-                    ? 'Reconnecting...'
-                    : wsState === 'connecting'
-                      ? 'Connecting...'
-                      : wsState === 'fallback_polling'
-                        ? 'Using polling for updates'
-                        : 'Updates paused'
-              }
-            >
-              {isConnected ? (
-                <Wifi className="w-3 h-3" />
-              ) : wsState === 'reconnecting' || wsState === 'connecting' ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : (
-                <WifiOff className="w-3 h-3" />
-              )}
-              <span>
-                {isConnected
-                  ? 'Live'
-                  : wsState === 'reconnecting'
-                    ? 'Reconnecting'
-                    : wsState === 'connecting'
-                      ? 'Connecting'
-                      : wsState === 'fallback_polling'
-                        ? 'Polling'
-                        : 'Offline'}
-              </span>
-            </div>
+            {/* Real-time connection indicator - only show when connected or after 3+ failed attempts */}
+            {(isConnected || showConnectionIssue) && (
+              <div
+                className={cn(
+                  'flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium',
+                  isConnected
+                    ? 'bg-success-100 text-success-700'
+                    : 'bg-warmgray-100 text-warmgray-500'
+                )}
+                title={
+                  isConnected
+                    ? 'Real-time updates active'
+                    : 'Connection interrupted - updates may be delayed'
+                }
+              >
+                {isConnected ? (
+                  <Wifi className="w-3 h-3" />
+                ) : (
+                  <WifiOff className="w-3 h-3" />
+                )}
+                <span>
+                  {isConnected ? 'Live' : 'Updates may be delayed'}
+                </span>
+              </div>
+            )}
           </div>
         </header>
 
