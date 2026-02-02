@@ -132,8 +132,9 @@
         "All tests pass with pytest"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Use pytest-httpx for mocking"
+      "passes": true,
+      "notes": "Use pytest-httpx for mocking",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "US-009",
@@ -525,6 +526,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-02T20:10:08.596Z"
+    "updatedAt": "2026-02-02T20:15:46.326Z"
   }
 }

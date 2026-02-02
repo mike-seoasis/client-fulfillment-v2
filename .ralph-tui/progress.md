@@ -527,3 +527,25 @@ When creating new SQLAlchemy models in `backend/app/models/`:
   - Feature flags should be grouped with related settings (added after pop_pass_threshold in POP section)
 ---
 
+## 2026-02-02 - US-008
+- Created comprehensive unit tests for POP client in `backend/tests/integrations/test_pop.py`:
+  - Tests for `create_report_task()` with mocked successful response (5 tests)
+  - Tests for `get_task_result()` with mocked pending, complete, failure, and unknown status responses (5 tests)
+  - Tests for polling loop (`poll_for_result()`) including timeout behavior (4 tests)
+  - Tests for circuit breaker state transitions: CLOSED → OPEN → HALF_OPEN → CLOSED/OPEN (8 tests)
+  - Tests for retry logic with various error codes: 500, 401, 403, 400, 429, timeouts (12 tests)
+  - Tests for credential masking in logs using caplog fixture (4 tests)
+  - Tests for helper functions (`_truncate_for_logging`) and data classes (14 tests)
+- All 52 tests pass with pytest
+- Files changed:
+  - `backend/tests/integrations/test_pop.py` - New file
+- **Learnings:**
+  - POP client `create_report_task()` and `get_task_result()` catch exceptions internally and return `POPTaskResult` with `success=False`
+  - For testing exceptions directly, use `_make_request()` method which raises `POPError` subclasses
+  - Use `unittest.mock.AsyncMock` and `MagicMock` for mocking httpx client (pytest-httpx not in dependencies)
+  - Test circuit breaker timing with short recovery timeouts (0.1s) and `asyncio.sleep()` to trigger state transitions
+  - Use `caplog.at_level()` fixture to capture log output and verify credential masking
+  - When testing retry logic, mock `request.side_effect` with a list to simulate failures then success
+  - Circuit breaker integration tests need `pop_max_retries=1` to speed up failure accumulation
+---
+
