@@ -386,6 +386,11 @@ class Settings(BaseSettings):
     pop_circuit_recovery_timeout: float = Field(
         default=60.0, description="Seconds before attempting recovery"
     )
+    # POP content scoring threshold
+    pop_pass_threshold: int = Field(
+        default=70,
+        description="Minimum page score (0-100) for content to pass quality gate",
+    )
 
 
 @lru_cache

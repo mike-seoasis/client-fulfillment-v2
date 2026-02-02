@@ -3,10 +3,10 @@
   "sessionId": "507aa4d0-6ebf-4607-82ff-4b567e5d9704",
   "status": "running",
   "startedAt": "2026-02-02T19:14:04.679Z",
-  "updatedAt": "2026-02-02T19:52:20.614Z",
-  "currentIteration": 14,
+  "updatedAt": "2026-02-02T19:54:15.621Z",
+  "currentIteration": 15,
   "maxIterations": 10,
-  "tasksCompleted": 14,
+  "tasksCompleted": 15,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -113,8 +113,8 @@
       {
         "id": "US-017",
         "title": "Implement content scoring data extraction",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-018",
@@ -348,6 +348,16 @@
       "durationMs": 102351,
       "startedAt": "2026-02-02T19:46:20.693Z",
       "endedAt": "2026-02-02T19:48:03.044Z"
+    },
+    {
+      "iteration": 15,
+      "status": "completed",
+      "taskId": "US-017",
+      "taskTitle": "Implement content scoring data extraction",
+      "taskCompleted": true,
+      "durationMs": 256337,
+      "startedAt": "2026-02-02T19:48:04.275Z",
+      "endedAt": "2026-02-02T19:52:20.612Z"
     }
   ],
   "skippedTaskIds": [],

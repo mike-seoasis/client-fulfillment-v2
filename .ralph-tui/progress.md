@@ -363,3 +363,19 @@ When creating new SQLAlchemy models in `backend/app/models/`:
   - mypy type narrowing requires storing `.get()` result in intermediate variable with explicit type annotation before comparison
 ---
 
+## 2026-02-02 - US-018
+- Implemented pass/fail determination for content scoring:
+  - Added `pop_pass_threshold` config setting (default 70) for configurable quality gate
+  - Added `_determine_pass_fail()` method to check page_score >= threshold
+  - Updated `score_content()` to set `passed` boolean based on threshold comparison
+  - Prioritized recommendations returned when content fails (sorted by category: structure > keyword > lsi > variations)
+- Files changed:
+  - `backend/app/core/config.py` - Added `pop_pass_threshold` setting
+  - `backend/app/services/pop_content_score.py` - Added pass/fail determination method and integration
+- **Learnings:**
+  - Pass/fail logic should be separate method for testability and clarity
+  - Recommendations already have per-category `priority` from API order - secondary sort uses this
+  - Category priority for recommendations: structure issues most critical, then keyword density, then LSI, then variations
+  - When content passes, recommendations can still be returned but are not prioritized (pass = meeting minimum quality bar)
+---
+

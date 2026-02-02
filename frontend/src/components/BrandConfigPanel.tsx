@@ -21,6 +21,7 @@
  */
 
 import { useState, useCallback, useRef, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Palette,
   Type,
@@ -37,6 +38,7 @@ import {
   Edit3,
   Save,
   ExternalLink,
+  Wand2,
 } from 'lucide-react'
 import { useApiQuery } from '@/lib/hooks/useApiQuery'
 import { useToastMutation } from '@/lib/hooks/useToastMutation'

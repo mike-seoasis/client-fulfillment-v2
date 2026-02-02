@@ -298,8 +298,9 @@
         "Threshold is configurable via settings"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "70 is initial threshold - may need calibration"
+      "passes": true,
+      "notes": "70 is initial threshold - may need calibration",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "US-019",
@@ -517,6 +518,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-02T19:52:20.613Z"
+    "updatedAt": "2026-02-02T19:54:15.620Z"
   }
 }
