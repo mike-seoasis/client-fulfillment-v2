@@ -174,8 +174,8 @@ async def list_templates(
     description="Get an email template by ID.",
 )
 async def get_template(
-    template_id: Annotated[str, Path(description="Template UUID")],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    template_id: str = Path(..., description="Template UUID"),
+    session: AsyncSession = Depends(get_session),
 ) -> NotificationTemplateResponse:
     """Get an email template by ID."""
     logger.debug("Getting template", extra={"template_id": template_id})
@@ -196,9 +196,9 @@ async def get_template(
     description="Update an email template.",
 )
 async def update_template(
-    template_id: Annotated[str, Path(description="Template UUID")],
     data: NotificationTemplateUpdate,
-    session: Annotated[AsyncSession, Depends(get_session)],
+    template_id: str = Path(..., description="Template UUID"),
+    session: AsyncSession = Depends(get_session),
 ) -> NotificationTemplateResponse:
     """Update an email template."""
     logger.debug(
@@ -255,8 +255,8 @@ async def update_template(
     description="Delete an email template.",
 )
 async def delete_template(
-    template_id: Annotated[str, Path(description="Template UUID")],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    template_id: str = Path(..., description="Template UUID"),
+    session: AsyncSession = Depends(get_session),
 ) -> None:
     """Delete an email template."""
     logger.debug("Deleting template", extra={"template_id": template_id})
@@ -379,8 +379,8 @@ async def list_webhooks(
     description="Get a webhook configuration by ID.",
 )
 async def get_webhook(
-    webhook_id: Annotated[str, Path(description="Webhook UUID")],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    webhook_id: str = Path(..., description="Webhook UUID"),
+    session: AsyncSession = Depends(get_session),
 ) -> WebhookConfigResponse:
     """Get a webhook configuration by ID."""
     logger.debug("Getting webhook", extra={"webhook_id": webhook_id})
@@ -401,9 +401,9 @@ async def get_webhook(
     description="Update a webhook configuration.",
 )
 async def update_webhook(
-    webhook_id: Annotated[str, Path(description="Webhook UUID")],
     data: WebhookConfigUpdate,
-    session: Annotated[AsyncSession, Depends(get_session)],
+    webhook_id: str = Path(..., description="Webhook UUID"),
+    session: AsyncSession = Depends(get_session),
 ) -> WebhookConfigResponse:
     """Update a webhook configuration."""
     logger.debug(
@@ -464,8 +464,8 @@ async def update_webhook(
     description="Delete a webhook configuration.",
 )
 async def delete_webhook(
-    webhook_id: Annotated[str, Path(description="Webhook UUID")],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    webhook_id: str = Path(..., description="Webhook UUID"),
+    session: AsyncSession = Depends(get_session),
 ) -> None:
     """Delete a webhook configuration."""
     logger.debug("Deleting webhook", extra={"webhook_id": webhook_id})
@@ -718,8 +718,8 @@ async def list_logs(
     description="Get a notification log entry by ID.",
 )
 async def get_log(
-    log_id: Annotated[str, Path(description="Log entry UUID")],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    log_id: str = Path(..., description="Log entry UUID"),
+    session: AsyncSession = Depends(get_session),
 ) -> NotificationLogResponse:
     """Get a notification log entry."""
     logger.debug("Getting notification log", extra={"log_id": log_id})

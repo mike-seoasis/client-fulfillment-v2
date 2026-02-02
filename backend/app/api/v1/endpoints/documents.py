@@ -273,6 +273,7 @@ async def upload_document(
 
 @router.get(
     "/{document_id}/download",
+    response_model=None,
     summary="Download a document",
     description="Download a document by its ID. Returns the raw file content.",
     responses={

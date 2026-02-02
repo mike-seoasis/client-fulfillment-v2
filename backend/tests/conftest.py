@@ -421,8 +421,9 @@ def client(
     # Override settings
     app.dependency_overrides[get_settings] = get_test_settings
 
-    with TestClient(app, raise_server_exceptions=False) as test_client:
-        yield test_client
+    # Use Starlette TestClient (handles ASGI app internally)
+    test_client = TestClient(app)
+    yield test_client
 
     app.dependency_overrides.clear()
 
