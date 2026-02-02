@@ -593,3 +593,28 @@ When creating new SQLAlchemy models in `backend/app/models/`:
   - Track nonlocal statistics variables across async tasks with `nonlocal` keyword
 ---
 
+## 2026-02-02 - US-023
+- Created comprehensive unit tests for POP Content Score service in `backend/tests/services/test_pop_content_score.py`:
+  - Tests for `score_content()` with mocked POP client (7 tests)
+  - Tests for each extraction method: page score, keyword analysis, LSI coverage, word count, heading analysis, recommendations (24 tests)
+  - Tests for pass/fail determination at threshold boundary: above, below, at, just below, None score, prioritization (6 tests)
+  - Tests for fallback triggering: circuit open, API error, timeout, fallback failure (4 tests)
+  - Tests for batch scoring: yields results, partial failures, empty items, rate limiting (4 tests)
+  - Tests for database persistence: save_score, score_and_save_content (6 tests)
+  - Tests verifying logging output includes required entity IDs (5 tests)
+  - Tests for singleton pattern, convenience functions, and service initialization (7 tests)
+- All 71 tests pass with pytest
+- Files changed:
+  - `backend/tests/services/test_pop_content_score.py` - New file
+- **Learnings:**
+  - Service tests follow pattern from `test_pop_content_brief.py`: fixtures for mocks, test classes per feature area
+  - Use `AsyncMock(spec=POPClient)` for type-safe mocking of async client
+  - Mock legacy service with `MagicMock()` containing `.score_content = AsyncMock()` for fallback testing
+  - When testing methods that call `get_settings()`, mock it with `patch("app.services.pop_content_score.get_settings")`
+  - Use `caplog.at_level()` fixture with specific logger name to capture structured logs for verification
+  - Combine nested `with` statements using `with (ctx1, ctx2):` syntax per ruff SIM117
+  - For testing pass/fail at threshold: test exact threshold (passes), just below (69.9 fails), above, and None score
+  - Testing batch scoring with async generators: use `async for result in method():` to collect results
+  - When mocking session refresh to set IDs, use `mock_session.refresh.side_effect = set_score_id` function
+---
+
