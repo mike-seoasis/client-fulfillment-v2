@@ -356,7 +356,7 @@ export function ProjectDetailPage() {
     refetch,
   } = useApiQuery<ProjectDetail>({
     queryKey: ['project', projectId],
-    endpoint: `/api/projects/${projectId}`,
+    endpoint: `/api/v1/projects/${projectId}`,
     requestOptions: {
       userAction: 'Load project details',
       component: 'ProjectDetailPage',
@@ -458,7 +458,7 @@ export function ProjectDetailPage() {
   if (isError && error) {
     console.error('[ProjectDetailPage] Failed to load project:', {
       error: error.message,
-      endpoint: `/api/projects/${projectId}`,
+      endpoint: `/api/v1/projects/${projectId}`,
       status: error.status,
       projectId,
     })

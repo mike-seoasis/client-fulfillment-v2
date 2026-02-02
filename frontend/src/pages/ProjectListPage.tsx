@@ -127,7 +127,7 @@ export function ProjectListPage() {
     refetch,
   } = useApiQuery<Project[]>({
     queryKey: ['projects'],
-    endpoint: '/api/projects',
+    endpoint: '/api/v1/projects',
     requestOptions: {
       userAction: 'Load projects list',
       component: 'ProjectListPage',
@@ -192,7 +192,7 @@ export function ProjectListPage() {
   if (isError && error) {
     console.error('[ProjectListPage] Failed to load projects:', {
       error: error.message,
-      endpoint: '/api/projects',
+      endpoint: '/api/v1/projects',
       status: error.status,
     })
   }

@@ -121,7 +121,7 @@ export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProject
 
   // Create project mutation with toast notifications
   const createMutation = useToastMutation<CreatedProject, Error, CreateProjectInput>({
-    mutationFn: (data) => api.post<CreatedProject>('/api/projects', data, {
+    mutationFn: (data) => api.post<CreatedProject>('/api/v1/projects', data, {
       userAction: 'Create project',
       component: 'CreateProjectModal',
     }),

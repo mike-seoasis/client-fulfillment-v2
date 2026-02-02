@@ -32,7 +32,7 @@ export interface UseApiQueryOptions<TData>
  * @example
  * const { data, isLoading, error } = useApiQuery<Project[]>({
  *   queryKey: ['projects'],
- *   endpoint: '/api/projects',
+ *   endpoint: '/api/v1/projects',
  *   requestOptions: { userAction: 'Load projects list', component: 'ProjectList' }
  * })
  */
@@ -67,7 +67,7 @@ export interface UseApiMutationOptions<TData, TVariables>
  *
  * @example
  * const mutation = useApiMutation<Project, CreateProjectInput>({
- *   endpoint: '/api/projects',
+ *   endpoint: '/api/v1/projects',
  *   method: 'POST',
  *   invalidateKeys: [['projects']],
  *   requestOptions: { userAction: 'Create project', component: 'ProjectForm' }
@@ -75,7 +75,7 @@ export interface UseApiMutationOptions<TData, TVariables>
  *
  * // Dynamic endpoint example
  * const updateMutation = useApiMutation<Project, { id: string; data: UpdateInput }>({
- *   endpoint: (vars) => `/api/projects/${vars.id}`,
+ *   endpoint: (vars) => `/api/v1/projects/${vars.id}`,
  *   method: 'PATCH',
  *   invalidateKeys: [['projects']],
  * })
@@ -127,7 +127,7 @@ export function useApiMutation<TData, TVariables = void>({
  * @example
  * const prefetchProject = usePrefetch<Project>({
  *   queryKey: ['project', id],
- *   endpoint: `/api/projects/${id}`,
+ *   endpoint: `/api/v1/projects/${id}`,
  * })
  *
  * // Prefetch on hover
