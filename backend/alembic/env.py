@@ -52,11 +52,7 @@ def get_database_url() -> str:
     elif db_url.startswith("postgresql://"):
         db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-    # Add sslmode=require if not present
-    if "sslmode=" not in db_url:
-        separator = "&" if "?" in db_url else "?"
-        db_url = f"{db_url}{separator}sslmode=require"
-
+    # Note: SSL is configured via connect_args, not URL params for asyncpg
     return db_url
 
 
@@ -109,6 +105,7 @@ async def run_async_migrations() -> None:
         connect_args={
             "timeout": settings.db_connect_timeout,
             "command_timeout": settings.db_command_timeout,
+            "ssl": "require",  # Railway requires SSL (asyncpg uses 'ssl' not 'sslmode')
         },
     )
 
