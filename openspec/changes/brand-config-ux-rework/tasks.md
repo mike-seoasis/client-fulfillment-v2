@@ -32,9 +32,9 @@
 
 ## 7. Frontend - Wizard Components
 
-- [ ] 7.1 Create wizard layout components (WizardProgress, WizardNavigation, WizardContainer)
-- [ ] 7.2 Create VoiceDimensionSlider component with 1-10 scale and example text
-- [ ] 7.3 Create form components (ChipInput, PersonaCard, ExampleEditor)
+- [x] 7.1 Create wizard layout components (WizardProgress, WizardNavigation, WizardContainer)
+- [x] 7.2 Create VoiceDimensionSlider component with 1-10 scale and example text
+- [x] 7.3 Create form components (ChipInput, PersonaCard, ExampleEditor)
 
 ## 8. Frontend - Wizard Steps
 

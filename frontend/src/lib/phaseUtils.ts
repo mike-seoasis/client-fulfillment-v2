@@ -7,8 +7,8 @@
 /** Valid phase statuses matching backend schema */
 export type PhaseStatus = 'pending' | 'in_progress' | 'completed' | 'blocked' | 'skipped'
 
-/** Valid phase names in order */
-export const PHASE_ORDER = ['discovery', 'requirements', 'implementation', 'review', 'launch'] as const
+/** Valid phase names in order (renamed for UX clarity) */
+export const PHASE_ORDER = ['brand_setup', 'site_analysis', 'content_generation', 'review_edit', 'export'] as const
 export type PhaseName = (typeof PHASE_ORDER)[number]
 
 /** Phase status entry from API */
@@ -21,11 +21,11 @@ export interface PhaseStatusEntry {
 
 /** Human-readable phase labels */
 export const phaseLabels: Record<PhaseName, string> = {
-  discovery: 'Discovery',
-  requirements: 'Requirements',
-  implementation: 'Implementation',
-  review: 'Review',
-  launch: 'Launch',
+  brand_setup: 'Brand Setup',
+  site_analysis: 'Site Analysis',
+  content_generation: 'Content Generation',
+  review_edit: 'Review & Edit',
+  export: 'Export',
 }
 
 /**

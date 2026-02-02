@@ -269,3 +269,28 @@ When creating new SQLAlchemy models in `backend/app/models/`:
   - Competitor position is inferred from array order (not explicitly provided by POP)
 ---
 
+## 2026-02-02 - US-013
+- Implemented content brief persistence in `backend/app/services/pop_content_brief.py`:
+  - Added `save_brief(page_id, keyword, result, project_id)` method with upsert logic
+  - Queries for existing brief by page_id, updates if found, creates new if not
+  - Added `fetch_and_save_brief(project_id, page_id, keyword, target_url)` convenience method
+  - Added `fetch_and_save_content_brief()` module-level convenience function accepting session
+  - Added `brief_id` field to `POPContentBriefResult` dataclass for returning DB record ID
+  - Updated constructor to accept optional `AsyncSession` for database operations
+- All acceptance criteria met:
+  - Saves brief to content_briefs table after successful fetch ✓
+  - Links brief to page via page_id foreign key ✓
+  - Stores pop_task_id for reference/debugging ✓
+  - Stores structured fields (word_count_*, heading_targets, etc.) ✓
+  - Stores raw_response JSON for debugging ✓
+  - Replaces existing brief if one exists for the same page (upsert) ✓
+- Files changed:
+  - `backend/app/services/pop_content_brief.py` - Added persistence methods and session handling
+- **Learnings:**
+  - Services that need database persistence follow pattern: accept `AsyncSession | None` in constructor
+  - Use `session.flush()` + `session.refresh(obj)` to get updated IDs after add
+  - For upsert logic: query with `select().where()`, check `scalar_one_or_none()`, update if exists else add new
+  - Dataclass fields with defaults must come after fields without defaults (order matters)
+  - Include project_id in all log entries even for persistence methods for consistent tracing
+---
+
