@@ -8,6 +8,7 @@ from app.api.v1.endpoints import (
     brand_wizard,
     categorize,
     competitor,
+    content_brief,
     content_generation,
     content_plan,
     content_quality,
@@ -66,6 +67,11 @@ router.include_router(
     paa_enrichment.router,
     prefix="/projects/{project_id}/phases/paa_enrichment",
     tags=["PAA Enrichment Phase"],
+)
+router.include_router(
+    content_brief.router,
+    prefix="/projects/{project_id}/phases/content_brief",
+    tags=["Content Brief Phase"],
 )
 router.include_router(
     content_plan.router,

@@ -451,3 +451,21 @@ When creating new SQLAlchemy models in `backend/app/models/`:
   - When adding new logging to existing code, verify you're not creating duplicate variable assignments
 ---
 
+## 2026-02-02 - US-024
+- Created content brief API endpoints in `backend/app/api/v1/endpoints/content_brief.py`:
+  - POST `/projects/{project_id}/phases/content_brief/fetch` - Fetch content brief from POP API
+  - GET `/projects/{project_id}/phases/content_brief/pages/{page_id}/brief` - Get existing brief for a page
+- Both endpoints validate project/page existence and return proper error responses (404, 422, 500)
+- All endpoint logs include request_id for traceability
+- Registered router in `backend/app/api/v1/__init__.py` with prefix `/projects/{project_id}/phases/content_brief`
+- Files changed:
+  - `backend/app/api/v1/endpoints/content_brief.py` - New file
+  - `backend/app/api/v1/__init__.py` - Added content_brief import and router registration
+- **Learnings:**
+  - Endpoint pattern follows paa_enrichment.py: helper functions `_get_request_id()`, `_verify_project_exists()`
+  - Page verification requires querying CrawledPage directly since no PageService exists
+  - For POST endpoints that need a page_id, use query parameter (`request.query_params.get("page_id")`)
+  - ContentBriefResponse uses `from_attributes=True` so can convert from ORM model directly via helper
+  - Router registration follows alphabetical pattern in imports but logical grouping in include_router calls
+---
+
