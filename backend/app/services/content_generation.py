@@ -24,8 +24,13 @@ import traceback
 from dataclasses import dataclass
 from typing import Any
 
+from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.integrations.claude import CompletionResult, get_claude
+from app.services.pop_content_brief import (
+    POPContentBriefResult,
+    POPContentBriefService,
+)
 
 logger = get_logger(__name__)
 
@@ -234,10 +239,11 @@ class ContentGenerationService:
     """Service for content generation.
 
     Generates SEO-optimized content for various page types:
-    1. Builds prompt with content type-specific instructions
-    2. Includes context (research, brand voice) if provided
-    3. Calls Claude with configured temperature
-    4. Parses and validates response
+    1. Optionally fetches content brief from POP (when flag enabled)
+    2. Builds prompt with content type-specific instructions
+    3. Includes context (research, brand voice, POP brief) if provided
+    4. Calls Claude with configured temperature
+    5. Parses and validates response
 
     Usage:
         service = ContentGenerationService()
@@ -254,18 +260,22 @@ class ContentGenerationService:
     def __init__(
         self,
         max_concurrent: int = DEFAULT_MAX_CONCURRENT,
+        pop_brief_service: POPContentBriefService | None = None,
     ) -> None:
         """Initialize content generation service.
 
         Args:
             max_concurrent: Maximum concurrent content generations.
+            pop_brief_service: Optional POP content brief service for dependency injection.
         """
         self._max_concurrent = max_concurrent
+        self._pop_brief_service = pop_brief_service
 
         logger.debug(
             "ContentGenerationService initialized",
             extra={
                 "max_concurrent": self._max_concurrent,
+                "pop_brief_service_provided": pop_brief_service is not None,
             },
         )
 
@@ -290,10 +300,15 @@ class ContentGenerationService:
                 parts.append(f"Main Angle: {angle}")
             benefits = brief.get("benefits")
             if isinstance(benefits, list):
-                parts.append("Key Benefits:\n" + "\n".join(f"- {b}" for b in benefits[:5]))
+                parts.append(
+                    "Key Benefits:\n" + "\n".join(f"- {b}" for b in benefits[:5])
+                )
             questions = brief.get("priority_questions")
             if isinstance(questions, list):
-                parts.append("Questions to Address:\n" + "\n".join(f"- {q}" for q in questions[:5]))
+                parts.append(
+                    "Questions to Address:\n"
+                    + "\n".join(f"- {q}" for q in questions[:5])
+                )
 
         # Brand voice
         voice = context.get("brand_voice")
@@ -310,7 +325,237 @@ class ContentGenerationService:
         if notes := context.get("notes"):
             parts.append(f"Additional Notes: {notes}")
 
+        # POP Content Brief data (if present)
+        pop_brief = context.get("pop_content_brief")
+        if isinstance(pop_brief, dict):
+            parts.append(self._format_pop_brief(pop_brief))
+
         return "\n\n".join(parts) if parts else "No additional context provided."
+
+    def _format_pop_brief(self, pop_brief: dict[str, Any]) -> str:
+        """Format POP content brief data for prompt insertion.
+
+        Args:
+            pop_brief: POP content brief data with word count targets, LSI terms, etc.
+
+        Returns:
+            Formatted string for prompt
+        """
+        parts: list[str] = []
+
+        parts.append("## POP Content Brief Targets")
+
+        # Word count targets
+        word_count_target = pop_brief.get("word_count_target")
+        word_count_min = pop_brief.get("word_count_min")
+        word_count_max = pop_brief.get("word_count_max")
+        if word_count_target is not None:
+            word_count_info = f"Target Word Count: {word_count_target}"
+            if word_count_min is not None and word_count_max is not None:
+                word_count_info += f" (range: {word_count_min}-{word_count_max})"
+            parts.append(word_count_info)
+
+        # Page score target
+        page_score_target = pop_brief.get("page_score_target")
+        if page_score_target is not None:
+            parts.append(f"Target Page Score: {page_score_target}")
+
+        # Heading targets
+        heading_targets = pop_brief.get("heading_targets", [])
+        if heading_targets:
+            heading_info = ["Heading Structure Targets:"]
+            for h in heading_targets[:6]:
+                if isinstance(h, dict):
+                    level = h.get("level", "").upper()
+                    min_count = h.get("min_count")
+                    max_count = h.get("max_count")
+                    if min_count is not None and max_count is not None:
+                        heading_info.append(f"- {level}: {min_count}-{max_count} tags")
+                    elif min_count is not None:
+                        heading_info.append(f"- {level}: at least {min_count} tags")
+            if len(heading_info) > 1:
+                parts.append("\n".join(heading_info))
+
+        # LSI terms (top 15 for prompt length)
+        lsi_terms = pop_brief.get("lsi_terms", [])
+        if lsi_terms:
+            lsi_info = ["LSI Terms to Include (aim for target count):"]
+            for term in lsi_terms[:15]:
+                if isinstance(term, dict):
+                    phrase = term.get("phrase", "")
+                    target_count = term.get("target_count")
+                    weight = term.get("weight")
+                    if phrase:
+                        term_line = f'- "{phrase}"'
+                        if target_count is not None:
+                            term_line += f" (target: {target_count}x)"
+                        if weight is not None:
+                            term_line += f" [weight: {weight:.2f}]"
+                        lsi_info.append(term_line)
+            if len(lsi_info) > 1:
+                parts.append("\n".join(lsi_info))
+
+        # Keyword targets by section (top keywords)
+        keyword_targets = pop_brief.get("keyword_targets", [])
+        # Filter out section totals
+        actual_keywords = [
+            k
+            for k in keyword_targets
+            if isinstance(k, dict)
+            and not str(k.get("keyword", "")).startswith("_total_")
+        ]
+        if actual_keywords:
+            kw_info = ["Keyword Density Targets by Section:"]
+            seen_sections: set[str] = set()
+            for kw in actual_keywords[:10]:
+                if isinstance(kw, dict):
+                    keyword = kw.get("keyword", "")
+                    section = kw.get("section", "")
+                    density_target = kw.get("density_target")
+                    if keyword and section and section not in seen_sections:
+                        kw_line = f'- {section}: "{keyword}"'
+                        if density_target is not None:
+                            kw_line += f" (target: {density_target})"
+                        kw_info.append(kw_line)
+                        seen_sections.add(section)
+            if len(kw_info) > 1:
+                parts.append("\n".join(kw_info))
+
+        # Related questions (PAA)
+        related_questions = pop_brief.get("related_questions", [])
+        if related_questions:
+            paa_info = ["Related Questions to Address:"]
+            for q in related_questions[:5]:
+                if isinstance(q, dict):
+                    question = q.get("question", "")
+                    if question:
+                        paa_info.append(f"- {question}")
+            if len(paa_info) > 1:
+                parts.append("\n".join(paa_info))
+
+        # Competitor insights (just count for context)
+        competitors = pop_brief.get("competitors", [])
+        if competitors:
+            parts.append(
+                f"Based on analysis of {len(competitors)} top-ranking competitors."
+            )
+
+        return "\n\n".join(parts) if len(parts) > 1 else ""
+
+    async def _fetch_pop_content_brief(
+        self,
+        project_id: str | None,
+        page_id: str | None,
+        keyword: str,
+        url: str,
+    ) -> POPContentBriefResult | None:
+        """Fetch content brief from POP API if enabled.
+
+        This method checks the use_pop_content_brief flag and fetches
+        the brief if enabled. Errors are logged but don't block content
+        generation - the method returns None on failure.
+
+        Args:
+            project_id: Project ID for logging
+            page_id: Page ID for logging
+            keyword: Target keyword for content optimization
+            url: Page URL for content optimization
+
+        Returns:
+            POPContentBriefResult if successful, None if disabled or failed
+        """
+        settings = get_settings()
+
+        if not settings.use_pop_content_brief:
+            logger.debug(
+                "POP content brief disabled by feature flag",
+                extra={
+                    "project_id": project_id,
+                    "page_id": page_id,
+                    "flag": "use_pop_content_brief",
+                },
+            )
+            return None
+
+        # Get or create the POP brief service
+        if self._pop_brief_service is None:
+            self._pop_brief_service = POPContentBriefService()
+
+        try:
+            logger.info(
+                "Fetching POP content brief before content generation",
+                extra={
+                    "project_id": project_id,
+                    "page_id": page_id,
+                    "keyword": keyword[:50] if keyword else "",
+                },
+            )
+
+            result = await self._pop_brief_service.fetch_brief(
+                project_id=project_id or "",
+                page_id=page_id or "",
+                keyword=keyword,
+                target_url=url,
+            )
+
+            if result.success:
+                logger.info(
+                    "POP content brief fetched successfully",
+                    extra={
+                        "project_id": project_id,
+                        "page_id": page_id,
+                        "task_id": result.task_id,
+                        "word_count_target": result.word_count_target,
+                        "lsi_term_count": len(result.lsi_terms),
+                        "duration_ms": round(result.duration_ms, 2),
+                    },
+                )
+                return result
+            else:
+                logger.warning(
+                    "POP content brief fetch failed - proceeding without brief",
+                    extra={
+                        "project_id": project_id,
+                        "page_id": page_id,
+                        "error": result.error,
+                        "duration_ms": round(result.duration_ms, 2),
+                    },
+                )
+                return None
+
+        except Exception as e:
+            logger.warning(
+                "POP content brief fetch error - proceeding without brief",
+                extra={
+                    "project_id": project_id,
+                    "page_id": page_id,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "stack_trace": traceback.format_exc(),
+                },
+            )
+            return None
+
+    def _pop_brief_to_context(self, brief: POPContentBriefResult) -> dict[str, Any]:
+        """Convert POP brief result to context dict for prompt inclusion.
+
+        Args:
+            brief: POPContentBriefResult from fetch_brief()
+
+        Returns:
+            Dictionary with brief data formatted for context
+        """
+        return {
+            "word_count_target": brief.word_count_target,
+            "word_count_min": brief.word_count_min,
+            "word_count_max": brief.word_count_max,
+            "heading_targets": brief.heading_targets,
+            "keyword_targets": brief.keyword_targets,
+            "lsi_terms": brief.lsi_terms,
+            "related_questions": brief.related_questions,
+            "competitors": brief.competitors,
+            "page_score_target": brief.page_score_target,
+        }
 
     def _build_user_prompt(self, input_data: ContentGenerationInput) -> str:
         """Build the user prompt with all context.
@@ -322,8 +567,7 @@ class ContentGenerationService:
             Complete user prompt
         """
         content_type_prompt = CONTENT_TYPE_PROMPTS.get(
-            input_data.content_type,
-            CONTENT_TYPE_PROMPTS["collection"]
+            input_data.content_type, CONTENT_TYPE_PROMPTS["collection"]
         )
 
         return f"""Generate {input_data.content_type} page content for:
@@ -429,6 +673,7 @@ Generate the content now. Respond with JSON only:"""
             # Calculate actual word count if not provided
             if not word_count:
                 import re
+
                 clean_text = re.sub(r"<[^>]+>", " ", body_content)
                 word_count = len(clean_text.split())
 
@@ -469,10 +714,11 @@ Generate the content now. Respond with JSON only:"""
         """Generate content for a single page.
 
         Content generation process:
-        1. Build prompt with content type-specific instructions
-        2. Include context if provided
-        3. Call Claude with temperature 0.4
-        4. Parse and validate response
+        1. Check use_pop_content_brief flag and fetch brief if enabled
+        2. Build prompt with content type-specific instructions
+        3. Include context (including POP brief) if provided
+        4. Call Claude with temperature 0.4
+        5. Parse and validate response
 
         Args:
             input_data: Input data for content generation
@@ -570,6 +816,35 @@ Generate the content now. Respond with JSON only:"""
                     page_id=page_id,
                 )
 
+            # Fetch POP content brief if enabled (errors don't block generation)
+            pop_brief = await self._fetch_pop_content_brief(
+                project_id=project_id,
+                page_id=page_id,
+                keyword=input_data.keyword,
+                url=input_data.url,
+            )
+
+            # Merge POP brief data into context if available
+            if pop_brief is not None:
+                # Create or update context with POP brief data
+                if input_data.context is None:
+                    input_data.context = {}
+                input_data.context["pop_content_brief"] = self._pop_brief_to_context(
+                    pop_brief
+                )
+
+                # Override target word count if POP provides one
+                if pop_brief.word_count_target is not None:
+                    input_data.target_word_count = pop_brief.word_count_target
+                    logger.debug(
+                        "Using POP word count target",
+                        extra={
+                            "project_id": project_id,
+                            "page_id": page_id,
+                            "pop_word_count_target": pop_brief.word_count_target,
+                        },
+                    )
+
             # Build prompt
             user_prompt = self._build_user_prompt(input_data)
 
@@ -611,9 +886,7 @@ Generate the content now. Respond with JSON only:"""
                 )
 
             # Parse response
-            content = self._parse_content_response(
-                result.text, project_id, page_id
-            )
+            content = self._parse_content_response(result.text, project_id, page_id)
 
             if not content:
                 return ContentGenerationResult(
@@ -734,7 +1007,9 @@ Generate the content now. Respond with JSON only:"""
 
         semaphore = asyncio.Semaphore(max_concurrent)
 
-        async def generate_one(input_data: ContentGenerationInput) -> ContentGenerationResult:
+        async def generate_one(
+            input_data: ContentGenerationInput,
+        ) -> ContentGenerationResult:
             async with semaphore:
                 return await self.generate_content(input_data)
 

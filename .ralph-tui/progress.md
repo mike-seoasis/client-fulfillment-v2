@@ -618,3 +618,23 @@ When creating new SQLAlchemy models in `backend/app/models/`:
   - When mocking session refresh to set IDs, use `mock_session.refresh.side_effect = set_score_id` function
 ---
 
+## 2026-02-02 - US-028
+- Wired content brief phase into content workflow in `backend/app/services/content_generation.py`:
+  - Added `_fetch_pop_content_brief()` method that checks `use_pop_content_brief` flag and fetches brief from POP API
+  - Added `_format_pop_brief()` method to format POP brief data for prompt insertion (word count targets, LSI terms, heading targets, keyword density targets, PAA questions, competitor count)
+  - Added `_pop_brief_to_context()` method to convert POPContentBriefResult to context dict
+  - Modified `generate_content()` to fetch brief before building prompt, merge into context
+  - Brief data (word count targets, LSI terms, heading targets, etc.) passed to content writer via context
+  - Word count target from POP overrides default target_word_count when available
+- Error handling: Brief fetch errors logged at WARNING level and don't block content generation - proceeds without brief data
+- Files changed:
+  - `backend/app/services/content_generation.py` - Added POP content brief integration
+- **Learnings:**
+  - Content generation service uses `input_data.context` dict to pass additional data to prompt
+  - The context dict can be extended with new keys (e.g., "pop_content_brief") without breaking existing code
+  - Service accepts optional dependency injection for POPContentBriefService to support testing
+  - `get_settings()` is imported from `app.core.config` and caches settings via `@lru_cache`
+  - Feature flags in config are boolean pydantic fields with `default=False` for safe rollout
+  - When modifying dataclass fields (like input_data.context), mutating the object is acceptable within the service method
+---
+

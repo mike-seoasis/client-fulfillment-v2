@@ -468,8 +468,9 @@
         "Errors in brief fetch don't block content generation (log warning, proceed without brief)"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Modify app/services/content_generation.py"
+      "passes": true,
+      "notes": "Modify app/services/content_generation.py",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "US-029",
@@ -529,6 +530,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-02T20:28:43.553Z"
+    "updatedAt": "2026-02-02T20:31:27.133Z"
   }
 }
