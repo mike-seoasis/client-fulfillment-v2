@@ -30,6 +30,8 @@ dependencies = [
     "websockets>=12.0",
     # Form data / file uploads
     "python-multipart>=0.0.6",
+    # Sync DB driver for APScheduler job store
+    "psycopg2-binary>=2.9.0",
 ]
 
 [project.optional-dependencies]
