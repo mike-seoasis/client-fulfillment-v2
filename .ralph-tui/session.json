@@ -1,0 +1,216 @@
+{
+  "version": 1,
+  "sessionId": "507aa4d0-6ebf-4607-82ff-4b567e5d9704",
+  "status": "running",
+  "startedAt": "2026-02-02T19:14:04.679Z",
+  "updatedAt": "2026-02-02T19:16:36.677Z",
+  "currentIteration": 0,
+  "maxIterations": 10,
+  "tasksCompleted": 0,
+  "isPaused": false,
+  "agentPlugin": "claude",
+  "trackerState": {
+    "plugin": "json",
+    "prdPath": "./openspec/changes/replace-content-scoring-api/prd.json",
+    "totalTasks": 32,
+    "tasks": [
+      {
+        "id": "US-001",
+        "title": "Add POP API configuration",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-002",
+        "title": "Create database migrations",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-003",
+        "title": "Create POP integration client base",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-004",
+        "title": "Implement POP task creation and polling",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-005",
+        "title": "Implement circuit breaker for POP client",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-006",
+        "title": "Implement retry logic for POP client",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-007",
+        "title": "Implement POP client logging",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-008",
+        "title": "Write POP client unit tests",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-009",
+        "title": "Create database models",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-010",
+        "title": "Create Pydantic schemas",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-011",
+        "title": "Create Content Brief service structure",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-012",
+        "title": "Implement content brief data extraction",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-013",
+        "title": "Implement content brief persistence",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-014",
+        "title": "Implement content brief service logging",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-015",
+        "title": "Write content brief service tests",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-016",
+        "title": "Create Content Scoring service structure",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-017",
+        "title": "Implement content scoring data extraction",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-018",
+        "title": "Implement pass/fail determination",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-019",
+        "title": "Implement fallback to legacy scoring",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-020",
+        "title": "Implement content score persistence",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-021",
+        "title": "Implement batch scoring support",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-022",
+        "title": "Implement content scoring service logging",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-023",
+        "title": "Write content scoring service tests",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-024",
+        "title": "Create content brief API endpoints",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-025",
+        "title": "Create content scoring API endpoints",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-026",
+        "title": "Register new endpoints in router",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-027",
+        "title": "Add feature flags for POP integration",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-028",
+        "title": "Wire content brief into workflow",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-029",
+        "title": "Wire content scoring into workflow",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-030",
+        "title": "Create integration tests",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-031",
+        "title": "Add shadow mode for scoring comparison",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-032",
+        "title": "Update documentation",
+        "status": "open",
+        "completedInSession": false
+      }
+    ]
+  },
+  "iterations": [],
+  "skippedTaskIds": [],
+  "cwd": "/Users/mike/Projects/client-onboarding-v2",
+  "activeTaskIds": [],
+  "subagentPanelVisible": false
+}

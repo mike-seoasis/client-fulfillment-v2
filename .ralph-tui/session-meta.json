@@ -1,15 +1,14 @@
 {
-  "id": "6226f3c1-428b-4af0-bf07-2e297e7d821d",
-  "status": "completed",
-  "startedAt": "2026-02-02T01:28:35.710Z",
-  "updatedAt": "2026-02-02T01:32:14.813Z",
+  "id": "507aa4d0-6ebf-4607-82ff-4b567e5d9704",
+  "status": "running",
+  "startedAt": "2026-02-02T19:14:04.446Z",
+  "updatedAt": "2026-02-02T19:14:52.656Z",
   "agentPlugin": "claude",
   "trackerPlugin": "json",
-  "prdPath": "prd.json",
-  "currentIteration": 1,
-  "maxIterations": 30,
+  "prdPath": "./openspec/changes/replace-content-scoring-api/prd.json",
+  "currentIteration": 0,
+  "maxIterations": 40,
   "totalTasks": 0,
-  "tasksCompleted": 1,
-  "cwd": "/Users/mike/Projects/client-onboarding-v2",
-  "endedAt": "2026-02-02T01:32:14.813Z"
+  "tasksCompleted": 0,
+  "cwd": "/Users/mike/Projects/client-onboarding-v2"
 }

@@ -354,6 +354,29 @@ class Settings(BaseSettings):
         default=60.0, description="Seconds before attempting recovery"
     )
 
+    # PageOptimizer Pro (POP) API (content optimization scoring)
+    pop_api_key: str | None = Field(
+        default=None,
+        description="PageOptimizer Pro API key for content scoring",
+    )
+    pop_api_url: str = Field(
+        default="https://api.pageoptimizer.pro",
+        description="PageOptimizer Pro API base URL",
+    )
+    pop_task_poll_interval: float = Field(
+        default=2.0, description="Interval in seconds between task status polls"
+    )
+    pop_task_timeout: float = Field(
+        default=300.0, description="Maximum time in seconds to wait for task completion"
+    )
+    # Circuit breaker settings for POP
+    pop_circuit_failure_threshold: int = Field(
+        default=5, description="Failures before circuit opens"
+    )
+    pop_circuit_recovery_timeout: float = Field(
+        default=60.0, description="Seconds before attempting recovery"
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:
