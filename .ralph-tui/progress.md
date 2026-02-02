@@ -220,3 +220,26 @@ When creating new SQLAlchemy models in `backend/app/models/`:
   - Response schemas should mirror all fields from corresponding SQLAlchemy models
 ---
 
+## 2026-02-02 - US-011
+- Created POPContentBriefService in `backend/app/services/pop_content_brief.py`:
+  - `POPContentBriefService` class with POP client dependency injection
+  - `fetch_brief(project_id, page_id, keyword, target_url)` method for fetching content briefs
+  - `POPContentBriefResult` dataclass for structured return values
+  - Exception classes: `POPContentBriefServiceError`, `POPContentBriefValidationError`
+  - Global singleton pattern with `get_pop_content_brief_service()` factory
+  - Convenience function `fetch_content_brief()` for simple usage
+- Follows `paa_enrichment.py` pattern exactly:
+  - ERROR LOGGING REQUIREMENTS docstring at module level
+  - DEBUG-level logging for method entry/exit with entity IDs
+  - INFO-level logging for phase transitions (task creation, polling, completion)
+  - ERROR-level logging with stack traces for exceptions
+  - Timing logs for operations exceeding SLOW_OPERATION_THRESHOLD_MS (1000ms)
+- Files changed:
+  - `backend/app/services/pop_content_brief.py` - New file
+- **Learnings:**
+  - Service pattern follows paa_enrichment.py: class with DI client, result dataclass, validation errors, singleton factory
+  - POP integration uses create_report_task + poll_for_result flow (async task-based API)
+  - POPTaskResult has `data` field containing raw API response, needs parsing for structured fields
+  - mypy errors in unrelated repository files don't affect new service file validation
+---
+
