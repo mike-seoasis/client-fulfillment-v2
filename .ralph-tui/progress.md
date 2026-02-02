@@ -125,3 +125,23 @@ When creating the POP API integration client in `backend/app/integrations/pop.py
   - State change logging uses logger.warning for visibility in production
 ---
 
+## 2026-02-02 - US-006
+- Retry logic was already implemented in US-003 as part of `_make_request()` method
+- Verified all acceptance criteria are met:
+  - Exponential backoff for 5xx errors and timeouts: `delay = self._retry_delay * (2**attempt)`
+  - Auth errors (401, 403) raise `POPAuthError` immediately without retry
+  - Client errors (4xx except 429) raise `POPError` immediately without retry
+  - Rate limit (429) retries with Retry-After header if ≤60s
+  - Max retries configurable (default 3)
+  - Each retry logs attempt number
+- Added `pop_max_retries` and `pop_retry_delay` config settings for consistency with other integrations
+- Updated POPClient to use config settings instead of hardcoded defaults
+- Files changed:
+  - `backend/app/core/config.py` - Added `pop_max_retries` and `pop_retry_delay` settings
+  - `backend/app/integrations/pop.py` - Updated constructor to use settings for retry config
+- **Learnings:**
+  - Retry logic was proactively implemented in US-003 as part of the base client
+  - All integrations in codebase follow pattern of having `{prefix}_max_retries` and `{prefix}_retry_delay` config settings
+  - When verifying "already implemented" features, still check for missing config settings for consistency
+---
+
