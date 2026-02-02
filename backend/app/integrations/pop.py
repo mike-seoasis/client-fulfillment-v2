@@ -276,6 +276,42 @@ class POPTaskResult:
     request_id: str | None = None
 
 
+# Maximum response body size to log (5KB)
+MAX_RESPONSE_LOG_SIZE = 5 * 1024
+
+
+def _truncate_for_logging(data: Any, max_size: int = MAX_RESPONSE_LOG_SIZE) -> Any:
+    """Truncate data for logging if it exceeds max_size.
+
+    Args:
+        data: Data to potentially truncate (dict, list, or string)
+        max_size: Maximum size in bytes before truncation
+
+    Returns:
+        Original data or truncated version with indicator
+    """
+    import json
+
+    try:
+        serialized = json.dumps(data)
+        if len(serialized) <= max_size:
+            return data
+
+        # Return truncated version with indicator
+        truncated_str = serialized[:max_size]
+        return {
+            "_truncated": True,
+            "_original_size_bytes": len(serialized),
+            "_preview": truncated_str[:500] + "...",
+        }
+    except (TypeError, ValueError):
+        # If we can't serialize, just return a string representation
+        str_repr = str(data)
+        if len(str_repr) <= max_size:
+            return str_repr
+        return f"{str_repr[:max_size]}... [truncated]"
+
+
 class POPClient:
     """Async client for PageOptimizer Pro API.
 
@@ -432,21 +468,25 @@ class POPClient:
             attempt_start = time.monotonic()
 
             try:
-                # Log request start (mask API key)
-                logger.debug(
-                    f"POP API call: {method} {endpoint}",
+                # Log request start at INFO level with endpoint, method, timing context
+                logger.info(
+                    f"POP API call starting: {method} {endpoint}",
                     extra={
                         "endpoint": endpoint,
                         "method": method,
                         "retry_attempt": attempt,
+                        "max_retries": self._max_retries,
                         "request_id": request_id,
                     },
                 )
+                # Log request body at DEBUG level (with masked API key)
                 logger.debug(
                     "POP API request body",
                     extra={
                         "endpoint": endpoint,
+                        "method": method,
                         "request_body": self._mask_api_key(request_payload),
+                        "request_id": request_id,
                     },
                 )
 
@@ -460,15 +500,22 @@ class POPClient:
 
                 # Handle response based on status code
                 if response.status_code == 429:
-                    # Rate limited
+                    # Rate limited - extract retry-after header
                     retry_after_str = response.headers.get("retry-after")
                     retry_after = float(retry_after_str) if retry_after_str else None
+                    # Log rate limit with retry-after header if present
                     logger.warning(
                         "POP API rate limit hit (429)",
                         extra={
                             "endpoint": endpoint,
+                            "method": method,
+                            "status_code": 429,
                             "retry_after_seconds": retry_after,
+                            "retry_after_header_present": retry_after is not None,
+                            "retry_attempt": attempt,
+                            "max_retries": self._max_retries,
                             "request_id": request_id,
+                            "duration_ms": round(duration_ms, 2),
                         },
                     )
                     await self._circuit_breaker.record_failure()
@@ -479,6 +526,16 @@ class POPClient:
                         and retry_after
                         and retry_after <= 60
                     ):
+                        logger.info(
+                            f"POP rate limit: waiting {retry_after}s before retry "
+                            f"(attempt {attempt + 2}/{self._max_retries})",
+                            extra={
+                                "retry_attempt": attempt + 1,
+                                "max_retries": self._max_retries,
+                                "retry_after_seconds": retry_after,
+                                "request_id": request_id,
+                            },
+                        )
                         await asyncio.sleep(retry_after)
                         continue
 
@@ -489,25 +546,23 @@ class POPClient:
                     )
 
                 if response.status_code in (401, 403):
-                    # Auth failure
+                    # Auth failure - log without exposing credentials
+                    # Note: We intentionally do NOT log the request body or any
+                    # credential-related information for auth failures
                     logger.warning(
                         f"POP API authentication failed ({response.status_code})",
                         extra={
-                            "status_code": response.status_code,
-                        },
-                    )
-                    logger.warning(
-                        f"POP API call failed: {method} {endpoint}",
-                        extra={
                             "endpoint": endpoint,
                             "method": method,
-                            "duration_ms": round(duration_ms, 2),
                             "status_code": response.status_code,
-                            "error": "Authentication failed",
+                            "duration_ms": round(duration_ms, 2),
+                            "error": "Authentication failed - check API key configuration",
                             "error_type": "AuthError",
                             "retry_attempt": attempt,
                             "request_id": request_id,
                             "success": False,
+                            # Explicitly note credentials are masked
+                            "credentials_logged": False,
                         },
                     )
                     await self._circuit_breaker.record_failure()
@@ -518,10 +573,10 @@ class POPClient:
                     )
 
                 if response.status_code >= 500:
-                    # Server error - retry
+                    # Server error - retry with exponential backoff
                     error_msg = f"Server error ({response.status_code})"
                     logger.error(
-                        f"POP API call failed: {method} {endpoint}",
+                        f"POP API server error: {method} {endpoint}",
                         extra={
                             "endpoint": endpoint,
                             "method": method,
@@ -530,6 +585,7 @@ class POPClient:
                             "error": error_msg,
                             "error_type": "ServerError",
                             "retry_attempt": attempt,
+                            "max_retries": self._max_retries,
                             "request_id": request_id,
                             "success": False,
                         },
@@ -539,14 +595,15 @@ class POPClient:
                     if attempt < self._max_retries - 1:
                         delay = self._retry_delay * (2**attempt)
                         logger.warning(
-                            f"POP request attempt {attempt + 1} failed, "
-                            f"retrying in {delay}s",
+                            f"POP request attempt {attempt + 1}/{self._max_retries} failed "
+                            f"with {response.status_code}, retrying in {delay}s",
                             extra={
-                                "attempt": attempt + 1,
+                                "retry_attempt": attempt + 1,
                                 "max_retries": self._max_retries,
                                 "delay_seconds": delay,
                                 "status_code": response.status_code,
                                 "request_id": request_id,
+                                "endpoint": endpoint,
                             },
                         )
                         await asyncio.sleep(delay)
@@ -586,15 +643,43 @@ class POPClient:
                 # Success - parse response
                 response_data = response.json()
 
-                # Log success
-                logger.debug(
+                # Extract API credits/cost if POP provides this info
+                credits_used = response_data.get("credits_used") or response_data.get(
+                    "cost"
+                )
+                credits_remaining = response_data.get(
+                    "credits_remaining"
+                ) or response_data.get("remaining_credits")
+
+                # Log success at INFO level with timing
+                log_extra: dict[str, Any] = {
+                    "endpoint": endpoint,
+                    "method": method,
+                    "duration_ms": round(duration_ms, 2),
+                    "status_code": response.status_code,
+                    "request_id": request_id,
+                    "retry_attempt": attempt,
+                    "success": True,
+                }
+                # Include credits info if available
+                if credits_used is not None:
+                    log_extra["credits_used"] = credits_used
+                if credits_remaining is not None:
+                    log_extra["credits_remaining"] = credits_remaining
+
+                logger.info(
                     f"POP API call completed: {method} {endpoint}",
+                    extra=log_extra,
+                )
+
+                # Log response body at DEBUG level, truncating if >5KB
+                logger.debug(
+                    "POP API response body",
                     extra={
                         "endpoint": endpoint,
                         "method": method,
-                        "duration_ms": round(duration_ms, 2),
                         "request_id": request_id,
-                        "success": True,
+                        "response_body": _truncate_for_logging(response_data),
                     },
                 )
 
@@ -604,23 +689,18 @@ class POPClient:
 
             except httpx.TimeoutException:
                 duration_ms = (time.monotonic() - attempt_start) * 1000
-                logger.warning(
-                    "POP API request timeout",
-                    extra={
-                        "endpoint": endpoint,
-                        "timeout_seconds": self._task_timeout,
-                    },
-                )
+                # Log timeout with all required fields: endpoint, elapsed time, configured timeout
                 logger.error(
-                    f"POP API call failed: {method} {endpoint}",
+                    f"POP API timeout: {method} {endpoint}",
                     extra={
                         "endpoint": endpoint,
                         "method": method,
-                        "duration_ms": round(duration_ms, 2),
-                        "status_code": None,
+                        "elapsed_ms": round(duration_ms, 2),
+                        "configured_timeout_seconds": self._task_timeout,
                         "error": "Request timed out",
                         "error_type": "TimeoutError",
                         "retry_attempt": attempt,
+                        "max_retries": self._max_retries,
                         "request_id": request_id,
                         "success": False,
                     },
@@ -630,12 +710,14 @@ class POPClient:
                 if attempt < self._max_retries - 1:
                     delay = self._retry_delay * (2**attempt)
                     logger.warning(
-                        f"POP request attempt {attempt + 1} timed out, "
+                        f"POP request attempt {attempt + 1}/{self._max_retries} timed out, "
                         f"retrying in {delay}s",
                         extra={
-                            "attempt": attempt + 1,
+                            "retry_attempt": attempt + 1,
                             "max_retries": self._max_retries,
                             "delay_seconds": delay,
+                            "request_id": request_id,
+                            "endpoint": endpoint,
                         },
                     )
                     await asyncio.sleep(delay)
@@ -649,15 +731,15 @@ class POPClient:
             except httpx.RequestError as e:
                 duration_ms = (time.monotonic() - attempt_start) * 1000
                 logger.error(
-                    f"POP API call failed: {method} {endpoint}",
+                    f"POP API request error: {method} {endpoint}",
                     extra={
                         "endpoint": endpoint,
                         "method": method,
-                        "duration_ms": round(duration_ms, 2),
-                        "status_code": None,
+                        "elapsed_ms": round(duration_ms, 2),
                         "error": str(e),
                         "error_type": type(e).__name__,
                         "retry_attempt": attempt,
+                        "max_retries": self._max_retries,
                         "request_id": request_id,
                         "success": False,
                     },
@@ -667,13 +749,15 @@ class POPClient:
                 if attempt < self._max_retries - 1:
                     delay = self._retry_delay * (2**attempt)
                     logger.warning(
-                        f"POP request attempt {attempt + 1} failed, "
-                        f"retrying in {delay}s",
+                        f"POP request attempt {attempt + 1}/{self._max_retries} failed "
+                        f"({type(e).__name__}), retrying in {delay}s",
                         extra={
-                            "attempt": attempt + 1,
+                            "retry_attempt": attempt + 1,
                             "max_retries": self._max_retries,
                             "delay_seconds": delay,
                             "error": str(e),
+                            "request_id": request_id,
+                            "endpoint": endpoint,
                         },
                     )
                     await asyncio.sleep(delay)
@@ -945,15 +1029,16 @@ class POPClient:
         while True:
             elapsed = time.monotonic() - start_time
 
-            # Check timeout
+            # Check timeout - log with task_id, elapsed time, and configured timeout
             if elapsed >= timeout:
                 logger.error(
                     "POP task polling timed out",
                     extra={
                         "task_id": task_id,
                         "elapsed_seconds": round(elapsed, 2),
-                        "timeout_seconds": timeout,
+                        "configured_timeout_seconds": timeout,
                         "poll_count": poll_count,
+                        "poll_interval_seconds": poll_interval,
                     },
                 )
                 raise POPTimeoutError(
@@ -961,7 +1046,17 @@ class POPClient:
                     request_id=task_id,
                 )
 
-            # Get current status
+            # Get current status - log poll attempt
+            logger.debug(
+                f"POP task poll attempt {poll_count + 1}",
+                extra={
+                    "task_id": task_id,
+                    "poll_attempt": poll_count + 1,
+                    "elapsed_seconds": round(elapsed, 2),
+                    "timeout_seconds": timeout,
+                },
+            )
+
             result = await self.get_task_result(task_id)
             poll_count += 1
 
@@ -972,7 +1067,8 @@ class POPClient:
                     extra={
                         "task_id": task_id,
                         "error": result.error,
-                        "poll_count": poll_count,
+                        "poll_attempt": poll_count,
+                        "elapsed_seconds": round(elapsed, 2),
                     },
                 )
                 return result
@@ -983,8 +1079,10 @@ class POPClient:
                     "POP task completed successfully",
                     extra={
                         "task_id": task_id,
+                        "status": result.status.value,
                         "elapsed_seconds": round(elapsed, 2),
-                        "poll_count": poll_count,
+                        "poll_attempt": poll_count,
+                        "total_polls": poll_count,
                     },
                 )
                 return result
@@ -994,22 +1092,25 @@ class POPClient:
                     "POP task failed",
                     extra={
                         "task_id": task_id,
+                        "status": result.status.value,
                         "elapsed_seconds": round(elapsed, 2),
-                        "poll_count": poll_count,
-                        "data": result.data,
+                        "poll_attempt": poll_count,
+                        "total_polls": poll_count,
+                        "error": result.data.get("error") if result.data else None,
                     },
                 )
                 return result
 
-            # Still processing - wait and poll again
-            logger.debug(
-                "POP task still processing",
+            # Still processing - log poll attempt with task_id, attempt number, status
+            logger.info(
+                f"POP task polling: attempt {poll_count}, status={result.status.value}",
                 extra={
                     "task_id": task_id,
                     "status": result.status.value,
+                    "poll_attempt": poll_count,
                     "elapsed_seconds": round(elapsed, 2),
-                    "poll_count": poll_count,
-                    "next_poll_in": poll_interval,
+                    "next_poll_in_seconds": poll_interval,
+                    "timeout_seconds": timeout,
                 },
             )
 
