@@ -1,17 +1,219 @@
 {
-  "name": "Client Onboarding V2",
-  "description": "Ready tasks batch",
+  "name": "Brand Config & UX Rework",
+  "description": "Implement comprehensive 11-part brand guidelines framework with Perplexity research, 7-step wizard UI, fix WebSocket indicator, and rename phases",
   "userStories": [
     {
-      "id": "client-onboarding-v2-c3y.156",
-      "title": "Decommission V1 after validation",
-      "description": "ERROR LOGGING REQUIREMENTS:\n- Log method entry/exit at DEBUG level with parameters (sanitized)\n- Log all exceptions with full stack trace and context\n- Include entity IDs (project_id, page_id) in all service logs\n- Log validation failures with field names and rejected values\n- Log state transitions (phase changes) at INFO level\n- Add timing logs for operations >1 second",
-      "acceptanceCriteria": [],
-      "passes": true,
-      "completionNotes": "Completed by agent"
+      "id": "brand-rework.1.1",
+      "title": "Add PERPLEXITY_API_KEY to config and .env.example",
+      "description": "Add PERPLEXITY_API_KEY environment variable to backend/app/core/config.py settings class and document it in .env.example",
+      "acceptanceCriteria": ["PERPLEXITY_API_KEY in config.py", "PERPLEXITY_API_KEY documented in .env.example"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.1.2",
+      "title": "Create skills/ directory and move brand_guidelines_bible.md there",
+      "description": "Create skills/ directory at project root with README.md explaining purpose. Move brand_guideilnes_bible.md from root to skills/brand_guidelines_bible.md",
+      "acceptanceCriteria": ["skills/ directory exists", "skills/README.md exists", "brand_guidelines_bible.md moved to skills/"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.2.1",
+      "title": "Create PerplexityClient with research_brand() method",
+      "description": "Create backend/app/integrations/perplexity.py with PerplexityClient class. Implement research_brand(domain: str) method that calls Perplexity API to research a brand from their website URL. Handle API errors gracefully.",
+      "acceptanceCriteria": ["PerplexityClient class exists", "research_brand() method works", "Handles missing API key gracefully"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.2.2",
+      "title": "Add caching (24hr TTL) and rate limiting (5/hr/project) to Perplexity",
+      "description": "Add Redis-based caching for Perplexity research results with 24-hour TTL. Add rate limiting of 5 requests per hour per project using Redis.",
+      "acceptanceCriteria": ["Research results cached in Redis", "Rate limiting enforced", "Cache bypass option for force refresh"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.3.1",
+      "title": "Create V3 Pydantic schemas for all 11 Brand Guidelines Bible sections",
+      "description": "Create backend/app/schemas/brand_config_v3.py with Pydantic models for: foundation, personas, voice_dimensions, voice_characteristics, writing_rules, vocabulary, proof_elements, examples_bank, competitor_context, ai_prompts, quick_reference. Include root V3BrandConfigSchema with _version, _generated_at, _sources_used fields.",
+      "acceptanceCriteria": ["All 11 section schemas defined", "Root V3BrandConfigSchema combines all sections", "Version marker _version: 3.0"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.3.2",
+      "title": "Add is_v3_config() / is_v2_config() detection helpers",
+      "description": "Add helper functions to detect schema version: is_v3_config(config) checks for _version: 3.0, is_v2_config(config) checks for v2 structure without _version or _version: 2.0",
+      "acceptanceCriteria": ["is_v3_config() correctly identifies V3", "is_v2_config() correctly identifies V2", "Functions handle edge cases"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.4.1",
+      "title": "Create BrandResearchService with Perplexity→Claude synthesis pipeline",
+      "description": "Create backend/app/services/brand_research.py with BrandResearchService class. Implement: research_brand() calls Perplexity, synthesize_to_v3() calls Claude to structure results into V3 schema, research_and_synthesize() combines both steps.",
+      "acceptanceCriteria": ["BrandResearchService class exists", "Two-stage pipeline: Perplexity research then Claude synthesis", "Returns valid V3 schema"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.4.2",
+      "title": "Create Claude prompt for V3 schema synthesis",
+      "description": "Create Claude system prompt that takes Perplexity research results and synthesizes them into V3 brand config schema. Reference brand_guidelines_bible.md for the 11-part structure. Prompt should handle partial data gracefully.",
+      "acceptanceCriteria": ["Prompt generates valid V3 JSON", "All 11 sections populated where data available", "Missing sections have sensible defaults"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.5.1",
+      "title": "Add brand_wizard_state column to projects table (migration)",
+      "description": "Create Alembic migration to add brand_wizard_state JSONB column to projects table with default empty object {}",
+      "acceptanceCriteria": ["Migration file created", "Column added with JSONB type", "Default value is empty object"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.5.2",
+      "title": "Create wizard API endpoints (GET/PUT state, POST research, POST generate)",
+      "description": "Create backend/app/api/v1/brand_wizard.py router with: GET /projects/{id}/brand-wizard (get state), PUT /projects/{id}/brand-wizard (save step), POST /projects/{id}/brand-wizard/research (trigger Perplexity), POST /projects/{id}/brand-wizard/generate (create V3 config). Register router.",
+      "acceptanceCriteria": ["All 4 endpoints working", "Router registered in __init__.py", "Proper error handling"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.6.1",
+      "title": "Create migration to rename phases (discovery→brand_setup, etc.)",
+      "description": "Create Alembic migration with SQL to rename phase keys in all existing project records: discovery→brand_setup, requirements→site_analysis, implementation→content_generation, review→review_edit, launch→export. Include rollback.",
+      "acceptanceCriteria": ["Migration updates existing records", "All 5 phase names renamed", "Rollback SQL included"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.6.2",
+      "title": "Update PHASE_NAMES constant in project model",
+      "description": "Update backend/app/models/project.py PHASE_NAMES constant (or equivalent) to use new phase names: brand_setup, site_analysis, content_generation, review_edit, export",
+      "acceptanceCriteria": ["PHASE_NAMES updated", "Any other backend references updated"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.7.1",
+      "title": "Create wizard layout components (WizardProgress, WizardNavigation, WizardContainer)",
+      "description": "Create frontend/src/components/brand-wizard/ directory with: WizardProgress.tsx (step indicator showing 1-7), WizardNavigation.tsx (prev/next buttons), WizardContainer.tsx (layout wrapper). Export from index.ts",
+      "acceptanceCriteria": ["All 3 components created", "WizardProgress shows clickable steps", "Proper styling"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.7.2",
+      "title": "Create VoiceDimensionSlider component with 1-10 scale and example text",
+      "description": "Create VoiceDimensionSlider.tsx with slider 1-10, value display, and example text at low/high ends. Props: name, value, onChange, lowExample, highExample. Style with brand colors.",
+      "acceptanceCriteria": ["Slider works 1-10", "Shows current value", "Displays low/high examples"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.7.3",
+      "title": "Create form components (ChipInput, PersonaCard, ExampleEditor)",
+      "description": "Create: ChipInput.tsx (add/remove chips for power_words, banned_words), PersonaCard.tsx (display/edit persona with all fields), ExampleEditor.tsx (good/bad example pairs)",
+      "acceptanceCriteria": ["ChipInput adds/removes chips", "PersonaCard shows all persona fields", "ExampleEditor handles good/bad pairs"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.8.1",
+      "title": "Create Step 1: Brand Setup (name, domain, research button)",
+      "description": "Create Step1BrandSetup.tsx with: brand name input (required), domain URL input (optional), 'Research Brand' button that triggers Perplexity API call. Show loading state during research.",
+      "acceptanceCriteria": ["Brand name required validation", "Research button calls API", "Loading state shown"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.8.2",
+      "title": "Create Step 2: Foundation (company info, positioning, differentiators)",
+      "description": "Create Step2Foundation.tsx with editable fields for: company overview, industry, business model, positioning statement, mission statement, core values (chips), key differentiators (chips), products/services. Pre-fill from research.",
+      "acceptanceCriteria": ["All foundation fields editable", "Pre-fills from research if available", "Chips for values/differentiators"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.8.3",
+      "title": "Create Step 3: Audience (persona cards with add/edit/remove)",
+      "description": "Create Step3Audience.tsx with: list of PersonaCards, add persona button, ability to mark one as primary. Each persona has: name, demographics, psychographics, pain points, motivations, buying triggers.",
+      "acceptanceCriteria": ["Add/edit/remove personas", "Mark primary persona", "All persona fields editable"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.8.4",
+      "title": "Create Step 4: Voice (4 dimension sliders + characteristics)",
+      "description": "Create Step4Voice.tsx with: 4 VoiceDimensionSliders (formality, humor, reverence, enthusiasm) with appropriate example text, and voice characteristics editor (we are/we are not with trait, description, example fields).",
+      "acceptanceCriteria": ["4 sliders with examples", "Voice characteristics add/edit/remove", "Each characteristic has trait/description/example"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.8.5",
+      "title": "Create Step 5: Writing Rules (toggles, vocabulary editors)",
+      "description": "Create Step5WritingRules.tsx with: sentence/paragraph length inputs, toggles (contractions, oxford comma), exclamation limit, capitalization rules, and vocabulary editors (power words chips, banned words chips, preferred terms key-value, industry terms).",
+      "acceptanceCriteria": ["All writing rule fields", "Vocabulary editors working", "Chips and key-value inputs"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.8.6",
+      "title": "Create Step 6: Proof & Examples (stats, quotes, good/bad examples)",
+      "description": "Create Step6ProofExamples.tsx with: statistics editor (stat + context), credentials list, customer quotes (quote + attribution), guarantees list, and examples bank with ExampleEditors for headlines, product descriptions, CTAs.",
+      "acceptanceCriteria": ["All proof element fields", "Examples bank with good/bad pairs", "Add/remove for all lists"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.8.7",
+      "title": "Create Step 7: Review & Generate (summary, quick reference, generate button)",
+      "description": "Create Step7Review.tsx with: summary of all sections with edit links, quick reference editor (voice in 3 words, one-sentence summary, primary audience, key CTA, avoid list), and 'Generate Brand Config' button with loading state.",
+      "acceptanceCriteria": ["Summary shows all sections", "Quick reference editable", "Generate button saves V3 and redirects"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.9.1",
+      "title": "Create BrandWizardPage with state management and auto-save",
+      "description": "Create frontend/src/pages/BrandWizardPage.tsx with: wizard state in useState/useReducer, load existing state via useApiQuery, auto-save on step change via mutation, step navigation logic (block 2-7 until step 1 complete).",
+      "acceptanceCriteria": ["State management working", "Auto-save on step change", "Step 1 required first"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.9.2",
+      "title": "Add route and link from ProjectDetailPage",
+      "description": "Add route /projects/:projectId/brand-wizard in App.tsx. Add 'Configure Brand' button to ProjectDetailPage that links to wizard.",
+      "acceptanceCriteria": ["Route works", "Button visible on project detail", "Navigation works"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.9.3",
+      "title": "Update BrandConfigPanel to detect V3 and show 'Launch Wizard' button",
+      "description": "Update BrandConfigPanel.tsx to: detect V3 vs V2 configs, show 'Launch Brand Wizard' for projects without config, show 'Upgrade to V3' for V2 configs, display V3 quick reference when V3 exists.",
+      "acceptanceCriteria": ["V3 detection working", "Appropriate buttons shown", "V3 quick reference displayed"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.10.1",
+      "title": "Hide WebSocket indicator until 3+ failed reconnection attempts",
+      "description": "Update useWebSocket.ts to track reconnection attempt count. Update ProjectDetailPage.tsx to hide indicator when connected or reconnecting (<3 attempts). Show subtle 'Updates may be delayed' after 3+ failures with static icon (no spinning).",
+      "acceptanceCriteria": ["Indicator hidden by default", "Only shows after 3+ failures", "No alarming animation"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.10.2",
+      "title": "Update phaseLabels to user-friendly names",
+      "description": "Update frontend/src/lib/phaseUtils.ts: change PHASE_ORDER to new names (brand_setup, site_analysis, content_generation, review_edit, export), update phaseLabels mapping to 'Brand Setup', 'Site Analysis', 'Content Generation', 'Review & Edit', 'Export'.",
+      "acceptanceCriteria": ["PHASE_ORDER updated", "phaseLabels updated", "UI shows new labels"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.11.1",
+      "title": "Test complete wizard flow end-to-end",
+      "description": "Test: create new project → enter wizard → research brand → complete all 7 steps → generate V3 config → verify config saved correctly. Test resume (leave mid-wizard, return).",
+      "acceptanceCriteria": ["Full flow works", "V3 config saved", "Resume works"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.11.2",
+      "title": "Test V2 backward compatibility and Perplexity fallback",
+      "description": "Test: load existing V2 config displays correctly, upgrade to V3 works. Test: remove PERPLEXITY_API_KEY, verify wizard allows manual entry without research.",
+      "acceptanceCriteria": ["V2 displays correctly", "Upgrade works", "Manual entry fallback works"],
+      "passes": false
+    },
+    {
+      "id": "brand-rework.11.3",
+      "title": "Add PERPLEXITY_API_KEY to Railway and deploy",
+      "description": "Add PERPLEXITY_API_KEY environment variable in Railway dashboard for backend service. Run database migrations. Verify deployment works end-to-end.",
+      "acceptanceCriteria": ["Env var set in Railway", "Migrations run", "Production works"],
+      "passes": false
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-02T01:32:13.508Z"
+    "updatedAt": "2026-02-02T12:00:00.000Z"
   }
 }
