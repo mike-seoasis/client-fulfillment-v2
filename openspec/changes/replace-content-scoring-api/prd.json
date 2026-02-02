@@ -497,8 +497,9 @@
         "Tests run successfully with pytest"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Use @pytest.mark.skip_ci for real API tests"
+      "passes": true,
+      "notes": "Use @pytest.mark.skip_ci for real API tests",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "US-031",
@@ -531,6 +532,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-02T20:36:51.261Z"
+    "updatedAt": "2026-02-02T20:43:52.651Z"
   }
 }

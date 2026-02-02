@@ -662,3 +662,26 @@ When creating new SQLAlchemy models in `backend/app/models/`:
   - Batch endpoint inner functions can access outer scope variables (like `use_pop` feature flag) via closure
 ---
 
+## 2026-02-02 - US-030
+- Created integration tests for POP workflow in `backend/tests/`:
+  - `tests/integrations/test_pop_integration.py`: Integration tests for POP client against real API
+    - Tests marked with `@pytest.mark.skip` to skip in CI (requires POP_API_KEY env var)
+    - Tests: create_report_task, poll_for_result, get_task_result, circuit breaker recovery, invalid credentials
+  - `tests/e2e/test_content_brief_scoring_workflow.py`: End-to-end tests for brief -> scoring flow
+    - TestE2EContentBriefToScoringWorkflow: Full workflow, pass threshold verification
+    - TestE2EContentScoreFallback: Fallback on circuit open, fallback on timeout
+    - TestE2EWorkflowEdgeCases: Empty brief data, metrics collection, data flow verification
+- All 12 tests collected: 5 skipped (real API), 7 passed (mocked)
+- Files changed:
+  - `backend/tests/integrations/test_pop_integration.py` - New file
+  - `backend/tests/e2e/test_content_brief_scoring_workflow.py` - New file
+- **Learnings:**
+  - Real API integration tests should be skipped in CI using `@pytest.mark.skip` with clear reason message
+  - Use `POP_API_KEY` environment variable check in fixtures to conditionally skip tests
+  - Fallback in POPContentScoreService is triggered by exceptions (`POPCircuitOpenError`, `POPTimeoutError`, `POPError`), not by `success=False` in task result
+  - E2E tests can avoid FastAPI app dependencies by testing service layer directly with mocked POP clients
+  - Mock `spec=POPClient` for type-safe mocking, then set `.available = True` for client availability check
+  - For fallback tests, use `.side_effect` to raise exceptions instead of `.return_value` with failed result
+  - Legacy scoring service returns `overall_score` (0-1 scale) which gets converted to POP scale (0-100)
+---
+
