@@ -38,13 +38,13 @@
 
 ## 8. Frontend - Wizard Steps
 
-- [ ] 8.1 Create Step 1: Brand Setup (name, domain, research button)
-- [ ] 8.2 Create Step 2: Foundation (company info, positioning, differentiators)
-- [ ] 8.3 Create Step 3: Audience (persona cards with add/edit/remove)
-- [ ] 8.4 Create Step 4: Voice (4 dimension sliders + characteristics)
-- [ ] 8.5 Create Step 5: Writing Rules (toggles, vocabulary editors)
-- [ ] 8.6 Create Step 6: Proof & Examples (stats, quotes, good/bad examples)
-- [ ] 8.7 Create Step 7: Review & Generate (summary, quick reference, generate button)
+- [x] 8.1 Create Step 1: Brand Setup (name, domain, research button)
+- [x] 8.2 Create Step 2: Foundation (company info, positioning, differentiators)
+- [x] 8.3 Create Step 3: Audience (persona cards with add/edit/remove)
+- [x] 8.4 Create Step 4: Voice (4 dimension sliders + characteristics)
+- [x] 8.5 Create Step 5: Writing Rules (toggles, vocabulary editors)
+- [x] 8.6 Create Step 6: Proof & Examples (stats, quotes, good/bad examples)
+- [x] 8.7 Create Step 7: Review & Generate (summary, quick reference, generate button)
 
 ## 9. Frontend - Wizard Page & Integration
 

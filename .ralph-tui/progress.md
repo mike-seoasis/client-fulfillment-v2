@@ -337,3 +337,29 @@ When creating new SQLAlchemy models in `backend/app/models/`:
   - Unused variable warning for `client` can be suppressed with `_ = client` when client will be used in future stories
 ---
 
+## 2026-02-02 - US-017
+- Implemented content scoring data extraction from POP API responses in `backend/app/services/pop_content_score.py`:
+  - `_parse_score_data()`: Main parsing method that orchestrates extraction
+  - `_extract_page_score()`: Extracts page score (0-100) from `pageScore` or `pageScoreValue` in cleanedContentBrief or top-level
+  - `_extract_keyword_analysis()`: Parses `cleanedContentBrief` sections (title, pageTitle, subHeadings, p) for keyword density current vs target
+  - `_extract_lsi_coverage()`: Extracts from `lsaPhrases` array with phrase, current_count, target_count, weight, plus coverage stats
+  - `_extract_word_count_current()`: Gets `wordCount.current` for current word count
+  - `_extract_word_count_target()`: Gets `wordCount.target` for target word count
+  - `_extract_heading_analysis()`: Parses `tagCounts` array for H1-H4 structure (current vs min/max per level) with issue tracking
+  - `_extract_recommendations()`: Parses recommendations endpoint response (exactKeyword, lsi, pageStructure, variations categories)
+- Updated `score_content()` method to actually integrate with POP API (task creation, polling, response parsing)
+- Added `word_count_target` field to `POPContentScoreResult` dataclass for word count comparison
+- Added INFO-level `score_extraction_stats` logging with all extracted metrics
+- All extraction methods handle missing fields gracefully with None/empty defaults
+- Files changed:
+  - `backend/app/services/pop_content_score.py` - Added 8 extraction methods, updated score_content, enhanced dataclass
+- **Learnings:**
+  - POP scoring uses same task creation/polling flow as content brief (create_report_task + poll_for_result)
+  - For scoring: `lsaPhrases.targetCount` = current count on target page, `averageCount` = competitor target
+  - `tagCounts.signalCnt` = current count on target page (different field name than in brief context)
+  - Recommendations endpoint is separate from task results - requires `get-custom-recommendations` API call with reportId, strategy, approach
+  - Recommendations come in 4 categories: exactKeyword, lsi, pageStructure, variations
+  - "Leave As Is" recommendations should be filtered out as non-actionable
+  - mypy type narrowing requires storing `.get()` result in intermediate variable with explicit type annotation before comparison
+---
+
