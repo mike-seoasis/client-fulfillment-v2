@@ -48,3 +48,32 @@ export {
   type ExampleEditorProps,
   type ExamplePair,
 } from './ExampleEditor'
+
+// Types
+export type {
+  WizardFormData,
+  WizardState,
+  WizardStepBaseProps,
+  VoiceDimensions,
+  VoiceCharacteristics,
+  PersonaData as PersonaDataType,
+  ExamplePair as ExamplePairType,
+  WritingRules,
+  Vocabulary,
+  ProofElements,
+  ExamplesBank,
+  ResearchData,
+} from './types'
+
+// Step components
+export {
+  Step1BrandSetup,
+  Step2Foundation,
+  Step3Audience,
+  Step4Voice,
+  Step5WritingRules,
+  Step6ProofExamples,
+  Step7Review,
+  type Step1BrandSetupProps,
+  type Step7ReviewProps,
+} from './steps'
