@@ -211,8 +211,6 @@ class RedisManager:
                 socket_timeout=settings.redis_socket_timeout,
                 retry_on_timeout=settings.redis_retry_on_timeout,
                 health_check_interval=settings.redis_health_check_interval,
-                # SSL settings for production
-                ssl_cert_reqs="required" if use_ssl else None,
             )
 
             # Create client with pool
