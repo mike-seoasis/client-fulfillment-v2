@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "sessionId": "fc08b17d-2989-4f04-8c3b-fd549d44f21f",
+  "sessionId": "32fc1404-9b2d-4f9f-8b48-53ff467ba2c2",
   "status": "running",
-  "startedAt": "2026-02-02T01:21:44.316Z",
-  "updatedAt": "2026-02-02T01:23:50.468Z",
+  "startedAt": "2026-02-02T01:23:54.566Z",
+  "updatedAt": "2026-02-02T01:25:39.366Z",
   "currentIteration": 0,
   "maxIterations": 30,
   "tasksCompleted": 0,
@@ -15,8 +15,8 @@
     "totalTasks": 1,
     "tasks": [
       {
-        "id": "client-onboarding-v2-c3y.153",
-        "title": "Run production data migration",
+        "id": "client-onboarding-v2-c3y.154",
+        "title": "DNS cutover to V2",
         "status": "open",
         "completedInSession": false
       }
