@@ -571,3 +571,25 @@ When creating new SQLAlchemy models in `backend/app/models/`:
   - For upsert tests, verify both the update path (existing brief) and create path (no existing brief)
 ---
 
+## 2026-02-02 - US-021
+- Implemented batch scoring support in `backend/app/services/pop_content_score.py`:
+  - Added `BatchScoreItem` dataclass for input: (page_id, keyword, url) tuple
+  - Added `BatchScoreResult` dataclass for output with individual success/failure status
+  - Added `score_batch()` async generator method that yields results as they complete
+  - Respects rate limits via semaphore-based concurrency control (default: 5 concurrent)
+  - Handles partial failures gracefully - one item's failure doesn't affect others
+- Added `pop_batch_rate_limit` config setting to `backend/app/core/config.py` (default: 5)
+- Added module-level `score_batch()` convenience function for easy access with session
+- Files changed:
+  - `backend/app/services/pop_content_score.py` - Added batch scoring method and dataclasses
+  - `backend/app/core/config.py` - Added `pop_batch_rate_limit` setting
+- **Learnings:**
+  - Use `AsyncIterator[T]` from `collections.abc` for type hint on async generators
+  - Async generators use `async for result in method():` pattern for consumers
+  - Use `asyncio.Queue` to collect results from concurrent tasks for streaming
+  - Use `TimeoutError` (builtin) not `asyncio.TimeoutError` per ruff UP041 rule
+  - Semaphore-based rate limiting: `asyncio.Semaphore(limit)` with `async with semaphore:` blocks
+  - For methods that yield results, can't return early - use guard `if not items: return` before generator loop
+  - Track nonlocal statistics variables across async tasks with `nonlocal` keyword
+---
+

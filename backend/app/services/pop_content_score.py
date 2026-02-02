@@ -19,8 +19,10 @@ ERROR LOGGING REQUIREMENTS:
 - Log fallback events at WARNING level with reason
 """
 
+import asyncio
 import time
 import traceback
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -72,6 +74,38 @@ class POPContentScoreResult:
     error: str | None = None
     duration_ms: float = 0.0
     request_id: str | None = None
+
+
+@dataclass
+class BatchScoreItem:
+    """Input item for batch scoring operation.
+
+    Represents a single content piece to be scored in a batch operation.
+    """
+
+    page_id: str
+    keyword: str
+    url: str
+
+
+@dataclass
+class BatchScoreResult:
+    """Result of a single item in a batch scoring operation.
+
+    Includes the input item data along with the scoring result for
+    easy correlation of inputs to outputs.
+    """
+
+    page_id: str
+    keyword: str
+    url: str
+    success: bool
+    score_id: str | None = None
+    page_score: float | None = None
+    passed: bool | None = None
+    fallback_used: bool = False
+    error: str | None = None
+    duration_ms: float = 0.0
 
 
 class POPContentScoreServiceError(Exception):
@@ -1632,6 +1666,242 @@ class POPContentScoreService:
 
         return result
 
+    async def score_batch(
+        self,
+        project_id: str,
+        items: list[BatchScoreItem],
+        rate_limit: int | None = None,
+    ) -> AsyncIterator[BatchScoreResult]:
+        """Score multiple content pieces, yielding results as they complete.
+
+        This method processes batch scoring requests concurrently while respecting
+        rate limits. Results are yielded as they complete rather than waiting for
+        all items to finish, enabling efficient streaming of results.
+
+        Features:
+        - Respects rate limits via semaphore-based concurrency control
+        - Yields results as they complete (not ordered)
+        - Handles partial failures gracefully - one item's failure doesn't affect others
+        - Each item has individual success/failure status
+
+        Args:
+            project_id: Project ID for logging context
+            items: List of BatchScoreItem with (page_id, keyword, url)
+            rate_limit: Max concurrent requests (default: DEFAULT_BATCH_RATE_LIMIT)
+
+        Yields:
+            BatchScoreResult for each item as scoring completes
+
+        Example:
+            items = [
+                BatchScoreItem(page_id="uuid1", keyword="hiking boots", url="https://..."),
+                BatchScoreItem(page_id="uuid2", keyword="running shoes", url="https://..."),
+            ]
+            async for result in service.score_batch("project_uuid", items):
+                if result.success:
+                    print(f"Page {result.page_id}: score={result.page_score}")
+                else:
+                    print(f"Page {result.page_id}: error={result.error}")
+        """
+        start_time = time.monotonic()
+        settings = get_settings()
+        effective_rate_limit = rate_limit or settings.pop_batch_rate_limit
+
+        # Method entry log
+        logger.debug(
+            "score_batch method entry",
+            extra={
+                "project_id": project_id,
+                "item_count": len(items),
+                "rate_limit": effective_rate_limit,
+            },
+        )
+
+        # Validate input
+        if not items:
+            logger.warning(
+                "score_batch called with empty items list",
+                extra={"project_id": project_id},
+            )
+            return
+
+        # Phase transition: batch_scoring_started
+        logger.info(
+            "batch_scoring_started",
+            extra={
+                "project_id": project_id,
+                "item_count": len(items),
+                "rate_limit": effective_rate_limit,
+            },
+        )
+
+        # Semaphore controls concurrent requests to respect rate limits
+        semaphore = asyncio.Semaphore(effective_rate_limit)
+
+        # Queue for completed results
+        result_queue: asyncio.Queue[BatchScoreResult] = asyncio.Queue()
+
+        # Track statistics
+        completed_count = 0
+        successful_count = 0
+        failed_count = 0
+        fallback_count = 0
+
+        async def score_single_item(item: BatchScoreItem) -> None:
+            """Score a single item and put result in queue."""
+            nonlocal completed_count, successful_count, failed_count, fallback_count
+
+            async with semaphore:
+                item_start_time = time.monotonic()
+
+                try:
+                    # Call the existing score_and_save_content method
+                    score_result = await self.score_and_save_content(
+                        project_id=project_id,
+                        page_id=item.page_id,
+                        keyword=item.keyword,
+                        content_url=item.url,
+                    )
+
+                    duration_ms = (time.monotonic() - item_start_time) * 1000
+
+                    # Convert to BatchScoreResult
+                    batch_result = BatchScoreResult(
+                        page_id=item.page_id,
+                        keyword=item.keyword,
+                        url=item.url,
+                        success=score_result.success,
+                        score_id=score_result.score_id,
+                        page_score=score_result.page_score,
+                        passed=score_result.passed,
+                        fallback_used=score_result.fallback_used,
+                        error=score_result.error,
+                        duration_ms=duration_ms,
+                    )
+
+                    # Update statistics
+                    completed_count += 1
+                    if score_result.success:
+                        successful_count += 1
+                    else:
+                        failed_count += 1
+                    if score_result.fallback_used:
+                        fallback_count += 1
+
+                    logger.debug(
+                        "batch_item_completed",
+                        extra={
+                            "project_id": project_id,
+                            "page_id": item.page_id,
+                            "keyword": item.keyword[:50],
+                            "success": score_result.success,
+                            "page_score": score_result.page_score,
+                            "passed": score_result.passed,
+                            "fallback_used": score_result.fallback_used,
+                            "completed_count": completed_count,
+                            "total_items": len(items),
+                            "duration_ms": round(duration_ms, 2),
+                        },
+                    )
+
+                except Exception as e:
+                    duration_ms = (time.monotonic() - item_start_time) * 1000
+
+                    # Handle partial failures gracefully
+                    batch_result = BatchScoreResult(
+                        page_id=item.page_id,
+                        keyword=item.keyword,
+                        url=item.url,
+                        success=False,
+                        error=str(e),
+                        duration_ms=duration_ms,
+                    )
+
+                    # Update statistics
+                    completed_count += 1
+                    failed_count += 1
+
+                    logger.error(
+                        "batch_item_failed",
+                        extra={
+                            "project_id": project_id,
+                            "page_id": item.page_id,
+                            "keyword": item.keyword[:50],
+                            "error": str(e),
+                            "error_type": type(e).__name__,
+                            "completed_count": completed_count,
+                            "total_items": len(items),
+                            "duration_ms": round(duration_ms, 2),
+                            "stack_trace": traceback.format_exc(),
+                        },
+                        exc_info=True,
+                    )
+
+                # Put result in queue regardless of success/failure
+                await result_queue.put(batch_result)
+
+        # Create tasks for all items
+        tasks = [asyncio.create_task(score_single_item(item)) for item in items]
+
+        # Yield results as they complete
+        items_yielded = 0
+        while items_yielded < len(items):
+            try:
+                # Wait for next result with timeout to prevent deadlock
+                result = await asyncio.wait_for(result_queue.get(), timeout=600.0)
+                items_yielded += 1
+                yield result
+            except TimeoutError:
+                # Log timeout but continue processing
+                logger.warning(
+                    "batch_scoring_result_timeout",
+                    extra={
+                        "project_id": project_id,
+                        "items_yielded": items_yielded,
+                        "total_items": len(items),
+                        "pending_items": len(items) - items_yielded,
+                    },
+                )
+                # Cancel remaining tasks
+                for task in tasks:
+                    if not task.done():
+                        task.cancel()
+                break
+
+        # Wait for all tasks to complete (should already be done)
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+        total_duration_ms = (time.monotonic() - start_time) * 1000
+
+        # Phase transition: batch_scoring_completed
+        logger.info(
+            "batch_scoring_completed",
+            extra={
+                "project_id": project_id,
+                "total_items": len(items),
+                "successful_count": successful_count,
+                "failed_count": failed_count,
+                "fallback_count": fallback_count,
+                "total_duration_ms": round(total_duration_ms, 2),
+                "avg_duration_ms": round(total_duration_ms / len(items), 2)
+                if items
+                else 0,
+            },
+        )
+
+        # Method exit log
+        logger.debug(
+            "score_batch method exit",
+            extra={
+                "project_id": project_id,
+                "total_items": len(items),
+                "successful_count": successful_count,
+                "failed_count": failed_count,
+                "fallback_count": fallback_count,
+                "total_duration_ms": round(total_duration_ms, 2),
+            },
+        )
+
 
 # Global singleton instance
 _pop_content_score_service: POPContentScoreService | None = None
@@ -1725,3 +1995,45 @@ async def score_and_save_content(
         keyword=keyword,
         content_url=content_url,
     )
+
+
+async def score_batch(
+    session: AsyncSession,
+    project_id: str,
+    items: list[BatchScoreItem],
+    rate_limit: int | None = None,
+) -> AsyncIterator[BatchScoreResult]:
+    """Convenience function for batch scoring content with persistence.
+
+    This function creates a new service instance with the provided session
+    and yields scoring results as they complete. Enables efficient streaming
+    of batch scoring results.
+
+    Args:
+        session: Async SQLAlchemy session for database operations
+        project_id: Project ID for logging context
+        items: List of BatchScoreItem with (page_id, keyword, url)
+        rate_limit: Max concurrent requests (default: from config)
+
+    Yields:
+        BatchScoreResult for each item as scoring completes
+
+    Example:
+        async with get_session() as session:
+            items = [
+                BatchScoreItem(page_id="uuid1", keyword="hiking boots", url="https://..."),
+                BatchScoreItem(page_id="uuid2", keyword="running shoes", url="https://..."),
+            ]
+            async for result in score_batch(session, "project_uuid", items):
+                if result.success:
+                    print(f"Page {result.page_id}: score={result.page_score}")
+                else:
+                    print(f"Page {result.page_id}: error={result.error}")
+    """
+    service = POPContentScoreService(session=session)
+    async for result in service.score_batch(
+        project_id=project_id,
+        items=items,
+        rate_limit=rate_limit,
+    ):
+        yield result

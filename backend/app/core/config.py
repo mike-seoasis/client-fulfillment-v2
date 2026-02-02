@@ -400,6 +400,11 @@ class Settings(BaseSettings):
         default=False,
         description="Enable POP integration for content scoring (default: disabled for safe rollout)",
     )
+    # POP batch scoring settings
+    pop_batch_rate_limit: int = Field(
+        default=5,
+        description="Maximum concurrent requests for batch scoring operations",
+    )
 
 
 @lru_cache
