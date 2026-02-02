@@ -3,15 +3,15 @@
   "description": "Ready tasks batch",
   "userStories": [
     {
-      "id": "client-onboarding-v2-c3y.153",
-      "title": "Run production data migration",
-      "description": "ERROR LOGGING REQUIREMENTS:\n- Log all database connection errors with connection string (masked)\n- Log query execution time for slow queries (>100ms) at WARNING level\n- Log transaction failures with rollback context\n- Log migration start/end with version info\n- Include table/model name in all database error logs\n- Log connection pool exhaustion at CRITICAL level\n\nRAILWAY DEPLOYMENT REQUIREMENTS:\n- Connect via DATABASE_URL environment variable (Railway provides this)\n- Use connection pooling (SQLAlchemy pool_size=5, max_overflow=10)\n- Handle connection timeouts gracefully (Railway can cold-start)\n- Migrations must run via `alembic upgrade head` in deploy command\n- NO sqlite - PostgreSQL only\n- Use SSL mode for database connections (sslmode=require)",
+      "id": "client-onboarding-v2-c3y.154",
+      "title": "DNS cutover to V2",
+      "description": "ERROR LOGGING REQUIREMENTS:\n- Log deployment start/end with version info\n- Log each migration step with success/failure status\n- Log rollback triggers and execution\n- Log environment variable validation (mask values)\n- Log health check results during deployment\n- Log database connection verification",
       "acceptanceCriteria": [],
       "passes": true,
       "completionNotes": "Completed by agent"
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-02T01:23:50.467Z"
+    "updatedAt": "2026-02-02T01:25:39.365Z"
   }
 }
