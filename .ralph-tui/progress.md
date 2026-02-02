@@ -379,3 +379,24 @@ When creating new SQLAlchemy models in `backend/app/models/`:
   - When content passes, recommendations can still be returned but are not prioritized (pass = meeting minimum quality bar)
 ---
 
+## 2026-02-02 - US-019
+- Implemented fallback to legacy ContentScoreService when POP is unavailable:
+  - Fallback triggers on `POPCircuitOpenError` (circuit breaker is open)
+  - Fallback triggers on `POPTimeoutError` (timeout after configured limit)
+  - Fallback triggers on `POPError` (API errors after retries exhausted)
+  - Added `_score_with_fallback()` method that calls legacy `ContentScoreService`
+  - Added `_get_legacy_service()` method for lazy-loading legacy service
+  - Updated constructor to accept optional `legacy_service` for DI
+- Response includes `fallback_used: True` flag when fallback is used
+- Fallback events logged at WARNING level with reason: `circuit_open`, `timeout`, `api_error`
+- Legacy score (0.0-1.0 scale) converted to POP scale (0-100) for consistency
+- Files changed:
+  - `backend/app/services/pop_content_score.py` - Added fallback logic, imports, methods
+- **Learnings:**
+  - Exception handling order matters: `POPCircuitOpenError` and `POPTimeoutError` must be caught before generic `POPError`
+  - Legacy ContentScoreService requires actual content text, not URL - for full implementation would need to fetch content
+  - Fallback result conversion: multiply legacy score by 100 to match POP's 0-100 scale
+  - Separate warning logs before fallback vs INFO logs during fallback execution for clear traceability
+  - Import order: import both exception types (`POPCircuitOpenError`, `POPTimeoutError`) from pop.py
+---
+

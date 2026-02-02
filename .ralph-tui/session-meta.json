@@ -2,13 +2,13 @@
   "id": "507aa4d0-6ebf-4607-82ff-4b567e5d9704",
   "status": "running",
   "startedAt": "2026-02-02T19:14:04.446Z",
-  "updatedAt": "2026-02-02T19:52:20.869Z",
+  "updatedAt": "2026-02-02T19:55:46.066Z",
   "agentPlugin": "claude",
   "trackerPlugin": "json",
   "prdPath": "./openspec/changes/replace-content-scoring-api/prd.json",
-  "currentIteration": 15,
-  "maxIterations": 40,
+  "currentIteration": 16,
+  "maxIterations": 70,
   "totalTasks": 0,
-  "tasksCompleted": 15,
+  "tasksCompleted": 16,
   "cwd": "/Users/mike/Projects/client-onboarding-v2"
 }
