@@ -84,13 +84,12 @@ def do_run_migrations(connection: Connection) -> None:
 
 async def run_async_migrations() -> None:
     """Run migrations in 'online' mode with async engine."""
-    # Get current migration info for logging
-    current_rev = context.get_context().get_current_revision() if context.is_offline_mode() is False else None
+    # Note: context.get_context() can't be called until after configure()
+    # So we log without the current revision
     head_rev = context.get_head_revision()
-
     db_logger.migration_start(
         version=str(head_rev) if head_rev else "initial",
-        description=f"Migrating from {current_rev or 'base'} to {head_rev or 'head'}",
+        description=f"Migrating to {head_rev or 'head'}",
     )
 
     configuration = config.get_section(config.config_ini_section, {})
