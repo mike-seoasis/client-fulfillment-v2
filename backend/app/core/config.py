@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     port: int = Field(default=8000, description="Port to bind to (Railway sets this)")
     host: str = Field(default="0.0.0.0", description="Host to bind to")
 
+    # CORS - Frontend URL for production
+    frontend_url: str | None = Field(
+        default=None,
+        description="Frontend URL for CORS (e.g., https://app.example.com). If not set, allows all origins.",
+    )
+
     # Database
     database_url: PostgresDsn = Field(
         ...,

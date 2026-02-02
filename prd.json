@@ -3,15 +3,15 @@
   "description": "Ready tasks batch",
   "userStories": [
     {
-      "id": "client-onboarding-v2-c3y.150",
-      "title": "Configure production PostgreSQL and Redis",
-      "description": "ERROR LOGGING REQUIREMENTS:\n- Configure structured JSON logging with python-json-logger\n- Set up log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL\n- Include correlation IDs (request_id) in all log entries\n- Configure log rotation and retention\n- Add timing/performance logging for slow operations (>500ms)\n- Ensure stack traces are captured for all exceptions\n\nRAILWAY DEPLOYMENT REQUIREMENTS:\n- Connect via REDIS_URL environment variable (Railway provides this)\n- Handle Redis connection failures gracefully (cache is optional)\n- Use SSL/TLS for Redis connections in production\n- Implement connection retry logic for cold starts",
+      "id": "client-onboarding-v2-c3y.151",
+      "title": "Set up environment variables for API keys",
+      "description": "ERROR LOGGING REQUIREMENTS:\n- Log all incoming requests with method, path, request_id\n- Log request body at DEBUG level (sanitize sensitive fields)\n- Log response status and timing for every request\n- Return structured error responses: {\"error\": str, \"code\": str, \"request_id\": str}\n- Log 4xx errors at WARNING, 5xx at ERROR\n- Include user context if available\n- Log rate limit hits at WARNING level\n\nRAILWAY DEPLOYMENT REQUIREMENTS:\n- CORS must allow frontend domain (configure via FRONTEND_URL env var)\n- Return proper error responses (Railway shows these in logs)\n- Include request_id in all responses for debugging\n- Health check endpoint at /health or /api/v1/health",
       "acceptanceCriteria": [],
       "passes": true,
       "completionNotes": "Completed by agent"
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-02T01:17:00.562Z"
+    "updatedAt": "2026-02-02T01:19:45.560Z"
   }
 }
