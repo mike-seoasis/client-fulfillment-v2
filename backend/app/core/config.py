@@ -94,7 +94,8 @@ class Settings(BaseSettings):
         description="Crawl4AI API token for authentication",
     )
     crawl4ai_timeout: float = Field(
-        default=300.0, description="Crawl4AI request timeout in seconds (5 min for Railway)"
+        default=300.0,
+        description="Crawl4AI request timeout in seconds (5 min for Railway)",
     )
     crawl4ai_max_retries: int = Field(
         default=3, description="Maximum retry attempts for Crawl4AI requests"
@@ -194,7 +195,8 @@ class Settings(BaseSettings):
         default=30.0, description="Keywords Everywhere API request timeout in seconds"
     )
     keywords_everywhere_max_retries: int = Field(
-        default=3, description="Maximum retry attempts for Keywords Everywhere API requests"
+        default=3,
+        description="Maximum retry attempts for Keywords Everywhere API requests",
     )
     keywords_everywhere_retry_delay: float = Field(
         default=1.0, description="Base delay between retries in seconds"
@@ -206,7 +208,8 @@ class Settings(BaseSettings):
         default="USD", description="Default currency for CPC data"
     )
     keywords_everywhere_default_data_source: str = Field(
-        default="gkp", description="Default data source (gkp=Google Keyword Planner, cli=clickstream)"
+        default="gkp",
+        description="Default data source (gkp=Google Keyword Planner, cli=clickstream)",
     )
     # Circuit breaker settings for Keywords Everywhere
     keywords_everywhere_circuit_failure_threshold: int = Field(
@@ -309,7 +312,8 @@ class Settings(BaseSettings):
         default=30.0, description="Google Cloud NLP API request timeout in seconds"
     )
     google_nlp_max_retries: int = Field(
-        default=3, description="Maximum retry attempts for Google Cloud NLP API requests"
+        default=3,
+        description="Maximum retry attempts for Google Cloud NLP API requests",
     )
     google_nlp_retry_delay: float = Field(
         default=1.0, description="Base delay between retries in seconds"
@@ -368,6 +372,12 @@ class Settings(BaseSettings):
     )
     pop_task_timeout: float = Field(
         default=300.0, description="Maximum time in seconds to wait for task completion"
+    )
+    pop_max_retries: int = Field(
+        default=3, description="Maximum retry attempts for POP API requests"
+    )
+    pop_retry_delay: float = Field(
+        default=1.0, description="Base delay between retries in seconds"
     )
     # Circuit breaker settings for POP
     pop_circuit_failure_threshold: int = Field(

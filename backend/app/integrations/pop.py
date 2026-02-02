@@ -302,8 +302,8 @@ class POPClient:
         api_url: str | None = None,
         task_poll_interval: float | None = None,
         task_timeout: float | None = None,
-        max_retries: int = 3,
-        retry_delay: float = 1.0,
+        max_retries: int | None = None,
+        retry_delay: float | None = None,
     ) -> None:
         """Initialize POP client.
 
@@ -312,8 +312,8 @@ class POPClient:
             api_url: POP API base URL. Defaults to settings.
             task_poll_interval: Interval between task status polls. Defaults to settings.
             task_timeout: Maximum time to wait for task completion. Defaults to settings.
-            max_retries: Maximum retry attempts. Defaults to 3.
-            retry_delay: Base delay between retries. Defaults to 1.0.
+            max_retries: Maximum retry attempts. Defaults to settings (3).
+            retry_delay: Base delay between retries. Defaults to settings (1.0).
         """
         settings = get_settings()
 
@@ -321,8 +321,12 @@ class POPClient:
         self._api_url = api_url or settings.pop_api_url
         self._task_poll_interval = task_poll_interval or settings.pop_task_poll_interval
         self._task_timeout = task_timeout or settings.pop_task_timeout
-        self._max_retries = max_retries
-        self._retry_delay = retry_delay
+        self._max_retries = (
+            max_retries if max_retries is not None else settings.pop_max_retries
+        )
+        self._retry_delay = (
+            retry_delay if retry_delay is not None else settings.pop_retry_delay
+        )
 
         # Initialize circuit breaker
         self._circuit_breaker = CircuitBreaker(
