@@ -5,25 +5,24 @@ after each iteration and it's included in prompts for context.
 
 ## Codebase Patterns (Study These First)
 
-### Type Checking Configuration
-- **Backend (mypy)**: Config in `backend/pyproject.toml` under `[tool.mypy]`. Third-party libs without stubs are handled via `[[tool.mypy.overrides]]` with `ignore_missing_imports = true`.
-- **Frontend (tsc)**: Config in `frontend/tsconfig.json`. Run with `npm run typecheck`.
-- When adding new third-party dependencies without type stubs, add them to the mypy overrides module list in `pyproject.toml`.
+- **Python tooling**: Uses Ruff for linting and formatting (replaces black/isort/flake8), configured in `backend/pyproject.toml`
+- **Frontend tooling**: ESLint + Prettier for TypeScript/React, configured in `frontend/.eslintrc.cjs` and `frontend/.prettierrc`
+- **Pre-commit**: Configuration in `.pre-commit-config.yaml` - install with `pip install pre-commit && pre-commit install`
 
 ---
 
-## 2026-02-01 - client-onboarding-v2-c3y.142
-- Ran mypy type checking on backend (134 source files) and tsc on frontend
-- Fixed 8 type errors across 4 backend files
+## 2026-02-01 - client-onboarding-v2-c3y.143
+- Configured pre-commit hooks for the monorepo
 - Files changed:
-  - `backend/pyproject.toml` - Added `boto3` and `boto3.*` to mypy ignore_missing_imports list
-  - `backend/app/core/logging.py` - Added `type: ignore[name-defined]` for JsonFormatter base class
-  - `backend/app/core/redis.py` - Added `type: ignore[misc]` for async ping() call
-  - `backend/app/api/v1/endpoints/projects.py` - Fixed return type for `create_project` (was missing `JSONResponse`), removed 4 unused `type: ignore[return-value]` comments
+  - `.pre-commit-config.yaml` (new) - Main pre-commit configuration
+  - `frontend/.prettierrc` (new) - Prettier formatting config
+  - `frontend/.prettierignore` (new) - Prettier ignore patterns
+  - `frontend/package.json` - Added prettier, eslint-config-prettier, format scripts
+  - `frontend/.eslintrc.cjs` - Extended with prettier config for compatibility
 - **Learnings:**
-  - Local imports (inside functions) are still affected by mypy module overrides in pyproject.toml
-  - FastAPI endpoints that return either a response model or JSONResponse need union return types (`ProjectResponse | JSONResponse`)
-  - The `warn_unused_ignores = true` mypy setting catches stale type: ignore comments
-  - Redis async client's `ping()` returns `Awaitable[bool] | bool` which requires type: ignore for await
+  - Ruff provides isort functionality via `I` rule and formatting via `ruff format` - no need for separate black/isort
+  - Pre-commit uses local hooks for frontend tooling to leverage project's npm setup
+  - eslint-config-prettier disables ESLint rules that conflict with Prettier formatting
+  - System npm cache had permission issues preventing `npm install` - users may need `sudo chown -R $(id -u):$(id -g) ~/.npm` to fix
 ---
 
