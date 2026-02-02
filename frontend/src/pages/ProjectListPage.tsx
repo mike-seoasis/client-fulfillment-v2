@@ -19,6 +19,14 @@ import { Input } from '@/components/ui/form-field'
 import { ProjectCard, ProjectCardSkeleton, type Project } from '@/components/ProjectCard'
 import { CreateProjectModal } from '@/components/CreateProjectModal'
 
+/** Paginated response from the API */
+interface PaginatedResponse<T> {
+  items: T[]
+  total: number
+  limit: number
+  offset: number
+}
+
 /**
  * Empty state component shown when no projects exist
  */
@@ -120,12 +128,12 @@ export function ProjectListPage() {
 
   // Fetch projects from API
   const {
-    data: projects,
+    data: response,
     isLoading,
     isError,
     error,
     refetch,
-  } = useApiQuery<Project[]>({
+  } = useApiQuery<PaginatedResponse<Project>>({
     queryKey: ['projects'],
     endpoint: '/api/v1/projects',
     requestOptions: {
@@ -133,6 +141,9 @@ export function ProjectListPage() {
       component: 'ProjectListPage',
     },
   })
+
+  // Extract projects array from paginated response
+  const projects = response?.items
 
   // Filter projects based on search query
   const filteredProjects = useMemo(() => {
