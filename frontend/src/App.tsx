@@ -1,8 +1,8 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ToastProvider } from '@/components/ui/toast-provider'
-import { Home } from '@/pages/Home'
+// Home page removed - redirecting to /projects
 import { ProjectListPage } from '@/pages/ProjectListPage'
 import { ProjectDetailPage } from '@/pages/ProjectDetailPage'
 import { ProjectSettingsPage } from '@/pages/ProjectSettingsPage'
@@ -27,11 +27,7 @@ export function App() {
             <Routes>
               <Route
                 path="/"
-                element={
-                  <ErrorBoundary componentName="Home">
-                    <Home />
-                  </ErrorBoundary>
-                }
+                element={<Navigate to="/projects" replace />}
               />
               <Route
                 path="/projects"

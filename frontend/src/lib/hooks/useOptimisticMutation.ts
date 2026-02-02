@@ -95,7 +95,7 @@ export interface UseOptimisticMutationOptions<TData, TVariables, TSnapshot = unk
  * @example
  * // Basic usage for project settings update
  * const updateProject = useOptimisticMutation({
- *   mutationFn: (data) => api.patch(`/api/projects/${projectId}`, data),
+ *   mutationFn: (data) => api.patch(`/api/v1/projects/${projectId}`, data),
  *   queryKey: ['project', projectId],
  *   getOptimisticData: (current, data) => ({
  *     ...current,
@@ -110,7 +110,7 @@ export interface UseOptimisticMutationOptions<TData, TVariables, TSnapshot = unk
  * @example
  * // Phase status update with nested data
  * const updatePhaseStatus = useOptimisticMutation({
- *   mutationFn: (data) => api.patch(`/api/projects/${projectId}/phases`, data),
+ *   mutationFn: (data) => api.patch(`/api/v1/projects/${projectId}/phases`, data),
  *   queryKey: ['project', projectId],
  *   getOptimisticData: (current, { phase, status }) => ({
  *     ...current,

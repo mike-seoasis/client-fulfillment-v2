@@ -183,7 +183,7 @@ function DangerZone({
 
   const deleteMutation = useToastMutation<void, Error, void>({
     mutationFn: () =>
-      api.delete(`/api/projects/${projectId}`, {
+      api.delete(`/api/v1/projects/${projectId}`, {
         userAction: 'Delete project',
         component: 'ProjectSettingsPage',
       }),
@@ -355,7 +355,7 @@ export function ProjectSettingsPage() {
     refetch,
   } = useApiQuery<ProjectDetail>({
     queryKey: ['project', projectId],
-    endpoint: `/api/projects/${projectId}`,
+    endpoint: `/api/v1/projects/${projectId}`,
     requestOptions: {
       userAction: 'Load project settings',
       component: 'ProjectSettingsPage',
@@ -387,7 +387,7 @@ export function ProjectSettingsPage() {
   // Update project mutation with optimistic updates
   const updateMutation = useOptimisticMutation<ProjectDetail, UpdateProjectInput, ProjectDetail>({
     mutationFn: (data) =>
-      api.patch<ProjectDetail>(`/api/projects/${projectId}`, data, {
+      api.patch<ProjectDetail>(`/api/v1/projects/${projectId}`, data, {
         userAction: 'Update project settings',
         component: 'ProjectSettingsPage',
       }),
@@ -422,7 +422,7 @@ export function ProjectSettingsPage() {
     mutationFn: () => {
       const newStatus = project?.status === 'archived' ? 'active' : 'archived'
       return api.patch<ProjectDetail>(
-        `/api/projects/${projectId}`,
+        `/api/v1/projects/${projectId}`,
         { status: newStatus },
         {
           userAction: project?.status === 'archived' ? 'Unarchive project' : 'Archive project',
@@ -576,7 +576,7 @@ export function ProjectSettingsPage() {
   if (isError && error) {
     console.error('[ProjectSettingsPage] Failed to load project settings:', {
       error: error.message,
-      endpoint: `/api/projects/${projectId}`,
+      endpoint: `/api/v1/projects/${projectId}`,
       status: error.status,
       projectId,
     })
