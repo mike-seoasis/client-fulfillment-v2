@@ -5,42 +5,39 @@ after each iteration and it's included in prompts for context.
 
 ## Codebase Patterns (Study These First)
 
-### Error Logging Pattern
-The codebase uses structured logging with the following conventions:
-- `log_method_entry(name, **params)` - DEBUG level entry with sanitized params
-- `log_method_exit(name, success, result_summary)` - DEBUG level exit
-- `log_exception_with_context(error, context, operation)` - ERROR with full stack trace
-- `log_slow_operation(operation, duration_s, **context)` - WARNING if >1s
-- `log_validation_failure(entity_type, entity_id, field_name, rejected_value, reason)` - WARNING
-- `log_phase_transition(project_id, phase_name, old_status, new_status)` - INFO
+### Database Configuration Pattern
+- Connection pooling: `pool_size=5`, `max_overflow=10` (Railway defaults)
+- SSL mode: Always add `sslmode=require` for Railway PostgreSQL
+- Cold-start timeouts: `db_connect_timeout=60`, `db_command_timeout=60`
+- Async driver: Convert `postgresql://` to `postgresql+asyncpg://`
 
-All service loggers (DatabaseLogger, ClaudeLogger, etc.) are singletons in `app/core/logging.py`.
+### Migration Logging Pattern
+- Use `db_logger` singleton from `app.core.logging`
+- Required methods: `migration_start()`, `migration_end()`, `migration_step()`
+- Connection errors: Always mask passwords with `mask_connection_string()`
+- Slow queries (>100ms): Log at WARNING level with `slow_query()`
+- Pool exhaustion: Log at CRITICAL level with `pool_exhausted()`
 
-### Schema Validation Pattern
-Use Pydantic models with `@field_validator` decorators for validation:
-```python
-class V2Schema(BaseModel):
-    field: str = Field(..., min_length=1)
-
-    @field_validator("field")
-    @classmethod
-    def validate_field(cls, v: str) -> str:
-        if not valid(v):
-            raise ValueError(f"Invalid: {v}")
-        return v
-```
+### Test File Organization
+- Tests in `backend/tests/` organized by type (api/, services/, utils/, migrations/, e2e/)
+- Each test module has class-based organization for related tests
+- Fixtures defined in `conftest.py` at various scopes
 
 ---
 
-## 2026-02-01 - client-onboarding-v2-c3y.145
-- What was implemented: V2 schema transformation script with comprehensive error logging
+## 2026-02-01 - client-onboarding-v2-c3y.146
+- What was implemented:
+  - Created comprehensive staging migration test suite in `backend/tests/migrations/test_staging_migration.py`
+  - 28 tests covering all error logging and Railway deployment requirements
+  - Tests verify: connection string masking, pool config defaults, SSL mode enforcement, slow query logging, transaction failure logging, migration start/end logging, pool exhaustion logging, Railway-specific requirements
 - Files changed:
-  - `execution/transform_v1_to_v2.py` (new file)
+  - `backend/tests/migrations/__init__.py` (new)
+  - `backend/tests/migrations/test_staging_migration.py` (new - 28 tests)
 - **Learnings:**
-  - V1 schema uses flat phase status fields (phase1_status, phase2_status, etc.) that need to be consolidated into V2's JSONB phase_status
-  - V1 didn't have client_id - need to derive from project name
-  - Page data can be in multiple files (crawl_results.json, categorized_pages.json, labeled_pages.json)
-  - Error logging requirements require: method entry/exit at DEBUG, exceptions with stack trace, entity IDs in logs, validation failures with field names, phase transitions at INFO, timing for >1s operations
-  - Use `dataclass` with `| None` type annotations and `__post_init__` for mutable defaults (not `= None`)
+  - The codebase already has comprehensive logging infrastructure in `app/core/logging.py` with `db_logger` singleton
+  - `deploy.py` handles deployment with proper logging - runs before app starts
+  - Alembic is configured for async migrations with proper Railway SSL/timeout settings
+  - Tests use SQLite for speed (conftest adapts PostgreSQL types) but production code is PostgreSQL-only
+  - Procfile runs `python -m app.deploy` before uvicorn to handle migrations
 ---
 
