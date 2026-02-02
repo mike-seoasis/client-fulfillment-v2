@@ -147,8 +147,9 @@
         "JSON columns use SQLAlchemy JSON type"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Follow existing model patterns in app/models/"
+      "passes": true,
+      "notes": "Follow existing model patterns in app/models/",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "US-010",
@@ -509,6 +510,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-02T19:29:13.443Z"
+    "updatedAt": "2026-02-02T19:31:41.514Z"
   }
 }
