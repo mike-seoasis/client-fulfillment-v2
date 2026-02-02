@@ -23,6 +23,7 @@ from app.api.v1.endpoints import (
     nlp,
     notifications,
     paa_enrichment,
+    pop_content_score,
     projects,
     review_platforms,
     schedule,
@@ -72,6 +73,11 @@ router.include_router(
     content_brief.router,
     prefix="/projects/{project_id}/phases/content_brief",
     tags=["Content Brief Phase"],
+)
+router.include_router(
+    pop_content_score.router,
+    prefix="/projects/{project_id}/phases/content_score",
+    tags=["Content Score Phase"],
 )
 router.include_router(
     content_plan.router,
