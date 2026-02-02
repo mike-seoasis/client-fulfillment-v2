@@ -685,3 +685,32 @@ When creating new SQLAlchemy models in `backend/app/models/`:
   - Legacy scoring service returns `overall_score` (0-1 scale) which gets converted to POP scale (0-100)
 ---
 
+## 2026-02-02 - US-031
+- Implemented shadow mode for scoring comparison to validate POP scoring before cutover:
+  - Added `pop_shadow_mode` config setting to `backend/app/core/config.py` (default: False)
+  - Added `ShadowComparisonMetrics` dataclass for storing comparison results
+  - Added `score_content_shadow()` method to `POPContentScoreService` that runs both POP and legacy scoring
+  - Added module-level convenience function `score_content_shadow()` for easy access
+- Shadow mode behavior:
+  - Runs POP scoring directly (no fallback to legacy on failure - we want pure POP result for comparison)
+  - Runs legacy scoring independently in parallel
+  - Converts legacy score (0.0-1.0) to POP scale (0-100) for fair comparison
+  - Logs detailed comparison metrics at INFO level: `shadow_comparison_metrics`
+  - Returns legacy result (not POP) to maintain current behavior during validation
+- Comparison metrics logged:
+  - `pop_score`, `legacy_score`, `score_difference` (POP - legacy)
+  - `pop_passed`, `legacy_passed`, `pass_agreement` (whether both agree on pass/fail)
+  - `pop_success`, `legacy_success` (whether each API call succeeded)
+  - `pop_duration_ms`, `legacy_duration_ms` (timing comparison)
+- Files changed:
+  - `backend/app/core/config.py` - Added `pop_shadow_mode` setting
+  - `backend/app/services/pop_content_score.py` - Added `ShadowComparisonMetrics`, `score_content_shadow()` method and convenience function
+  - `backend/.env.example` - Added `POP_SHADOW_MODE=false` documentation
+- **Learnings:**
+  - Shadow mode should return legacy result (not POP) to avoid affecting production behavior during validation
+  - For fair comparison, both scores must use the same scale (0-100) and same pass threshold
+  - POP API exceptions should be caught individually (POPCircuitOpenError, POPTimeoutError, POPError) for granular error logging
+  - Shadow scoring doesn't need to store the full POPContentScoreResult - just extract metrics for comparison
+  - The `pass_agreement` metric is key for validating POP before cutover
+---
+

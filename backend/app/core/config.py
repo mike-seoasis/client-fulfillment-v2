@@ -405,6 +405,11 @@ class Settings(BaseSettings):
         default=5,
         description="Maximum concurrent requests for batch scoring operations",
     )
+    # POP shadow mode for scoring comparison
+    pop_shadow_mode: bool = Field(
+        default=False,
+        description="Enable shadow mode to run both POP and legacy scoring for comparison analysis",
+    )
 
 
 @lru_cache

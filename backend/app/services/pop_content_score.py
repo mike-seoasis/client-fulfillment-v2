@@ -108,6 +108,43 @@ class BatchScoreResult:
     duration_ms: float = 0.0
 
 
+@dataclass
+class ShadowComparisonMetrics:
+    """Metrics comparing POP and legacy scoring results.
+
+    Used for shadow mode analysis to validate POP scoring before cutover.
+    All comparisons use POP's 0-100 scale (legacy scores are converted).
+    """
+
+    pop_score: float | None = None
+    legacy_score: float | None = None
+    score_difference: float | None = None  # POP - legacy (both on 0-100 scale)
+    pop_passed: bool | None = None
+    legacy_passed: bool | None = None
+    pass_agreement: bool = False  # Whether both agree on pass/fail
+    pop_success: bool = False  # Whether POP API call succeeded
+    legacy_success: bool = False  # Whether legacy scoring succeeded
+    pop_duration_ms: float = 0.0
+    legacy_duration_ms: float = 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for logging/serialization."""
+        return {
+            "pop_score": self.pop_score,
+            "legacy_score": self.legacy_score,
+            "score_difference": round(self.score_difference, 2)
+            if self.score_difference is not None
+            else None,
+            "pop_passed": self.pop_passed,
+            "legacy_passed": self.legacy_passed,
+            "pass_agreement": self.pass_agreement,
+            "pop_success": self.pop_success,
+            "legacy_success": self.legacy_success,
+            "pop_duration_ms": round(self.pop_duration_ms, 2),
+            "legacy_duration_ms": round(self.legacy_duration_ms, 2),
+        }
+
+
 class POPContentScoreServiceError(Exception):
     """Base exception for POP content score service errors."""
 
@@ -1370,6 +1407,230 @@ class POPContentScoreService:
                 duration_ms=duration_ms,
             )
 
+    async def score_content_shadow(
+        self,
+        project_id: str,
+        page_id: str,
+        keyword: str,
+        content_url: str,
+        content: str,
+    ) -> tuple[POPContentScoreResult, ShadowComparisonMetrics]:
+        """Score content using both POP and legacy scoring for comparison.
+
+        Shadow mode runs both scoring systems in parallel and logs comparison
+        metrics without affecting the response. Returns the legacy result
+        (the current production scoring) while collecting metrics for analysis.
+
+        This enables validation of POP scoring accuracy before full cutover.
+
+        Args:
+            project_id: Project ID for logging context
+            page_id: Page ID for logging context
+            keyword: Target keyword for scoring
+            content_url: URL of the content (for POP scoring)
+            content: Actual content text (for legacy scoring)
+
+        Returns:
+            Tuple of (legacy_result as POPContentScoreResult, comparison_metrics)
+            The legacy result is returned to maintain current behavior.
+        """
+        start_time = time.monotonic()
+        settings = get_settings()
+
+        # Method entry log
+        logger.debug(
+            "score_content_shadow method entry",
+            extra={
+                "project_id": project_id,
+                "page_id": page_id,
+                "keyword": keyword[:50] if keyword else "",
+                "content_url": content_url[:100] if content_url else "",
+                "content_length": len(content) if content else 0,
+                "shadow_mode": True,
+            },
+        )
+
+        logger.info(
+            "shadow_scoring_started",
+            extra={
+                "project_id": project_id,
+                "page_id": page_id,
+                "keyword": keyword[:50] if keyword else "",
+            },
+        )
+
+        # Initialize metrics
+        metrics = ShadowComparisonMetrics()
+
+        # Run POP scoring (don't let it fall back to legacy - we want pure POP result)
+        pop_start = time.monotonic()
+        try:
+            client = await self._get_client()
+
+            # Create task and poll for result (direct POP API call, no fallback)
+            task_result = await client.create_report_task(
+                keyword=keyword,
+                url=content_url,
+            )
+
+            if task_result.success and task_result.task_id:
+                poll_result = await client.poll_for_result(task_result.task_id)
+
+                if poll_result.success and poll_result.status == POPTaskStatus.SUCCESS:
+                    raw_data = poll_result.data or {}
+                    parsed = self._parse_score_data(raw_data)
+                    page_score = parsed.get("page_score")
+
+                    passed, _ = self._determine_pass_fail(
+                        page_score, parsed.get("recommendations", [])
+                    )
+
+                    # Extract metrics from successful POP scoring
+                    # We don't need the full result object, just the comparison metrics
+                    metrics.pop_success = True
+                    metrics.pop_score = page_score
+                    metrics.pop_passed = passed
+                    metrics.pop_duration_ms = (time.monotonic() - pop_start) * 1000
+
+        except (POPCircuitOpenError, POPTimeoutError, POPError) as e:
+            logger.warning(
+                "shadow_pop_scoring_failed",
+                extra={
+                    "project_id": project_id,
+                    "page_id": page_id,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                },
+            )
+        except Exception as e:
+            logger.error(
+                "shadow_pop_scoring_unexpected_error",
+                extra={
+                    "project_id": project_id,
+                    "page_id": page_id,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "stack_trace": traceback.format_exc(),
+                },
+            )
+
+        metrics.pop_duration_ms = (time.monotonic() - pop_start) * 1000
+
+        # Run legacy scoring
+        legacy_start = time.monotonic()
+        legacy_result_raw = None
+        try:
+            legacy_service = self._get_legacy_service()
+
+            legacy_input = ContentScoreInput(
+                content=content,
+                primary_keyword=keyword,
+                secondary_keywords=[],
+                project_id=project_id,
+                page_id=page_id,
+            )
+
+            legacy_result_raw = await legacy_service.score_content(legacy_input)
+
+            if legacy_result_raw.success:
+                metrics.legacy_success = True
+                # Convert legacy score (0-1) to POP scale (0-100)
+                metrics.legacy_score = legacy_result_raw.overall_score * 100
+                # Determine pass/fail using the same POP threshold for fair comparison
+                metrics.legacy_passed = (
+                    metrics.legacy_score >= settings.pop_pass_threshold
+                )
+
+        except Exception as e:
+            logger.error(
+                "shadow_legacy_scoring_failed",
+                extra={
+                    "project_id": project_id,
+                    "page_id": page_id,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "stack_trace": traceback.format_exc(),
+                },
+            )
+
+        metrics.legacy_duration_ms = (time.monotonic() - legacy_start) * 1000
+
+        # Calculate comparison metrics
+        if metrics.pop_score is not None and metrics.legacy_score is not None:
+            metrics.score_difference = metrics.pop_score - metrics.legacy_score
+            metrics.pass_agreement = metrics.pop_passed == metrics.legacy_passed
+
+        total_duration_ms = (time.monotonic() - start_time) * 1000
+
+        # Log shadow comparison metrics at INFO level for analysis
+        logger.info(
+            "shadow_comparison_metrics",
+            extra={
+                "project_id": project_id,
+                "page_id": page_id,
+                "keyword": keyword[:50] if keyword else "",
+                "pop_score": metrics.pop_score,
+                "legacy_score": round(metrics.legacy_score, 2)
+                if metrics.legacy_score is not None
+                else None,
+                "score_difference": round(metrics.score_difference, 2)
+                if metrics.score_difference is not None
+                else None,
+                "pop_passed": metrics.pop_passed,
+                "legacy_passed": metrics.legacy_passed,
+                "pass_agreement": metrics.pass_agreement,
+                "pop_success": metrics.pop_success,
+                "legacy_success": metrics.legacy_success,
+                "pop_duration_ms": round(metrics.pop_duration_ms, 2),
+                "legacy_duration_ms": round(metrics.legacy_duration_ms, 2),
+                "total_duration_ms": round(total_duration_ms, 2),
+            },
+        )
+
+        # Convert legacy result to POPContentScoreResult format for return
+        # This maintains backward compatibility - shadow mode returns legacy result
+        legacy_page_score = metrics.legacy_score
+        legacy_passed = metrics.legacy_passed
+
+        result = POPContentScoreResult(
+            success=metrics.legacy_success,
+            keyword=keyword,
+            content_url=content_url,
+            page_score=legacy_page_score,
+            passed=legacy_passed,
+            word_count_current=(
+                legacy_result_raw.word_count_score.word_count
+                if legacy_result_raw and legacy_result_raw.word_count_score
+                else None
+            ),
+            fallback_used=False,  # Not a fallback - intentional legacy use
+            raw_response={
+                "shadow_mode": True,
+                "legacy_scoring": True,
+                "pop_score_available": metrics.pop_success,
+            },
+            error=legacy_result_raw.error
+            if legacy_result_raw
+            else "Legacy scoring failed",
+            duration_ms=total_duration_ms,
+        )
+
+        # Method exit log
+        logger.debug(
+            "score_content_shadow method exit",
+            extra={
+                "project_id": project_id,
+                "page_id": page_id,
+                "success": result.success,
+                "legacy_score": legacy_page_score,
+                "pop_score": metrics.pop_score,
+                "pass_agreement": metrics.pass_agreement,
+                "duration_ms": round(total_duration_ms, 2),
+            },
+        )
+
+        return result, metrics
+
     async def save_score(
         self,
         page_id: str,
@@ -2037,3 +2298,47 @@ async def score_batch(
         rate_limit=rate_limit,
     ):
         yield result
+
+
+async def score_content_shadow(
+    project_id: str,
+    page_id: str,
+    keyword: str,
+    content_url: str,
+    content: str,
+) -> tuple[POPContentScoreResult, ShadowComparisonMetrics]:
+    """Convenience function for shadow scoring content.
+
+    Runs both POP and legacy scoring for comparison analysis.
+    Returns the legacy result while logging comparison metrics.
+
+    Args:
+        project_id: Project ID for logging context
+        page_id: Page ID for logging context
+        keyword: Target keyword for scoring
+        content_url: URL of the content (for POP scoring)
+        content: Actual content text (for legacy scoring)
+
+    Returns:
+        Tuple of (legacy_result, comparison_metrics)
+
+    Example:
+        result, metrics = await score_content_shadow(
+            project_id="uuid",
+            page_id="uuid",
+            keyword="hiking boots",
+            content_url="https://example.com/hiking-boots",
+            content="Your content here...",
+        )
+        print(f"Legacy score: {result.page_score}")
+        print(f"POP score: {metrics.pop_score}")
+        print(f"Agreement: {metrics.pass_agreement}")
+    """
+    service = get_pop_content_score_service()
+    return await service.score_content_shadow(
+        project_id=project_id,
+        page_id=page_id,
+        keyword=keyword,
+        content_url=content_url,
+        content=content,
+    )
