@@ -5,39 +5,32 @@ after each iteration and it's included in prompts for context.
 
 ## Codebase Patterns (Study These First)
 
-### Database Configuration Pattern
-- Connection pooling: `pool_size=5`, `max_overflow=10` (Railway defaults)
-- SSL mode: Always add `sslmode=require` for Railway PostgreSQL
-- Cold-start timeouts: `db_connect_timeout=60`, `db_command_timeout=60`
-- Async driver: Convert `postgresql://` to `postgresql+asyncpg://`
+### Data Integrity Validation Pattern
+- Created `app/core/data_integrity.py` as a reusable validation module
+- Uses dataclasses (`ValidationResult`, `IntegrityReport`) for structured reporting
+- All validation methods follow async pattern with timing and error handling
+- Logs slow queries (>100ms) at WARNING level via `db_logger.slow_query()`
+- Foreign key integrity checks use LEFT JOIN pattern to find orphans
+- Integration point: Called from `deploy.py` after migrations complete
 
-### Migration Logging Pattern
-- Use `db_logger` singleton from `app.core.logging`
-- Required methods: `migration_start()`, `migration_end()`, `migration_step()`
-- Connection errors: Always mask passwords with `mask_connection_string()`
-- Slow queries (>100ms): Log at WARNING level with `slow_query()`
-- Pool exhaustion: Log at CRITICAL level with `pool_exhausted()`
-
-### Test File Organization
-- Tests in `backend/tests/` organized by type (api/, services/, utils/, migrations/, e2e/)
-- Each test module has class-based organization for related tests
-- Fixtures defined in `conftest.py` at various scopes
+### Deployment Script Flow
+- Environment validation → Health checks → Migrations → Data integrity → Start app
+- Each step logs success/failure with structured JSON logging
+- Exit code 1 blocks deployment on any failure
 
 ---
 
-## 2026-02-01 - client-onboarding-v2-c3y.146
-- What was implemented:
-  - Created comprehensive staging migration test suite in `backend/tests/migrations/test_staging_migration.py`
-  - 28 tests covering all error logging and Railway deployment requirements
-  - Tests verify: connection string masking, pool config defaults, SSL mode enforcement, slow query logging, transaction failure logging, migration start/end logging, pool exhaustion logging, Railway-specific requirements
+## 2026-02-01 - client-onboarding-v2-c3y.147
+- What was implemented: Post-migration data integrity validation
 - Files changed:
-  - `backend/tests/migrations/__init__.py` (new)
-  - `backend/tests/migrations/test_staging_migration.py` (new - 28 tests)
+  - `backend/app/core/data_integrity.py` (new) - DataIntegrityValidator class with 16 validation checks
+  - `backend/app/deploy.py` (modified) - Added data integrity validation step after migrations
+  - `backend/tests/core/test_data_integrity.py` (new) - 25 unit tests for validation
 - **Learnings:**
-  - The codebase already has comprehensive logging infrastructure in `app/core/logging.py` with `db_logger` singleton
-  - `deploy.py` handles deployment with proper logging - runs before app starts
-  - Alembic is configured for async migrations with proper Railway SSL/timeout settings
-  - Tests use SQLite for speed (conftest adapts PostgreSQL types) but production code is PostgreSQL-only
-  - Procfile runs `python -m app.deploy` before uvicorn to handle migrations
+  - Pattern: Use `get_settings()` in `__init__` for configuration; tests need DATABASE_URL env var set
+  - Gotcha: Ruff enforces import sorting (stdlib → third-party → local) and Yoda conditions (expected == actual)
+  - Pattern: For SQL injection safe queries with table names, use f-strings with `# noqa: S608` comment
+  - Pattern: Use `await session.execute(text(query))` for raw SQL in async SQLAlchemy
+  - Foreign key checks: LEFT JOIN child to parent, WHERE parent.id IS NULL finds orphans
 ---
 
