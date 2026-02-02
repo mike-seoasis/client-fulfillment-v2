@@ -714,3 +714,40 @@ When creating new SQLAlchemy models in `backend/app/models/`:
   - The `pass_agreement` metric is key for validating POP before cutover
 ---
 
+## 2026-02-02 - US-032
+- Updated documentation for the POP API integration:
+  - Created `backend/docs/POP_INTEGRATION.md` - Comprehensive API documentation with:
+    - All endpoint specifications with request/response examples
+    - Configuration reference (environment variables, feature flags)
+    - Fallback behavior documentation
+    - Monitoring alerts recommendations
+    - Database table documentation
+    - Migration path from legacy to POP
+    - Troubleshooting guide
+  - Created `backend/docs/LOGGING.md` - Detailed logging reference for ops/monitoring with:
+    - Log levels and loggers reference
+    - All log fields with types and descriptions
+    - Example log entries for each event type
+    - Log correlation guidance (request_id, task_id)
+    - Monitoring queries (circuit breaker, fallback rate, pass rate, shadow mode, API credits)
+  - Created `backend/README.md` - Project README with:
+    - Quick start guide
+    - External integrations overview
+    - POP integration summary with endpoints
+    - Project structure
+    - Testing instructions
+    - API documentation links
+  - Updated `backend/app/services/content_score.py` - Added deprecation notice to ContentScoreService docstring
+- Files changed:
+  - `backend/docs/POP_INTEGRATION.md` - New file
+  - `backend/docs/LOGGING.md` - New file
+  - `backend/README.md` - New file
+  - `backend/app/services/content_score.py` - Added deprecation notice
+- **Learnings:**
+  - No existing README existed for the backend - created one as central hub for documentation
+  - Documentation structure: detailed docs in `docs/` folder, summary in README
+  - Sphinx-style `.. deprecated::` notation in docstrings provides IDE support and documentation generation compatibility
+  - Monitoring docs should include example queries for common monitoring scenarios
+  - Migration path documentation helps teams understand the rollout strategy
+---
+

@@ -53,36 +53,234 @@ DEFAULT_SCORING_WEIGHTS = {
 }
 
 # Standard English stop words for semantic analysis
-STOP_WORDS: frozenset[str] = frozenset({
-    "a", "about", "above", "after", "again", "against", "all", "am", "an",
-    "and", "any", "are", "aren't", "as", "at", "be", "because", "been",
-    "before", "being", "below", "between", "both", "but", "by", "can",
-    "can't", "cannot", "could", "couldn't", "did", "didn't", "do", "does",
-    "doesn't", "doing", "don't", "down", "during", "each", "few", "for",
-    "from", "further", "had", "hadn't", "has", "hasn't", "have", "haven't",
-    "having", "he", "he'd", "he'll", "he's", "her", "here", "here's", "hers",
-    "herself", "him", "himself", "his", "how", "how's", "i", "i'd", "i'll",
-    "i'm", "i've", "if", "in", "into", "is", "isn't", "it", "it's", "its",
-    "itself", "let's", "me", "more", "most", "mustn't", "my", "myself", "no",
-    "nor", "not", "of", "off", "on", "once", "only", "or", "other", "ought",
-    "our", "ours", "ourselves", "out", "over", "own", "same", "shan't", "she",
-    "she'd", "she'll", "she's", "should", "shouldn't", "so", "some", "such",
-    "than", "that", "that's", "the", "their", "theirs", "them", "themselves",
-    "then", "there", "there's", "these", "they", "they'd", "they'll",
-    "they're", "they've", "this", "those", "through", "to", "too", "under",
-    "until", "up", "very", "was", "wasn't", "we", "we'd", "we'll", "we're",
-    "we've", "were", "weren't", "what", "what's", "when", "when's", "where",
-    "where's", "which", "while", "who", "who's", "whom", "why", "why's",
-    "with", "won't", "would", "wouldn't", "you", "you'd", "you'll", "you're",
-    "you've", "your", "yours", "yourself", "yourselves",
-    # Additional common words
-    "also", "just", "like", "get", "got", "will", "one", "two", "three",
-    "may", "might", "shall", "need", "use", "used", "using", "make", "made",
-    "makes", "making", "way", "ways", "well", "good", "new", "know", "see",
-    "time", "take", "come", "back", "now", "even", "want", "first", "still",
-    "many", "much", "right", "think", "say", "said", "says", "look", "going",
-    "day", "thing", "things",
-})
+STOP_WORDS: frozenset[str] = frozenset(
+    {
+        "a",
+        "about",
+        "above",
+        "after",
+        "again",
+        "against",
+        "all",
+        "am",
+        "an",
+        "and",
+        "any",
+        "are",
+        "aren't",
+        "as",
+        "at",
+        "be",
+        "because",
+        "been",
+        "before",
+        "being",
+        "below",
+        "between",
+        "both",
+        "but",
+        "by",
+        "can",
+        "can't",
+        "cannot",
+        "could",
+        "couldn't",
+        "did",
+        "didn't",
+        "do",
+        "does",
+        "doesn't",
+        "doing",
+        "don't",
+        "down",
+        "during",
+        "each",
+        "few",
+        "for",
+        "from",
+        "further",
+        "had",
+        "hadn't",
+        "has",
+        "hasn't",
+        "have",
+        "haven't",
+        "having",
+        "he",
+        "he'd",
+        "he'll",
+        "he's",
+        "her",
+        "here",
+        "here's",
+        "hers",
+        "herself",
+        "him",
+        "himself",
+        "his",
+        "how",
+        "how's",
+        "i",
+        "i'd",
+        "i'll",
+        "i'm",
+        "i've",
+        "if",
+        "in",
+        "into",
+        "is",
+        "isn't",
+        "it",
+        "it's",
+        "its",
+        "itself",
+        "let's",
+        "me",
+        "more",
+        "most",
+        "mustn't",
+        "my",
+        "myself",
+        "no",
+        "nor",
+        "not",
+        "of",
+        "off",
+        "on",
+        "once",
+        "only",
+        "or",
+        "other",
+        "ought",
+        "our",
+        "ours",
+        "ourselves",
+        "out",
+        "over",
+        "own",
+        "same",
+        "shan't",
+        "she",
+        "she'd",
+        "she'll",
+        "she's",
+        "should",
+        "shouldn't",
+        "so",
+        "some",
+        "such",
+        "than",
+        "that",
+        "that's",
+        "the",
+        "their",
+        "theirs",
+        "them",
+        "themselves",
+        "then",
+        "there",
+        "there's",
+        "these",
+        "they",
+        "they'd",
+        "they'll",
+        "they're",
+        "they've",
+        "this",
+        "those",
+        "through",
+        "to",
+        "too",
+        "under",
+        "until",
+        "up",
+        "very",
+        "was",
+        "wasn't",
+        "we",
+        "we'd",
+        "we'll",
+        "we're",
+        "we've",
+        "were",
+        "weren't",
+        "what",
+        "what's",
+        "when",
+        "when's",
+        "where",
+        "where's",
+        "which",
+        "while",
+        "who",
+        "who's",
+        "whom",
+        "why",
+        "why's",
+        "with",
+        "won't",
+        "would",
+        "wouldn't",
+        "you",
+        "you'd",
+        "you'll",
+        "you're",
+        "you've",
+        "your",
+        "yours",
+        "yourself",
+        "yourselves",
+        # Additional common words
+        "also",
+        "just",
+        "like",
+        "get",
+        "got",
+        "will",
+        "one",
+        "two",
+        "three",
+        "may",
+        "might",
+        "shall",
+        "need",
+        "use",
+        "used",
+        "using",
+        "make",
+        "made",
+        "makes",
+        "making",
+        "way",
+        "ways",
+        "well",
+        "good",
+        "new",
+        "know",
+        "see",
+        "time",
+        "take",
+        "come",
+        "back",
+        "now",
+        "even",
+        "want",
+        "first",
+        "still",
+        "many",
+        "much",
+        "right",
+        "think",
+        "say",
+        "said",
+        "says",
+        "look",
+        "going",
+        "day",
+        "thing",
+        "things",
+    }
+)
 
 # Common named entity patterns (simplified for pure Python implementation)
 ENTITY_PATTERNS = {
@@ -397,6 +595,19 @@ class ContentScoreResult:
 class ContentScoreService:
     """Service for comprehensive content quality scoring.
 
+    .. deprecated::
+        This service is deprecated in favor of :class:`POPContentScoreService`
+        which provides SERP-based scoring via the PageOptimizer Pro API.
+        This service is retained as a fallback when POP is unavailable.
+
+        Migration path:
+        1. Enable shadow mode: ``POP_SHADOW_MODE=true``
+        2. Validate scoring accuracy via shadow comparison metrics
+        3. Enable POP scoring: ``USE_POP_SCORING=true``
+        4. Monitor fallback rate
+
+        See ``backend/docs/POP_INTEGRATION.md`` for full migration details.
+
     Analyzes content across multiple dimensions:
     - Word count and structure
     - Semantic relevance and depth
@@ -521,7 +732,9 @@ class ContentScoreService:
         paragraph_count = max(1, paragraph_count)
 
         # Average words per sentence
-        avg_words_per_sentence = word_count / sentence_count if sentence_count > 0 else 0
+        avg_words_per_sentence = (
+            word_count / sentence_count if sentence_count > 0 else 0
+        )
 
         # Calculate score based on target range
         if word_count < target_min:
@@ -697,23 +910,23 @@ class ContentScoreService:
 
         # Flesch Reading Ease (0-100, higher = easier)
         flesch_reading_ease = (
-            206.835
-            - (1.015 * avg_words_per_sentence)
-            - (84.6 * avg_syllables_per_word)
+            206.835 - (1.015 * avg_words_per_sentence) - (84.6 * avg_syllables_per_word)
         )
         flesch_reading_ease = max(0, min(100, flesch_reading_ease))
 
         # Flesch-Kincaid Grade Level
         flesch_kincaid_grade = (
-            (0.39 * avg_words_per_sentence)
-            + (11.8 * avg_syllables_per_word)
-            - 15.59
+            (0.39 * avg_words_per_sentence) + (11.8 * avg_syllables_per_word) - 15.59
         )
         flesch_kincaid_grade = max(0, flesch_kincaid_grade)
 
         # Calculate score based on readability target
         # Target: 30-70 on Flesch scale (fairly easy to standard)
-        if DEFAULT_TARGET_READABILITY_MIN <= flesch_reading_ease <= DEFAULT_TARGET_READABILITY_MAX:
+        if (
+            DEFAULT_TARGET_READABILITY_MIN
+            <= flesch_reading_ease
+            <= DEFAULT_TARGET_READABILITY_MAX
+        ):
             score = 1.0
         elif flesch_reading_ease < DEFAULT_TARGET_READABILITY_MIN:
             # Too difficult - penalize
@@ -1028,8 +1241,14 @@ class ContentScoreService:
                 (word_count_score.score * self.scoring_weights["word_count"])
                 + (semantic_score.score * self.scoring_weights["semantic"])
                 + (readability_score.score * self.scoring_weights["readability"])
-                + (keyword_density_score.score * self.scoring_weights["keyword_density"])
-                + (entity_coverage_score.score * self.scoring_weights["entity_coverage"])
+                + (
+                    keyword_density_score.score
+                    * self.scoring_weights["keyword_density"]
+                )
+                + (
+                    entity_coverage_score.score
+                    * self.scoring_weights["entity_coverage"]
+                )
             )
 
             passed = overall_score >= self.pass_threshold
