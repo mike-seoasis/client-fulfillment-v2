@@ -170,7 +170,7 @@ def run_migrations() -> bool:
         # Run alembic upgrade with verbose output
         logger.info("Executing alembic upgrade head")
         result = subprocess.run(
-            ["alembic", "upgrade", "head", "--verbose"],
+            ["alembic", "upgrade", "head"],
             capture_output=True,
             text=True,
             cwd=os.path.dirname(os.path.dirname(__file__)),
