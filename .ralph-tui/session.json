@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "sessionId": "2378102f-0480-4ec2-aa1c-6b10e6e46358",
+  "sessionId": "690dd5d5-2efa-47b9-a8f6-9e9f51e64810",
   "status": "running",
-  "startedAt": "2026-02-02T00:24:34.273Z",
-  "updatedAt": "2026-02-02T00:34:19.893Z",
+  "startedAt": "2026-02-02T00:34:24.497Z",
+  "updatedAt": "2026-02-02T00:42:56.795Z",
   "currentIteration": 0,
   "maxIterations": 30,
   "tasksCompleted": 0,
@@ -15,8 +15,8 @@
     "totalTasks": 1,
     "tasks": [
       {
-        "id": "client-onboarding-v2-c3y.140",
-        "title": "Add integration tests for API endpoints",
+        "id": "client-onboarding-v2-c3y.141",
+        "title": "Add E2E tests for critical workflows (crawl → content generation)",
         "status": "open",
         "completedInSession": false
       }
