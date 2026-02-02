@@ -181,6 +181,22 @@ class WebsiteAnalysisResult:
 
 
 @dataclass
+class BrandResearchResult:
+    """Result of a brand research operation for V3 brand config."""
+
+    success: bool
+    domain: str
+    research_data: dict[str, Any] | None = None
+    raw_text: str | None = None
+    citations: list[str] = field(default_factory=list)
+    error: str | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    duration_ms: float = 0.0
+    request_id: str | None = None
+
+
+@dataclass
 class CompletionResult:
     """Result of a Perplexity completion request."""
 
@@ -257,6 +273,65 @@ Focus on extracting:
 6. Brand voice and tone
 
 Provide a well-structured, factual analysis based on what you find on the website and any available information."""
+
+# System prompt for brand research (V3 brand config)
+BRAND_RESEARCH_SYSTEM_PROMPT = """You are a brand research expert. Your task is to thoroughly research a brand from their website and online presence to extract comprehensive brand information.
+
+Research and extract the following information, organized into these sections:
+
+## 1. FOUNDATION
+- Company name, founding year, location, industry
+- Business model (B2B, B2C, DTC, etc.)
+- Primary products/services and price positioning
+- Tagline or slogan (if any)
+- Mission statement and core values
+- Key differentiators (what makes them unique)
+- What they explicitly are NOT (positioning they reject)
+
+## 2. TARGET AUDIENCE
+For each identifiable customer segment, extract:
+- Demographics (age, location, income level, profession)
+- Psychographics (values, aspirations, fears, identity)
+- Pain points and frustrations with current solutions
+- Motivations and buying triggers
+- How they discover and research products
+- Decision factors (price, quality, brand, convenience)
+
+## 3. VOICE INDICATORS
+Analyze their existing content to identify:
+- Formality level (casual to formal, scale 1-10)
+- Use of humor (playful to serious, scale 1-10)
+- Tone toward competitors/industry (irreverent to respectful, scale 1-10)
+- Energy/enthusiasm level (enthusiastic to matter-of-fact, scale 1-10)
+- Voice characteristics (e.g., "knowledgeable but approachable")
+- What their voice is definitely NOT
+
+## 4. WRITING PATTERNS
+Note any observable patterns:
+- Sentence length tendencies (short and punchy vs. longer)
+- Use of contractions
+- Punctuation habits (exclamation points, em dashes)
+- Recurring phrases or terminology
+- Industry-specific vocabulary
+
+## 5. PROOF & TRUST ELEMENTS
+Extract any verifiable claims:
+- Customer counts or statistics
+- Years in business
+- Review ratings and counts
+- Certifications or awards
+- Media mentions
+- Notable partnerships or endorsements
+- Guarantees and warranties
+- Customer testimonials (exact quotes if available)
+
+## 6. COMPETITIVE CONTEXT
+If discoverable:
+- Main competitors mentioned or implied
+- How they differentiate from competitors
+- Market position (leader, challenger, specialist)
+
+Provide thorough, factual findings with citations. If information is not available for a section, explicitly state what could not be determined."""
 
 
 class PerplexityClient:
@@ -756,6 +831,109 @@ Please research the website thoroughly and provide factual information with cita
             system_prompt="You are a research assistant. Provide accurate, well-cited information based on your web research.",
             temperature=0.2,
             return_citations=True,
+        )
+
+    async def research_brand(
+        self,
+        domain: str,
+        brand_name: str | None = None,
+    ) -> BrandResearchResult:
+        """Research a brand from their website for V3 brand config creation.
+
+        This method performs comprehensive brand research using Perplexity's
+        web-connected capabilities, extracting information aligned with the
+        11-part V3 brand configuration schema.
+
+        Args:
+            domain: Website domain to research (e.g., "acme.com" or "https://acme.com")
+            brand_name: Optional brand name if different from domain
+
+        Returns:
+            BrandResearchResult with structured brand research data and citations
+        """
+        start_time = time.monotonic()
+
+        # Normalize domain
+        if not domain.startswith(("http://", "https://")):
+            url = f"https://{domain}"
+        else:
+            url = domain
+            # Extract domain from URL for logging
+            domain = url.replace("https://", "").replace("http://", "").split("/")[0]
+
+        perplexity_logger.analysis_start(url)
+        logger.info(
+            "Starting brand research",
+            extra={"domain": domain, "brand_name": brand_name},
+        )
+
+        # Build user prompt
+        brand_context = f"for the brand '{brand_name}'" if brand_name else ""
+        user_prompt = f"""Research the brand at {url} {brand_context} and provide comprehensive brand information.
+
+Analyze their website, social media presence, reviews, press mentions, and any other available information to build a complete picture of:
+1. Who they are (company foundation, mission, values)
+2. Who they serve (target audience personas)
+3. How they communicate (brand voice and writing style)
+4. What makes them credible (proof elements, trust signals)
+5. How they position against competitors
+
+Be thorough and cite your sources. If certain information cannot be determined, explicitly note what is missing."""
+
+        # Make completion request with higher token limit for comprehensive research
+        result = await self.complete(
+            user_prompt=user_prompt,
+            system_prompt=BRAND_RESEARCH_SYSTEM_PROMPT,
+            max_tokens=4096,  # Allow longer response for comprehensive research
+            temperature=0.2,  # Lower temperature for factual research
+            return_citations=True,
+        )
+
+        total_duration_ms = (time.monotonic() - start_time) * 1000
+
+        if not result.success:
+            perplexity_logger.analysis_complete(
+                url, total_duration_ms, success=False, citation_count=0
+            )
+            logger.warning(
+                "Brand research failed",
+                extra={"domain": domain, "error": result.error},
+            )
+            return BrandResearchResult(
+                success=False,
+                domain=domain,
+                error=result.error,
+                input_tokens=result.input_tokens,
+                output_tokens=result.output_tokens,
+                duration_ms=total_duration_ms,
+                request_id=result.request_id,
+            )
+
+        perplexity_logger.analysis_complete(
+            url,
+            total_duration_ms,
+            success=True,
+            citation_count=len(result.citations),
+        )
+        logger.info(
+            "Brand research completed",
+            extra={
+                "domain": domain,
+                "duration_ms": total_duration_ms,
+                "citations": len(result.citations),
+            },
+        )
+
+        return BrandResearchResult(
+            success=True,
+            domain=domain,
+            research_data=None,  # Raw text only; synthesis happens in BrandResearchService
+            raw_text=result.text,
+            citations=result.citations,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+            duration_ms=total_duration_ms,
+            request_id=result.request_id,
         )
 
 

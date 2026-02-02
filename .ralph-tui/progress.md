@@ -198,3 +198,25 @@ When creating new SQLAlchemy models in `backend/app/models/`:
   - Existing models don't have ForeignKey in column definition - use separate ForeignKey constraint; but new models can use ForeignKey directly in mapped_column for cleaner code
 ---
 
+## 2026-02-02 - US-010
+- Created Pydantic schemas for POP content brief and content score API validation:
+  - `backend/app/schemas/content_brief.py`: ContentBriefRequest, ContentBriefResponse with nested schemas
+  - `backend/app/schemas/content_score.py`: ContentScoreRequest, ContentScoreResponse with nested schemas
+- Nested schemas created for complex fields:
+  - Content Brief: HeadingTargetSchema, KeywordTargetSchema, LSITermSchema, EntitySchema, RelatedQuestionSchema, RelatedSearchSchema, CompetitorSchema
+  - Content Score: KeywordAnalysisSchema, KeywordSectionAnalysisSchema, LSICoverageSchema, LSICoverageItemSchema, HeadingAnalysisSchema, HeadingLevelAnalysisSchema, RecommendationSchema
+- Added batch request/response schemas for both content brief and content score
+- Added stats response schemas for project-level aggregation
+- Updated `backend/app/schemas/__init__.py` with all new exports
+- Files changed:
+  - `backend/app/schemas/content_brief.py` - New file
+  - `backend/app/schemas/content_score.py` - New file
+  - `backend/app/schemas/__init__.py` - Added imports and exports for new schemas
+- **Learnings:**
+  - Pydantic schemas use `ConfigDict(from_attributes=True)` for ORM model compatibility
+  - Use `Field(default_factory=list)` for list fields with defaults, not `Field(default=[])`
+  - Nested schemas enable better validation and documentation for complex JSONB fields
+  - ruff auto-sorts imports alphabetically by module name; new imports may be reordered
+  - Response schemas should mirror all fields from corresponding SQLAlchemy models
+---
+
