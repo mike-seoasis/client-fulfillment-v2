@@ -285,10 +285,18 @@ def create_app() -> FastAPI:
     # Request logging middleware (added first, runs last)
     app.add_middleware(RequestLoggingMiddleware)
 
-    # CORS middleware
+    # CORS middleware - use FRONTEND_URL for production, allow all origins otherwise
+    cors_origins: list[str] = ["*"]
+    if settings.frontend_url:
+        cors_origins = [settings.frontend_url]
+        logger.info(
+            "CORS configured for production",
+            extra={"allowed_origins": cors_origins},
+        )
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Configure appropriately for production
+        allow_origins=cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
