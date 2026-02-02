@@ -400,3 +400,27 @@ When creating new SQLAlchemy models in `backend/app/models/`:
   - Import order: import both exception types (`POPCircuitOpenError`, `POPTimeoutError`) from pop.py
 ---
 
+## 2026-02-02 - US-020
+- Implemented content score persistence in `backend/app/services/pop_content_score.py`:
+  - Added `save_score(page_id, result, project_id)` method for persisting scores
+  - Added `score_and_save_content(project_id, page_id, keyword, content_url)` convenience method
+  - Added module-level `score_and_save_content(session, ...)` convenience function
+  - Updated constructor to accept optional `AsyncSession` for database operations
+- Unlike content briefs, scores are NOT replaced (upsert) - each scoring creates a new record to maintain history
+- All acceptance criteria met:
+  - Save score to content_scores table after successful scoring ✓
+  - Link score to page via page_id foreign key ✓
+  - Store pop_task_id, page_score, passed, fallback_used ✓
+  - Store analysis JSON fields (keyword_analysis, lsi_coverage, heading_analysis, recommendations) ✓
+  - Store raw_response JSON for debugging ✓
+  - Store scored_at timestamp ✓
+- Files changed:
+  - `backend/app/services/pop_content_score.py` - Added persistence methods and session handling
+- **Learnings:**
+  - Content scores should maintain history (append) vs content briefs which replace (upsert)
+  - `scored_at` field uses `datetime.now(UTC)` at save time to capture actual scoring timestamp
+  - Don't import `select` if you're only creating new records (not querying existing ones)
+  - Service persistence pattern: accept `AsyncSession | None` in constructor, check `self._session is not None` before DB ops
+  - Follow same logging pattern as content brief service: method entry/exit at DEBUG, phase transitions at INFO
+---
+

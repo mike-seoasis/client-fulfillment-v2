@@ -22,7 +22,10 @@ ERROR LOGGING REQUIREMENTS:
 import time
 import traceback
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
@@ -34,6 +37,7 @@ from app.integrations.pop import (
     POPTimeoutError,
     get_pop_client,
 )
+from app.models.content_score import ContentScore
 from app.services.content_score import (
     ContentScoreInput,
     ContentScoreService,
@@ -127,15 +131,19 @@ class POPContentScoreService:
 
     def __init__(
         self,
+        session: AsyncSession | None = None,
         client: POPClient | None = None,
         legacy_service: ContentScoreService | None = None,
     ) -> None:
         """Initialize POP content score service.
 
         Args:
+            session: Optional async SQLAlchemy session for persistence.
+                     If None, persistence operations will not be available.
             client: POP client instance. If None, uses global instance.
             legacy_service: Legacy ContentScoreService for fallback. If None, uses global instance.
         """
+        self._session = session
         self._client = client
         self._legacy_service = legacy_service
 
@@ -143,6 +151,7 @@ class POPContentScoreService:
             "POPContentScoreService initialized",
             extra={
                 "client_provided": client is not None,
+                "session_provided": session is not None,
                 "legacy_service_provided": legacy_service is not None,
             },
         )
@@ -1279,6 +1288,302 @@ class POPContentScoreService:
                 duration_ms=duration_ms,
             )
 
+    async def save_score(
+        self,
+        page_id: str,
+        result: POPContentScoreResult,
+        project_id: str | None = None,
+    ) -> ContentScore:
+        """Save a content score to the database.
+
+        Creates a new content score record for the given page. Unlike content briefs,
+        scores are not replaced - each scoring operation creates a new record to
+        maintain scoring history.
+
+        Args:
+            page_id: UUID of the crawled page this score is for
+            result: POPContentScoreResult from score_content()
+            project_id: Optional project ID for logging context
+
+        Returns:
+            The created ContentScore model instance
+
+        Raises:
+            POPContentScoreServiceError: If session is not available or save fails
+        """
+        start_time = time.monotonic()
+
+        # Method entry log with sanitized parameters
+        logger.debug(
+            "save_score method entry",
+            extra={
+                "page_id": page_id,
+                "project_id": project_id,
+                "task_id": result.task_id,
+                "page_score": result.page_score,
+                "passed": result.passed,
+                "fallback_used": result.fallback_used,
+            },
+        )
+
+        if self._session is None:
+            raise POPContentScoreServiceError(
+                "Database session not available - cannot save score",
+                project_id=project_id,
+                page_id=page_id,
+            )
+
+        try:
+            # Create new score record (scores are historical, not replaced)
+            score = ContentScore(
+                page_id=page_id,
+                pop_task_id=result.task_id,
+                page_score=result.page_score,
+                passed=result.passed,
+                keyword_analysis=result.keyword_analysis,
+                lsi_coverage=result.lsi_coverage,
+                word_count_current=result.word_count_current,
+                heading_analysis=result.heading_analysis,
+                recommendations=result.recommendations,
+                fallback_used=result.fallback_used,
+                raw_response=result.raw_response,
+                scored_at=datetime.now(UTC),
+            )
+            self._session.add(score)
+
+            logger.info(
+                "Created new content score",
+                extra={
+                    "page_id": page_id,
+                    "project_id": project_id,
+                    "pop_task_id": result.task_id,
+                    "page_score": result.page_score,
+                    "passed": result.passed,
+                    "fallback_used": result.fallback_used,
+                },
+            )
+
+            await self._session.flush()
+            await self._session.refresh(score)
+
+            duration_ms = (time.monotonic() - start_time) * 1000
+
+            if duration_ms > SLOW_OPERATION_THRESHOLD_MS:
+                logger.warning(
+                    "Slow content score save operation",
+                    extra={
+                        "score_id": score.id,
+                        "page_id": page_id,
+                        "project_id": project_id,
+                        "task_id": result.task_id,
+                        "duration_ms": round(duration_ms, 2),
+                        "threshold_ms": SLOW_OPERATION_THRESHOLD_MS,
+                    },
+                )
+
+            # Method exit log with result summary
+            logger.debug(
+                "save_score method exit",
+                extra={
+                    "score_id": score.id,
+                    "page_id": page_id,
+                    "project_id": project_id,
+                    "task_id": result.task_id,
+                    "success": True,
+                    "duration_ms": round(duration_ms, 2),
+                },
+            )
+
+            return score
+
+        except Exception as e:
+            duration_ms = (time.monotonic() - start_time) * 1000
+            logger.error(
+                "Failed to save content score",
+                extra={
+                    "page_id": page_id,
+                    "project_id": project_id,
+                    "task_id": result.task_id,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "duration_ms": round(duration_ms, 2),
+                    "stack_trace": traceback.format_exc(),
+                },
+                exc_info=True,
+            )
+            # Method exit log on error
+            logger.debug(
+                "save_score method exit",
+                extra={
+                    "score_id": None,
+                    "page_id": page_id,
+                    "project_id": project_id,
+                    "task_id": result.task_id,
+                    "success": False,
+                    "error": str(e),
+                    "duration_ms": round(duration_ms, 2),
+                },
+            )
+            raise POPContentScoreServiceError(
+                f"Failed to save content score: {e}",
+                project_id=project_id,
+                page_id=page_id,
+            ) from e
+
+    async def score_and_save_content(
+        self,
+        project_id: str,
+        page_id: str,
+        keyword: str,
+        content_url: str,
+    ) -> POPContentScoreResult:
+        """Score content from POP API and save the result to the database.
+
+        This is a convenience method that combines score_content() and save_score()
+        into a single operation. After successful scoring, the result is automatically
+        persisted to the database. Each scoring operation creates a new record to
+        maintain scoring history.
+
+        Args:
+            project_id: Project ID for logging context
+            page_id: Page ID (FK to crawled_pages) - required for persistence
+            keyword: Target keyword for scoring
+            content_url: URL of the content to score
+
+        Returns:
+            POPContentScoreResult with score data and score_id (if saved) or error
+
+        Raises:
+            POPContentScoreValidationError: If validation fails
+            POPContentScoreServiceError: If persistence fails (session not available)
+        """
+        # Method entry log with sanitized parameters
+        logger.debug(
+            "score_and_save_content method entry",
+            extra={
+                "project_id": project_id,
+                "page_id": page_id,
+                "keyword": keyword[:50] if keyword else "",
+                "content_url": content_url[:100] if content_url else "",
+            },
+        )
+
+        # Step 1: Score the content via POP API
+        result = await self.score_content(
+            project_id=project_id,
+            page_id=page_id,
+            keyword=keyword,
+            content_url=content_url,
+        )
+
+        # Step 2: If scoring was successful and we have a session, save to database
+        if result.success and self._session is not None:
+            try:
+                score = await self.save_score(
+                    page_id=page_id,
+                    result=result,
+                    project_id=project_id,
+                )
+
+                # Update result with the database record ID
+                result.score_id = score.id
+
+                logger.info(
+                    "Content scored and saved successfully",
+                    extra={
+                        "project_id": project_id,
+                        "page_id": page_id,
+                        "score_id": score.id,
+                        "keyword": keyword[:50],
+                        "task_id": result.task_id,
+                        "page_score": result.page_score,
+                        "passed": result.passed,
+                        "fallback_used": result.fallback_used,
+                    },
+                )
+
+                # Method exit log with result summary (success with save)
+                logger.debug(
+                    "score_and_save_content method exit",
+                    extra={
+                        "project_id": project_id,
+                        "page_id": page_id,
+                        "score_id": score.id,
+                        "task_id": result.task_id,
+                        "success": True,
+                        "saved": True,
+                        "page_score": result.page_score,
+                        "passed": result.passed,
+                    },
+                )
+
+            except POPContentScoreServiceError:
+                # Re-raise persistence errors
+                raise
+            except Exception as e:
+                logger.error(
+                    "Failed to save content score after successful scoring",
+                    extra={
+                        "project_id": project_id,
+                        "page_id": page_id,
+                        "task_id": result.task_id,
+                        "keyword": keyword[:50],
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "stack_trace": traceback.format_exc(),
+                    },
+                    exc_info=True,
+                )
+                raise POPContentScoreServiceError(
+                    f"Failed to save content score: {e}",
+                    project_id=project_id,
+                    page_id=page_id,
+                ) from e
+
+        elif result.success and self._session is None:
+            logger.warning(
+                "Content scored but not saved - no database session",
+                extra={
+                    "project_id": project_id,
+                    "page_id": page_id,
+                    "task_id": result.task_id,
+                    "keyword": keyword[:50],
+                    "page_score": result.page_score,
+                    "passed": result.passed,
+                },
+            )
+
+            # Method exit log with result summary (success without save)
+            logger.debug(
+                "score_and_save_content method exit",
+                extra={
+                    "project_id": project_id,
+                    "page_id": page_id,
+                    "score_id": None,
+                    "task_id": result.task_id,
+                    "success": True,
+                    "saved": False,
+                    "page_score": result.page_score,
+                    "passed": result.passed,
+                },
+            )
+
+        else:
+            # Scoring failed
+            logger.debug(
+                "score_and_save_content method exit",
+                extra={
+                    "project_id": project_id,
+                    "page_id": page_id,
+                    "score_id": None,
+                    "success": False,
+                    "saved": False,
+                    "error": result.error,
+                },
+            )
+
+        return result
+
 
 # Global singleton instance
 _pop_content_score_service: POPContentScoreService | None = None
@@ -1323,6 +1628,50 @@ async def score_content(
     """
     service = get_pop_content_score_service()
     return await service.score_content(
+        project_id=project_id,
+        page_id=page_id,
+        keyword=keyword,
+        content_url=content_url,
+    )
+
+
+async def score_and_save_content(
+    session: AsyncSession,
+    project_id: str,
+    page_id: str,
+    keyword: str,
+    content_url: str,
+) -> POPContentScoreResult:
+    """Convenience function for scoring content and saving to database.
+
+    This function creates a new service instance with the provided session,
+    scores the content via POP API, and saves it to the database.
+    Each scoring operation creates a new record to maintain scoring history.
+
+    Args:
+        session: Async SQLAlchemy session for database operations
+        project_id: Project ID for logging context
+        page_id: Page ID (FK to crawled_pages) - required for persistence
+        keyword: Target keyword for scoring
+        content_url: URL of the content to score
+
+    Returns:
+        POPContentScoreResult with score data and score_id (if saved) or error
+
+    Example:
+        async with get_session() as session:
+            result = await score_and_save_content(
+                session=session,
+                project_id="uuid",
+                page_id="uuid",
+                keyword="hiking boots",
+                content_url="https://example.com/hiking-boots",
+            )
+            if result.success:
+                print(f"Score saved with ID: {result.score_id}")
+    """
+    service = POPContentScoreService(session=session)
+    return await service.score_and_save_content(
         project_id=project_id,
         page_id=page_id,
         keyword=keyword,
