@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "sessionId": "eccbdd0d-fb19-4c53-958e-bb948857077a",
+  "sessionId": "1a775b76-e191-4a18-8469-d321808564a4",
   "status": "running",
-  "startedAt": "2026-02-02T01:01:42.304Z",
-  "updatedAt": "2026-02-02T01:08:04.216Z",
+  "startedAt": "2026-02-02T01:08:08.369Z",
+  "updatedAt": "2026-02-02T01:12:29.286Z",
   "currentIteration": 0,
   "maxIterations": 30,
   "tasksCompleted": 0,
@@ -15,8 +15,8 @@
     "totalTasks": 1,
     "tasks": [
       {
-        "id": "client-onboarding-v2-c3y.147",
-        "title": "Validate data integrity post-migration",
+        "id": "client-onboarding-v2-c3y.148",
+        "title": "Document rollback procedure",
         "status": "open",
         "completedInSession": false
       }
