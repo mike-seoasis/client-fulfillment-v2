@@ -5,48 +5,37 @@ after each iteration and it's included in prompts for context.
 
 ## Codebase Patterns (Study These First)
 
-### Error Logging Pattern (Comprehensive)
-All services follow a consistent error logging pattern documented in file docstrings:
-1. **Method entry/exit**: `logger.debug()` with parameters (sanitized)
-2. **Exceptions**: `logger.error()` with `exc_info=True` for full stack traces
-3. **Entity IDs**: Always include `project_id`, `page_id`, `crawl_id` in `extra` dict
-4. **Validation failures**: `logger.warning()` with `field`, `value`, and `valid` options
-5. **State transitions**: `logger.info()` for phase/status changes
-6. **Slow operations**: `SLOW_OPERATION_THRESHOLD_MS = 1000` constant with `logger.warning()` when exceeded
-
-Example pattern:
+### ServiceLogger Pattern
+Use `ServiceLogger` from `app.core.logging` for standardized service-layer logging:
 ```python
-start_time = time.monotonic()
-logger.debug("Method entry", extra={"project_id": project_id, "param": value})
-try:
-    # ... operation ...
-    duration_ms = (time.monotonic() - start_time) * 1000
-    logger.debug("Method exit", extra={"project_id": id, "duration_ms": round(duration_ms, 2)})
-    if duration_ms > SLOW_OPERATION_THRESHOLD_MS:
-        logger.warning("Slow operation", extra={"duration_ms": round(duration_ms, 2)})
-except SomeServiceError:
-    raise  # Re-raise known errors without logging
-except Exception as e:
-    logger.error("Failed", extra={"error_type": type(e).__name__, "error_message": str(e)}, exc_info=True)
-    raise
+from app.core.logging import get_service_logger
+
+class MyService:
+    def __init__(self) -> None:
+        self.logger = get_service_logger("my_service")
+
+    async def do_work(self, project_id: str) -> Entity:
+        with self.logger.operation("do_work", project_id=project_id) as ctx:
+            # Business logic...
+            ctx.add_result(entity_id=result.id)
+            return result
 ```
+
+Key methods:
+- `operation()` - Context manager for automatic entry/exit logging with timing
+- `validation_failure()` - Log validation errors with field/value
+- `state_transition()` - Log phase/status changes at INFO level
+- `exception()` - Log exceptions with full stack trace
 
 ---
 
-## 2026-02-01 - client-onboarding-v2-c3y.155
-- **What was implemented**: Verified that comprehensive error logging requirements are already fully implemented across the codebase
-- **Files changed**: None (requirements were already met)
-- **Verification**:
-  - Checked `backend/app/services/project.py` (1,020 lines) - all 6 logging requirements implemented
-  - Checked `backend/app/services/crawl.py` (2,166 lines) - all 6 logging requirements implemented
-  - Found 66 files with ERROR LOGGING REQUIREMENTS docstring
-  - Found 46 files with SLOW_OPERATION_THRESHOLD_MS constant
-  - Type checks pass: `mypy` - Success
-  - Lint checks pass: `ruff` - All checks passed
+## 2026-02-01 - client-onboarding-v2-c3y.156
+- What was implemented: Added `ServiceLogger` class to `backend/app/core/logging.py` implementing ERROR LOGGING REQUIREMENTS
+- Files changed: `backend/app/core/logging.py`
 - **Learnings:**
-  - Error logging requirements were systematically applied as a codebase-wide pattern
-  - Each service file includes the requirements in its docstring for reference
-  - The pattern is consistent: DEBUG for entry/exit, WARNING for validation failures, INFO for state transitions, ERROR with exc_info=True for exceptions
-  - Timing logs use a 1000ms threshold (`SLOW_OPERATION_THRESHOLD_MS`)
+  - Patterns discovered: Existing services (project.py, category.py, crawl.py) already implement logging manually - the ServiceLogger centralizes this
+  - Gotchas encountered: mypy requires `__exit__` return type to be `None` (not `bool`) when always returning False to propagate exceptions
+  - The codebase already has comprehensive logging infrastructure with specialized loggers (DatabaseLogger, RedisLogger, ClaudeLogger, etc.) - ServiceLogger complements these for service layer
+
 ---
 

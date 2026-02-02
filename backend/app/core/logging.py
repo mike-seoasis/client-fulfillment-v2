@@ -2376,3 +2376,470 @@ class GoogleNLPLogger:
 
 # Singleton Google Cloud NLP logger
 google_nlp_logger = GoogleNLPLogger()
+
+
+class ServiceLogger:
+    """Logger for service-layer operations with standardized error logging.
+
+    Implements ERROR LOGGING REQUIREMENTS for services:
+    - Log method entry/exit at DEBUG level with parameters (sanitized)
+    - Log all exceptions with full stack trace and context
+    - Include entity IDs (project_id, page_id) in all service logs
+    - Log validation failures with field names and rejected values
+    - Log state transitions (phase changes) at INFO level
+    - Add timing logs for operations >1 second
+
+    Example usage:
+        class MyService:
+            def __init__(self, session: AsyncSession) -> None:
+                self.logger = ServiceLogger("my_service")
+
+            async def create_entity(self, data: CreateData) -> Entity:
+                with self.logger.operation("create_entity", project_id=data.project_id) as ctx:
+                    # Validation
+                    if not data.name:
+                        self.logger.validation_failure("name", data.name, "Name is required")
+                        raise ValidationError("name", data.name, "Name is required")
+
+                    # Business logic
+                    entity = await self.repository.create(data)
+                    return entity
+    """
+
+    # Default threshold for slow operations (1 second in ms)
+    DEFAULT_SLOW_THRESHOLD_MS = 1000
+
+    def __init__(
+        self,
+        name: str,
+        slow_threshold_ms: int = DEFAULT_SLOW_THRESHOLD_MS,
+    ) -> None:
+        """Initialize service logger.
+
+        Args:
+            name: Logger name (usually service name like 'project_service')
+            slow_threshold_ms: Threshold in ms for logging slow operations
+        """
+        self.logger = get_logger(name)
+        self.slow_threshold_ms = slow_threshold_ms
+
+    def method_entry(
+        self,
+        method_name: str,
+        *,
+        project_id: str | None = None,
+        page_id: str | None = None,
+        **params: Any,
+    ) -> None:
+        """Log method entry at DEBUG level with parameters (sanitized).
+
+        Args:
+            method_name: Name of the method being called
+            project_id: Optional project ID for context
+            page_id: Optional page ID for context
+            **params: Method parameters (will be sanitized)
+        """
+        extra: dict[str, Any] = {
+            "method": method_name,
+            "event": "method_entry",
+        }
+        if project_id:
+            extra["project_id"] = project_id
+        if page_id:
+            extra["page_id"] = page_id
+
+        # Add sanitized parameters
+        sanitized_params = self._sanitize_params(params)
+        if sanitized_params:
+            extra["params"] = sanitized_params
+
+        self.logger.debug(f"{method_name}() called", extra=extra)
+
+    def method_exit(
+        self,
+        method_name: str,
+        duration_ms: float,
+        *,
+        project_id: str | None = None,
+        page_id: str | None = None,
+        **result_info: Any,
+    ) -> None:
+        """Log method exit at DEBUG level with timing.
+
+        Args:
+            method_name: Name of the method completing
+            duration_ms: Operation duration in milliseconds
+            project_id: Optional project ID for context
+            page_id: Optional page ID for context
+            **result_info: Additional result information to log
+        """
+        extra: dict[str, Any] = {
+            "method": method_name,
+            "event": "method_exit",
+            "duration_ms": round(duration_ms, 2),
+        }
+        if project_id:
+            extra["project_id"] = project_id
+        if page_id:
+            extra["page_id"] = page_id
+
+        # Add result info
+        extra.update(result_info)
+
+        self.logger.debug(f"{method_name}() completed", extra=extra)
+
+        # Log slow operation warning if needed
+        if duration_ms > self.slow_threshold_ms:
+            self.slow_operation(
+                method_name,
+                duration_ms,
+                project_id=project_id,
+                page_id=page_id,
+            )
+
+    def exception(
+        self,
+        method_name: str,
+        error: Exception,
+        *,
+        project_id: str | None = None,
+        page_id: str | None = None,
+        **context: Any,
+    ) -> None:
+        """Log exception with full stack trace and context.
+
+        Args:
+            method_name: Name of the method where exception occurred
+            error: The exception that was raised
+            project_id: Optional project ID for context
+            page_id: Optional page ID for context
+            **context: Additional context about the operation
+        """
+        extra: dict[str, Any] = {
+            "method": method_name,
+            "event": "exception",
+            "error_type": type(error).__name__,
+            "error_message": str(error),
+        }
+        if project_id:
+            extra["project_id"] = project_id
+        if page_id:
+            extra["page_id"] = page_id
+
+        # Add context
+        extra.update(context)
+
+        self.logger.error(
+            f"{method_name}() failed with {type(error).__name__}",
+            extra=extra,
+            exc_info=True,  # Include full stack trace
+        )
+
+    def validation_failure(
+        self,
+        field: str,
+        rejected_value: Any,
+        message: str,
+        *,
+        project_id: str | None = None,
+        page_id: str | None = None,
+    ) -> None:
+        """Log validation failure with field name and rejected value.
+
+        Args:
+            field: Name of the field that failed validation
+            rejected_value: The value that was rejected
+            message: Validation failure message
+            project_id: Optional project ID for context
+            page_id: Optional page ID for context
+        """
+        extra: dict[str, Any] = {
+            "event": "validation_failure",
+            "field": field,
+            "rejected_value": self._sanitize_value(rejected_value),
+            "message": message,
+        }
+        if project_id:
+            extra["project_id"] = project_id
+        if page_id:
+            extra["page_id"] = page_id
+
+        self.logger.warning(
+            f"Validation failed for '{field}': {message}",
+            extra=extra,
+        )
+
+    def state_transition(
+        self,
+        entity_type: str,
+        entity_id: str,
+        from_state: str,
+        to_state: str,
+        *,
+        project_id: str | None = None,
+        page_id: str | None = None,
+        transition_type: str = "status",
+        **metadata: Any,
+    ) -> None:
+        """Log state transition (phase/status change) at INFO level.
+
+        Args:
+            entity_type: Type of entity (e.g., 'project', 'phase')
+            entity_id: ID of the entity transitioning
+            from_state: Previous state
+            to_state: New state
+            project_id: Optional project ID for context
+            page_id: Optional page ID for context
+            transition_type: Type of transition (e.g., 'status', 'phase')
+            **metadata: Additional metadata about the transition
+        """
+        extra: dict[str, Any] = {
+            "event": "state_transition",
+            "entity_type": entity_type,
+            "entity_id": entity_id,
+            "from_state": from_state,
+            "to_state": to_state,
+            "transition_type": transition_type,
+        }
+        if project_id:
+            extra["project_id"] = project_id
+        if page_id:
+            extra["page_id"] = page_id
+
+        # Add metadata
+        extra.update(metadata)
+
+        self.logger.info(
+            f"{entity_type} {transition_type} transition: {from_state} -> {to_state}",
+            extra=extra,
+        )
+
+    def slow_operation(
+        self,
+        operation_name: str,
+        duration_ms: float,
+        *,
+        project_id: str | None = None,
+        page_id: str | None = None,
+        threshold_ms: int | None = None,
+    ) -> None:
+        """Log slow operation warning (>1 second by default).
+
+        Args:
+            operation_name: Name of the slow operation
+            duration_ms: Operation duration in milliseconds
+            project_id: Optional project ID for context
+            page_id: Optional page ID for context
+            threshold_ms: Custom threshold (defaults to instance threshold)
+        """
+        threshold = threshold_ms or self.slow_threshold_ms
+
+        extra: dict[str, Any] = {
+            "event": "slow_operation",
+            "operation": operation_name,
+            "duration_ms": round(duration_ms, 2),
+            "threshold_ms": threshold,
+        }
+        if project_id:
+            extra["project_id"] = project_id
+        if page_id:
+            extra["page_id"] = page_id
+
+        self.logger.warning(
+            f"Slow operation detected: {operation_name} took {round(duration_ms, 2)}ms",
+            extra=extra,
+        )
+
+    def operation(
+        self,
+        method_name: str,
+        *,
+        project_id: str | None = None,
+        page_id: str | None = None,
+        **params: Any,
+    ) -> "OperationContext":
+        """Context manager for automatic method entry/exit logging with timing.
+
+        Args:
+            method_name: Name of the method/operation
+            project_id: Optional project ID for context
+            page_id: Optional page ID for context
+            **params: Method parameters to log (will be sanitized)
+
+        Returns:
+            OperationContext that tracks timing and handles logging
+
+        Example:
+            with self.logger.operation("create_project", project_id=pid) as ctx:
+                # Do work...
+                ctx.add_result(entity_id=new_id)
+        """
+        return OperationContext(
+            self,
+            method_name,
+            project_id=project_id,
+            page_id=page_id,
+            **params,
+        )
+
+    def _sanitize_params(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Sanitize parameters for logging (mask sensitive values).
+
+        Args:
+            params: Parameters to sanitize
+
+        Returns:
+            Sanitized parameters safe for logging
+        """
+        sensitive_keys = {
+            "password", "token", "api_key", "apikey", "secret",
+            "credential", "auth", "authorization", "key",
+        }
+        result: dict[str, Any] = {}
+
+        for key, value in params.items():
+            key_lower = key.lower()
+            if any(s in key_lower for s in sensitive_keys):
+                result[key] = "****"
+            else:
+                result[key] = self._sanitize_value(value)
+
+        return result
+
+    def _sanitize_value(self, value: Any, max_length: int = 200) -> Any:
+        """Sanitize a single value for logging.
+
+        Args:
+            value: Value to sanitize
+            max_length: Maximum string length before truncation
+
+        Returns:
+            Sanitized value safe for logging
+        """
+        if value is None:
+            return None
+        if isinstance(value, str):
+            if len(value) > max_length:
+                return value[:max_length] + f"... (truncated, {len(value)} chars)"
+            return value
+        if isinstance(value, (int, float, bool)):
+            return value
+        if isinstance(value, (list, tuple)):
+            if len(value) > 10:
+                return f"[{type(value).__name__} with {len(value)} items]"
+            return [self._sanitize_value(v, max_length) for v in value[:10]]
+        if isinstance(value, dict):
+            if len(value) > 20:
+                return f"{{dict with {len(value)} keys}}"
+            return {k: self._sanitize_value(v, max_length) for k, v in list(value.items())[:20]}
+        # For other types, convert to string and truncate
+        str_value = str(value)
+        if len(str_value) > max_length:
+            return str_value[:max_length] + "... (truncated)"
+        return str_value
+
+
+class OperationContext:
+    """Context manager for tracking operation timing and logging.
+
+    Automatically logs method entry on enter and method exit on exit,
+    including timing information and any added result data.
+    """
+
+    def __init__(
+        self,
+        service_logger: ServiceLogger,
+        method_name: str,
+        *,
+        project_id: str | None = None,
+        page_id: str | None = None,
+        **params: Any,
+    ) -> None:
+        """Initialize operation context.
+
+        Args:
+            service_logger: Parent ServiceLogger instance
+            method_name: Name of the method/operation
+            project_id: Optional project ID for context
+            page_id: Optional page ID for context
+            **params: Method parameters to log
+        """
+        self._logger = service_logger
+        self._method_name = method_name
+        self._project_id = project_id
+        self._page_id = page_id
+        self._params = params
+        self._result_info: dict[str, Any] = {}
+        self._start_time: float = 0
+
+    def add_result(self, **result_info: Any) -> None:
+        """Add result information to be logged on exit.
+
+        Args:
+            **result_info: Result information to include in exit log
+        """
+        self._result_info.update(result_info)
+
+    @property
+    def duration_ms(self) -> float:
+        """Get current duration in milliseconds."""
+        import time
+        return (time.monotonic() - self._start_time) * 1000
+
+    def __enter__(self) -> "OperationContext":
+        """Enter context: log method entry and start timer."""
+        import time
+        self._start_time = time.monotonic()
+        self._logger.method_entry(
+            self._method_name,
+            project_id=self._project_id,
+            page_id=self._page_id,
+            **self._params,
+        )
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: Any,
+    ) -> None:
+        """Exit context: log method exit or exception."""
+        import time
+        duration_ms = (time.monotonic() - self._start_time) * 1000
+
+        if exc_val is not None:
+            # Log exception
+            self._logger.exception(
+                self._method_name,
+                exc_val,  # type: ignore[arg-type]
+                project_id=self._project_id,
+                page_id=self._page_id,
+                duration_ms=round(duration_ms, 2),
+                **self._result_info,
+            )
+        else:
+            # Log successful completion
+            self._logger.method_exit(
+                self._method_name,
+                duration_ms,
+                project_id=self._project_id,
+                page_id=self._page_id,
+                **self._result_info,
+            )
+
+
+def get_service_logger(
+    name: str,
+    slow_threshold_ms: int = ServiceLogger.DEFAULT_SLOW_THRESHOLD_MS,
+) -> ServiceLogger:
+    """Get a ServiceLogger instance for a service.
+
+    Args:
+        name: Logger name (usually service name)
+        slow_threshold_ms: Threshold for slow operation warnings
+
+    Returns:
+        Configured ServiceLogger instance
+    """
+    return ServiceLogger(name, slow_threshold_ms=slow_threshold_ms)
