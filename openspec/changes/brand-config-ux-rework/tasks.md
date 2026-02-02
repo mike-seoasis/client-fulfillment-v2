@@ -48,9 +48,9 @@
 
 ## 9. Frontend - Wizard Page & Integration
 
-- [ ] 9.1 Create BrandWizardPage with state management and auto-save
-- [ ] 9.2 Add route and link from ProjectDetailPage
-- [ ] 9.3 Update BrandConfigPanel to detect V3 and show "Launch Wizard" button
+- [x] 9.1 Create BrandWizardPage with state management and auto-save
+- [x] 9.2 Add route and link from ProjectDetailPage
+- [x] 9.3 Update BrandConfigPanel to detect V3 and show "Launch Wizard" button
 
 ## 10. Frontend - UX Fixes
 

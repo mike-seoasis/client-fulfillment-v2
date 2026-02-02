@@ -926,10 +926,18 @@ export function BrandConfigPanel({ projectId, className }: BrandConfigPanelProps
               </div>
               <div className="flex items-center gap-2">
                 {!isEditing ? (
-                  <Button variant="outline" size="sm" onClick={handleStartEdit}>
-                    <Edit3 className="w-4 h-4" />
-                    Edit
-                  </Button>
+                  <>
+                    <Link to={`/projects/${projectId}/brand-wizard`}>
+                      <Button variant="outline" size="sm">
+                        <Wand2 className="w-4 h-4" />
+                        Wizard
+                      </Button>
+                    </Link>
+                    <Button variant="outline" size="sm" onClick={handleStartEdit}>
+                      <Edit3 className="w-4 h-4" />
+                      Edit
+                    </Button>
+                  </>
                 ) : (
                   <>
                     <Button variant="ghost" size="sm" onClick={handleCancelEdit}>
@@ -953,9 +961,15 @@ export function BrandConfigPanel({ projectId, className }: BrandConfigPanelProps
           <div className="text-center py-6">
             <Palette className="w-12 h-12 text-warmgray-300 mx-auto mb-3" />
             <p className="text-warmgray-500">No brand configuration yet</p>
-            <p className="text-sm text-warmgray-400 mt-1">
-              Upload brand documents to synthesize your brand identity.
+            <p className="text-sm text-warmgray-400 mt-1 mb-4">
+              Use the wizard to configure your brand identity, or upload documents below.
             </p>
+            <Link to={`/projects/${projectId}/brand-wizard`}>
+              <Button>
+                <Wand2 className="w-4 h-4" />
+                Launch Brand Wizard
+              </Button>
+            </Link>
           </div>
         )}
       </div>
