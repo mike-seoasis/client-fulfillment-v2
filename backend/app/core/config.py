@@ -391,6 +391,15 @@ class Settings(BaseSettings):
         default=70,
         description="Minimum page score (0-100) for content to pass quality gate",
     )
+    # POP feature flags for safe rollout
+    use_pop_content_brief: bool = Field(
+        default=False,
+        description="Enable POP integration for content briefs (default: disabled for safe rollout)",
+    )
+    use_pop_scoring: bool = Field(
+        default=False,
+        description="Enable POP integration for content scoring (default: disabled for safe rollout)",
+    )
 
 
 @lru_cache

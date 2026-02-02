@@ -506,3 +506,24 @@ When creating new SQLAlchemy models in `backend/app/models/`:
   - This story was effectively already complete when endpoint files were created
 ---
 
+## 2026-02-02 - US-027
+- Added POP feature flags to `backend/app/core/config.py`:
+  - `use_pop_content_brief`: Boolean flag to enable/disable POP for content briefs (default: False)
+  - `use_pop_scoring`: Boolean flag to enable/disable POP for content scoring (default: False)
+- Updated `backend/.env.example` with documented environment variables:
+  - `USE_POP_CONTENT_BRIEF=false`
+  - `USE_POP_SCORING=false`
+- All acceptance criteria met:
+  - ✓ Add use_pop_content_brief boolean setting to config
+  - ✓ Add use_pop_scoring boolean setting to config
+  - ✓ Defaults to False (disabled) for safe rollout
+  - ✓ Settings loadable from environment variables
+- Files changed:
+  - `backend/app/core/config.py` - Added two boolean feature flag settings
+  - `backend/.env.example` - Added feature flag environment variables
+- **Learnings:**
+  - Feature flags follow same Field() pattern as other settings with description parameter
+  - Boolean settings in pydantic-settings parse environment variables case-insensitively (true/True/TRUE all work)
+  - Feature flags should be grouped with related settings (added after pop_pass_threshold in POP section)
+---
+
