@@ -37,6 +37,9 @@ COPY --from=build /app/dist /usr/share/nginx/html
 # Copy nginx configuration for SPA routing
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Railway assigns PORT dynamically
-# Use envsubst to inject PORT into nginx config at runtime
-CMD /bin/sh -c "envsubst '\$PORT' < /etc/nginx/conf.d/default.conf > /etc/nginx/conf.d/default.conf.tmp && mv /etc/nginx/conf.d/default.conf.tmp /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"
+# Railway assigns PORT dynamically, BACKEND_URL should be set for API proxy
+# Default BACKEND_URL to the Railway backend service
+ENV BACKEND_URL=https://be-client-fulfillment-v2-production.up.railway.app
+
+# Use envsubst to inject PORT and BACKEND_URL into nginx config at runtime
+CMD /bin/sh -c "envsubst '\$PORT \$BACKEND_URL' < /etc/nginx/conf.d/default.conf > /etc/nginx/conf.d/default.conf.tmp && mv /etc/nginx/conf.d/default.conf.tmp /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"
