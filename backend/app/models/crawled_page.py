@@ -8,14 +8,18 @@ The CrawledPage model represents a single page crawled during client onboarding:
 """
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from sqlalchemy import DateTime, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+if TYPE_CHECKING:
+    from app.models.content_brief import ContentBrief
+    from app.models.content_score import ContentScore
 
 
 class CrawledPage(Base):
@@ -105,6 +109,19 @@ class CrawledPage(Base):
         default=lambda: datetime.now(UTC),
         server_default=text("now()"),
         onupdate=lambda: datetime.now(UTC),
+    )
+
+    # Relationships to content brief and score models
+    content_briefs: Mapped[list["ContentBrief"]] = relationship(
+        "ContentBrief",
+        back_populates="page",
+        cascade="all, delete-orphan",
+    )
+
+    content_scores: Mapped[list["ContentScore"]] = relationship(
+        "ContentScore",
+        back_populates="page",
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:

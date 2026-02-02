@@ -32,6 +32,16 @@ When creating the POP API integration client in `backend/app/integrations/pop.py
 4. **Factory**: `get_pop_client()` async function for FastAPI dependency injection
 5. **Masking**: Use `_mask_api_key()` to redact apiKey from logs
 
+### SQLAlchemy Model Pattern
+When creating new SQLAlchemy models in `backend/app/models/`:
+1. **File naming**: `{table_name_singular}.py` (e.g., `content_brief.py` for `content_briefs` table)
+2. **UUID primary keys**: Use `UUID(as_uuid=False)` with `default=lambda: str(uuid4())` and `server_default=text("gen_random_uuid()")`
+3. **JSONB columns**: Use `Mapped[list[Any]]` for arrays, `Mapped[dict[str, Any]]` for objects, with `default=list` or `default=dict`
+4. **Timestamps**: Use `DateTime(timezone=True)` with `default=lambda: datetime.now(UTC)` and `server_default=text("now()")`
+5. **Foreign keys**: Use `ForeignKey("table.id", ondelete="CASCADE")` directly in `mapped_column()`
+6. **Relationships**: Use `TYPE_CHECKING` guard for forward references, `back_populates` for bidirectional, `cascade="all, delete-orphan"` for parent side
+7. **Exports**: Add new models to `app/models/__init__.py` imports and `__all__` list
+
 ---
 
 ## 2026-02-02 - US-001
@@ -165,5 +175,26 @@ When creating the POP API integration client in `backend/app/integrations/pop.py
   - For auth failures, explicitly noting `credentials_logged: False` in logs provides audit trail
   - Poll logging at INFO level (not DEBUG) helps trace long-running async tasks in production
   - Credits/cost fields are optional - POP may or may not provide this data
+---
+
+## 2026-02-02 - US-009
+- Created SQLAlchemy models for POP content data persistence:
+  - `backend/app/models/content_brief.py`: ContentBrief model matching content_briefs table schema
+  - `backend/app/models/content_score.py`: ContentScore model matching content_scores table schema
+- Added bidirectional relationships between CrawledPage and new models:
+  - `CrawledPage.content_briefs` → list of ContentBrief records
+  - `CrawledPage.content_scores` → list of ContentScore records
+  - Both use `cascade="all, delete-orphan"` for proper cascade deletes
+- Updated `backend/app/models/__init__.py` to export ContentBrief and ContentScore
+- Files changed:
+  - `backend/app/models/content_brief.py` - New file
+  - `backend/app/models/content_score.py` - New file
+  - `backend/app/models/crawled_page.py` - Added relationship imports and relationship properties
+  - `backend/app/models/__init__.py` - Added ContentBrief and ContentScore exports
+- **Learnings:**
+  - Use `TYPE_CHECKING` guard for forward reference imports to avoid circular import issues
+  - SQLAlchemy relationships with `back_populates` require matching property names on both sides
+  - JSONB columns: use `list[Any]` for arrays, `dict[str, Any]` for objects
+  - Existing models don't have ForeignKey in column definition - use separate ForeignKey constraint; but new models can use ForeignKey directly in mapped_column for cleaner code
 ---
 

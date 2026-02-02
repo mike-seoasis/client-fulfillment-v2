@@ -7,6 +7,8 @@ All models inherit from the Base class defined in core.database.
 from app.core.database import Base
 from app.models.brand_config import BrandConfig
 from app.models.competitor import Competitor
+from app.models.content_brief import ContentBrief
+from app.models.content_score import ContentScore
 from app.models.crawl_history import CrawlHistory
 from app.models.crawl_schedule import CrawlSchedule
 from app.models.crawled_page import CrawledPage
@@ -27,6 +29,8 @@ __all__ = [
     "Base",
     "BrandConfig",
     "Competitor",
+    "ContentBrief",
+    "ContentScore",
     "CrawlHistory",
     "CrawlSchedule",
     "CrawledPage",
