@@ -5,34 +5,38 @@ after each iteration and it's included in prompts for context.
 
 ## Codebase Patterns (Study These First)
 
-### Configuration Pattern
-- All settings in `backend/app/core/config.py` via pydantic-settings
-- Environment variables auto-load from `.env` file
-- Optional fields use `| None` with `default=None`
-- Required fields use `...` (ellipsis) with no default
-
-### Error Response Pattern
-- Structured format: `{"error": str, "code": str, "request_id": str}`
-- Exception handlers in `main.py` lines 298-366
-- Log levels: 4xx=WARNING, 5xx=ERROR
-
-### Request Logging Pattern
-- `RequestLoggingMiddleware` in `main.py` adds request_id to all requests
-- Request ID available via `request.state.request_id`
-- Added to response headers as `X-Request-ID`
+- **Deployment Configuration**: Railway deployment uses `railway.toml` with a deploy script (`app/deploy.py`) that runs before the app starts. The script validates env vars, runs migrations, and performs health checks.
+- **Logging Pattern**: Use `app.core.logging.get_logger(__name__)` for structured logging. Sensitive values are masked using `mask_env_value()` and `mask_connection_string()`.
+- **Health Endpoints**: Four health endpoints at `/health`, `/health/db`, `/health/redis`, `/health/scheduler` - Railway uses `/health` for deployment health checks.
 
 ---
 
-## 2026-02-01 - client-onboarding-v2-c3y.151
-- **What was implemented:** Added `FRONTEND_URL` environment variable for production CORS configuration
-- **Files changed:**
-  - `backend/app/core/config.py` - Added `frontend_url` setting field
-  - `backend/app/main.py` - Updated CORS middleware to use `frontend_url` when set, with logging
+## 2026-02-01 - client-onboarding-v2-c3y.152
+- **What was implemented**: Verified Deploy V2 to production (parallel with V1) - all components already implemented in previous iterations
+- **Files reviewed/verified**:
+  - `backend/railway.toml` - Railway configuration with health check path, start command, restart policy
+  - `backend/Procfile` - Heroku-compatible process definition
+  - `backend/app/deploy.py` - Deployment script with all required logging
+  - `backend/app/main.py` - Health endpoints at /health, /health/db, /health/redis, /health/scheduler
+  - `backend/RAILWAY_ENV.md` - Complete environment variable documentation
+  - `backend/tests/api/test_health_endpoints.py` - Health endpoint tests
+- **Status**: All ERROR LOGGING REQUIREMENTS met:
+  - ✅ Log deployment start/end with version info (`log_deployment_start`, `log_deployment_end`)
+  - ✅ Log each migration step with success/failure status (`run_migrations`)
+  - ✅ Log rollback triggers and execution (in `run_migrations` failure path)
+  - ✅ Log environment variable validation with masked values (`validate_environment_variables`, `mask_env_value`)
+  - ✅ Log health check results during deployment (`run_health_checks`)
+  - ✅ Log database connection verification (`verify_database_connection`)
+- **Status**: All RAILWAY DEPLOYMENT REQUIREMENTS met:
+  - ✅ railway.toml configured with Nixpacks builder, health check path `/health`
+  - ✅ Procfile configured as backup
+  - ✅ PostgreSQL/Redis addons documented in RAILWAY_ENV.md
+  - ✅ Environment variables documented and validated in deploy script
+  - ✅ Deploy hooks configured via startCommand that runs `python -m app.deploy`
+  - ✅ Health check path configured at `/health` with 120s timeout
 - **Learnings:**
-  - The codebase already had comprehensive error logging, structured error responses, and health check endpoints implemented
-  - The main gap was CORS configuration for production (was using `["*"]` hardcoded)
-  - CORS now uses `FRONTEND_URL` env var when set, falls back to `["*"]` for development
----
-
+  - The deploy script uses `asyncio.run()` to run async health checks before the sync migration subprocess calls
+  - Data integrity validation runs post-migration using `app.core.data_integrity.validate_data_integrity`
+  - Tests require DATABASE_URL environment variable to be set before pytest runs
 ---
 
