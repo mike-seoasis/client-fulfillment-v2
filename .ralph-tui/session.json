@@ -3,10 +3,10 @@
   "sessionId": "507aa4d0-6ebf-4607-82ff-4b567e5d9704",
   "status": "running",
   "startedAt": "2026-02-02T19:14:04.679Z",
-  "updatedAt": "2026-02-02T20:04:56.420Z",
-  "currentIteration": 19,
+  "updatedAt": "2026-02-02T20:08:18.256Z",
+  "currentIteration": 20,
   "maxIterations": 10,
-  "tasksCompleted": 19,
+  "tasksCompleted": 20,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -155,8 +155,8 @@
       {
         "id": "US-024",
         "title": "Create content brief API endpoints",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-025",
@@ -398,6 +398,16 @@
       "durationMs": 123744,
       "startedAt": "2026-02-02T19:59:49.683Z",
       "endedAt": "2026-02-02T20:01:53.427Z"
+    },
+    {
+      "iteration": 20,
+      "status": "completed",
+      "taskId": "US-024",
+      "taskTitle": "Create content brief API endpoints",
+      "taskCompleted": true,
+      "durationMs": 181763,
+      "startedAt": "2026-02-02T20:01:54.655Z",
+      "endedAt": "2026-02-02T20:04:56.418Z"
     }
   ],
   "skippedTaskIds": [],

@@ -451,6 +451,26 @@ When creating new SQLAlchemy models in `backend/app/models/`:
   - When adding new logging to existing code, verify you're not creating duplicate variable assignments
 ---
 
+## 2026-02-02 - US-025
+- Created content scoring API endpoints in `backend/app/api/v1/endpoints/pop_content_score.py`:
+  - POST `/projects/{project_id}/phases/content_score/score` - Score content for a single page
+  - POST `/projects/{project_id}/phases/content_score/batch` - Batch score multiple pages concurrently
+- Endpoints validate project/page existence and return proper error responses (404, 422, 500)
+- All endpoint logs include request_id for traceability
+- Batch endpoint uses asyncio.Semaphore for concurrent request limiting (max_concurrent)
+- Batch endpoint returns detailed statistics: successful_items, failed_items, items_passed, items_failed_threshold, fallback_count
+- Registered router in `backend/app/api/v1/__init__.py` with prefix `/projects/{project_id}/phases/content_score`
+- Files changed:
+  - `backend/app/api/v1/endpoints/pop_content_score.py` - New file
+  - `backend/app/api/v1/__init__.py` - Added pop_content_score import and router registration
+- **Learnings:**
+  - For batch endpoints with page_ids, use comma-separated query parameter `page_ids=uuid1,uuid2,...`
+  - Use `zip(..., strict=True)` to satisfy ruff B905 linting rule
+  - When converting JSONB dict fields to typed Pydantic schemas, use `# type: ignore[arg-type]` for mypy since Pydantic handles coercion at runtime
+  - Batch scoring pattern: semaphore-controlled async tasks + asyncio.gather for concurrent processing
+  - mypy may report errors in unrelated files due to import graph - filter with grep to verify target file is clean
+---
+
 ## 2026-02-02 - US-024
 - Created content brief API endpoints in `backend/app/api/v1/endpoints/content_brief.py`:
   - POST `/projects/{project_id}/phases/content_brief/fetch` - Fetch content brief from POP API
