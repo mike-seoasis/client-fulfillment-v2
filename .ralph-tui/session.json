@@ -3,10 +3,10 @@
   "sessionId": "507aa4d0-6ebf-4607-82ff-4b567e5d9704",
   "status": "running",
   "startedAt": "2026-02-02T19:14:04.679Z",
-  "updatedAt": "2026-02-02T19:18:51.854Z",
-  "currentIteration": 1,
+  "updatedAt": "2026-02-02T19:21:39.812Z",
+  "currentIteration": 2,
   "maxIterations": 10,
-  "tasksCompleted": 1,
+  "tasksCompleted": 2,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -23,8 +23,8 @@
       {
         "id": "US-002",
         "title": "Create database migrations",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-003",
@@ -218,6 +218,16 @@
       "durationMs": 105341,
       "startedAt": "2026-02-02T19:14:51.334Z",
       "endedAt": "2026-02-02T19:16:36.675Z"
+    },
+    {
+      "iteration": 2,
+      "status": "completed",
+      "taskId": "US-002",
+      "taskTitle": "Create database migrations",
+      "taskCompleted": true,
+      "durationMs": 133957,
+      "startedAt": "2026-02-02T19:16:37.895Z",
+      "endedAt": "2026-02-02T19:18:51.852Z"
     }
   ],
   "skippedTaskIds": [],

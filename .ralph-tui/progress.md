@@ -24,6 +24,14 @@ When creating new database tables in `backend/alembic/versions/`:
 7. **Indexes**: Create indexes for foreign keys and commonly queried columns using `op.f("ix_{table}_{column}")`
 8. **Verify**: Run `alembic heads` and `alembic history` to verify migration chain
 
+### POP Integration Client Pattern
+When creating the POP API integration client in `backend/app/integrations/pop.py`:
+1. **Auth in body**: POP uses `apiKey` in JSON request body (not HTTP headers like DataForSEO)
+2. **Pattern**: Follow `backend/app/integrations/dataforseo.py` structure exactly
+3. **Components**: CircuitBreaker, exception classes (POPError, POPTimeoutError, etc.), POPClient class
+4. **Factory**: `get_pop_client()` async function for FastAPI dependency injection
+5. **Masking**: Use `_mask_api_key()` to redact apiKey from logs
+
 ---
 
 ## 2026-02-02 - US-001
@@ -59,5 +67,23 @@ When creating new database tables in `backend/alembic/versions/`:
   - Can verify migrations without database by: importing Python module, running `alembic heads`, and `alembic history`
   - Use `DATABASE_URL="postgresql://user:pass@localhost:5432/db"` prefix for alembic commands when env var not set
   - Both tables have FK to `crawled_pages.id` with CASCADE delete
+---
+
+## 2026-02-02 - US-003
+- Created POP integration client base in `backend/app/integrations/pop.py`:
+  - `POPClient` class with async httpx client
+  - Circuit breaker for fault tolerance
+  - Retry logic with exponential backoff
+  - Auth via `apiKey` in request body (not headers)
+  - Exception hierarchy: POPError, POPTimeoutError, POPRateLimitError, POPAuthError, POPCircuitOpenError
+  - Factory function `get_pop_client()` for FastAPI dependency injection
+  - Init/close lifecycle functions `init_pop()` and `close_pop()`
+- Files changed:
+  - `backend/app/integrations/pop.py` - New file
+- **Learnings:**
+  - POP authenticates via `apiKey` in JSON body, not HTTP Basic Auth like DataForSEO
+  - `_mask_api_key()` helper needed to redact apiKey from logged request bodies
+  - Global client singleton pattern matches dataforseo.py: `_pop_client` variable with init/close/get functions
+  - All quality checks pass: ruff check, ruff format, mypy
 ---
 
