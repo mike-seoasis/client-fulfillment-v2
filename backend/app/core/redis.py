@@ -243,7 +243,7 @@ class RedisManager:
         for attempt in range(max_retries):
             try:
                 if self._client:
-                    await self._client.ping()
+                    await self._client.ping()  # type: ignore[misc]
                     return
             except (RedisConnectionError, RedisTimeoutError) as e:
                 last_error = e

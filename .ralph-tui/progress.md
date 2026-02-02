@@ -5,46 +5,25 @@ after each iteration and it's included in prompts for context.
 
 ## Codebase Patterns (Study These First)
 
-### E2E Test Pattern
-- Use fixtures from `tests/conftest.py` for test client, db_session, mock_redis
-- Tests require `DATABASE_URL` env var (e.g., `DATABASE_URL="postgresql://test:test@localhost:5432/test"`)
-- For E2E tests, create fixtures that build on each other: project → crawl_history → crawled_pages → page_keywords
-- Mock external services (Claude LLM) using `unittest.mock.patch` with `AsyncMock`
-- Include timing logs using `time.monotonic()` for performance tracking
-- Add DEBUG level logging in fixtures for setup/teardown visibility
-
-### API Route Ordering Issue (Known Bug)
-- In `crawl.py`, the `/{crawl_id}` route is defined before `/pages`, causing "/pages" to be matched as a crawl_id
-- Workaround: Tests for `/pages` endpoint are skipped with documented reason
-- Fix would require reordering routes in `app/api/v1/endpoints/crawl.py` (not part of this task)
+### Type Checking Configuration
+- **Backend (mypy)**: Config in `backend/pyproject.toml` under `[tool.mypy]`. Third-party libs without stubs are handled via `[[tool.mypy.overrides]]` with `ignore_missing_imports = true`.
+- **Frontend (tsc)**: Config in `frontend/tsconfig.json`. Run with `npm run typecheck`.
+- When adding new third-party dependencies without type stubs, add them to the mypy overrides module list in `pyproject.toml`.
 
 ---
 
-## 2026-02-01 - client-onboarding-v2-c3y.141
-- What was implemented:
-  - E2E test suite for crawl → content generation workflow
-  - Test file: `backend/tests/e2e/test_crawl_to_content_workflow.py`
-  - 21 tests total (19 passing, 2 skipped due to API route ordering issue)
-
+## 2026-02-01 - client-onboarding-v2-c3y.142
+- Ran mypy type checking on backend (134 source files) and tsc on frontend
+- Fixed 8 type errors across 4 backend files
 - Files changed:
-  - `backend/tests/e2e/__init__.py` (new)
-  - `backend/tests/e2e/test_crawl_to_content_workflow.py` (new)
-
-- Test Classes:
-  - `TestE2EProjectCreation` - Project CRUD tests
-  - `TestE2ECrawlWorkflow` - Crawl start, progress, history tests
-  - `TestE2ECrawledPagesWorkflow` - Crawled pages retrieval tests
-  - `TestE2EContentGenerationWorkflow` - Content generation with mocked LLM
-  - `TestE2EFullWorkflow` - Complete workflow from project to content
-  - `TestE2ERegenerationWorkflow` - Content regeneration tests
-  - `TestE2EErrorHandling` - Error response structure validation
-
+  - `backend/pyproject.toml` - Added `boto3` and `boto3.*` to mypy ignore_missing_imports list
+  - `backend/app/core/logging.py` - Added `type: ignore[name-defined]` for JsonFormatter base class
+  - `backend/app/core/redis.py` - Added `type: ignore[misc]` for async ping() call
+  - `backend/app/api/v1/endpoints/projects.py` - Fixed return type for `create_project` (was missing `JSONResponse`), removed 4 unused `type: ignore[return-value]` comments
 - **Learnings:**
-  - Pattern: FastAPI route order matters - static paths (`/pages`) must come before dynamic paths (`/{crawl_id}`)
-  - Pattern: Use `pytest.mark.skip` with reason for known API issues rather than failing tests
-  - Pattern: Mock Claude LLM by patching `get_claude` and returning MagicMock with required attributes
-  - Gotcha: Test fixtures should use `await db_session.flush()` not `commit()` to keep data in transaction
-  - Gotcha: LogRecord key errors occur when using reserved keys like 'name', 'message' in log extra dict
-  - Gotcha: Package version conflicts between starlette/httpx/fastapi can break TestClient
+  - Local imports (inside functions) are still affected by mypy module overrides in pyproject.toml
+  - FastAPI endpoints that return either a response model or JSONResponse need union return types (`ProjectResponse | JSONResponse`)
+  - The `warn_unused_ignores = true` mypy setting catches stale type: ignore comments
+  - Redis async client's `ping()` returns `Awaitable[bool] | bool` which requires type: ignore for await
 ---
 

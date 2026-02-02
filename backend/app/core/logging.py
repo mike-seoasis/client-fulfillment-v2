@@ -22,7 +22,7 @@ from pythonjsonlogger import jsonlogger
 from app.core.config import get_settings
 
 
-class CustomJsonFormatter(jsonlogger.JsonFormatter):
+class CustomJsonFormatter(jsonlogger.JsonFormatter):  # type: ignore[name-defined]
     """Custom JSON formatter with additional fields."""
 
     def add_fields(
