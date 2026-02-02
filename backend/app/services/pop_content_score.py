@@ -268,6 +268,22 @@ class POPContentScoreService:
             settings = get_settings()
             passed = page_score >= settings.pop_pass_threshold if page_score else False
 
+            # Log scoring results at INFO level for fallback path
+            logger.info(
+                "scoring_results",
+                extra={
+                    "project_id": project_id,
+                    "page_id": page_id,
+                    "task_id": None,  # No POP task for fallback
+                    "page_score": page_score,
+                    "passed": passed,
+                    "recommendation_count": 0,  # Fallback doesn't provide recommendations
+                    "prioritized_recommendation_count": 0,
+                    "fallback_used": True,
+                    "fallback_reason": fallback_reason,
+                },
+            )
+
             # Method exit log
             logger.debug(
                 "score_content method exit (fallback)",
@@ -1118,6 +1134,13 @@ class POPContentScoreService:
                 },
             )
 
+            # Determine pass/fail and get prioritized recommendations
+            page_score = parsed.get("page_score")
+            all_recommendations = parsed.get("recommendations", [])
+            passed, prioritized_recs = self._determine_pass_fail(
+                page_score, all_recommendations
+            )
+
             # Phase transition: score_completed
             logger.info(
                 "score_completed",
@@ -1126,11 +1149,43 @@ class POPContentScoreService:
                     "page_id": page_id,
                     "keyword": keyword[:50],
                     "task_id": task_id,
-                    "page_score": parsed.get("page_score"),
+                    "page_score": page_score,
                     "success": True,
                     "duration_ms": round(duration_ms, 2),
                 },
             )
+
+            # Log scoring results at INFO level with page_score, passed, recommendation_count
+            logger.info(
+                "scoring_results",
+                extra={
+                    "project_id": project_id,
+                    "page_id": page_id,
+                    "task_id": task_id,
+                    "page_score": page_score,
+                    "passed": passed,
+                    "recommendation_count": len(all_recommendations),
+                    "prioritized_recommendation_count": len(prioritized_recs),
+                    "fallback_used": False,
+                },
+            )
+
+            # Log API cost per scoring request (extracted from response if available)
+            credits_used = raw_data.get("creditsUsed") or raw_data.get("credits_used")
+            credits_remaining = raw_data.get("creditsRemaining") or raw_data.get(
+                "credits_remaining"
+            )
+            if credits_used is not None or credits_remaining is not None:
+                logger.info(
+                    "scoring_api_cost",
+                    extra={
+                        "project_id": project_id,
+                        "page_id": page_id,
+                        "task_id": task_id,
+                        "credits_used": credits_used,
+                        "credits_remaining": credits_remaining,
+                    },
+                )
 
             if duration_ms > SLOW_OPERATION_THRESHOLD_MS:
                 logger.warning(
@@ -1144,13 +1199,6 @@ class POPContentScoreService:
                         "threshold_ms": SLOW_OPERATION_THRESHOLD_MS,
                     },
                 )
-
-            # Determine pass/fail and get prioritized recommendations
-            page_score = parsed.get("page_score")
-            all_recommendations = parsed.get("recommendations", [])
-            passed, prioritized_recs = self._determine_pass_fail(
-                page_score, all_recommendations
-            )
 
             result = POPContentScoreResult(
                 success=True,
