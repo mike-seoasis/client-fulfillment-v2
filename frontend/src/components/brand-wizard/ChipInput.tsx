@@ -12,7 +12,7 @@
 
 import { cn } from '@/lib/utils'
 import { useState, useRef, KeyboardEvent, useId } from 'react'
-import { X, Plus } from 'lucide-react'
+import { X } from 'lucide-react'
 
 export interface ChipInputProps {
   /** Current values */

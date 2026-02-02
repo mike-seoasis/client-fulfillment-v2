@@ -169,8 +169,9 @@ class POPContentBriefService:
         """
         start_time = time.monotonic()
 
+        # Method entry log with sanitized parameters
         logger.debug(
-            "Saving content brief to database",
+            "save_brief method entry",
             extra={
                 "page_id": page_id,
                 "project_id": project_id,
@@ -258,16 +259,6 @@ class POPContentBriefService:
 
             duration_ms = (time.monotonic() - start_time) * 1000
 
-            logger.debug(
-                "Content brief saved successfully",
-                extra={
-                    "brief_id": brief.id,
-                    "page_id": page_id,
-                    "project_id": project_id,
-                    "duration_ms": round(duration_ms, 2),
-                },
-            )
-
             if duration_ms > SLOW_OPERATION_THRESHOLD_MS:
                 logger.warning(
                     "Slow content brief save operation",
@@ -275,10 +266,24 @@ class POPContentBriefService:
                         "brief_id": brief.id,
                         "page_id": page_id,
                         "project_id": project_id,
+                        "task_id": result.task_id,
                         "duration_ms": round(duration_ms, 2),
                         "threshold_ms": SLOW_OPERATION_THRESHOLD_MS,
                     },
                 )
+
+            # Method exit log with result summary
+            logger.debug(
+                "save_brief method exit",
+                extra={
+                    "brief_id": brief.id,
+                    "page_id": page_id,
+                    "project_id": project_id,
+                    "task_id": result.task_id,
+                    "success": True,
+                    "duration_ms": round(duration_ms, 2),
+                },
+            )
 
             return brief
 
@@ -289,6 +294,7 @@ class POPContentBriefService:
                 extra={
                     "page_id": page_id,
                     "project_id": project_id,
+                    "task_id": result.task_id,
                     "keyword": keyword[:50] if keyword else "",
                     "error": str(e),
                     "error_type": type(e).__name__,
@@ -296,6 +302,19 @@ class POPContentBriefService:
                     "stack_trace": traceback.format_exc(),
                 },
                 exc_info=True,
+            )
+            # Method exit log on error
+            logger.debug(
+                "save_brief method exit",
+                extra={
+                    "brief_id": None,
+                    "page_id": page_id,
+                    "project_id": project_id,
+                    "task_id": result.task_id,
+                    "success": False,
+                    "error": str(e),
+                    "duration_ms": round(duration_ms, 2),
+                },
             )
             raise POPContentBriefServiceError(
                 f"Failed to save content brief: {e}",
@@ -792,8 +811,9 @@ class POPContentBriefService:
         """
         start_time = time.monotonic()
 
+        # Method entry log with sanitized parameters
         logger.debug(
-            "Fetching POP content brief",
+            "fetch_brief method entry",
             extra={
                 "project_id": project_id,
                 "page_id": page_id,
@@ -845,6 +865,17 @@ class POPContentBriefService:
         try:
             client = await self._get_client()
 
+            # Phase transition: brief_fetch_started
+            logger.info(
+                "brief_fetch_started",
+                extra={
+                    "project_id": project_id,
+                    "page_id": page_id,
+                    "keyword": keyword[:50],
+                    "target_url": target_url[:100],
+                },
+            )
+
             # Step 1: Create report task
             logger.info(
                 "Creating POP report task for content brief",
@@ -868,6 +899,18 @@ class POPContentBriefService:
                         "project_id": project_id,
                         "page_id": page_id,
                         "keyword": keyword[:50],
+                        "error": task_result.error,
+                        "duration_ms": round(duration_ms, 2),
+                    },
+                )
+                # Method exit log on task creation failure
+                logger.debug(
+                    "fetch_brief method exit",
+                    extra={
+                        "project_id": project_id,
+                        "page_id": page_id,
+                        "success": False,
+                        "brief_id": None,
                         "error": task_result.error,
                         "duration_ms": round(duration_ms, 2),
                     },
@@ -909,6 +952,19 @@ class POPContentBriefService:
                         "duration_ms": round(duration_ms, 2),
                     },
                 )
+                # Method exit log on polling failure
+                logger.debug(
+                    "fetch_brief method exit",
+                    extra={
+                        "project_id": project_id,
+                        "page_id": page_id,
+                        "task_id": task_id,
+                        "success": False,
+                        "brief_id": None,
+                        "error": poll_result.error,
+                        "duration_ms": round(duration_ms, 2),
+                    },
+                )
                 return POPContentBriefResult(
                     success=False,
                     keyword=keyword,
@@ -933,6 +989,19 @@ class POPContentBriefService:
                         "duration_ms": round(duration_ms, 2),
                     },
                 )
+                # Method exit log on task failure
+                logger.debug(
+                    "fetch_brief method exit",
+                    extra={
+                        "project_id": project_id,
+                        "page_id": page_id,
+                        "task_id": task_id,
+                        "success": False,
+                        "brief_id": None,
+                        "error": error_msg,
+                        "duration_ms": round(duration_ms, 2),
+                    },
+                )
                 return POPContentBriefResult(
                     success=False,
                     keyword=keyword,
@@ -950,16 +1019,34 @@ class POPContentBriefService:
 
             duration_ms = (time.monotonic() - start_time) * 1000
 
+            # Brief extraction stats at INFO level
             logger.info(
-                "POP content brief fetched successfully",
+                "brief_extraction_stats",
+                extra={
+                    "project_id": project_id,
+                    "page_id": page_id,
+                    "task_id": task_id,
+                    "word_count_target": parsed.get("word_count_target"),
+                    "word_count_min": parsed.get("word_count_min"),
+                    "word_count_max": parsed.get("word_count_max"),
+                    "lsi_term_count": len(parsed.get("lsi_terms", [])),
+                    "competitor_count": len(parsed.get("competitors", [])),
+                    "heading_target_count": len(parsed.get("heading_targets", [])),
+                    "keyword_target_count": len(parsed.get("keyword_targets", [])),
+                    "related_question_count": len(parsed.get("related_questions", [])),
+                    "page_score_target": parsed.get("page_score_target"),
+                },
+            )
+
+            # Phase transition: brief_fetch_completed
+            logger.info(
+                "brief_fetch_completed",
                 extra={
                     "project_id": project_id,
                     "page_id": page_id,
                     "keyword": keyword[:50],
                     "task_id": task_id,
-                    "word_count_target": parsed.get("word_count_target"),
-                    "lsi_terms_count": len(parsed.get("lsi_terms", [])),
-                    "competitors_count": len(parsed.get("competitors", [])),
+                    "success": True,
                     "duration_ms": round(duration_ms, 2),
                 },
             )
@@ -970,13 +1057,14 @@ class POPContentBriefService:
                     extra={
                         "project_id": project_id,
                         "page_id": page_id,
+                        "task_id": task_id,
                         "keyword": keyword[:50],
                         "duration_ms": round(duration_ms, 2),
                         "threshold_ms": SLOW_OPERATION_THRESHOLD_MS,
                     },
                 )
 
-            return POPContentBriefResult(
+            result = POPContentBriefResult(
                 success=True,
                 keyword=keyword,
                 target_url=target_url,
@@ -997,6 +1085,21 @@ class POPContentBriefService:
                 request_id=poll_result.request_id,
             )
 
+            # Method exit log with result summary
+            logger.debug(
+                "fetch_brief method exit",
+                extra={
+                    "project_id": project_id,
+                    "page_id": page_id,
+                    "task_id": task_id,
+                    "success": True,
+                    "brief_id": None,  # Not saved yet at this point
+                    "duration_ms": round(duration_ms, 2),
+                },
+            )
+
+            return result
+
         except POPContentBriefValidationError:
             raise
         except POPError as e:
@@ -1013,6 +1116,18 @@ class POPContentBriefService:
                     "stack_trace": traceback.format_exc(),
                 },
                 exc_info=True,
+            )
+            # Method exit log on error
+            logger.debug(
+                "fetch_brief method exit",
+                extra={
+                    "project_id": project_id,
+                    "page_id": page_id,
+                    "success": False,
+                    "brief_id": None,
+                    "error": str(e),
+                    "duration_ms": round(duration_ms, 2),
+                },
             )
             return POPContentBriefResult(
                 success=False,
@@ -1036,6 +1151,18 @@ class POPContentBriefService:
                     "stack_trace": traceback.format_exc(),
                 },
                 exc_info=True,
+            )
+            # Method exit log on unexpected error
+            logger.debug(
+                "fetch_brief method exit",
+                extra={
+                    "project_id": project_id,
+                    "page_id": page_id,
+                    "success": False,
+                    "brief_id": None,
+                    "error": str(e),
+                    "duration_ms": round(duration_ms, 2),
+                },
             )
             return POPContentBriefResult(
                 success=False,
@@ -1072,8 +1199,9 @@ class POPContentBriefService:
             POPContentBriefValidationError: If validation fails
             POPContentBriefServiceError: If persistence fails (session not available)
         """
+        # Method entry log with sanitized parameters
         logger.debug(
-            "Fetching and saving content brief",
+            "fetch_and_save_brief method entry",
             extra={
                 "project_id": project_id,
                 "page_id": page_id,
@@ -1114,6 +1242,19 @@ class POPContentBriefService:
                     },
                 )
 
+                # Method exit log with result summary (success with save)
+                logger.debug(
+                    "fetch_and_save_brief method exit",
+                    extra={
+                        "project_id": project_id,
+                        "page_id": page_id,
+                        "brief_id": brief.id,
+                        "task_id": result.task_id,
+                        "success": True,
+                        "saved": True,
+                    },
+                )
+
             except POPContentBriefServiceError:
                 # Re-raise persistence errors
                 raise
@@ -1123,6 +1264,7 @@ class POPContentBriefService:
                     extra={
                         "project_id": project_id,
                         "page_id": page_id,
+                        "task_id": result.task_id,
                         "keyword": keyword[:50],
                         "error": str(e),
                         "error_type": type(e).__name__,
@@ -1142,8 +1284,35 @@ class POPContentBriefService:
                 extra={
                     "project_id": project_id,
                     "page_id": page_id,
-                    "keyword": keyword[:50],
                     "task_id": result.task_id,
+                    "keyword": keyword[:50],
+                },
+            )
+
+            # Method exit log with result summary (success without save)
+            logger.debug(
+                "fetch_and_save_brief method exit",
+                extra={
+                    "project_id": project_id,
+                    "page_id": page_id,
+                    "brief_id": None,
+                    "task_id": result.task_id,
+                    "success": True,
+                    "saved": False,
+                },
+            )
+
+        else:
+            # Fetch failed
+            logger.debug(
+                "fetch_and_save_brief method exit",
+                extra={
+                    "project_id": project_id,
+                    "page_id": page_id,
+                    "brief_id": None,
+                    "success": False,
+                    "saved": False,
+                    "error": result.error,
                 },
             )
 

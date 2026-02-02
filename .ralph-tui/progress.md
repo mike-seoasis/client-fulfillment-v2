@@ -294,3 +294,23 @@ When creating new SQLAlchemy models in `backend/app/models/`:
   - Include project_id in all log entries even for persistence methods for consistent tracing
 ---
 
+## 2026-02-02 - US-014
+- Implemented comprehensive logging in content brief service for traceability:
+  - Added DEBUG-level method entry/exit logs to `fetch_brief`, `save_brief`, `fetch_and_save_brief` with sanitized parameters
+  - Method exit logs include result summary (success/failure, brief_id)
+  - Added INFO-level phase state transition logs: `brief_fetch_started`, `brief_fetch_completed`
+  - Added `brief_extraction_stats` INFO log with: word_count_target, word_count_min/max, lsi_term_count, competitor_count, heading_target_count, keyword_target_count, related_question_count, page_score_target
+  - Ensured all log messages include entity IDs (project_id, page_id, brief_id where applicable, task_id)
+  - Exception logging already had full stack traces from previous story (US-011/US-013)
+  - Validation failures already logged with field name and rejected value (US-011)
+  - Timing logs for operations >1 second already in place via SLOW_OPERATION_THRESHOLD_MS
+- Files changed:
+  - `backend/app/services/pop_content_brief.py` - Enhanced logging throughout all methods
+- **Learnings:**
+  - Service logging pattern: method entry/exit at DEBUG, phase transitions at INFO, errors at ERROR
+  - Phase transition log messages should be verbs/events: `brief_fetch_started`, `brief_fetch_completed`
+  - Stats logs should be noun-based: `brief_extraction_stats`
+  - Always include all relevant entity IDs in every log message for traceability
+  - Method exit logs should be added to all exit paths including early returns for error cases
+---
+

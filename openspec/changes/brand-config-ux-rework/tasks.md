@@ -54,8 +54,8 @@
 
 ## 10. Frontend - UX Fixes
 
-- [ ] 10.1 Hide WebSocket indicator until 3+ failed reconnection attempts
-- [ ] 10.2 Update phaseLabels to user-friendly names (Brand Setup, Site Analysis, etc.)
+- [x] 10.1 Hide WebSocket indicator until 3+ failed reconnection attempts
+- [x] 10.2 Update phaseLabels to user-friendly names (Brand Setup, Site Analysis, etc.)
 
 ## 11. Testing & Deployment
 
