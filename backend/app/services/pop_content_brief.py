@@ -138,82 +138,465 @@ class POPContentBriefService:
     ) -> dict[str, Any]:
         """Parse raw POP API response into structured brief data.
 
+        Extracts structured data from POP API responses following their schema:
+        - wordCount: {current, target} - word count targets
+        - tagCounts: [{tagLabel, min, max, mean, signalCnt}] - heading structure
+        - cleanedContentBrief: {title, pageTitle, subHeadings, p} - keyword targets by section
+        - lsaPhrases: [{phrase, weight, averageCount, targetCount}] - LSI terms
+        - relatedQuestions: [{question, link, snippet, title}] - PAA data
+        - competitors: [{url, title, pageScore}] - competitor data
+
         Args:
             raw_data: Raw API response data
 
         Returns:
             Dictionary with parsed brief fields
         """
-        # Extract word count recommendations
-        word_count = raw_data.get("word_count", {})
-        if isinstance(word_count, dict):
-            word_count_target = word_count.get("target") or word_count.get(
-                "recommended"
-            )
-            word_count_min = word_count.get("min") or word_count.get("minimum")
-            word_count_max = word_count.get("max") or word_count.get("maximum")
-        else:
-            word_count_target = raw_data.get("word_count_target")
-            word_count_min = raw_data.get("word_count_min")
-            word_count_max = raw_data.get("word_count_max")
-
-        # Extract heading targets
-        heading_targets = raw_data.get("heading_targets") or raw_data.get(
-            "headings", []
-        )
-        if not isinstance(heading_targets, list):
-            heading_targets = []
-
-        # Extract keyword targets
-        keyword_targets = raw_data.get("keyword_targets") or raw_data.get(
-            "keywords", []
-        )
-        if not isinstance(keyword_targets, list):
-            keyword_targets = []
-
-        # Extract LSI terms
-        lsi_terms = raw_data.get("lsi_terms") or raw_data.get("lsi", [])
-        if not isinstance(lsi_terms, list):
-            lsi_terms = []
-
-        # Extract entities
-        entities = raw_data.get("entities", [])
-        if not isinstance(entities, list):
-            entities = []
-
-        # Extract related questions
-        related_questions = raw_data.get("related_questions") or raw_data.get("paa", [])
-        if not isinstance(related_questions, list):
-            related_questions = []
-
-        # Extract related searches
-        related_searches = raw_data.get("related_searches", [])
-        if not isinstance(related_searches, list):
-            related_searches = []
-
-        # Extract competitors
-        competitors = raw_data.get("competitors") or raw_data.get("serp_results", [])
-        if not isinstance(competitors, list):
-            competitors = []
-
-        # Extract page score target
-        page_score_target = raw_data.get("page_score_target") or raw_data.get(
-            "target_score"
-        )
-
         return {
-            "word_count_target": word_count_target,
-            "word_count_min": word_count_min,
-            "word_count_max": word_count_max,
-            "heading_targets": heading_targets,
-            "keyword_targets": keyword_targets,
-            "lsi_terms": lsi_terms,
-            "entities": entities,
-            "related_questions": related_questions,
-            "related_searches": related_searches,
-            "competitors": competitors,
-            "page_score_target": page_score_target,
+            "word_count_target": self._extract_word_count_target(raw_data),
+            "word_count_min": self._extract_word_count_min(raw_data),
+            "word_count_max": self._extract_word_count_max(raw_data),
+            "heading_targets": self._extract_heading_targets(raw_data),
+            "keyword_targets": self._extract_keyword_targets(raw_data),
+            "lsi_terms": self._extract_lsi_terms(raw_data),
+            "entities": self._extract_entities(raw_data),
+            "related_questions": self._extract_related_questions(raw_data),
+            "related_searches": self._extract_related_searches(raw_data),
+            "competitors": self._extract_competitors(raw_data),
+            "page_score_target": self._extract_page_score_target(raw_data),
         }
+
+    def _extract_word_count_target(self, raw_data: dict[str, Any]) -> int | None:
+        """Extract word count target from POP response.
+
+        POP API provides wordCount.target for target word count.
+        Falls back to averaging competitors if not present.
+        """
+        word_count = raw_data.get("wordCount")
+        if isinstance(word_count, dict):
+            target = word_count.get("target")
+            if target is not None:
+                return int(target) if isinstance(target, (int, float)) else None
+        return None
+
+    def _extract_word_count_min(self, raw_data: dict[str, Any]) -> int | None:
+        """Extract minimum word count from POP response.
+
+        POP API does not provide explicit min, so we derive from tagCounts
+        or use 80% of target as a reasonable minimum.
+        """
+        # Check tagCounts for word count entry
+        tag_counts = raw_data.get("tagCounts", [])
+        if isinstance(tag_counts, list):
+            for tag in tag_counts:
+                if isinstance(tag, dict):
+                    label = tag.get("tagLabel", "").lower()
+                    if "word" in label and "count" in label:
+                        min_val = tag.get("min")
+                        if min_val is not None:
+                            return (
+                                int(min_val)
+                                if isinstance(min_val, (int, float))
+                                else None
+                            )
+
+        # Fall back to 80% of target
+        target = self._extract_word_count_target(raw_data)
+        if target is not None:
+            return int(target * 0.8)
+        return None
+
+    def _extract_word_count_max(self, raw_data: dict[str, Any]) -> int | None:
+        """Extract maximum word count from POP response.
+
+        POP API does not provide explicit max, so we derive from tagCounts
+        or use 120% of target as a reasonable maximum.
+        """
+        # Check tagCounts for word count entry
+        tag_counts = raw_data.get("tagCounts", [])
+        if isinstance(tag_counts, list):
+            for tag in tag_counts:
+                if isinstance(tag, dict):
+                    label = tag.get("tagLabel", "").lower()
+                    if "word" in label and "count" in label:
+                        max_val = tag.get("max")
+                        if max_val is not None:
+                            return (
+                                int(max_val)
+                                if isinstance(max_val, (int, float))
+                                else None
+                            )
+
+        # Fall back to 120% of target
+        target = self._extract_word_count_target(raw_data)
+        if target is not None:
+            return int(target * 1.2)
+        return None
+
+    def _extract_heading_targets(
+        self, raw_data: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        """Extract heading structure targets from tagCounts.
+
+        POP API provides tagCounts array with entries like:
+        - tagLabel: 'H1 tag total', 'H2 tag total', 'H3 tag total', 'H4 tag total'
+        - min: minimum count required
+        - max: maximum count required
+        - mean: average count across competitors
+        - signalCnt: current count on target page
+        """
+        heading_targets: list[dict[str, Any]] = []
+        tag_counts = raw_data.get("tagCounts", [])
+
+        if not isinstance(tag_counts, list):
+            return heading_targets
+
+        # Map tag labels to heading levels
+        heading_labels = {
+            "h1": ["h1 tag", "h1 total", "h1 tag total"],
+            "h2": ["h2 tag", "h2 total", "h2 tag total"],
+            "h3": ["h3 tag", "h3 total", "h3 tag total"],
+            "h4": ["h4 tag", "h4 total", "h4 tag total"],
+        }
+
+        for tag in tag_counts:
+            if not isinstance(tag, dict):
+                continue
+
+            tag_label = str(tag.get("tagLabel", "")).lower()
+
+            for level, patterns in heading_labels.items():
+                if any(pattern in tag_label for pattern in patterns):
+                    min_count = tag.get("min")
+                    max_count = tag.get("max")
+
+                    heading_targets.append(
+                        {
+                            "level": level,
+                            "text": None,  # POP doesn't provide suggested text in tagCounts
+                            "min_count": int(min_count)
+                            if isinstance(min_count, (int, float))
+                            else None,
+                            "max_count": int(max_count)
+                            if isinstance(max_count, (int, float))
+                            else None,
+                            "priority": None,
+                        }
+                    )
+                    break  # Found the level, move to next tag
+
+        return heading_targets
+
+    def _extract_keyword_targets(
+        self, raw_data: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        """Extract keyword density targets by section from cleanedContentBrief.
+
+        POP API provides cleanedContentBrief with sections:
+        - title: keyword targets for meta title
+        - pageTitle: keyword targets for page title (H1)
+        - subHeadings: keyword targets for H2/H3
+        - p: keyword targets for paragraph content
+
+        Each section has arrays with:
+        - term: {phrase, type, weight}
+        - contentBrief: {current, target}
+        """
+        keyword_targets: list[dict[str, Any]] = []
+        content_brief = raw_data.get("cleanedContentBrief", {})
+
+        if not isinstance(content_brief, dict):
+            return keyword_targets
+
+        # Map section names to our normalized section names
+        section_mapping = {
+            "title": "title",
+            "pageTitle": "h1",
+            "subHeadings": "h2",  # POP treats subHeadings as H2+H3
+            "p": "paragraph",
+        }
+
+        for pop_section, our_section in section_mapping.items():
+            section_data = content_brief.get(pop_section, [])
+            if not isinstance(section_data, list):
+                continue
+
+            for item in section_data:
+                if not isinstance(item, dict):
+                    continue
+
+                term = item.get("term", {})
+                if not isinstance(term, dict):
+                    continue
+
+                phrase = term.get("phrase")
+                if not phrase:
+                    continue
+
+                brief = item.get("contentBrief", {})
+                target_count = brief.get("target") if isinstance(brief, dict) else None
+
+                keyword_targets.append(
+                    {
+                        "keyword": str(phrase),
+                        "section": our_section,
+                        "count_min": None,  # POP doesn't provide explicit min per keyword
+                        "count_max": None,  # POP doesn't provide explicit max per keyword
+                        "density_target": float(target_count)
+                        if isinstance(target_count, (int, float))
+                        else None,
+                    }
+                )
+
+        # Also extract from section totals (titleTotal, pageTitleTotal, subHeadingsTotal, pTotal)
+        total_sections = {
+            "titleTotal": "title",
+            "pageTitleTotal": "h1",
+            "subHeadingsTotal": "h2",
+            "pTotal": "paragraph",
+        }
+
+        for pop_total, our_section in total_sections.items():
+            total_data = content_brief.get(pop_total, {})
+            if not isinstance(total_data, dict):
+                continue
+
+            min_val = total_data.get("min")
+            max_val = total_data.get("max")
+
+            # Only add if we have min/max data and haven't already captured this section
+            if min_val is not None or max_val is not None:
+                keyword_targets.append(
+                    {
+                        "keyword": f"_total_{our_section}",  # Special marker for section totals
+                        "section": our_section,
+                        "count_min": int(min_val)
+                        if isinstance(min_val, (int, float))
+                        else None,
+                        "count_max": int(max_val)
+                        if isinstance(max_val, (int, float))
+                        else None,
+                        "density_target": None,
+                    }
+                )
+
+        return keyword_targets
+
+    def _extract_lsi_terms(self, raw_data: dict[str, Any]) -> list[dict[str, Any]]:
+        """Extract LSI terms from lsaPhrases array.
+
+        POP API provides lsaPhrases with:
+        - phrase: the LSI term
+        - weight: importance weight
+        - averageCount: average count in competitors
+        - targetCount: recommended target count
+        """
+        lsi_terms: list[dict[str, Any]] = []
+        lsa_phrases = raw_data.get("lsaPhrases", [])
+
+        if not isinstance(lsa_phrases, list):
+            return lsi_terms
+
+        for item in lsa_phrases:
+            if not isinstance(item, dict):
+                continue
+
+            phrase = item.get("phrase")
+            if not phrase:
+                continue
+
+            weight = item.get("weight")
+            avg_count = item.get("averageCount")
+            target_count = item.get("targetCount")
+
+            lsi_terms.append(
+                {
+                    "phrase": str(phrase),
+                    "weight": float(weight)
+                    if isinstance(weight, (int, float))
+                    else None,
+                    "average_count": float(avg_count)
+                    if isinstance(avg_count, (int, float))
+                    else None,
+                    "target_count": int(target_count)
+                    if isinstance(target_count, (int, float))
+                    else None,
+                }
+            )
+
+        return lsi_terms
+
+    def _extract_entities(self, raw_data: dict[str, Any]) -> list[dict[str, Any]]:
+        """Extract entities from POP response.
+
+        POP API may provide entities in various forms. Handles gracefully
+        if not present.
+        """
+        entities: list[dict[str, Any]] = []
+        entities_data = raw_data.get("entities", [])
+
+        if not isinstance(entities_data, list):
+            return entities
+
+        for item in entities_data:
+            if not isinstance(item, dict):
+                continue
+
+            name = item.get("name") or item.get("entity")
+            if not name:
+                continue
+
+            salience = item.get("salience")
+            entities.append(
+                {
+                    "name": str(name),
+                    "type": str(item.get("type", "")) if item.get("type") else None,
+                    "salience": float(salience)
+                    if isinstance(salience, (int, float))
+                    else None,
+                }
+            )
+
+        return entities
+
+    def _extract_related_questions(
+        self, raw_data: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        """Extract related questions (PAA) from relatedQuestions array.
+
+        POP API provides relatedQuestions with:
+        - question: the question text
+        - link: source URL
+        - snippet: answer snippet
+        - title: title of the source
+        - displayed_link: formatted display link
+        """
+        related_questions: list[dict[str, Any]] = []
+        questions_data = raw_data.get("relatedQuestions", [])
+
+        if not isinstance(questions_data, list):
+            return related_questions
+
+        for item in questions_data:
+            if not isinstance(item, dict):
+                continue
+
+            question = item.get("question")
+            if not question:
+                continue
+
+            related_questions.append(
+                {
+                    "question": str(question),
+                    "answer_snippet": str(item.get("snippet", ""))
+                    if item.get("snippet")
+                    else None,
+                    "source_url": str(item.get("link", ""))
+                    if item.get("link")
+                    else None,
+                }
+            )
+
+        return related_questions
+
+    def _extract_related_searches(
+        self, raw_data: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        """Extract related searches from relatedSearches array.
+
+        POP API provides relatedSearches with:
+        - query: the search query
+        - link: URL
+        - items: array of related items
+        """
+        related_searches: list[dict[str, Any]] = []
+        searches_data = raw_data.get("relatedSearches", [])
+
+        if not isinstance(searches_data, list):
+            return related_searches
+
+        for item in searches_data:
+            if not isinstance(item, dict):
+                continue
+
+            query = item.get("query")
+            if not query:
+                continue
+
+            related_searches.append(
+                {
+                    "query": str(query),
+                    "relevance": None,  # POP doesn't provide relevance score
+                }
+            )
+
+        return related_searches
+
+    def _extract_competitors(self, raw_data: dict[str, Any]) -> list[dict[str, Any]]:
+        """Extract competitor data from competitors array.
+
+        POP API provides competitors with:
+        - url: competitor page URL
+        - title: page title
+        - pageScore: optimization score
+        - plus additional data like h2Texts, h3Texts, schemaTypes, etc.
+        """
+        competitors: list[dict[str, Any]] = []
+        competitors_data = raw_data.get("competitors", [])
+
+        if not isinstance(competitors_data, list):
+            return competitors
+
+        for idx, item in enumerate(competitors_data):
+            if not isinstance(item, dict):
+                continue
+
+            url = item.get("url")
+            if not url:
+                continue
+
+            page_score = item.get("pageScore")
+
+            competitors.append(
+                {
+                    "url": str(url),
+                    "title": str(item.get("title", "")) if item.get("title") else None,
+                    "page_score": float(page_score)
+                    if isinstance(page_score, (int, float))
+                    else None,
+                    "word_count": None,  # POP doesn't provide word count directly per competitor
+                    "position": idx + 1,  # Infer position from array order
+                }
+            )
+
+        return competitors
+
+    def _extract_page_score_target(self, raw_data: dict[str, Any]) -> float | None:
+        """Extract page score target from POP response.
+
+        POP API provides pageScore or pageScoreValue at top level
+        of cleanedContentBrief.
+        """
+        # Try cleanedContentBrief first
+        content_brief = raw_data.get("cleanedContentBrief", {})
+        if isinstance(content_brief, dict):
+            page_score = content_brief.get("pageScore")
+            if isinstance(page_score, (int, float)):
+                return float(page_score)
+
+            page_score_value = content_brief.get("pageScoreValue")
+            if page_score_value is not None:
+                try:
+                    return float(page_score_value)
+                except (ValueError, TypeError):
+                    pass
+
+        # Try top-level
+        page_score = raw_data.get("pageScore")
+        if isinstance(page_score, (int, float)):
+            return float(page_score)
+
+        return None
 
     async def fetch_brief(
         self,

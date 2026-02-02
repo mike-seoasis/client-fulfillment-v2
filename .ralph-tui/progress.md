@@ -243,3 +243,29 @@ When creating new SQLAlchemy models in `backend/app/models/`:
   - mypy errors in unrelated repository files don't affect new service file validation
 ---
 
+## 2026-02-02 - US-012
+- Implemented content brief data extraction from POP API responses in `backend/app/services/pop_content_brief.py`:
+  - `_extract_word_count_target()`: Extracts from `wordCount.target`, no min/max from POP so derives 80%/120% of target
+  - `_extract_word_count_min()`: Checks `tagCounts` for word count entry, falls back to 80% of target
+  - `_extract_word_count_max()`: Checks `tagCounts` for word count entry, falls back to 120% of target
+  - `_extract_heading_targets()`: Parses `tagCounts` array for H1-H4 entries with min/max counts
+  - `_extract_keyword_targets()`: Parses `cleanedContentBrief` sections (title, pageTitle, subHeadings, p) for keyword density targets
+  - `_extract_lsi_terms()`: Extracts from `lsaPhrases` array with phrase, weight, averageCount, targetCount
+  - `_extract_related_questions()`: Parses `relatedQuestions` array for PAA data (question, snippet, link)
+  - `_extract_competitors()`: Extracts from `competitors` array with url, title, pageScore
+  - `_extract_page_score_target()`: Gets from `cleanedContentBrief.pageScore` or `cleanedContentBrief.pageScoreValue`
+- All extraction methods handle missing fields gracefully with None defaults
+- Refactored monolithic `_parse_brief_data()` into focused private methods for better maintainability
+- Files changed:
+  - `backend/app/services/pop_content_brief.py` - Added 11 private extraction methods
+- **Learnings:**
+  - POP API response structure uses camelCase field names (wordCount, tagCounts, lsaPhrases, cleanedContentBrief)
+  - POP doesn't provide explicit word count min/max at top level; must derive from competitors or use heuristics
+  - `tagCounts` uses `tagLabel` strings like "H1 tag total", "H2 tag total" - need pattern matching
+  - `cleanedContentBrief` has nested structure: sections (title, pageTitle, subHeadings, p) with arrays of term objects
+  - Each term object has `term.phrase`, `term.type`, `term.weight` and `contentBrief.current`, `contentBrief.target`
+  - Section totals (titleTotal, pageTitleTotal, subHeadingsTotal, pTotal) have min/max values
+  - mypy type narrowing requires storing `.get()` result in variable before isinstance check to avoid "Any | None" errors
+  - Competitor position is inferred from array order (not explicitly provided by POP)
+---
+

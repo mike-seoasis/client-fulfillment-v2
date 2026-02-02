@@ -2,33 +2,33 @@
 
 ## 1. Setup
 
-- [ ] 1.1 Add PERPLEXITY_API_KEY to config and .env.example
-- [ ] 1.2 Create skills/ directory and move brand_guidelines_bible.md there
+- [x] 1.1 Add PERPLEXITY_API_KEY to config and .env.example
+- [x] 1.2 Create skills/ directory and move brand_guidelines_bible.md there
 
 ## 2. Backend - Perplexity Integration
 
-- [ ] 2.1 Create PerplexityClient with research_brand() method
-- [ ] 2.2 Add caching (24hr TTL) and rate limiting (5/hr/project)
+- [x] 2.1 Create PerplexityClient with research_brand() method
+- [x] 2.2 Add caching (24hr TTL) and rate limiting (5/hr/project)
 
 ## 3. Backend - V3 Schema
 
-- [ ] 3.1 Create V3 Pydantic schemas for all 11 Brand Guidelines Bible sections
-- [ ] 3.2 Add is_v3_config() / is_v2_config() detection helpers
+- [x] 3.1 Create V3 Pydantic schemas for all 11 Brand Guidelines Bible sections
+- [x] 3.2 Add is_v3_config() / is_v2_config() detection helpers
 
 ## 4. Backend - Brand Research Service
 
-- [ ] 4.1 Create BrandResearchService with Perplexity→Claude synthesis pipeline
-- [ ] 4.2 Create Claude prompt for V3 schema synthesis
+- [x] 4.1 Create BrandResearchService with Perplexity→Claude synthesis pipeline
+- [x] 4.2 Create Claude prompt for V3 schema synthesis
 
 ## 5. Backend - Wizard Endpoints
 
-- [ ] 5.1 Add brand_wizard_state column to projects table (migration)
-- [ ] 5.2 Create wizard API endpoints (GET/PUT state, POST research, POST generate)
+- [x] 5.1 Add brand_wizard_state column to projects table (migration)
+- [x] 5.2 Create wizard API endpoints (GET/PUT state, POST research, POST generate)
 
 ## 6. Backend - Phase Migration
 
-- [ ] 6.1 Create migration to rename phases (discovery→brand_setup, etc.)
-- [ ] 6.2 Update PHASE_NAMES constant in project model
+- [x] 6.1 Create migration to rename phases (discovery→brand_setup, etc.)
+- [x] 6.2 Update PHASE_NAMES constant in project model
 
 ## 7. Frontend - Wizard Components
 
