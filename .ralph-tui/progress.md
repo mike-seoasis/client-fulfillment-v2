@@ -549,3 +549,25 @@ When creating new SQLAlchemy models in `backend/app/models/`:
   - Circuit breaker integration tests need `pop_max_retries=1` to speed up failure accumulation
 ---
 
+## 2026-02-02 - US-015
+- Created comprehensive unit tests for POP Content Brief service in `backend/tests/services/test_pop_content_brief.py`:
+  - Tests for `fetch_brief()` with mocked POP client (10 tests)
+  - Tests for each extraction method: word count, headings, keywords, LSI, PAA, competitors, entities, related searches, page score (23 tests)
+  - Tests for database persistence: save_brief, fetch_and_save_brief with upsert logic (7 tests)
+  - Tests for error handling: POP failure, timeout, parse errors, validation errors (10 tests)
+  - Tests verifying logging output includes required entity IDs: project_id, page_id, task_id (4 tests)
+  - Tests for dataclasses, exceptions, singleton pattern, and service initialization (9 tests)
+- All 63 tests pass with pytest
+- Files changed:
+  - `backend/tests/services/test_pop_content_brief.py` - New file
+- **Learnings:**
+  - Service tests follow pattern from `test_paa_enrichment.py`: fixtures for mocks, test classes per feature area
+  - Use `AsyncMock(spec=POPClient)` for type-safe mocking of async client
+  - Mock SQLAlchemy session with `session.execute.return_value.scalar_one_or_none.return_value` for query results
+  - For testing save methods that return refreshed objects, use `mock_session.refresh.side_effect` to modify the passed object
+  - When mocking task creation + polling, ensure `task_id` values are consistent between mocks
+  - `caplog.at_level(logging.INFO, logger="app.services.pop_content_brief")` captures structured logs for verification
+  - Test extraction methods independently from fetch_brief() for isolation and better coverage
+  - For upsert tests, verify both the update path (existing brief) and create path (no existing brief)
+---
+
