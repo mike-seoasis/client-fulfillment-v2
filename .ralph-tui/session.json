@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "sessionId": "915e9ecc-bbe8-42fe-b775-b16f953abfd8",
+  "sessionId": "71fc427e-d927-463d-8c73-3b3bba414798",
   "status": "running",
-  "startedAt": "2026-02-02T00:48:26.858Z",
-  "updatedAt": "2026-02-02T00:50:54.887Z",
+  "startedAt": "2026-02-02T00:50:59.137Z",
+  "updatedAt": "2026-02-02T00:57:05.343Z",
   "currentIteration": 0,
   "maxIterations": 30,
   "tasksCompleted": 0,
@@ -15,8 +15,8 @@
     "totalTasks": 1,
     "tasks": [
       {
-        "id": "client-onboarding-v2-c3y.144",
-        "title": "Create V1 data export script (projects, pages, keywords, content)",
+        "id": "client-onboarding-v2-c3y.145",
+        "title": "Create V2 schema transformation script",
         "status": "open",
         "completedInSession": false
       }
