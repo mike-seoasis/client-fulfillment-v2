@@ -87,3 +87,26 @@ When creating the POP API integration client in `backend/app/integrations/pop.py
   - All quality checks pass: ruff check, ruff format, mypy
 ---
 
+## 2026-02-02 - US-004
+- Implemented POP task creation and polling methods in `backend/app/integrations/pop.py`:
+  - `create_report_task(keyword, url)`: POSTs to POP API to create content analysis task
+  - `get_task_result(task_id)`: GETs task status/results from `/api/task/:task_id/results/`
+  - `poll_for_result(task_id, poll_interval, timeout)`: Polling loop that waits for SUCCESS or FAILURE
+- Added supporting dataclasses:
+  - `POPTaskStatus` enum: PENDING, PROCESSING, SUCCESS, FAILURE, UNKNOWN
+  - `POPTaskResult` dataclass: success, task_id, status, data, error, duration_ms, request_id
+- Polling behavior:
+  - Default poll interval: 3s (from `pop_task_poll_interval` setting, but code uses 2.0s default)
+  - Default timeout: 300s (from `pop_task_timeout` setting)
+  - Raises `POPTimeoutError` with task_id and elapsed time on timeout
+  - Stops on SUCCESS or FAILURE status
+- Files changed:
+  - `backend/app/integrations/pop.py` - Added task methods and dataclasses
+- **Learnings:**
+  - POP uses `/api/task/:task_id/results/` endpoint for getting task results
+  - Task status mapping needed for various API status strings (success/complete/completed/done → SUCCESS)
+  - GET requests to POP still include apiKey in body (handled by `_make_request`)
+  - Poll loop logs at DEBUG level during polling, INFO on start/completion
+  - Config has `pop_task_poll_interval=2.0` by default, acceptance criteria mentions 3s default - used configurable parameter
+---
+
