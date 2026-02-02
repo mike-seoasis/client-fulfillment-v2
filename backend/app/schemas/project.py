@@ -18,16 +18,25 @@ VALID_PHASE_STATUSES = frozenset(
     {"pending", "in_progress", "completed", "blocked", "skipped"}
 )
 
-# Valid phase names
+# Valid phase names (renamed for UX clarity)
 VALID_PHASES = frozenset(
     {
-        "discovery",
-        "requirements",
-        "implementation",
-        "review",
-        "launch",
+        "brand_setup",       # was: discovery
+        "site_analysis",     # was: requirements
+        "content_generation",  # was: implementation
+        "review_edit",       # was: review
+        "export",            # was: launch
     }
 )
+
+# Phase display labels for UI
+PHASE_LABELS = {
+    "brand_setup": "Brand Setup",
+    "site_analysis": "Site Analysis",
+    "content_generation": "Content Generation",
+    "review_edit": "Review & Edit",
+    "export": "Export",
+}
 
 
 class PhaseStatusEntry(BaseModel):

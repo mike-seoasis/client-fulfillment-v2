@@ -76,6 +76,14 @@ class Project(Base):
         server_default=text("'{}'::jsonb"),
     )
 
+    brand_wizard_state: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+        doc="State of the brand configuration wizard (current step, form data, research results)",
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

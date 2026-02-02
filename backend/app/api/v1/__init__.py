@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import (
     amazon_reviews,
     brand_config,
+    brand_wizard,
     categorize,
     competitor,
     content_generation,
@@ -116,6 +117,11 @@ router.include_router(
     brand_config.router,
     prefix="/projects/{project_id}/phases/brand_config",
     tags=["Brand Config Phase"],
+)
+router.include_router(
+    brand_wizard.router,
+    prefix="/projects/{project_id}/brand-wizard",
+    tags=["Brand Wizard"],
 )
 router.include_router(
     notifications.router,
