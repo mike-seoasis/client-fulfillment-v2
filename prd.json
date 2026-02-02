@@ -3,15 +3,15 @@
   "description": "Ready tasks batch",
   "userStories": [
     {
-      "id": "client-onboarding-v2-c3y.148",
-      "title": "Document rollback procedure",
-      "description": "ERROR LOGGING REQUIREMENTS:\n- Log method entry/exit at DEBUG level with parameters (sanitized)\n- Log all exceptions with full stack trace and context\n- Include entity IDs (project_id, page_id) in all service logs\n- Log validation failures with field names and rejected values\n- Log state transitions (phase changes) at INFO level\n- Add timing logs for operations >1 second",
+      "id": "client-onboarding-v2-c3y.149",
+      "title": "Set up Railway production environment",
+      "description": "ERROR LOGGING REQUIREMENTS:\n- Log deployment start/end with version info\n- Log each migration step with success/failure status\n- Log rollback triggers and execution\n- Log environment variable validation (mask values)\n- Log health check results during deployment\n- Log database connection verification\n\nRAILWAY DEPLOYMENT REQUIREMENTS:\n- Use railway.toml or Procfile for configuration\n- Set up Railway project with PostgreSQL and Redis addons\n- Configure environment variables in Railway dashboard\n- Set up deploy hooks for migrations\n- Configure health check path in Railway settings",
       "acceptanceCriteria": [],
       "passes": true,
       "completionNotes": "Completed by agent"
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-02T01:12:29.285Z"
+    "updatedAt": "2026-02-02T01:14:52.802Z"
   }
 }
