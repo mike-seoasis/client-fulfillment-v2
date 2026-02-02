@@ -32,12 +32,16 @@ RAILWAY DEPLOYMENT REQUIREMENTS:
 AUTHENTICATION:
 - POP uses apiKey in request body (not HTTP headers)
 - All requests must include {"apiKey": "<key>"} in the JSON body
+
+API ENDPOINTS:
+- Task creation: POST to base URL with keyword/URL in body
+- Task results: GET https://app.pageoptimizer.pro/api/task/:task_id/results/
 """
 
 import asyncio
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
@@ -247,6 +251,29 @@ class POPCircuitOpenError(POPError):
     """Raised when circuit breaker is open."""
 
     pass
+
+
+class POPTaskStatus(Enum):
+    """POP task status values."""
+
+    PENDING = "pending"
+    PROCESSING = "processing"
+    SUCCESS = "success"
+    FAILURE = "failure"
+    UNKNOWN = "unknown"
+
+
+@dataclass
+class POPTaskResult:
+    """Result of a POP task operation."""
+
+    success: bool
+    task_id: str | None = None
+    status: POPTaskStatus = POPTaskStatus.UNKNOWN
+    data: dict[str, Any] = field(default_factory=dict)
+    error: str | None = None
+    duration_ms: float = 0.0
+    request_id: str | None = None
 
 
 class POPClient:
@@ -659,6 +686,330 @@ class POPClient:
             "Request failed after all retries",
             request_id=request_id,
         )
+
+    async def create_report_task(
+        self,
+        keyword: str,
+        url: str,
+    ) -> POPTaskResult:
+        """Create a POP report task for content scoring.
+
+        POSTs to the POP API to create a new content analysis task.
+        The task runs asynchronously and must be polled for results.
+
+        Args:
+            keyword: Target keyword for content optimization
+            url: URL of the page to analyze
+
+        Returns:
+            POPTaskResult with task_id if successful
+        """
+        start_time = time.monotonic()
+
+        if not self._available:
+            return POPTaskResult(
+                success=False,
+                error="POP not configured (missing API key)",
+            )
+
+        if not keyword or not url:
+            return POPTaskResult(
+                success=False,
+                error="Both keyword and url are required",
+            )
+
+        logger.info(
+            "Creating POP report task",
+            extra={
+                "keyword": keyword[:50],
+                "url": url[:100],
+            },
+        )
+
+        payload = {
+            "keyword": keyword,
+            "url": url,
+        }
+
+        try:
+            response_data, request_id = await self._make_request(
+                "/api/report",
+                payload,
+                method="POST",
+            )
+
+            # Extract task_id from response
+            task_id = response_data.get("task_id") or response_data.get("taskId")
+
+            if not task_id:
+                # Some APIs return the task_id directly or in a nested structure
+                task_id = response_data.get("id") or response_data.get("data", {}).get(
+                    "task_id"
+                )
+
+            duration_ms = (time.monotonic() - start_time) * 1000
+
+            if task_id:
+                logger.info(
+                    "POP report task created",
+                    extra={
+                        "task_id": task_id,
+                        "keyword": keyword[:50],
+                        "duration_ms": round(duration_ms, 2),
+                    },
+                )
+                return POPTaskResult(
+                    success=True,
+                    task_id=str(task_id),
+                    status=POPTaskStatus.PENDING,
+                    data=response_data,
+                    duration_ms=duration_ms,
+                    request_id=request_id,
+                )
+            else:
+                logger.warning(
+                    "POP task created but no task_id returned",
+                    extra={
+                        "response_keys": list(response_data.keys()),
+                    },
+                )
+                return POPTaskResult(
+                    success=False,
+                    error="No task_id in response",
+                    data=response_data,
+                    duration_ms=duration_ms,
+                    request_id=request_id,
+                )
+
+        except POPError as e:
+            duration_ms = (time.monotonic() - start_time) * 1000
+            logger.error(
+                "Failed to create POP report task",
+                extra={
+                    "keyword": keyword[:50],
+                    "error": str(e),
+                    "duration_ms": round(duration_ms, 2),
+                },
+            )
+            return POPTaskResult(
+                success=False,
+                error=str(e),
+                duration_ms=duration_ms,
+                request_id=e.request_id,
+            )
+
+    async def get_task_result(
+        self,
+        task_id: str,
+    ) -> POPTaskResult:
+        """Get the result of a POP task.
+
+        GETs the task status and results from the POP API.
+
+        Args:
+            task_id: The task ID returned from create_report_task()
+
+        Returns:
+            POPTaskResult with status and data if available
+        """
+        start_time = time.monotonic()
+
+        if not self._available:
+            return POPTaskResult(
+                success=False,
+                task_id=task_id,
+                error="POP not configured (missing API key)",
+            )
+
+        if not task_id:
+            return POPTaskResult(
+                success=False,
+                error="task_id is required",
+            )
+
+        logger.debug(
+            "Getting POP task result",
+            extra={"task_id": task_id},
+        )
+
+        # POP API endpoint for task results
+        # Note: This uses the app.pageoptimizer.pro domain per the notes
+        endpoint = f"/api/task/{task_id}/results/"
+
+        try:
+            # Note: GET request still needs apiKey in body for POP
+            response_data, request_id = await self._make_request(
+                endpoint,
+                {},  # Empty payload, apiKey added by _make_request
+                method="GET",
+            )
+
+            duration_ms = (time.monotonic() - start_time) * 1000
+
+            # Parse status from response
+            status_str = (
+                response_data.get("status")
+                or response_data.get("task_status")
+                or "unknown"
+            )
+            status_str = status_str.lower()
+
+            if status_str in ("success", "complete", "completed", "done"):
+                status = POPTaskStatus.SUCCESS
+            elif status_str in ("failure", "failed", "error"):
+                status = POPTaskStatus.FAILURE
+            elif status_str in ("pending", "queued", "waiting"):
+                status = POPTaskStatus.PENDING
+            elif status_str in ("processing", "running", "in_progress"):
+                status = POPTaskStatus.PROCESSING
+            else:
+                status = POPTaskStatus.UNKNOWN
+
+            logger.debug(
+                "POP task status retrieved",
+                extra={
+                    "task_id": task_id,
+                    "status": status.value,
+                    "duration_ms": round(duration_ms, 2),
+                },
+            )
+
+            return POPTaskResult(
+                success=True,
+                task_id=task_id,
+                status=status,
+                data=response_data,
+                duration_ms=duration_ms,
+                request_id=request_id,
+            )
+
+        except POPError as e:
+            duration_ms = (time.monotonic() - start_time) * 1000
+            logger.error(
+                "Failed to get POP task result",
+                extra={
+                    "task_id": task_id,
+                    "error": str(e),
+                    "duration_ms": round(duration_ms, 2),
+                },
+            )
+            return POPTaskResult(
+                success=False,
+                task_id=task_id,
+                error=str(e),
+                duration_ms=duration_ms,
+                request_id=e.request_id,
+            )
+
+    async def poll_for_result(
+        self,
+        task_id: str,
+        poll_interval: float | None = None,
+        timeout: float | None = None,
+    ) -> POPTaskResult:
+        """Poll for task completion with configurable interval and timeout.
+
+        Continuously polls get_task_result() until the task completes
+        (SUCCESS or FAILURE) or the timeout is reached.
+
+        Args:
+            task_id: The task ID to poll
+            poll_interval: Seconds between polls. Defaults to settings (3s).
+            timeout: Maximum seconds to wait. Defaults to settings (300s).
+
+        Returns:
+            POPTaskResult with final status and data
+
+        Raises:
+            POPTimeoutError: If timeout is reached before task completes
+        """
+        poll_interval = poll_interval or self._task_poll_interval
+        timeout = timeout or self._task_timeout
+
+        start_time = time.monotonic()
+        poll_count = 0
+
+        logger.info(
+            "Starting POP task polling",
+            extra={
+                "task_id": task_id,
+                "poll_interval_seconds": poll_interval,
+                "timeout_seconds": timeout,
+            },
+        )
+
+        while True:
+            elapsed = time.monotonic() - start_time
+
+            # Check timeout
+            if elapsed >= timeout:
+                logger.error(
+                    "POP task polling timed out",
+                    extra={
+                        "task_id": task_id,
+                        "elapsed_seconds": round(elapsed, 2),
+                        "timeout_seconds": timeout,
+                        "poll_count": poll_count,
+                    },
+                )
+                raise POPTimeoutError(
+                    f"Task {task_id} timed out after {elapsed:.1f}s",
+                    request_id=task_id,
+                )
+
+            # Get current status
+            result = await self.get_task_result(task_id)
+            poll_count += 1
+
+            if not result.success:
+                # API error - return the error result
+                logger.warning(
+                    "POP task poll failed",
+                    extra={
+                        "task_id": task_id,
+                        "error": result.error,
+                        "poll_count": poll_count,
+                    },
+                )
+                return result
+
+            # Check for terminal states
+            if result.status == POPTaskStatus.SUCCESS:
+                logger.info(
+                    "POP task completed successfully",
+                    extra={
+                        "task_id": task_id,
+                        "elapsed_seconds": round(elapsed, 2),
+                        "poll_count": poll_count,
+                    },
+                )
+                return result
+
+            if result.status == POPTaskStatus.FAILURE:
+                logger.warning(
+                    "POP task failed",
+                    extra={
+                        "task_id": task_id,
+                        "elapsed_seconds": round(elapsed, 2),
+                        "poll_count": poll_count,
+                        "data": result.data,
+                    },
+                )
+                return result
+
+            # Still processing - wait and poll again
+            logger.debug(
+                "POP task still processing",
+                extra={
+                    "task_id": task_id,
+                    "status": result.status.value,
+                    "elapsed_seconds": round(elapsed, 2),
+                    "poll_count": poll_count,
+                    "next_poll_in": poll_interval,
+                },
+            )
+
+            await asyncio.sleep(poll_interval)
 
 
 # Global POP client instance
