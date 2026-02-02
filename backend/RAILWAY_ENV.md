@@ -48,12 +48,94 @@ These are automatically set by Railway:
 | `RAILWAY_ENVIRONMENT_NAME` | Environment name (staging, production) |
 | `RAILWAY_GIT_COMMIT_SHA` | Git commit SHA being deployed |
 
-## Setting Up Railway
+## Setting Up Railway Production Environment
 
-1. Create a new Railway project
-2. Add PostgreSQL addon (sets `DATABASE_URL` automatically)
-3. Add Redis addon if needed (sets `REDIS_URL` automatically)
-4. Set environment variables in Railway dashboard:
-   - `ENVIRONMENT=staging`
-   - `LOG_LEVEL=INFO`
-5. Deploy from GitHub repository
+### Step 1: Create Railway Project
+
+1. Go to [Railway](https://railway.app) and create a new project
+2. Connect your GitHub repository
+
+### Step 2: Add Database Addons
+
+1. **PostgreSQL**: Click "New" > "Database" > "PostgreSQL"
+   - Railway automatically sets `DATABASE_URL`
+   - Use the "Variables" tab to verify connection string
+
+2. **Redis** (optional): Click "New" > "Database" > "Redis"
+   - Railway automatically sets `REDIS_URL`
+   - Used for caching and session management
+
+### Step 3: Configure Environment Variables
+
+In the Railway dashboard, go to your service's "Variables" tab and set:
+
+**Staging Environment:**
+```
+ENVIRONMENT=staging
+LOG_LEVEL=DEBUG
+DEBUG=true
+```
+
+**Production Environment:**
+```
+ENVIRONMENT=production
+LOG_LEVEL=INFO
+DEBUG=false
+```
+
+### Step 4: Deploy Configuration
+
+The `railway.toml` file handles:
+- **Health checks**: Configured at `/health` with 120s timeout
+- **Deploy hooks**: Migrations run automatically via `python -m app.deploy`
+- **Restart policy**: Auto-restart on failure (max 3 retries)
+
+### Step 5: Health Check Endpoints
+
+The app provides multiple health endpoints:
+
+| Endpoint | Description |
+|----------|-------------|
+| `/health` | Basic health (Railway uses this) |
+| `/health/db` | Database connectivity |
+| `/health/redis` | Redis connectivity and circuit breaker state |
+| `/health/scheduler` | APScheduler status |
+
+## Deployment Error Logging
+
+The deploy script (`app/deploy.py`) logs:
+
+| Event | Log Level | Details |
+|-------|-----------|---------|
+| Deployment start | INFO | App version, environment, commit SHA |
+| Environment validation | INFO/ERROR | Variable presence (values masked) |
+| Database connection | INFO/ERROR | Connection verification |
+| Migration start | INFO | From/to revision |
+| Migration step | INFO | Individual migration progress |
+| Migration failure | ERROR | Error details, triggers rollback logging |
+| Rollback trigger | WARNING | Reason, affected versions |
+| Data integrity check | INFO/ERROR | Validation results |
+| Deployment end | INFO | Success status, duration |
+
+## Rollback Procedure
+
+If a deployment fails:
+
+1. **Automatic**: Railway reverts to previous deployment
+2. **Manual database rollback**:
+   ```bash
+   # SSH into Railway or run locally with DATABASE_URL
+   alembic downgrade -1  # Rollback one migration
+   alembic downgrade <revision>  # Rollback to specific revision
+   ```
+
+3. **Check rollback logs**: Look for `"rollback_trigger"` in deployment logs
+
+## Monitoring
+
+After deployment, verify:
+
+1. **Health endpoint**: `curl https://your-app.railway.app/health`
+2. **Database health**: `curl https://your-app.railway.app/health/db`
+3. **Railway logs**: Check for any ERROR or WARNING messages
+4. **Deployment logs**: Verify migration steps completed successfully
