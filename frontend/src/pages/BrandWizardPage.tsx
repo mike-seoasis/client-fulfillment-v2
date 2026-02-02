@@ -70,7 +70,7 @@ export function BrandWizardPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { addToast } = useToast()
+  const toast = useToast()
 
   // Local state
   const [currentStep, setCurrentStep] = useState(1)
@@ -81,6 +81,8 @@ export function BrandWizardPage() {
   const [researchCachedAt, setResearchCachedAt] = useState<string | null>(null)
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
   const [pendingSave, setPendingSave] = useState(false)
+  const [researchError, setResearchError] = useState<string | null>(null)
+  const [generateError, setGenerateError] = useState<string | null>(null)
 
   // Refs for auto-save debouncing
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -92,107 +94,80 @@ export function BrandWizardPage() {
     data: wizardState,
     isLoading: isLoadingState,
     error: stateError,
-  } = useApiQuery<WizardStateResponse>(
-    ['wizard-state', projectId],
-    `/api/v1/projects/${projectId}/brand-wizard`,
-    {
-      enabled: !!projectId,
-      staleTime: 0, // Always fetch fresh on mount
-    }
-  )
+  } = useApiQuery<WizardStateResponse>({
+    queryKey: ['wizard-state', projectId],
+    endpoint: `/api/v1/projects/${projectId}/brand-wizard`,
+    enabled: !!projectId,
+    staleTime: 0, // Always fetch fresh on mount
+  })
 
   // Update wizard state mutation
-  const updateMutation = useApiMutation<WizardUpdateResponse, { current_step: number; form_data: WizardFormData }>(
-    `/api/v1/projects/${projectId}/brand-wizard`,
-    {
-      method: 'PUT',
-      onSuccess: (data) => {
-        setLastSavedAt(data.updated_at)
-        setCompletedSteps(data.steps_completed)
-        setPendingSave(false)
-        addBreadcrumb('Wizard state saved', 'wizard', { step: data.current_step })
-      },
-      onError: (error) => {
-        setPendingSave(false)
-        addToast({
-          type: 'error',
-          title: 'Failed to save',
-          description: error instanceof Error ? error.message : 'Could not save wizard state',
-        })
-      },
-    }
-  )
+  const updateMutation = useApiMutation<WizardUpdateResponse, { current_step: number; form_data: WizardFormData }>({
+    endpoint: `/api/v1/projects/${projectId}/brand-wizard`,
+    method: 'PUT',
+    onSuccess: (data) => {
+      setLastSavedAt(data.updated_at)
+      setCompletedSteps(data.steps_completed)
+      setPendingSave(false)
+      addBreadcrumb('Wizard state saved', 'wizard', { step: data.current_step })
+    },
+    onError: () => {
+      setPendingSave(false)
+      toast.error('Failed to save', 'Could not save wizard state')
+    },
+  })
 
   // Research mutation
-  const researchMutation = useApiMutation<ResearchResponse, { domain: string; brand_name?: string; force_refresh?: boolean }>(
-    `/api/v1/projects/${projectId}/brand-wizard/research`,
-    {
-      method: 'POST',
-      onSuccess: (data) => {
-        if (data.success && data.raw_research) {
-          setResearchData({ raw_research: data.raw_research })
-          setResearchCitations(data.citations)
-          setResearchCachedAt(data.cached_at || null)
-          addBreadcrumb('Brand research completed', 'wizard', { from_cache: data.from_cache })
-          addToast({
-            type: 'success',
-            title: 'Research complete',
-            description: data.from_cache
-              ? 'Loaded cached research data'
-              : 'Successfully researched your brand',
-          })
-        } else if (data.error) {
-          addToast({
-            type: 'error',
-            title: 'Research failed',
-            description: data.error,
-          })
-        }
-      },
-      onError: (error) => {
-        addToast({
-          type: 'error',
-          title: 'Research failed',
-          description: error instanceof Error ? error.message : 'Could not complete brand research',
-        })
-      },
-    }
-  )
+  const researchMutation = useApiMutation<ResearchResponse, { domain: string; brand_name?: string; force_refresh?: boolean }>({
+    endpoint: `/api/v1/projects/${projectId}/brand-wizard/research`,
+    method: 'POST',
+    onSuccess: (data) => {
+      if (data.success && data.raw_research) {
+        setResearchData({ raw_research: data.raw_research })
+        setResearchCitations(data.citations)
+        setResearchCachedAt(data.cached_at || null)
+        setResearchError(null)
+        addBreadcrumb('Brand research completed', 'wizard', { from_cache: data.from_cache })
+        toast.success(
+          'Research complete',
+          data.from_cache ? 'Loaded cached research data' : 'Successfully researched your brand'
+        )
+      } else if (data.error) {
+        setResearchError(data.error)
+        toast.error('Research failed', data.error)
+      }
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : 'Could not complete brand research'
+      setResearchError(message)
+      toast.error('Research failed', message)
+    },
+  })
 
   // Generate V3 config mutation
-  const generateMutation = useApiMutation<GenerateResponse, { brand_name: string; domain?: string; wizard_data: WizardFormData }>(
-    `/api/v1/projects/${projectId}/brand-wizard/generate`,
-    {
-      method: 'POST',
-      onSuccess: (data) => {
-        if (data.success) {
-          addBreadcrumb('V3 config generated', 'wizard', { brand_config_id: data.brand_config_id })
-          addToast({
-            type: 'success',
-            title: 'Brand configuration generated',
-            description: 'Your brand guidelines are ready!',
-          })
-          // Invalidate project query to refresh brand config
-          queryClient.invalidateQueries({ queryKey: ['project', projectId] })
-          // Navigate back to project detail
-          navigate(`/projects/${projectId}`)
-        } else if (data.error) {
-          addToast({
-            type: 'error',
-            title: 'Generation failed',
-            description: data.error,
-          })
-        }
-      },
-      onError: (error) => {
-        addToast({
-          type: 'error',
-          title: 'Generation failed',
-          description: error instanceof Error ? error.message : 'Could not generate brand configuration',
-        })
-      },
-    }
-  )
+  const generateMutation = useApiMutation<GenerateResponse, { brand_name: string; domain?: string; wizard_data: WizardFormData }>({
+    endpoint: `/api/v1/projects/${projectId}/brand-wizard/generate`,
+    method: 'POST',
+    onSuccess: (data) => {
+      if (data.success) {
+        setGenerateError(null)
+        addBreadcrumb('V3 config generated', 'wizard', { brand_config_id: data.brand_config_id })
+        toast.success('Brand configuration generated', 'Your brand guidelines are ready!')
+        // Invalidate project query to refresh brand config
+        queryClient.invalidateQueries({ queryKey: ['project', projectId] })
+        // Navigate back to project detail
+        navigate(`/projects/${projectId}`)
+      } else if (data.error) {
+        setGenerateError(data.error)
+        toast.error('Generation failed', data.error)
+      }
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : 'Could not generate brand configuration'
+      setGenerateError(message)
+      toast.error('Generation failed', message)
+    },
+  })
 
   // Initialize state from API response
   useEffect(() => {
@@ -251,6 +226,7 @@ export function BrandWizardPage() {
   // Handle research trigger
   const handleResearch = useCallback(() => {
     if (formData.domain) {
+      setResearchError(null)
       researchMutation.mutate({
         domain: formData.domain,
         brand_name: formData.brand_name,
@@ -261,6 +237,7 @@ export function BrandWizardPage() {
   // Handle generate trigger
   const handleGenerate = useCallback(() => {
     if (formData.brand_name) {
+      setGenerateError(null)
       generateMutation.mutate({
         brand_name: formData.brand_name,
         domain: formData.domain,
@@ -295,10 +272,6 @@ export function BrandWizardPage() {
   const canNavigate = useMemo(() => {
     return !!formData.brand_name
   }, [formData.brand_name])
-
-  // Calculate if previous/next are available
-  const hasPrevious = currentStep > 1
-  const hasNext = currentStep < 7
 
   // Render loading state
   if (isLoadingState) {
@@ -345,7 +318,7 @@ export function BrandWizardPage() {
             researchCachedAt={researchCachedAt}
             isResearching={researchMutation.isPending}
             onResearch={handleResearch}
-            researchError={researchMutation.error instanceof Error ? researchMutation.error.message : null}
+            researchError={researchError}
           />
         )
       case 2:
@@ -390,7 +363,7 @@ export function BrandWizardPage() {
             onNavigateToStep={handleStepChange}
             isGenerating={generateMutation.isPending}
             onGenerate={handleGenerate}
-            generateError={generateMutation.error instanceof Error ? generateMutation.error.message : null}
+            generateError={generateError}
           />
         )
       default:
@@ -410,11 +383,12 @@ export function BrandWizardPage() {
       navigation={{
         currentStep,
         totalSteps: 7,
-        onPrevious: hasPrevious ? () => handleStepChange(currentStep - 1) : undefined,
-        onNext: hasNext ? () => handleStepChange(currentStep + 1) : undefined,
-        isPreviousDisabled: !hasPrevious,
-        isNextDisabled: !hasNext || (currentStep === 1 && !formData.brand_name),
-        nextLabel: currentStep === 6 ? 'Review' : currentStep === 7 ? 'Generate' : 'Next',
+        onPrevious: () => handleStepChange(currentStep - 1),
+        onNext: () => handleStepChange(currentStep + 1),
+        onFinish: handleGenerate,
+        canProceed: currentStep === 1 ? !!formData.brand_name : true,
+        isLoading: generateMutation.isPending,
+        nextLabel: currentStep === 6 ? 'Review' : 'Next',
       }}
       isSaving={pendingSave || updateMutation.isPending}
       lastSavedAt={lastSavedAt}

@@ -18,6 +18,7 @@ import traceback
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.integrations.pop import (
     POPClient,
@@ -587,6 +588,70 @@ class POPContentScoreService:
 
         return recommendations
 
+    def _determine_pass_fail(
+        self,
+        page_score: float | None,
+        recommendations: list[dict[str, Any]],
+    ) -> tuple[bool, list[dict[str, Any]]]:
+        """Determine if content passes the scoring threshold.
+
+        Content passes if page_score >= configurable threshold (default 70).
+        When content fails, returns prioritized recommendations.
+
+        Args:
+            page_score: The page score from POP (0-100)
+            recommendations: List of recommendations from POP
+
+        Returns:
+            Tuple of (passed: bool, prioritized_recommendations: list)
+            - passed is True if page_score >= threshold
+            - prioritized_recommendations is non-empty only when passed is False
+        """
+        settings = get_settings()
+        threshold = settings.pop_pass_threshold
+
+        # Cannot determine pass/fail without a score
+        if page_score is None:
+            logger.warning(
+                "Cannot determine pass/fail - page_score is None",
+                extra={"threshold": threshold},
+            )
+            return False, recommendations
+
+        passed = page_score >= threshold
+
+        logger.info(
+            "pass_fail_determination",
+            extra={
+                "page_score": page_score,
+                "threshold": threshold,
+                "passed": passed,
+            },
+        )
+
+        # Return prioritized recommendations only when failed
+        if passed:
+            return True, []
+
+        # Prioritize recommendations by category importance
+        # Order: structure > keyword > lsi > variations
+        category_priority = {
+            "structure": 1,
+            "keyword": 2,
+            "lsi": 3,
+            "variations": 4,
+        }
+
+        prioritized = sorted(
+            recommendations,
+            key=lambda r: (
+                category_priority.get(r.get("category", ""), 99),
+                r.get("priority", 999),
+            ),
+        )
+
+        return False, prioritized
+
     async def score_content(
         self,
         project_id: str,
@@ -873,18 +938,26 @@ class POPContentScoreService:
                     },
                 )
 
+            # Determine pass/fail and get prioritized recommendations
+            page_score = parsed.get("page_score")
+            all_recommendations = parsed.get("recommendations", [])
+            passed, prioritized_recs = self._determine_pass_fail(
+                page_score, all_recommendations
+            )
+
             result = POPContentScoreResult(
                 success=True,
                 keyword=keyword,
                 content_url=content_url,
                 task_id=task_id,
-                page_score=parsed.get("page_score"),
+                page_score=page_score,
+                passed=passed,
                 keyword_analysis=parsed.get("keyword_analysis", {}),
                 lsi_coverage=parsed.get("lsi_coverage", {}),
                 word_count_current=parsed.get("word_count_current"),
                 word_count_target=parsed.get("word_count_target"),
                 heading_analysis=parsed.get("heading_analysis", {}),
-                recommendations=parsed.get("recommendations", []),
+                recommendations=prioritized_recs if not passed else all_recommendations,
                 raw_response=raw_data,
                 duration_ms=duration_ms,
                 request_id=poll_result.request_id,
@@ -898,6 +971,7 @@ class POPContentScoreService:
                     "page_id": page_id,
                     "task_id": task_id,
                     "success": True,
+                    "passed": passed,
                     "score_id": None,  # Not saved yet at this point
                     "page_score": result.page_score,
                     "duration_ms": round(duration_ms, 2),
