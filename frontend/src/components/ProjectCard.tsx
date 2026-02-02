@@ -135,8 +135,9 @@ function getCurrentPhase(phaseStatus: Record<string, PhaseStatusEntry>): PhaseNa
  * - Hover effects for interactivity
  */
 export function ProjectCard({ project, onClick, className }: ProjectCardProps) {
-  const completionPercentage = getCompletionPercentage(project.phase_status)
-  const currentPhase = getCurrentPhase(project.phase_status)
+  const phaseStatus = project.phase_status || {}
+  const completionPercentage = getCompletionPercentage(phaseStatus)
+  const currentPhase = getCurrentPhase(phaseStatus)
 
   const handleClick = () => {
     if (onClick) {
@@ -203,7 +204,7 @@ export function ProjectCard({ project, onClick, className }: ProjectCardProps) {
         {/* Phase indicators */}
         <div className="flex gap-1.5">
           {PHASE_ORDER.map((phase) => {
-            const phaseData = project.phase_status[phase]
+            const phaseData = phaseStatus[phase]
             const status: PhaseStatus = phaseData?.status || 'pending'
 
             return (
