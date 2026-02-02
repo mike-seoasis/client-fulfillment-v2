@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "sessionId": "71fc427e-d927-463d-8c73-3b3bba414798",
+  "sessionId": "1454614a-adc6-471d-8d25-d4c714c8488e",
   "status": "running",
-  "startedAt": "2026-02-02T00:50:59.137Z",
-  "updatedAt": "2026-02-02T00:57:05.343Z",
+  "startedAt": "2026-02-02T00:57:09.453Z",
+  "updatedAt": "2026-02-02T01:01:38.130Z",
   "currentIteration": 0,
   "maxIterations": 30,
   "tasksCompleted": 0,
@@ -15,8 +15,8 @@
     "totalTasks": 1,
     "tasks": [
       {
-        "id": "client-onboarding-v2-c3y.145",
-        "title": "Create V2 schema transformation script",
+        "id": "client-onboarding-v2-c3y.146",
+        "title": "Test migration on staging with production data snapshot",
         "status": "open",
         "completedInSession": false
       }
