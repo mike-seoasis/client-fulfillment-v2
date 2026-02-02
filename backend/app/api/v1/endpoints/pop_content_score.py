@@ -4,6 +4,10 @@ Provides content scoring operations for a project:
 - POST /api/v1/projects/{project_id}/phases/content_score/score - Score content for a page
 - POST /api/v1/projects/{project_id}/phases/content_score/batch - Batch score multiple pages
 
+The scoring behavior is controlled by the use_pop_scoring feature flag:
+- When enabled (True): Uses POPContentScoreService for SERP-based POP API scoring
+- When disabled (False): Uses legacy ContentScoreService for local content analysis
+
 Error Logging Requirements:
 - Log all incoming requests with method, path, request_id
 - Log request body at DEBUG level (sanitize sensitive fields)
@@ -22,12 +26,14 @@ Railway Deployment Requirements:
 
 import asyncio
 import time
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_session
 from app.core.logging import get_logger
 from app.models.content_score import ContentScore
@@ -39,6 +45,10 @@ from app.schemas.content_score import (
     ContentScoreCreateResponse,
     ContentScoreRequest,
     ContentScoreResponse,
+)
+from app.services.content_score import (
+    ContentScoreInput,
+    get_content_score_service,
 )
 from app.services.pop_content_score import (
     POPContentScoreService,
@@ -123,6 +133,199 @@ async def _verify_page_exists(
     return page, None
 
 
+async def _score_with_legacy_service(
+    project_id: str,
+    page_id: str,
+    keyword: str,
+    content_url: str,
+    session: AsyncSession,
+    request_id: str,
+) -> tuple[ContentScore | None, str | None]:
+    """Score content using legacy ContentScoreService when POP is disabled.
+
+    When use_pop_scoring flag is False, this function handles scoring using
+    the legacy ContentScoreService. Since the legacy service requires actual
+    content text (not a URL), we attempt to fetch the page's cached content
+    from the database.
+
+    Args:
+        project_id: Project ID
+        page_id: Page ID
+        keyword: Target keyword for scoring
+        content_url: URL of the content (for reference, not fetched)
+        session: Database session
+        request_id: Request ID for logging
+
+    Returns:
+        Tuple of (ContentScore, None) on success, or (None, error_message) on failure
+    """
+    start_time = time.monotonic()
+
+    logger.info(
+        "Using legacy ContentScoreService (POP scoring disabled)",
+        extra={
+            "request_id": request_id,
+            "project_id": project_id,
+            "page_id": page_id,
+            "keyword": keyword[:50] if keyword else "",
+            "use_pop_scoring": False,
+        },
+    )
+
+    try:
+        # Get the page to access any cached content
+        stmt = select(CrawledPage).where(CrawledPage.id == page_id)
+        result = await session.execute(stmt)
+        page = result.scalar_one_or_none()
+
+        if not page:
+            return None, f"Page not found: {page_id}"
+
+        # Get content from page if available (body_text or similar field)
+        content = ""
+        if hasattr(page, "body_text") and page.body_text:
+            content = page.body_text
+        elif hasattr(page, "content") and page.content:
+            content = page.content
+        elif hasattr(page, "raw_html") and page.raw_html:
+            # Strip HTML tags for basic content extraction
+            import re
+
+            content = re.sub(r"<[^>]+>", " ", page.raw_html)
+            content = re.sub(r"\s+", " ", content).strip()
+
+        # If no content available, use a minimal placeholder
+        # The legacy service will return a low score for empty content
+        if not content:
+            logger.warning(
+                "No content available for legacy scoring",
+                extra={
+                    "request_id": request_id,
+                    "project_id": project_id,
+                    "page_id": page_id,
+                },
+            )
+            content = keyword  # Use keyword as minimal content
+
+        # Get legacy service and score
+        legacy_service = get_content_score_service()
+        legacy_input = ContentScoreInput(
+            content=content,
+            primary_keyword=keyword,
+            secondary_keywords=[],
+            project_id=project_id,
+            page_id=page_id,
+        )
+
+        legacy_result = await legacy_service.score_content(legacy_input)
+
+        duration_ms = (time.monotonic() - start_time) * 1000
+
+        if not legacy_result.success:
+            logger.warning(
+                "Legacy scoring failed",
+                extra={
+                    "request_id": request_id,
+                    "project_id": project_id,
+                    "page_id": page_id,
+                    "error": legacy_result.error,
+                    "duration_ms": round(duration_ms, 2),
+                },
+            )
+            return None, legacy_result.error
+
+        # Convert legacy score (0.0-1.0) to POP scale (0-100)
+        page_score = legacy_result.overall_score * 100
+
+        # Determine pass/fail using POP threshold
+        settings = get_settings()
+        passed = page_score >= settings.pop_pass_threshold
+
+        # Create ContentScore record
+        score = ContentScore(
+            page_id=page_id,
+            pop_task_id=None,  # No POP task for legacy scoring
+            page_score=page_score,
+            passed=passed,
+            keyword_analysis=None,
+            lsi_coverage=None,
+            word_count_current=(
+                legacy_result.word_count_score.word_count
+                if legacy_result.word_count_score
+                else None
+            ),
+            heading_analysis=None,
+            recommendations=[],
+            fallback_used=False,  # Not a fallback - intentionally using legacy
+            raw_response={
+                "legacy_scoring": True,
+                "overall_score": legacy_result.overall_score,
+                "word_count_score": (
+                    legacy_result.word_count_score.to_dict()
+                    if legacy_result.word_count_score
+                    else None
+                ),
+                "semantic_score": (
+                    legacy_result.semantic_score.to_dict()
+                    if legacy_result.semantic_score
+                    else None
+                ),
+                "readability_score": (
+                    legacy_result.readability_score.to_dict()
+                    if legacy_result.readability_score
+                    else None
+                ),
+                "keyword_density_score": (
+                    legacy_result.keyword_density_score.to_dict()
+                    if legacy_result.keyword_density_score
+                    else None
+                ),
+                "entity_coverage_score": (
+                    legacy_result.entity_coverage_score.to_dict()
+                    if legacy_result.entity_coverage_score
+                    else None
+                ),
+            },
+            scored_at=datetime.now(UTC),
+        )
+
+        # Save to database
+        session.add(score)
+        await session.flush()
+        await session.refresh(score)
+
+        logger.info(
+            "Legacy scoring complete",
+            extra={
+                "request_id": request_id,
+                "project_id": project_id,
+                "page_id": page_id,
+                "score_id": score.id,
+                "page_score": page_score,
+                "passed": passed,
+                "duration_ms": round(duration_ms, 2),
+            },
+        )
+
+        return score, None
+
+    except Exception as e:
+        duration_ms = (time.monotonic() - start_time) * 1000
+        logger.error(
+            "Legacy scoring error",
+            extra={
+                "request_id": request_id,
+                "project_id": project_id,
+                "page_id": page_id,
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "duration_ms": round(duration_ms, 2),
+            },
+            exc_info=True,
+        )
+        return None, f"Legacy scoring error: {e}"
+
+
 def _convert_score_to_response(score: ContentScore) -> ContentScoreResponse:
     """Convert ContentScore model to API response schema.
 
@@ -198,20 +401,31 @@ async def score_content(
     data: ContentScoreRequest,
     session: AsyncSession = Depends(get_session),
 ) -> ContentScoreCreateResponse | JSONResponse:
-    """Score content from POP API for a keyword/URL.
+    """Score content for a keyword/URL.
 
-    Creates a POP report task, polls for completion, parses the results,
-    and saves the content score to the database. Each scoring creates a
+    The scoring behavior is controlled by the use_pop_scoring feature flag:
+    - When enabled (True): Uses POPContentScoreService for SERP-based POP API scoring
+    - When disabled (False): Uses legacy ContentScoreService for local content analysis
+
+    Creates a scoring record and saves to the database. Each scoring creates a
     new record to maintain scoring history.
 
     The request requires a page_id query parameter to associate the score
     with an existing crawled page.
+
+    Response includes fallback_used indicator:
+    - False when using POP scoring successfully or when using legacy service by flag
+    - True when POP scoring failed and fell back to legacy service
     """
     request_id = _get_request_id(request)
     start_time = time.monotonic()
 
     # Get page_id from query params
     page_id = request.query_params.get("page_id")
+
+    # Check feature flag
+    settings = get_settings()
+    use_pop = settings.use_pop_scoring
 
     logger.debug(
         "Content score request",
@@ -221,6 +435,7 @@ async def score_content(
             "page_id": page_id,
             "keyword": data.keyword[:50] if data.keyword else "",
             "content_url": data.content_url[:100] if data.content_url else "",
+            "use_pop_scoring": use_pop,
         },
     )
 
@@ -254,6 +469,38 @@ async def score_content(
     if page_not_found:
         return page_not_found
 
+    # Route to appropriate scoring service based on feature flag
+    if not use_pop:
+        # Use legacy ContentScoreService when POP is disabled
+        score, error = await _score_with_legacy_service(
+            project_id=project_id,
+            page_id=page_id,
+            keyword=data.keyword,
+            content_url=data.content_url,
+            session=session,
+            request_id=request_id,
+        )
+
+        duration_ms = (time.monotonic() - start_time) * 1000
+
+        if score:
+            return ContentScoreCreateResponse(
+                success=True,
+                score=_convert_score_to_response(score),
+                error=None,
+                fallback_used=False,  # Not a fallback - intentionally using legacy
+                duration_ms=round(duration_ms, 2),
+            )
+        else:
+            return ContentScoreCreateResponse(
+                success=False,
+                score=None,
+                error=error,
+                fallback_used=False,
+                duration_ms=round(duration_ms, 2),
+            )
+
+    # Use POPContentScoreService when POP is enabled (default behavior)
     try:
         # Create service with session for persistence
         service = POPContentScoreService(session=session)
@@ -437,16 +684,25 @@ async def batch_score_content(
     data: ContentScoreBatchRequest,
     session: AsyncSession = Depends(get_session),
 ) -> ContentScoreBatchResponse | JSONResponse:
-    """Batch score content from POP API for multiple keyword/URL pairs.
+    """Batch score content for multiple keyword/URL pairs.
+
+    The scoring behavior is controlled by the use_pop_scoring feature flag:
+    - When enabled (True): Uses POPContentScoreService for SERP-based POP API scoring
+    - When disabled (False): Uses legacy ContentScoreService for local content analysis
 
     Processes multiple scoring requests concurrently up to max_concurrent limit.
     Each item requires a page_id query parameter in the request items or as a
     comma-separated list in the query string (page_ids=uuid1,uuid2,...).
 
     Returns individual results for each item, with overall statistics.
+    Response includes fallback_used indicator per item and fallback_count total.
     """
     request_id = _get_request_id(request)
     start_time = time.monotonic()
+
+    # Check feature flag
+    settings = get_settings()
+    use_pop = settings.use_pop_scoring
 
     # Get page_ids from query params (comma-separated)
     page_ids_param = request.query_params.get("page_ids", "")
@@ -460,6 +716,7 @@ async def batch_score_content(
             "item_count": len(data.items),
             "page_ids_count": len(page_ids),
             "max_concurrent": data.max_concurrent,
+            "use_pop_scoring": use_pop,
         },
     )
 
@@ -507,7 +764,54 @@ async def batch_score_content(
             """Score a single item with semaphore control."""
             async with semaphore:
                 try:
-                    # Create service with session for persistence
+                    # Route based on feature flag
+                    if not use_pop:
+                        # Use legacy ContentScoreService when POP is disabled
+                        score, error = await _score_with_legacy_service(
+                            project_id=project_id,
+                            page_id=page_id,
+                            keyword=item.keyword,
+                            content_url=item.content_url,
+                            session=session,
+                            request_id=request_id,
+                        )
+
+                        logger.debug(
+                            "Batch item scored (legacy)",
+                            extra={
+                                "request_id": request_id,
+                                "project_id": project_id,
+                                "page_id": page_id,
+                                "keyword": item.keyword[:50],
+                                "success": score is not None,
+                                "page_score": score.page_score if score else None,
+                                "passed": score.passed if score else None,
+                                "fallback_used": False,
+                                "use_pop_scoring": False,
+                            },
+                        )
+
+                        if score:
+                            return ContentScoreBatchItemResponse(
+                                page_id=page_id,
+                                keyword=item.keyword,
+                                success=True,
+                                score_id=score.id,
+                                page_score=score.page_score,
+                                passed=score.passed,
+                                fallback_used=False,  # Not a fallback
+                                error=None,
+                            )
+                        else:
+                            return ContentScoreBatchItemResponse(
+                                page_id=page_id,
+                                keyword=item.keyword,
+                                success=False,
+                                fallback_used=False,
+                                error=error,
+                            )
+
+                    # Use POPContentScoreService when POP is enabled
                     service = POPContentScoreService(session=session)
 
                     result = await service.score_and_save_content(

@@ -638,3 +638,27 @@ When creating new SQLAlchemy models in `backend/app/models/`:
   - When modifying dataclass fields (like input_data.context), mutating the object is acceptable within the service method
 ---
 
+## 2026-02-02 - US-029
+- Wired content scoring into workflow with feature flag support:
+  - Modified `backend/app/api/v1/endpoints/pop_content_score.py` to check `use_pop_scoring` flag
+  - When `use_pop_scoring=True` (enabled): Uses POPContentScoreService for SERP-based POP API scoring
+  - When `use_pop_scoring=False` (disabled): Uses legacy ContentScoreService for local content analysis
+  - Added `_score_with_legacy_service()` helper function for legacy scoring path
+  - Both single `/score` and `/batch` endpoints respect the feature flag
+  - Response includes `fallback_used` indicator: False when using legacy by flag, True when POP fell back to legacy due to errors
+- Legacy scoring implementation:
+  - Attempts to get content from CrawledPage (body_text, content, or raw_html fields)
+  - Converts legacy score (0.0-1.0 scale) to POP scale (0-100) for consistency
+  - Creates ContentScore record with `fallback_used=False` (not a fallback - intentional legacy use)
+  - Stores raw_response with `legacy_scoring: True` flag and component scores for debugging
+- Files changed:
+  - `backend/app/api/v1/endpoints/pop_content_score.py` - Added feature flag check and legacy scoring path
+- **Learnings:**
+  - Feature flag routing at endpoint level provides clean separation of concerns
+  - Legacy service requires actual content text, not URL - need to fetch from database or use minimal placeholder
+  - `fallback_used` semantics: False when intentionally using legacy (flag disabled), True when POP failed and fell back
+  - The docstring at top of endpoint file is important for documenting the feature flag behavior
+  - Helper functions within endpoints should handle the full flow including database persistence
+  - Batch endpoint inner functions can access outer scope variables (like `use_pop` feature flag) via closure
+---
+
