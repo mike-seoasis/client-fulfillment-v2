@@ -314,3 +314,26 @@ When creating new SQLAlchemy models in `backend/app/models/`:
   - Method exit logs should be added to all exit paths including early returns for error cases
 ---
 
+## 2026-02-02 - US-016
+- Created POPContentScoreService in `backend/app/services/pop_content_score.py`:
+  - `POPContentScoreService` class with POP client dependency injection
+  - `score_content(project_id, page_id, keyword, content_url)` method signature
+  - `POPContentScoreResult` dataclass for structured return values
+  - Exception classes: `POPContentScoreServiceError`, `POPContentScoreValidationError`
+  - Global singleton pattern with `get_pop_content_score_service()` factory
+  - Convenience function `score_content()` for simple usage
+- Follows same pattern as `pop_content_brief.py` exactly:
+  - ERROR LOGGING REQUIREMENTS docstring at module level
+  - DEBUG-level logging for method entry/exit with entity IDs
+  - INFO-level logging for phase transitions (score_started, score_completed)
+  - ERROR-level logging with stack traces for exceptions
+  - Timing logs for operations exceeding SLOW_OPERATION_THRESHOLD_MS (1000ms)
+- Files changed:
+  - `backend/app/services/pop_content_score.py` - New file
+- **Learnings:**
+  - Service structure pattern is consistent: class with DI client, result dataclass, validation errors, singleton factory
+  - For service structure stories, actual API integration can be placeholder - method signature is what matters
+  - mypy errors in unrelated repository files don't affect new service file validation
+  - Unused variable warning for `client` can be suppressed with `_ = client` when client will be used in future stories
+---
+
