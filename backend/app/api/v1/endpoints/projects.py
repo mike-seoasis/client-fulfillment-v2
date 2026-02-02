@@ -88,7 +88,7 @@ async def create_project(
     request: Request,
     data: ProjectCreate,
     session: AsyncSession = Depends(get_session),
-) -> ProjectResponse:
+) -> ProjectResponse | JSONResponse:
     """Create a new project."""
     request_id = _get_request_id(request)
     logger.debug(
@@ -148,7 +148,7 @@ async def get_project(
     request: Request,
     project_id: str,
     session: AsyncSession = Depends(get_session),
-) -> ProjectResponse | JSONResponse:  # type: ignore[return-value]
+) -> ProjectResponse | JSONResponse:
     """Get a project by ID."""
     request_id = _get_request_id(request)
     logger.debug(
@@ -218,7 +218,7 @@ async def update_project(
     project_id: str,
     data: ProjectUpdate,
     session: AsyncSession = Depends(get_session),
-) -> ProjectResponse | JSONResponse:  # type: ignore[return-value]
+) -> ProjectResponse | JSONResponse:
     """Update an existing project."""
     request_id = _get_request_id(request)
     logger.debug(
@@ -311,7 +311,7 @@ async def delete_project(
     request: Request,
     project_id: str,
     session: AsyncSession = Depends(get_session),
-) -> None | JSONResponse:  # type: ignore[return-value]
+) -> None | JSONResponse:
     """Delete a project."""
     request_id = _get_request_id(request)
     logger.debug(
@@ -381,7 +381,7 @@ async def update_project_phase(
     project_id: str,
     data: PhaseStatusUpdate,
     session: AsyncSession = Depends(get_session),
-) -> ProjectResponse | JSONResponse:  # type: ignore[return-value]
+) -> ProjectResponse | JSONResponse:
     """Update a specific phase's status within a project."""
     request_id = _get_request_id(request)
     logger.debug(

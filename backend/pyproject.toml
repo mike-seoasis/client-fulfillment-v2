@@ -144,6 +144,8 @@ module = [
     "aiosmtplib.*",
     "websockets",
     "websockets.*",
+    "boto3",
+    "boto3.*",
 ]
 ignore_missing_imports = true
 
