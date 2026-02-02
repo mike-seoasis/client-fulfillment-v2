@@ -5,37 +5,32 @@ after each iteration and it's included in prompts for context.
 
 ## Codebase Patterns (Study These First)
 
-### ServiceLogger Pattern
-Use `ServiceLogger` from `app.core.logging` for standardized service-layer logging:
-```python
-from app.core.logging import get_service_logger
-
-class MyService:
-    def __init__(self) -> None:
-        self.logger = get_service_logger("my_service")
-
-    async def do_work(self, project_id: str) -> Entity:
-        with self.logger.operation("do_work", project_id=project_id) as ctx:
-            # Business logic...
-            ctx.add_result(entity_id=result.id)
-            return result
-```
-
-Key methods:
-- `operation()` - Context manager for automatic entry/exit logging with timing
-- `validation_failure()` - Log validation errors with field/value
-- `state_transition()` - Log phase/status changes at INFO level
-- `exception()` - Log exceptions with full stack trace
+### External API Configuration Pattern
+When adding a new external API integration to `backend/app/core/config.py`:
+1. **API credentials**: `{prefix}_api_key` or `{prefix}_api_login`/`{prefix}_api_password` (str | None, default=None)
+2. **Base URL**: `{prefix}_api_url` (str with default value)
+3. **Polling/timeout settings**: `{prefix}_task_poll_interval`, `{prefix}_task_timeout` for async task-based APIs
+4. **Circuit breaker**: `{prefix}_circuit_failure_threshold` (int, default=5) and `{prefix}_circuit_recovery_timeout` (float, default=60.0)
+5. All fields use pydantic `Field()` with `description` parameter
 
 ---
 
-## 2026-02-01 - client-onboarding-v2-c3y.156
-- What was implemented: Added `ServiceLogger` class to `backend/app/core/logging.py` implementing ERROR LOGGING REQUIREMENTS
-- Files changed: `backend/app/core/logging.py`
+## 2026-02-02 - US-001
+- Added POP API configuration settings to `backend/app/core/config.py`:
+  - `pop_api_key`: API key for PageOptimizer Pro
+  - `pop_api_url`: Base URL (default: https://api.pageoptimizer.pro)
+  - `pop_task_poll_interval`: Polling interval for async tasks (default: 2.0s)
+  - `pop_task_timeout`: Maximum wait time for task completion (default: 300s)
+  - `pop_circuit_failure_threshold`: Circuit breaker threshold (default: 5)
+  - `pop_circuit_recovery_timeout`: Circuit recovery timeout (default: 60s)
+- Created `backend/.env.example` with documented environment variables including POP_API_KEY
+- Files changed:
+  - `backend/app/core/config.py` - Added POP API settings
+  - `backend/.env.example` - New file with all backend env vars documented
 - **Learnings:**
-  - Patterns discovered: Existing services (project.py, category.py, crawl.py) already implement logging manually - the ServiceLogger centralizes this
-  - Gotchas encountered: mypy requires `__exit__` return type to be `None` (not `bool`) when always returning False to propagate exceptions
-  - The codebase already has comprehensive logging infrastructure with specialized loggers (DatabaseLogger, RedisLogger, ClaudeLogger, etc.) - ServiceLogger complements these for service layer
-
+  - Backend config lives in `backend/app/core/config.py`, not `app/core/config.py`
+  - No `.env.example` existed for backend previously; created one with all documented API keys
+  - Pattern: All external APIs follow same structure with circuit breaker settings
+  - ruff is available globally but mypy needs to be installed in venv (dev dependency)
 ---
 
