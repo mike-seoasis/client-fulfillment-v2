@@ -33,7 +33,21 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
+      - name: Debug info
+        run: |
+          echo "Python version:"
+          uv run python --version
+          echo "Ruff version:"
+          uv run ruff --version
+          echo "Working directory:"
+          pwd
+          echo "Files in app:"
+          ls -la app/
+
       - name: Run Ruff linter
+        run: uv run ruff check app --output-format=full || true
+
+      - name: Run Ruff linter (strict)
         run: uv run ruff check app --output-format=github
 
       - name: Run Ruff formatter check
