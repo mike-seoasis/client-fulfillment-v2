@@ -411,6 +411,49 @@ class Settings(BaseSettings):
         description="Enable shadow mode to run both POP and legacy scoring for comparison analysis",
     )
 
+    # S3/Object Storage
+    s3_bucket: str | None = Field(
+        default=None,
+        description="S3 bucket name for file storage",
+    )
+    s3_endpoint_url: str | None = Field(
+        default=None,
+        description="S3 endpoint URL (for LocalStack or S3-compatible services)",
+    )
+    s3_access_key: str | None = Field(
+        default=None,
+        description="S3 access key ID",
+    )
+    s3_secret_key: str | None = Field(
+        default=None,
+        description="S3 secret access key",
+    )
+    s3_region: str = Field(
+        default="us-east-1",
+        description="S3 region",
+    )
+    s3_timeout: float = Field(
+        default=30.0,
+        description="S3 operation timeout in seconds",
+    )
+    s3_max_retries: int = Field(
+        default=3,
+        description="Maximum retry attempts for S3 operations",
+    )
+    s3_retry_delay: float = Field(
+        default=1.0,
+        description="Base delay between retries in seconds",
+    )
+    # Circuit breaker settings for S3
+    s3_circuit_failure_threshold: int = Field(
+        default=5,
+        description="Failures before S3 circuit opens",
+    )
+    s3_circuit_recovery_timeout: float = Field(
+        default=60.0,
+        description="Seconds before attempting S3 recovery",
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:

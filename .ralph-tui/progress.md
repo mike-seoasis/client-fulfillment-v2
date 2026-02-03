@@ -49,3 +49,18 @@ after each iteration and it's included in prompts for context.
   - Verified: Both upgrade and downgrade paths work correctly
 ---
 
+## 2026-02-03 - S2-004
+- **What was implemented:** S3 integration client with circuit breaker pattern for file storage
+- **Files changed:**
+  - `backend/app/core/config.py` (added S3 settings: s3_bucket, s3_endpoint_url, s3_access_key, s3_secret_key, s3_region, s3_timeout, s3_max_retries, s3_retry_delay, circuit breaker settings)
+  - `backend/app/integrations/s3.py` (created - S3Client class with upload_file, get_file, delete_file, file_exists, get_file_metadata)
+  - `backend/app/integrations/__init__.py` (added S3 exports)
+- **Learnings:**
+  - Pattern: Use `boto3.client` for S3 operations; boto3 clients are thread-safe but operations are sync, so wrap with `run_in_executor` for async
+  - Pattern: Use `endpoint_url` parameter for LocalStack/S3-compatible services
+  - Pattern: S3NotFoundError (404/NoSuchKey) should NOT trigger circuit breaker - it's expected behavior
+  - Pattern: Import `Callable` from `collections.abc` not `typing` (ruff UP035)
+  - Pattern: botocore modules need `# type: ignore[import-not-found]` - stubs not available
+  - Gotcha: Type ignores must match the exact error code (e.g., `no-any-return` not `return-value`)
+---
+
