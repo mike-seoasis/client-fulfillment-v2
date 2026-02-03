@@ -432,8 +432,9 @@
         "Show error message if generation fails"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Steps: perplexity_research, crawling, processing_docs, then 9 section names, then ai_prompt_snippet."
+      "passes": true,
+      "notes": "Steps: perplexity_research, crawling, processing_docs, then 9 section names, then ai_prompt_snippet.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S2-027",
@@ -676,6 +677,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T22:45:19.284Z"
+    "updatedAt": "2026-02-03T22:48:05.825Z"
   }
 }

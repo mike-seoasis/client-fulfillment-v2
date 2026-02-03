@@ -366,3 +366,16 @@ after each iteration and it's included in prompts for context.
   - Pattern: Generation progress checklist uses steps_completed vs array index to determine isComplete, isCurrent states
 ---
 
+## 2026-02-03 - S2-026
+- **What was implemented:** GenerationProgress component extracted from page with all 13 generation steps
+- **Files changed:**
+  - `frontend/src/components/GenerationProgress.tsx` (created - reusable generation progress component)
+  - `frontend/src/app/projects/new/page.tsx` (refactored to use GenerationProgress component)
+- **Learnings:**
+  - Pattern: Backend only tracks synthesis steps (10 steps), but UI shows all 13 steps (3 research + 10 synthesis)
+  - Pattern: Research phase steps (perplexity_research, crawling, processing_docs) are inferred from generation state before synthesis begins
+  - Pattern: Extract complex UI logic into dedicated components for reusability (GenerationProgress can be reused elsewhere)
+  - Pattern: Use callback props (onComplete, onBack, onGoToProject) to let parent control navigation while component handles display
+  - Pattern: useEffect with dependency on generation.isComplete triggers onComplete callback for navigation
+---
+

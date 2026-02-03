@@ -5,39 +5,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ProjectForm, type ProjectFormData } from '@/components/ProjectForm';
 import { type UploadedFile } from '@/components/FileUpload';
+import { GenerationProgress } from '@/components/GenerationProgress';
 import { useCreateProject } from '@/hooks/use-projects';
 import { uploadFileToProject } from '@/hooks/useProjectFiles';
-import { useBrandConfigGeneration } from '@/hooks/useBrandConfigGeneration';
+import { useStartBrandConfigGeneration } from '@/hooks/useBrandConfigGeneration';
 import { Button } from '@/components/ui';
 
 type WizardStep = 1 | 2;
-
-// Generation steps for the checklist display
-const GENERATION_STEPS = [
-  'brand_foundation',
-  'target_audience',
-  'voice_dimensions',
-  'voice_characteristics',
-  'writing_style',
-  'vocabulary',
-  'trust_elements',
-  'examples_bank',
-  'competitor_context',
-  'ai_prompt_snippet',
-] as const;
-
-const STEP_DISPLAY_NAMES: Record<string, string> = {
-  brand_foundation: 'Extracting brand foundation',
-  target_audience: 'Building target audience personas',
-  voice_dimensions: 'Analyzing voice dimensions (4 scales)',
-  voice_characteristics: 'Defining voice characteristics',
-  writing_style: 'Setting writing style rules',
-  vocabulary: 'Building vocabulary guide',
-  trust_elements: 'Compiling trust elements',
-  examples_bank: 'Creating examples bank',
-  competitor_context: 'Analyzing competitor context',
-  ai_prompt_snippet: 'Generating AI prompt snippet',
-};
 
 export default function CreateProjectPage() {
   const router = useRouter();
@@ -55,8 +29,8 @@ export default function CreateProjectPage() {
   const formId = useId();
   const [formData, setFormData] = useState<ProjectFormData | null>(null);
 
-  // Brand config generation - only enabled when we have a project
-  const generation = useBrandConfigGeneration(projectId ?? '');
+  // Brand config generation mutation - use startGenerationAsync directly
+  const startGeneration = useStartBrandConfigGeneration(projectId ?? '');
 
   // Track if files are being uploaded
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
@@ -163,7 +137,7 @@ export default function CreateProjectPage() {
       setCurrentStep(2);
 
       // Start brand config generation
-      await generation.startGenerationAsync();
+      await startGeneration.mutateAsync();
     } catch (err) {
       setError(
         err instanceof Error
@@ -190,7 +164,7 @@ export default function CreateProjectPage() {
   const isSubmitting =
     createProject.isPending ||
     isUploadingFiles ||
-    generation.isStarting;
+    startGeneration.isPending;
 
   return (
     <div>
@@ -265,203 +239,13 @@ export default function CreateProjectPage() {
           )}
 
           {/* Step 2: Generation Progress */}
-          {currentStep === 2 && (
-            <div className="space-y-6">
-              {/* Generation header */}
-              {generation.isComplete ? (
-                <div className="text-center py-4">
-                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-palm-100 flex items-center justify-center">
-                    <svg
-                      className="w-8 h-8 text-palm-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                  </div>
-                  <h2 className="text-xl font-semibold text-warm-gray-900 mb-2">
-                    Project Created!
-                  </h2>
-                  <p className="text-warm-gray-600">
-                    &ldquo;{formData?.name}&rdquo; is ready. Brand configuration has been
-                    generated successfully.
-                  </p>
-                </div>
-              ) : generation.isFailed ? (
-                <div className="text-center py-4">
-                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-coral-100 flex items-center justify-center">
-                    <svg
-                      className="w-8 h-8 text-coral-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                      />
-                    </svg>
-                  </div>
-                  <h2 className="text-xl font-semibold text-warm-gray-900 mb-2">
-                    Generation Failed
-                  </h2>
-                  <p className="text-coral-600">{generation.error}</p>
-                </div>
-              ) : (
-                <div className="text-center py-4">
-                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-palm-100 flex items-center justify-center animate-pulse">
-                    <svg
-                      className="w-8 h-8 text-palm-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M13 10V3L4 14h7v7l9-11h-7z"
-                      />
-                    </svg>
-                  </div>
-                  <h2 className="text-xl font-semibold text-warm-gray-900 mb-2">
-                    Generating Brand Configuration...
-                  </h2>
-                </div>
-              )}
-
-              {/* Progress bar */}
-              {!generation.isComplete && !generation.isFailed && (
-                <div className="space-y-2">
-                  <div className="h-2 bg-cream-200 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-palm-500 transition-all duration-500 ease-out"
-                      style={{ width: `${generation.progress}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-sm text-warm-gray-500">
-                    <span>{generation.currentStepLabel || 'Starting...'}</span>
-                    <span>{generation.progress}%</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Generation steps checklist */}
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {GENERATION_STEPS.map((step, index) => {
-                  const isComplete = index < generation.stepsCompleted;
-                  const isCurrent =
-                    index === generation.stepsCompleted &&
-                    generation.isGenerating;
-
-                  return (
-                    <div
-                      key={step}
-                      className={`flex items-center gap-3 p-2 rounded-sm ${
-                        isCurrent ? 'bg-palm-50' : ''
-                      }`}
-                    >
-                      {/* Status icon */}
-                      <div className="flex-shrink-0 w-5 h-5">
-                        {isComplete ? (
-                          <svg
-                            className="w-5 h-5 text-palm-500"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M5 13l4 4L19 7"
-                            />
-                          </svg>
-                        ) : isCurrent ? (
-                          <svg
-                            className="w-5 h-5 text-palm-500 animate-spin"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                          >
-                            <circle
-                              className="opacity-25"
-                              cx="12"
-                              cy="12"
-                              r="10"
-                              stroke="currentColor"
-                              strokeWidth="4"
-                            />
-                            <path
-                              className="opacity-75"
-                              fill="currentColor"
-                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                            />
-                          </svg>
-                        ) : (
-                          <div className="w-5 h-5 rounded-full border-2 border-warm-gray-300" />
-                        )}
-                      </div>
-
-                      {/* Step name */}
-                      <span
-                        className={`text-sm ${
-                          isComplete
-                            ? 'text-warm-gray-600'
-                            : isCurrent
-                            ? 'text-palm-700 font-medium'
-                            : 'text-warm-gray-400'
-                        }`}
-                      >
-                        {STEP_DISPLAY_NAMES[step]}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Action buttons */}
-              <div className="flex justify-end gap-3 pt-4 border-t border-cream-200">
-                {generation.isComplete ? (
-                  <Button onClick={handleGoToProject}>
-                    Go to Project
-                    <svg
-                      className="w-4 h-4 ml-1"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
-                  </Button>
-                ) : generation.isFailed ? (
-                  <>
-                    <Button variant="ghost" onClick={handleBack}>
-                      Back
-                    </Button>
-                    <Button onClick={handleGoToProject}>
-                      Go to Project Anyway
-                    </Button>
-                  </>
-                ) : (
-                  <Button variant="ghost" disabled>
-                    Please wait...
-                  </Button>
-                )}
-              </div>
-            </div>
+          {currentStep === 2 && projectId && (
+            <GenerationProgress
+              projectId={projectId}
+              projectName={formData?.name}
+              onBack={handleBack}
+              onGoToProject={handleGoToProject}
+            />
           )}
         </div>
       </div>
