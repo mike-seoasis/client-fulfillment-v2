@@ -100,3 +100,14 @@ after each iteration and it's included in prompts for context.
   - Removed ~900 lines of duplicate code across the 9 integration files
 ---
 
+## 2026-02-02 - P0-007
+- What was implemented: Created comprehensive unit tests for the shared CircuitBreaker module
+- Files changed:
+  - Created `backend/tests/core/test_circuit_breaker.py` (20 tests)
+- **Learnings:**
+  - Mock `time.monotonic` for timeout tests rather than using actual delays
+  - Can directly set internal state (`cb._state`, `cb._last_failure_time`) for testing specific transitions
+  - pytest-asyncio with `mode=Mode.AUTO` means no need for `@pytest.mark.asyncio` decorator (but added for explicitness)
+  - Use `unittest.mock.patch` for mocking `time.monotonic` and logger in async tests
+---
+

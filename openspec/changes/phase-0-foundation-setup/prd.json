@@ -119,8 +119,9 @@
         "All tests pass with pytest tests/core/test_circuit_breaker.py"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Use pytest-asyncio for async tests. Mock time.monotonic for timeout tests."
+      "passes": true,
+      "notes": "Use pytest-asyncio for async tests. Mock time.monotonic for timeout tests.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "P0-008",
@@ -283,7 +284,7 @@
   ],
   "metadata": {
     "phase": 0,
-    "updatedAt": "2026-02-03T01:56:24.580Z",
+    "updatedAt": "2026-02-03T01:58:01.926Z",
     "openspecChange": "phase-0-foundation-setup"
   }
 }
