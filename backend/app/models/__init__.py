@@ -24,6 +24,7 @@ from app.models.notification import (
 from app.models.page_keywords import PageKeywords
 from app.models.page_paa import PagePAA
 from app.models.project import Project
+from app.models.project_file import ProjectFile
 
 __all__ = [
     "Base",
@@ -43,5 +44,6 @@ __all__ = [
     "PageKeywords",
     "PagePAA",
     "Project",
+    "ProjectFile",
     "WebhookConfig",
 ]
