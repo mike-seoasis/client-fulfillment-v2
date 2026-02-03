@@ -11,6 +11,7 @@ after each iteration and it's included in prompts for context.
 - **Alembic migrations**: Follow `0NNN_description.py` naming pattern. Use `op.add_column()`, `op.alter_column()`, `op.create_index()`. For new required columns on existing tables, add `server_default` temporarily, then remove it after.
 - **Alembic verification**: Use `alembic heads` to verify migration is detected (no DB required). Use `alembic history -r X:Y` to verify chain.
 - **Pydantic URL fields**: Use `HttpUrl` in request schemas for automatic URL validation. Use `str` in response schemas (DB stores as string, `from_attributes=True` handles conversion).
+- **Service layer**: Services live in `backend/app/services/`. Use `@staticmethod` methods, async patterns with `select()` + `db.execute()`, and `db.flush()` + `db.refresh()` for writes. Let the route dependency handle commit/rollback.
 
 ---
 
@@ -46,5 +47,22 @@ after each iteration and it's included in prompts for context.
   - Pydantic v2 `HttpUrl` type provides automatic URL validation
   - Use `HttpUrl` in request schemas for validation, but `str` in response schemas (since DB stores as string)
   - Schemas already exported in `__init__.py`, no changes needed there
+---
+
+## 2026-02-03 - S1-004
+- Created `backend/app/services/` directory with service layer
+- Created `ProjectService` class with all CRUD operations:
+  - `list_projects(db)` - returns all projects ordered by `updated_at` DESC
+  - `get_project(db, id)` - returns project or raises HTTPException 404
+  - `create_project(db, data)` - creates and returns new project
+  - `update_project(db, id, data)` - updates and returns project
+  - `delete_project(db, id)` - deletes project or raises 404
+- All methods are async and use SQLAlchemy 2.0 patterns (`select()`, `db.execute()`, `db.flush()`)
+- Files changed: `backend/app/services/__init__.py`, `backend/app/services/project.py`
+- **Learnings:**
+  - Service layer uses `@staticmethod` for methods that don't need instance state
+  - Use `db.flush()` + `db.refresh()` to get updated object state without committing (transaction handled by dependency)
+  - Convert `HttpUrl` to `str()` when storing to database
+  - Use `model_dump(exclude_unset=True)` to only update fields that were provided in the request
 ---
 

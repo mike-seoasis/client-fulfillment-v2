@@ -65,8 +65,9 @@
         "All methods are async and use SQLAlchemy 2.0 patterns"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Follow async patterns. Use select() for queries, db.execute(), db.commit()."
+      "passes": true,
+      "notes": "Follow async patterns. Use select() for queries, db.execute(), db.commit().",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S1-005",
@@ -344,6 +345,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T17:23:18.409Z"
+    "updatedAt": "2026-02-03T17:24:38.800Z"
   }
 }
