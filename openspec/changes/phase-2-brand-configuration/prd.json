@@ -584,8 +584,9 @@
         "Test unsupported content type raises error"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Include small test fixtures in tests/fixtures/ directory."
+      "passes": true,
+      "notes": "Include small test fixtures in tests/fixtures/ directory.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S2-036",
@@ -685,6 +686,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T23:07:29.921Z"
+    "updatedAt": "2026-02-03T23:10:06.661Z"
   }
 }

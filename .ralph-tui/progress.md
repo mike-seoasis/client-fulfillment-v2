@@ -500,3 +500,17 @@ after each iteration and it's included in prompts for context.
   - Pattern: When adding fields to shared interfaces, update all test mocks that use that interface
 ---
 
+## 2026-02-03 - S2-035
+- **What was implemented:** Unit tests for text extraction utilities (PDF, DOCX, TXT)
+- **Files changed:**
+  - `backend/tests/utils/__init__.py` (created - module init)
+  - `backend/tests/utils/test_text_extraction.py` (created - 27 tests covering all extraction functions)
+- **Learnings:**
+  - Pattern: Use programmatic fixture generation (helper functions that build valid PDF/DOCX bytes) instead of storing binary test files - cleaner and more maintainable
+  - Pattern: Create minimal valid PDF with text stream using `BT /F1 12 Tf x y Td (text) Tj ET` content stream format
+  - Pattern: DOCX is a ZIP archive - build with `zipfile.ZipFile` containing `[Content_Types].xml`, `_rels/.rels`, and `word/document.xml`
+  - Pattern: Test classes organize by function: `TestExtractTextFromPdf`, `TestExtractTextFromDocx`, `TestExtractTextFromTxt`, `TestExtractText`, `TestTextTruncation`
+  - Pattern: Test edge cases: empty files, invalid/corrupted files, charset parameters in content type, case-insensitive content types
+  - Pattern: Text extraction tests are synchronous (no async fixtures needed) - simpler than API tests
+---
+
