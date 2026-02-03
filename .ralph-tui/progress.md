@@ -171,3 +171,20 @@ after each iteration and it's included in prompts for context.
   - npm audit shows vulnerabilities in Next.js dependency tree (common, not blocking)
 ---
 
+## 2026-02-02 - P0-012
+- What was implemented: Configured Tailwind with warm color palette
+- Files changed:
+  - Modified `frontend/tailwind.config.ts` - added custom warm color palette and softer border-radius
+- **Color palette added:**
+  - `gold` (50-900): Warm golden tones for accents and CTAs
+  - `cream` (50-900): Soft neutral backgrounds
+  - `coral` (50-900): Warm accent for highlights and alerts
+  - `warm-gray` (50-900): Neutral text and borders with warm undertones
+- **Border-radius increased:** sm=0.25rem, DEFAULT=0.375rem, md=0.5rem, lg=0.75rem, xl=1rem, 2xl=1.25rem, 3xl=1.75rem
+- **Content paths:** Simplified to `./src/app/**/*` and `./src/components/**/*` (removed `./src/pages/**/*` since using App Router)
+- **Learnings:**
+  - Tailwind color scales follow 50-900 pattern for flexibility in light/dark variations
+  - `warm-gray` uses hyphenated name since Tailwind supports kebab-case for custom colors
+  - Border-radius extend values override defaults for more pronounced softness
+---
+
