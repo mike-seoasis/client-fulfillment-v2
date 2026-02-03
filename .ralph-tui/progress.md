@@ -201,3 +201,18 @@ after each iteration and it's included in prompts for context.
   - Pattern: Log warnings (not errors) for graceful degradation - research phase continues with partial data
 ---
 
+## 2026-02-03 - S2-014
+- **What was implemented:** Synthesis phase for brand config generation - sequential generation of 10 brand sections via Claude
+- **Files changed:**
+  - `backend/app/services/brand_config.py` (added SECTION_PROMPTS dict with 10 section-specific prompts, added _synthesis_phase method, added SECTION_TIMEOUT_SECONDS constant, updated GENERATION_STEPS to include ai_prompt_snippet)
+- **Learnings:**
+  - Pattern: Use `asyncio.wait_for(coro, timeout=N)` for per-call timeouts on async operations
+  - Pattern: Catch `TimeoutError` (not `asyncio.TimeoutError`) - ruff UP041 prefers builtin exception
+  - Pattern: For sequential LLM generation, accumulate previous sections in prompts to maintain coherence
+  - Pattern: Use temperature=0.3 for brand voice generation (slight creativity, but mostly consistent)
+  - Pattern: Handle markdown code blocks in LLM JSON responses by stripping fence lines
+  - Pattern: Static methods don't need db parameter if they don't use it - pass only what's needed
+  - Pattern: Store errors in result dict under `_errors` key for downstream handling
+  - Pattern: Use max_tokens=2048 for comprehensive brand section generation
+---
+

@@ -231,8 +231,9 @@
         "Add 60s timeout per section"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Reference skills/brand_guidelines_bible.md for section templates. ai_prompt_snippet is generated last as summary."
+      "passes": true,
+      "notes": "Reference skills/brand_guidelines_bible.md for section templates. ai_prompt_snippet is generated last as summary.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S2-015",
@@ -664,6 +665,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T22:14:14.207Z"
+    "updatedAt": "2026-02-03T22:17:21.872Z"
   }
 }
