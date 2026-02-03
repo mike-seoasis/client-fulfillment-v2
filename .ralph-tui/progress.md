@@ -313,3 +313,14 @@ after each iteration and it's included in prompts for context.
   - Pattern: Test fixtures can return tuples like `tuple[AsyncClient, MockS3Client]` to give tests access to mocks for verification
 ---
 
+## 2026-02-03 - S2-022
+- **What was implemented:** Updated project API tests for new response fields (additional_info, brand_config_status, has_brand_config, uploaded_files_count)
+- **Files changed:**
+  - `backend/tests/api/test_projects.py` (added 7 new tests in TestCreateProject and new TestProjectResponseFields class)
+- **Learnings:**
+  - Pattern: Test computed response fields by creating projects in specific states and verifying the computed values (e.g., files_count=0 for new project, files_count=2 after uploads)
+  - Pattern: Group computed field tests in a dedicated test class (e.g., TestProjectResponseFields) to keep them organized
+  - Pattern: Reuse existing fixtures like `async_client_with_s3_for_projects` to test cross-cutting concerns (file uploads affecting project response)
+  - Note: Cascade delete tests (files deleted when project deleted) were already implemented in S2-021
+---
+

@@ -291,6 +291,42 @@ class TestCreateProject:
 
         assert response.status_code == 422
 
+    @pytest.mark.asyncio
+    async def test_create_project_with_additional_info(
+        self, async_client: AsyncClient
+    ) -> None:
+        """Should create project with additional_info field."""
+        response = await async_client.post(
+            "/api/v1/projects",
+            json={
+                "name": "Project With Notes",
+                "site_url": "https://notes.example.com",
+                "additional_info": "Client prefers blue colors and formal tone.",
+            },
+        )
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["name"] == "Project With Notes"
+        assert data["additional_info"] == "Client prefers blue colors and formal tone."
+
+    @pytest.mark.asyncio
+    async def test_create_project_without_additional_info(
+        self, async_client: AsyncClient
+    ) -> None:
+        """Should create project with additional_info as None when not provided."""
+        response = await async_client.post(
+            "/api/v1/projects",
+            json={
+                "name": "Project No Notes",
+                "site_url": "https://nonotes.example.com",
+            },
+        )
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["additional_info"] is None
+
 
 class TestGetProject:
     """Tests for GET /api/v1/projects/{id} endpoint."""
@@ -485,6 +521,104 @@ class TestDeleteProject:
         assert response.status_code == 404
         data = response.json()
         assert "detail" in data
+
+
+class TestProjectResponseFields:
+    """Tests for computed fields in ProjectResponse."""
+
+    @pytest.mark.asyncio
+    async def test_response_includes_brand_config_status_pending(
+        self, async_client: AsyncClient
+    ) -> None:
+        """Should return brand_config_status as 'pending' for new project."""
+        response = await async_client.post(
+            "/api/v1/projects",
+            json={"name": "New Project", "site_url": "https://new.example.com"},
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert data["brand_config_status"] == "pending"
+
+    @pytest.mark.asyncio
+    async def test_response_includes_has_brand_config_false(
+        self, async_client: AsyncClient
+    ) -> None:
+        """Should return has_brand_config as False for project without brand config."""
+        response = await async_client.post(
+            "/api/v1/projects",
+            json={"name": "No Brand Config", "site_url": "https://nobrand.example.com"},
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert data["has_brand_config"] is False
+
+    @pytest.mark.asyncio
+    async def test_response_includes_uploaded_files_count_zero(
+        self, async_client: AsyncClient
+    ) -> None:
+        """Should return uploaded_files_count as 0 for project without files."""
+        response = await async_client.post(
+            "/api/v1/projects",
+            json={"name": "No Files", "site_url": "https://nofiles.example.com"},
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert data["uploaded_files_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_response_includes_uploaded_files_count_with_files(
+        self,
+        async_client_with_s3_for_projects: tuple[AsyncClient, MockS3Client],
+    ) -> None:
+        """Should return correct uploaded_files_count after uploading files."""
+        client, _mock_s3 = async_client_with_s3_for_projects
+
+        # Create a project
+        create_response = await client.post(
+            "/api/v1/projects",
+            json={"name": "Has Files", "site_url": "https://hasfiles.example.com"},
+        )
+        assert create_response.status_code == 201
+        project_id = create_response.json()["id"]
+
+        # Upload 2 files
+        await client.post(
+            f"/api/v1/projects/{project_id}/files",
+            files={"file": ("doc1.txt", b"content 1", "text/plain")},
+        )
+        await client.post(
+            f"/api/v1/projects/{project_id}/files",
+            files={"file": ("doc2.txt", b"content 2", "text/plain")},
+        )
+
+        # Get the project and verify count
+        get_response = await client.get(f"/api/v1/projects/{project_id}")
+        assert get_response.status_code == 200
+        data = get_response.json()
+        assert data["uploaded_files_count"] == 2
+
+    @pytest.mark.asyncio
+    async def test_list_response_includes_computed_fields(
+        self, async_client: AsyncClient
+    ) -> None:
+        """Should include all computed fields in list response."""
+        # Create a project
+        await async_client.post(
+            "/api/v1/projects",
+            json={"name": "List Test", "site_url": "https://listtest.example.com"},
+        )
+
+        # List projects
+        response = await async_client.get("/api/v1/projects")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["items"]) >= 1
+
+        # Verify computed fields exist in list items
+        project = data["items"][0]
+        assert "brand_config_status" in project
+        assert "has_brand_config" in project
+        assert "uploaded_files_count" in project
 
 
 class TestDeleteProjectWithFiles:

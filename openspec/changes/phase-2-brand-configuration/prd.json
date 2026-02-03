@@ -363,8 +363,9 @@
         "Test delete project cascades to files"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Add new assertions to existing tests plus new test cases."
+      "passes": true,
+      "notes": "Add new assertions to existing tests plus new test cases.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S2-023",
@@ -672,6 +673,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T22:34:45.818Z"
+    "updatedAt": "2026-02-03T22:36:22.907Z"
   }
 }
