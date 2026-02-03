@@ -234,3 +234,20 @@ after each iteration and it's included in prompts for context.
   - Skeleton loaders should mirror the layout/structure they replace for smooth transition
 ---
 
+## 2026-02-03 - S1-014
+- Created `frontend/src/components/ProjectForm.tsx` with React Hook Form and Zod validation
+- Form features:
+  - Name field: required, min 1 character with inline validation error
+  - Site URL field: required, valid URL format with inline validation error
+  - Submit button shows "Saving..." during submission, "Update Project" in edit mode, "Create Project" in create mode
+  - Accepts `onSubmit` callback, optional `initialData` for edit mode, and `isSubmitting` for loading state
+- Uses existing UI components (Input, Button) from design system
+- Installed packages: `react-hook-form`, `@hookform/resolvers`, `zod`
+- Files changed: `frontend/src/components/ProjectForm.tsx`, `frontend/package.json`
+- **Learnings:**
+  - React Hook Form's `register()` returns props compatible with forwardRef Input components
+  - `zodResolver` from `@hookform/resolvers/zod` integrates Zod schemas with React Hook Form
+  - Export the inferred form data type (`ProjectFormData`) for type-safe callbacks
+  - Use `defaultValues` in `useForm` with nullish coalescing (`??`) for proper initial state
+---
+
