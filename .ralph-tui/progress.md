@@ -139,3 +139,16 @@ after each iteration and it's included in prompts for context.
   - Virtual environment path from uv: `/app/.venv` - add to PATH with `ENV PATH="/app/.venv/bin:$PATH"`
 ---
 
+## 2026-02-02 - P0-010
+- What was implemented: Deleted existing Vite frontend and created fresh Next.js 14 project
+- Files changed:
+  - Deleted `frontend/` (Vite-based React app)
+  - Created `frontend/` (Next.js 14 project with App Router)
+- **Learnings:**
+  - Use `npx create-next-app@14` to pin to Next.js 14 (latest is 15.x)
+  - Flags `--typescript --tailwind --eslint --app --src-dir --use-npm --no-import-alias` configure all options non-interactively
+  - Next.js 14 creates `src/app/` directory for App Router by default with `--app` flag
+  - TypeScript strict mode is enabled by default in Next.js 14's tsconfig.json
+  - The `@/*` path alias is configured by default (maps to `./src/*`)
+---
+

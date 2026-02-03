@@ -169,8 +169,9 @@
         "'npm run build' in frontend/ succeeds"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Answer 'Yes' to all create-next-app prompts. This gives us TypeScript, Tailwind, ESLint, App Router."
+      "passes": true,
+      "notes": "Answer 'Yes' to all create-next-app prompts. This gives us TypeScript, Tailwind, ESLint, App Router.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "P0-011",
@@ -286,7 +287,7 @@
   ],
   "metadata": {
     "phase": 0,
-    "updatedAt": "2026-02-03T02:00:30.024Z",
+    "updatedAt": "2026-02-03T02:01:37.849Z",
     "openspecChange": "phase-0-foundation-setup"
   }
 }
