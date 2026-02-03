@@ -238,8 +238,9 @@
         "Test commands updated: 'uv run pytest tests/core/ tests/models/'"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Add 'v2-rebuild' to branches array. Install uv with: curl -LsSf https://astral.sh/uv/install.sh | sh"
+      "passes": true,
+      "notes": "Add 'v2-rebuild' to branches array. Install uv with: curl -LsSf https://astral.sh/uv/install.sh | sh",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "P0-015",
@@ -290,7 +291,7 @@
   ],
   "metadata": {
     "phase": 0,
-    "updatedAt": "2026-02-03T02:05:27.013Z",
+    "updatedAt": "2026-02-03T02:06:43.675Z",
     "openspecChange": "phase-0-foundation-setup"
   }
 }

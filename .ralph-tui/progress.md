@@ -10,6 +10,7 @@ after each iteration and it's included in prompts for context.
 - **CircuitBreaker**: Use shared `app.core.circuit_breaker` module. Pass `name` parameter for logging context. Config via `CircuitBreakerConfig(failure_threshold, recovery_timeout)`.
 - **uv package manager**: uv installed at `~/.local/bin/uv`. Run `uv lock` in backend/ to regenerate lockfile. Use `uv run pytest` or `uv run python` to execute commands with dependencies.
 - **uv in Docker**: Use `COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv` to get uv binary. Install deps with `uv sync --frozen --no-dev --no-install-project`.
+- **uv in GitHub Actions**: Install with `curl -LsSf https://astral.sh/uv/install.sh | sh`, then use `uv sync --frozen` and `uv run <command>`.
 
 ---
 
@@ -207,5 +208,25 @@ after each iteration and it's included in prompts for context.
   - Use `condition: service_healthy` in depends_on for proper startup ordering
   - Redis data path in alpine is `/var/lib/redis/data`
   - Container names (onboarding-db, onboarding-redis, onboarding-backend) help with log identification
+---
+
+## 2026-02-02 - P0-014
+- What was implemented: Updated GitHub Actions CI for v2-rebuild branch with new tooling
+- Files changed:
+  - Modified `.github/workflows/ci.yml`
+- **Changes made:**
+  - Added `v2-rebuild` to branches array for push/PR triggers
+  - Renamed jobs with `backend-` and `frontend-` prefixes for clarity
+  - Python jobs now use uv: `curl -LsSf https://astral.sh/uv/install.sh | sh` and `uv sync --frozen`
+  - Test command updated to `uv run pytest tests/core/ tests/models/`
+  - Added `backend-docker-build` job using docker/build-push-action with GHA caching
+  - Added frontend jobs: `frontend-lint`, `frontend-type-check`, `frontend-build`, `frontend-test`
+  - Frontend jobs use npm commands for Next.js (npm ci, npm run lint, npx tsc --noEmit, npm run build, npm run test -- --run)
+  - Updated `all-checks` job to verify all 8 jobs pass
+- **Learnings:**
+  - uv in CI: Install with curl script, then use `uv sync --frozen` (uses lockfile)
+  - Docker Buildx with GHA cache: `cache-from: type=gha` and `cache-to: type=gha,mode=max` for layer caching
+  - Vitest in CI: Use `npm run test -- --run` to run once and exit (not watch mode)
+  - Node.js caching: use `cache: npm` with `cache-dependency-path: frontend/package-lock.json`
 ---
 
