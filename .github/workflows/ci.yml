@@ -42,13 +42,22 @@ jobs:
           echo "uv version: $(uv --version)"
           uv pip list 2>&1 || echo "pip list failed"
 
-      - name: Run Ruff linter
+      - name: Run Ruff linter (with error output)
+        shell: bash
         run: |
-          uv run ruff check app --output-format=text 2>&1 || echo "Ruff check failed with code $?"
-          uv run ruff check app --output-format=github
+          set +e
+          echo "=== Running ruff check ==="
+          output=$(uv run ruff check app 2>&1)
+          exit_code=$?
+          echo "$output"
+          echo "=== Exit code: $exit_code ==="
+          if [ $exit_code -ne 0 ]; then
+            echo "::error::Ruff check failed"
+            exit $exit_code
+          fi
 
       - name: Run Ruff formatter check
-        run: uv run ruff format --check app
+        run: uv run ruff format --check app || (echo "Format check failed"; exit 1)
 
   backend-type-check:
     name: Backend Type Check
