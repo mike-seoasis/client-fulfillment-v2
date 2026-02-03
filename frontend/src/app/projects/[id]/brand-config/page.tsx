@@ -8,6 +8,18 @@ import { useBrandConfig, useRegenerateBrandConfig } from '@/hooks/useBrandConfig
 import { useProjectFiles } from '@/hooks/useProjectFiles';
 import { Button } from '@/components/ui';
 import { SectionNav, BRAND_SECTIONS, type SectionKey } from '@/components/SectionNav';
+import {
+  BrandFoundationSection,
+  TargetAudienceSection,
+  VoiceDimensionsSection,
+  VoiceCharacteristicsSection,
+  WritingStyleSection,
+  VocabularySection,
+  TrustElementsSection,
+  ExamplesBankSection,
+  CompetitorContextSection,
+  AIPromptSection,
+} from '@/components/brand-sections';
 
 function LoadingSkeleton() {
   return (
@@ -105,6 +117,45 @@ function RefreshIcon({ className }: { className?: string }) {
       <path d="M21 21v-5h-5" />
     </svg>
   );
+}
+
+interface SectionContentProps {
+  sectionKey: SectionKey;
+  v2Schema: Record<string, unknown>;
+}
+
+/**
+ * Renders the appropriate section component based on the active section key.
+ */
+function SectionContent({ sectionKey, v2Schema }: SectionContentProps) {
+  // Extract section data from v2_schema
+  // The v2_schema structure has section keys matching our SectionKey type
+  const sectionData = v2Schema[sectionKey] as Record<string, unknown> | undefined;
+
+  switch (sectionKey) {
+    case 'brand_foundation':
+      return <BrandFoundationSection data={sectionData as Parameters<typeof BrandFoundationSection>[0]['data']} />;
+    case 'target_audience':
+      return <TargetAudienceSection data={sectionData as Parameters<typeof TargetAudienceSection>[0]['data']} />;
+    case 'voice_dimensions':
+      return <VoiceDimensionsSection data={sectionData as Parameters<typeof VoiceDimensionsSection>[0]['data']} />;
+    case 'voice_characteristics':
+      return <VoiceCharacteristicsSection data={sectionData as Parameters<typeof VoiceCharacteristicsSection>[0]['data']} />;
+    case 'writing_style':
+      return <WritingStyleSection data={sectionData as Parameters<typeof WritingStyleSection>[0]['data']} />;
+    case 'vocabulary':
+      return <VocabularySection data={sectionData as Parameters<typeof VocabularySection>[0]['data']} />;
+    case 'trust_elements':
+      return <TrustElementsSection data={sectionData as Parameters<typeof TrustElementsSection>[0]['data']} />;
+    case 'examples_bank':
+      return <ExamplesBankSection data={sectionData as Parameters<typeof ExamplesBankSection>[0]['data']} />;
+    case 'competitor_context':
+      return <CompetitorContextSection data={sectionData as Parameters<typeof CompetitorContextSection>[0]['data']} />;
+    case 'ai_prompt_snippet':
+      return <AIPromptSection data={sectionData as Parameters<typeof AIPromptSection>[0]['data']} />;
+    default:
+      return <div className="text-warm-gray-500 text-sm">Unknown section</div>;
+  }
 }
 
 export default function BrandConfigPage() {
@@ -233,16 +284,11 @@ export default function BrandConfigPage() {
             </Button>
           </div>
 
-          {/* Section content placeholder - will be populated in subsequent stories */}
-          <div className="text-warm-gray-500 text-sm">
-            <p>
-              Content for{' '}
-              <span className="font-medium">
-                {BRAND_SECTIONS.find((s) => s.key === activeSection)?.label}
-              </span>{' '}
-              will be displayed here.
-            </p>
-          </div>
+          {/* Section content */}
+          <SectionContent
+            sectionKey={activeSection}
+            v2Schema={brandConfig.v2_schema}
+          />
         </div>
       </div>
     </div>
