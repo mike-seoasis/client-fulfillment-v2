@@ -338,3 +338,14 @@ after each iteration and it's included in prompts for context.
   - Pattern: Reset file input value after selection (`fileInputRef.current.value = ''`) to allow re-selecting the same file
 ---
 
+## 2026-02-03 - S2-024
+- **What was implemented:** useProjectFiles hook with TanStack Query for file operations
+- **Files changed:**
+  - `frontend/src/hooks/useProjectFiles.ts` (created - useProjectFiles, useUploadFile, useDeleteFile hooks)
+- **Learnings:**
+  - Pattern: File upload mutations use native `fetch` with `FormData` (not the JSON apiClient) since multipart/form-data requires browser to set Content-Type with boundary
+  - Pattern: Query keys for nested resources follow `['parent', parentId, 'child']` convention (e.g., `['projects', projectId, 'files']`)
+  - Pattern: Hook factory functions like `useUploadFile(projectId)` take parent ID as param so mutations can invalidate the correct query key
+  - Pattern: Don't set Content-Type header for FormData uploads - browser handles it automatically with correct boundary
+---
+

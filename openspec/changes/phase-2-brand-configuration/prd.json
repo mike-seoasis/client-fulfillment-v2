@@ -397,8 +397,9 @@
         "Invalidate files query after upload/delete"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Reference existing useProjects hook pattern. Use multipart/form-data for upload."
+      "passes": true,
+      "notes": "Reference existing useProjects hook pattern. Use multipart/form-data for upload.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S2-025",
@@ -674,6 +675,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T22:38:07.307Z"
+    "updatedAt": "2026-02-03T22:39:07.927Z"
   }
 }
