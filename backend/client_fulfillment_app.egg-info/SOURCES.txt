@@ -5,6 +5,8 @@ app/deploy.py
 app/main.py
 app/api/__init__.py
 app/api/v1/__init__.py
+app/api/v1/files.py
+app/api/v1/projects.py
 app/core/__init__.py
 app/core/circuit_breaker.py
 app/core/config.py
@@ -25,6 +27,7 @@ app/integrations/keywords_everywhere.py
 app/integrations/perplexity.py
 app/integrations/pop.py
 app/integrations/review_platforms.py
+app/integrations/s3.py
 app/integrations/webhook.py
 app/models/__init__.py
 app/models/brand_config.py
@@ -40,6 +43,7 @@ app/models/notification.py
 app/models/page_keywords.py
 app/models/page_paa.py
 app/models/project.py
+app/models/project_file.py
 app/schemas/__init__.py
 app/schemas/amazon_reviews.py
 app/schemas/brand_config.py
@@ -64,8 +68,14 @@ app/schemas/notification.py
 app/schemas/paa_analysis.py
 app/schemas/paa_enrichment.py
 app/schemas/project.py
+app/schemas/project_file.py
 app/schemas/review_platforms.py
 app/schemas/schedule.py
+app/services/__init__.py
+app/services/file.py
+app/services/project.py
+app/utils/__init__.py
+app/utils/text_extraction.py
 app/workers/__init__.py
 client_fulfillment_app.egg-info/PKG-INFO
 client_fulfillment_app.egg-info/SOURCES.txt

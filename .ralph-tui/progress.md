@@ -20,6 +20,14 @@ after each iteration and it's included in prompts for context.
 - Raise `HTTPException` for client-facing errors (404, 500)
 - New services must be added to `app/services/__init__.py` (import + `__all__` list)
 
+### API Test Pattern
+- Use `async_client` fixture for standard API tests
+- For tests needing S3, create `async_client_with_s3` fixture that overrides `get_s3` dependency
+- Create mock clients (e.g., `MockS3Client`) with same interface as real integration
+- Override dependencies via `app.dependency_overrides[dependency_func] = lambda: mock_instance`
+- Use `files={"file": ("name.ext", content_bytes, "content/type")}` for multipart uploads
+- Test classes follow: `TestUploadFile`, `TestListFiles`, `TestDeleteFile` pattern
+
 ---
 
 ## 2026-02-03 - S2-001
@@ -136,5 +144,21 @@ after each iteration and it's included in prompts for context.
   - Pattern: File validation constants at module level: `MAX_FILE_SIZE_BYTES`, `ALLOWED_CONTENT_TYPES`
   - Pattern: 413 for size exceeded, 415 for unsupported media type
   - Pattern: Instantiate service in endpoint with injected S3Client: `FileService(s3)`
+---
+
+## 2026-02-03 - S2-010
+- **What was implemented:** API tests for file upload endpoints
+- **Files changed:**
+  - `backend/tests/api/test_files.py` (created - 15 tests covering upload, list, delete)
+  - `backend/pyproject.toml` (added boto3 to dependencies - was missing)
+- **Learnings:**
+  - Pattern: Create a `MockS3Client` class with same interface as S3Client for testing
+  - Pattern: Override FastAPI dependencies with `app.dependency_overrides[get_s3] = lambda: mock_s3`
+  - Pattern: Create fixture `async_client_with_s3` that combines db/redis/s3 mocks
+  - Pattern: Use `files={"file": ("name.txt", content, "content/type")}` for multipart uploads in httpx
+  - Pattern: Create minimal valid file content for tests (PDF, DOCX as zip, TXT)
+  - Pattern: Test file isolation between projects - ensure each project only sees its own files
+  - Pattern: Test cross-project access denied - file belonging to project A should 404 when accessed via project B
+  - Gotcha: boto3 was missing from pyproject.toml dependencies - added `boto3>=1.34.0`
 ---
 
