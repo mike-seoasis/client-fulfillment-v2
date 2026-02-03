@@ -17,6 +17,7 @@ after each iteration and it's included in prompts for context.
 - **API client**: Use `apiClient` from `frontend/src/lib/api.ts` for all API calls. Base URL from `NEXT_PUBLIC_API_URL` env var.
 - **TanStack Query hooks**: Create hooks in `frontend/src/hooks/`. Use query key factories (`resourceKeys.all`, `resourceKeys.detail(id)`) for cache consistency. For mutations: invalidate list queries, use `setQueryData` for optimistic updates.
 - **API tests**: Use pytest-asyncio with `async_client` fixture from conftest.py. Tests use httpx AsyncClient with ASGI transport. Validation errors return `{"error": ..., "code": ..., "request_id": ...}` format (not `detail`).
+- **UI components**: Store in `frontend/src/components/ui/`. Use `forwardRef` for form elements. Export types and components from `index.ts`. Use warm palette classes: `gold-*` for primary, `cream-*` for secondary, `coral-*` for danger, `warm-gray-*` for text.
 
 ---
 
@@ -165,5 +166,21 @@ after each iteration and it's included in prompts for context.
   - App uses custom error format `{"error": ..., "code": ..., "request_id": ...}` for validation errors, not FastAPI default `detail`
   - `ProjectListResponse` schema requires `limit >= 1`, so router must ensure minimum of 1 even when returning empty list
   - Use `uuid.uuid4()` for generating non-existent IDs in 404 tests
+---
+
+## 2026-02-03 - S1-010
+- Created base UI components in `frontend/src/components/ui/`:
+  - `Button.tsx` - Button with variants (primary, secondary, danger, ghost) and sizes (sm, md, lg)
+  - `Input.tsx` - Input with label, error state, and ARIA attributes
+  - `Card.tsx` - Card with hover state, onClick support, and keyboard accessibility
+  - `EmptyState.tsx` - Empty state component with icon, title, description, and action slots
+  - `index.ts` - Barrel export for all components and types
+- All components use warm palette colors and forwardRef pattern for form elements
+- Files changed: `frontend/src/components/ui/Button.tsx`, `frontend/src/components/ui/Input.tsx`, `frontend/src/components/ui/Card.tsx`, `frontend/src/components/ui/EmptyState.tsx`, `frontend/src/components/ui/index.ts`
+- **Learnings:**
+  - Use `forwardRef` for Button and Input to allow ref forwarding from form libraries
+  - Clickable Cards need `role="button"`, `tabIndex={0}`, and keyboard event handlers for accessibility
+  - EmptyState uses ReactNode for icon/action slots to maximize flexibility
+  - Barrel exports (`index.ts`) allow clean imports: `import { Button, Card } from '@/components/ui'`
 ---
 
