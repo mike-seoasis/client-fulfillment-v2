@@ -264,8 +264,9 @@
         "Wire generation to FastAPI BackgroundTasks"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Use BackgroundTasks for async generation. Frontend will poll status endpoint."
+      "passes": true,
+      "notes": "Use BackgroundTasks for async generation. Frontend will poll status endpoint.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S2-017",
@@ -666,6 +667,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T22:19:13.329Z"
+    "updatedAt": "2026-02-03T22:21:48.365Z"
   }
 }

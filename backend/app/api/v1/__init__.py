@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from app.api.v1.brand_config import router as brand_config_router
 from app.api.v1.files import router as files_router
 from app.api.v1.projects import router as projects_router
 
@@ -10,3 +11,4 @@ router = APIRouter(prefix="/api/v1")
 # Include domain routers
 router.include_router(projects_router)
 router.include_router(files_router)
+router.include_router(brand_config_router)

@@ -228,3 +228,20 @@ after each iteration and it's included in prompts for context.
   - Pattern: Mark generation complete even with warnings, but fail if required sections (brand_foundation) are missing
 ---
 
+## 2026-02-03 - S2-016
+- **What was implemented:** API endpoints for triggering and monitoring brand config generation
+- **Files changed:**
+  - `backend/app/api/v1/brand_config.py` (created - router with POST /generate and GET /status endpoints)
+  - `backend/app/schemas/brand_config_generation.py` (created - GenerationStatusResponse schema)
+  - `backend/app/api/v1/__init__.py` (registered brand_config router)
+  - `backend/app/schemas/__init__.py` (added GenerationStatusResponse export)
+- **Learnings:**
+  - Pattern: Use `status_code=status.HTTP_202_ACCEPTED` for async operations that start background tasks
+  - Pattern: Inject FastAPI `BackgroundTasks` for long-running operations that should return immediately
+  - Pattern: Background task receives all dependencies (db, clients) as parameters captured from endpoint scope
+  - Pattern: Response schemas for API should be separate from service dataclasses - convert in endpoint
+  - Pattern: Routers nested under projects use prefix like `/projects/{project_id}/brand-config`
+  - Pattern: Document expected HTTP error responses using FastAPI `responses` parameter in decorator
+  - Pattern: Alphabetical import order in `__init__.py` files to pass ruff linting (brand_config before categorize)
+---
+
