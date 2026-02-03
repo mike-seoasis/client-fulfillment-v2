@@ -214,8 +214,9 @@
         "Combine results into research_context dict"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "If Perplexity fails, continue with crawl + docs. If crawl fails, continue with Perplexity + docs. Log warnings for failures."
+      "passes": true,
+      "notes": "If Perplexity fails, continue with crawl + docs. If crawl fails, continue with Perplexity + docs. Log warnings for failures.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S2-014",
@@ -663,6 +664,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T22:11:21.248Z"
+    "updatedAt": "2026-02-03T22:14:14.207Z"
   }
 }

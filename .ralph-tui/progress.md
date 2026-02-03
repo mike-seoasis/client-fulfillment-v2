@@ -186,3 +186,18 @@ after each iteration and it's included in prompts for context.
   - Pattern: Include timestamps (started_at, completed_at) in status objects for debugging and UX
 ---
 
+## 2026-02-03 - S2-013
+- **What was implemented:** Research phase for brand config generation - parallel data gathering from 3 sources
+- **Files changed:**
+  - `backend/app/services/brand_config.py` (added ResearchContext dataclass and _research_phase method)
+  - `backend/app/services/__init__.py` (added ResearchContext export)
+- **Learnings:**
+  - Pattern: Use `asyncio.gather()` for parallel execution of independent async tasks
+  - Pattern: Define inner async functions when you need closure access to outer variables (like `errors` list)
+  - Pattern: Check `client.available` property before attempting operations that require external services
+  - Pattern: Handle both "task returned None" (service unavailable) and "result.success == False" (API error) cases
+  - Pattern: Use `result.fetchall()` with list comprehension for retrieving multiple column values from SQLAlchemy
+  - Pattern: Return a dataclass with `has_any_data()` helper to check if any research source succeeded
+  - Pattern: Log warnings (not errors) for graceful degradation - research phase continues with partial data
+---
+
