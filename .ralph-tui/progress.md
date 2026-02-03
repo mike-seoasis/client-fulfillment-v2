@@ -188,3 +188,24 @@ after each iteration and it's included in prompts for context.
   - Border-radius extend values override defaults for more pronounced softness
 ---
 
+## 2026-02-02 - P0-013
+- What was implemented: Created docker-compose.yml for local development
+- Files changed:
+  - Created `docker-compose.yml` at project root
+- **Services configured:**
+  - `db`: PostgreSQL 15-alpine with pg_isready health check
+  - `redis`: Redis 7-alpine with redis-cli ping health check
+  - `backend`: Builds from ./backend/Dockerfile, depends on healthy db and redis
+- **Environment variables:**
+  - DATABASE_URL: postgresql://postgres:postgres@db:5432/onboarding
+  - REDIS_URL: redis://redis:6379/0
+- **Volumes:**
+  - `postgres_data` for PostgreSQL persistence
+  - `redis_data` for Redis persistence
+  - `./backend/app:/app/app` mount for hot reload
+- **Learnings:**
+  - Use `condition: service_healthy` in depends_on for proper startup ordering
+  - Redis data path in alpine is `/var/lib/redis/data`
+  - Container names (onboarding-db, onboarding-redis, onboarding-backend) help with log identification
+---
+

@@ -222,8 +222,9 @@
         "'docker-compose config' validates without errors"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Use postgres:15-alpine and redis:7-alpine images. Backend mounts app/ for hot reload."
+      "passes": true,
+      "notes": "Use postgres:15-alpine and redis:7-alpine images. Backend mounts app/ for hot reload.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "P0-014",
@@ -289,7 +290,7 @@
   ],
   "metadata": {
     "phase": 0,
-    "updatedAt": "2026-02-03T02:04:28.261Z",
+    "updatedAt": "2026-02-03T02:05:27.013Z",
     "openspecChange": "phase-0-foundation-setup"
   }
 }
