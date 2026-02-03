@@ -188,8 +188,9 @@
         "'npm run build' still succeeds after all installs"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Run: npm install @tanstack/react-query@5 zustand axios && npm install -D vitest @vitejs/plugin-react @playwright/test"
+      "passes": true,
+      "notes": "Run: npm install @tanstack/react-query@5 zustand axios && npm install -D vitest @vitejs/plugin-react @playwright/test",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "P0-012",
@@ -287,7 +288,7 @@
   ],
   "metadata": {
     "phase": 0,
-    "updatedAt": "2026-02-03T02:01:37.849Z",
+    "updatedAt": "2026-02-03T02:03:24.717Z",
     "openspecChange": "phase-0-foundation-setup"
   }
 }

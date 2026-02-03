@@ -152,3 +152,22 @@ after each iteration and it's included in prompts for context.
   - The `@/*` path alias is configured by default (maps to `./src/*`)
 ---
 
+## 2026-02-02 - P0-011
+- What was implemented: Configured Next.js frontend dependencies and testing tools
+- Files changed:
+  - Modified `frontend/package.json` - added dependencies and test scripts
+  - Created `frontend/vitest.config.ts` - Vitest configuration with React plugin and jsdom
+  - Created `frontend/playwright.config.ts` - Playwright E2E configuration
+  - Created `frontend/src/test/setup.ts` - Test setup with jest-dom matchers
+  - Created `frontend/e2e/` - Directory for Playwright E2E tests
+- **Dependencies installed:**
+  - Production: @tanstack/react-query@5, zustand, axios
+  - Dev: vitest, @vitejs/plugin-react, @playwright/test, jsdom, @testing-library/jest-dom, @testing-library/react
+- **Learnings:**
+  - Vitest for Next.js: Use jsdom environment and @vitejs/plugin-react for JSX support
+  - The vitest.config.ts needs path alias matching tsconfig.json's `@/*` mapping
+  - Added @testing-library/jest-dom and @testing-library/react for React component testing
+  - Playwright webServer config can auto-start Next.js dev server during E2E tests
+  - npm audit shows vulnerabilities in Next.js dependency tree (common, not blocking)
+---
+
