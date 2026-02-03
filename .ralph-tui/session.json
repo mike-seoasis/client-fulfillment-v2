@@ -3,10 +3,10 @@
   "sessionId": "6943362d-2f3d-4b49-a343-77824578f920",
   "status": "running",
   "startedAt": "2026-02-03T21:49:10.158Z",
-  "updatedAt": "2026-02-03T22:49:27.581Z",
-  "currentIteration": 26,
+  "updatedAt": "2026-02-03T22:51:02.378Z",
+  "currentIteration": 27,
   "maxIterations": 10,
-  "tasksCompleted": 26,
+  "tasksCompleted": 27,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -173,8 +173,8 @@
       {
         "id": "S2-027",
         "title": "Handle generation completion",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "S2-028",
@@ -522,6 +522,16 @@
       "durationMs": 165433,
       "startedAt": "2026-02-03T22:45:20.391Z",
       "endedAt": "2026-02-03T22:48:05.824Z"
+    },
+    {
+      "iteration": 27,
+      "status": "completed",
+      "taskId": "S2-027",
+      "taskTitle": "Handle generation completion",
+      "taskCompleted": true,
+      "durationMs": 80653,
+      "startedAt": "2026-02-03T22:48:06.925Z",
+      "endedAt": "2026-02-03T22:49:27.578Z"
     }
   ],
   "skippedTaskIds": [],

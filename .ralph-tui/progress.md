@@ -390,3 +390,15 @@ after each iteration and it's included in prompts for context.
   - Pattern: Existing implementation already met most acceptance criteria - generation completion screen had checkmark, message, and navigation
 ---
 
+## 2026-02-03 - S2-028
+- **What was implemented:** useBrandConfig hook for brand config operations (fetch, update, regenerate)
+- **Files changed:**
+  - `frontend/src/hooks/useBrandConfig.ts` (created - useBrandConfig, useUpdateBrandConfig, useRegenerateBrandConfig, useBrandConfigWithStatus hooks)
+- **Learnings:**
+  - Pattern: Separate config fetch hooks from generation/status hooks for cleaner organization (useBrandConfig.ts vs useBrandConfigGeneration.ts)
+  - Pattern: Re-export related hooks for consumer convenience (`export { useBrandConfigStatus } from './useBrandConfigGeneration'`)
+  - Pattern: For mutations with optional input, use `RegenerateInput | undefined` not `RegenerateInput | void` to avoid TypeScript issues with void vs undefined
+  - Pattern: Combine query keys factory from related hook files to coordinate cache invalidation across concerns
+  - Pattern: Add `useBrandConfigWithStatus()` helper that combines query + mutations for components that need both
+---
+

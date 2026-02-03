@@ -464,8 +464,9 @@
         "useRegenerateBrandConfig() mutation for regeneration"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Status hook should support refetchInterval for polling during generation."
+      "passes": true,
+      "notes": "Status hook should support refetchInterval for polling during generation.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S2-029",
@@ -678,6 +679,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T22:49:27.579Z"
+    "updatedAt": "2026-02-03T22:51:02.375Z"
   }
 }
