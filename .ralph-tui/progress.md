@@ -10,7 +10,10 @@ after each iteration and it's included in prompts for context.
 - **CircuitBreaker**: Use shared `app.core.circuit_breaker` module. Pass `name` parameter for logging context. Config via `CircuitBreakerConfig(failure_threshold, recovery_timeout)`.
 - **uv package manager**: uv installed at `~/.local/bin/uv`. Run `uv lock` in backend/ to regenerate lockfile. Use `uv run pytest` or `uv run python` to execute commands with dependencies.
 - **uv in Docker**: Use `COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv` to get uv binary. Install deps with `uv sync --frozen --no-dev --no-install-project`.
-- **uv in GitHub Actions**: Install with `curl -LsSf https://astral.sh/uv/install.sh | sh`, then use `uv sync --frozen` and `uv run <command>`.
+- **uv in GitHub Actions**: Use `astral-sh/setup-uv@v7` action, then `uv python install $VERSION` and `uv sync --frozen`. Dev deps require `[dependency-groups]` not `[project.optional-dependencies]`.
+- **uv dev dependencies**: Use `[dependency-groups] dev = [...]` in pyproject.toml (NOT `[project.optional-dependencies]`). The old extras syntax doesn't get installed by `uv sync --frozen`.
+- **git-filter-repo for secrets**: Use `git filter-repo --path <path> --invert-paths --force` to remove sensitive files from history. Re-add remote after as it gets removed.
+- **gitignore iteration logs**: Add `.ralph-tui/iterations/` to gitignore - these logs can capture env var output which may contain secrets.
 
 ---
 
@@ -265,5 +268,28 @@ after each iteration and it's included in prompts for context.
 - **Learnings:**
   - Status tracking task - always update plan documents after completing a phase to maintain accurate project state
   - Session log provides a chronological record useful for context when resuming work
+---
+
+## 2026-02-02 - P0-099
+- What was implemented: Committed all Phase 0 changes and verified CI passes
+- Files changed:
+  - Modified `.gitignore` - added `.ralph-tui/iterations/` to prevent secret leakage
+  - Modified `.github/workflows/ci.yml` - fixed uv setup (use setup-uv@v7, explicit python install)
+  - Modified `backend/pyproject.toml` - migrated from `[project.optional-dependencies]` to `[dependency-groups]` for dev deps
+  - Modified `backend/Dockerfile` - updated to python:3.12-slim
+  - Regenerated `backend/uv.lock` for Python 3.12
+  - Created `frontend/src/test/placeholder.test.ts` - placeholder test for Vitest
+- **Key fixes:**
+  - Removed `.ralph-tui/iterations/` from git history (contained Perplexity API key in log output)
+  - CI was failing because `[project.optional-dependencies] dev` deps aren't installed by `uv sync`
+  - Solution: Use `[dependency-groups] dev` which uv includes by default
+- **Learnings:**
+  - GitHub push protection blocks pushes with detected secrets; use git-filter-repo to clean history
+  - The curl-based uv install puts binary in `~/.local/bin` which isn't in PATH on GitHub runners
+  - `astral-sh/setup-uv@v7` properly configures PATH and environment
+  - `setup-uv`'s `python-version` input only sets UV_PYTHON, doesn't install Python
+  - Need explicit `uv python install $VERSION` step before `uv sync`
+  - uv's `[dependency-groups]` is the modern way for dev deps; `[project.optional-dependencies]` requires `uv sync --extra dev`
+  - Python 3.12 is used throughout (pyproject.toml, CI, Dockerfile, ruff target, mypy version)
 ---
 

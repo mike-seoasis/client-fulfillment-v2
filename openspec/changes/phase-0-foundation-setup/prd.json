@@ -287,13 +287,14 @@
         "CI pipeline passes on GitHub"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Do not proceed to Phase 1 until CI passes. This is the foundation for all future work."
+      "passes": true,
+      "notes": "Do not proceed to Phase 1 until CI passes. This is the foundation for all future work.",
+      "completionNotes": "Completed by agent"
     }
   ],
   "metadata": {
     "phase": 0,
-    "updatedAt": "2026-02-03T02:11:04.940Z",
+    "updatedAt": "2026-02-03T02:49:16.872Z",
     "openspecChange": "phase-0-foundation-setup"
   }
 }
