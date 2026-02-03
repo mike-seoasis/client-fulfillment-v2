@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import DateTime, String, text
+from sqlalchemy import DateTime, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -89,6 +89,12 @@ class Project(Base):
         default=dict,
         server_default=text("'{}'::jsonb"),
         doc="State of the brand configuration wizard (current step, form data, research results)",
+    )
+
+    additional_info: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        doc="Additional notes or information about the project provided during creation",
     )
 
     created_at: Mapped[datetime] = mapped_column(

@@ -38,3 +38,14 @@ after each iteration and it's included in prompts for context.
   - Verified: Both upgrade and downgrade paths work correctly
 ---
 
+## 2026-02-03 - S2-003
+- **What was implemented:** Added additional_info column to Project model for user notes during project creation
+- **Files changed:**
+  - `backend/app/models/project.py` (added additional_info field with Text type, nullable)
+  - `backend/alembic/versions/0018_add_additional_info_to_projects.py` (created)
+- **Learnings:**
+  - Pattern: Use `Text` (not `String`) for unbounded text fields like notes/descriptions
+  - Pattern: Simple column additions don't need indexes unless they'll be queried directly
+  - Verified: Both upgrade and downgrade paths work correctly
+---
+
