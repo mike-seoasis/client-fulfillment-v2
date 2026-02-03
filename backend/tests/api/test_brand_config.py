@@ -1,9 +1,11 @@
 """Tests for Brand Config API endpoints.
 
 Tests all brand config management operations on the /api/v1/projects/{project_id}/brand-config endpoints:
-- Get brand config
-- Update brand config sections
-- Regenerate brand config sections
+- Start generation (POST /generate)
+- Get generation status (GET /status)
+- Get brand config (GET)
+- Update brand config sections (PATCH)
+- Regenerate brand config sections (POST /regenerate)
 """
 
 import uuid
@@ -203,6 +205,244 @@ def sample_v2_schema() -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Test Classes
 # ---------------------------------------------------------------------------
+
+
+class TestStartGeneration:
+    """Tests for POST /api/v1/projects/{project_id}/brand-config/generate"""
+
+    async def test_start_generation_returns_202(
+        self,
+        async_client_with_mocks: AsyncClient,
+        db_session,
+    ) -> None:
+        """Test starting brand config generation returns 202 Accepted."""
+        # Create project
+        project = Project(
+            id=str(uuid.uuid4()),
+            name="Test Project",
+            site_url="https://test.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+
+        # Start generation
+        response = await async_client_with_mocks.post(
+            f"/api/v1/projects/{project.id}/brand-config/generate"
+        )
+
+        assert response.status_code == 202
+        data = response.json()
+        assert data["status"] == "generating"
+        assert data["current_step"] == "brand_foundation"
+        assert data["steps_completed"] == 0
+        assert data["steps_total"] == 10
+        assert data["started_at"] is not None
+        assert data["completed_at"] is None
+        assert data["error"] is None
+
+    async def test_start_generation_in_progress_returns_409(
+        self,
+        async_client_with_mocks: AsyncClient,
+        db_session,
+    ) -> None:
+        """Test starting generation while already in progress returns 409 Conflict."""
+        # Create project with generation already in progress
+        project = Project(
+            id=str(uuid.uuid4()),
+            name="Test Project",
+            site_url="https://test.com",
+            brand_wizard_state={
+                "generation": {
+                    "status": "generating",
+                    "current_step": "target_audience",
+                    "steps_completed": 1,
+                    "steps_total": 10,
+                    "started_at": datetime.now(UTC).isoformat(),
+                }
+            },
+        )
+        db_session.add(project)
+        await db_session.commit()
+
+        # Try to start generation again
+        response = await async_client_with_mocks.post(
+            f"/api/v1/projects/{project.id}/brand-config/generate"
+        )
+
+        assert response.status_code == 409
+        assert "already in progress" in response.json()["detail"]
+
+    async def test_start_generation_project_not_found(
+        self,
+        async_client_with_mocks: AsyncClient,
+    ) -> None:
+        """Test starting generation for nonexistent project returns 404."""
+        fake_id = str(uuid.uuid4())
+        response = await async_client_with_mocks.post(
+            f"/api/v1/projects/{fake_id}/brand-config/generate"
+        )
+
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"]
+
+
+class TestGetGenerationStatus:
+    """Tests for GET /api/v1/projects/{project_id}/brand-config/status"""
+
+    async def test_get_status_pending(
+        self,
+        async_client: AsyncClient,
+        db_session,
+    ) -> None:
+        """Test getting status when generation hasn't started returns pending."""
+        # Create project with no generation state
+        project = Project(
+            id=str(uuid.uuid4()),
+            name="Test Project",
+            site_url="https://test.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+
+        response = await async_client.get(
+            f"/api/v1/projects/{project.id}/brand-config/status"
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "pending"
+        assert data["steps_completed"] == 0
+        assert data["steps_total"] == 0
+
+    async def test_get_status_during_generation(
+        self,
+        async_client: AsyncClient,
+        db_session,
+    ) -> None:
+        """Test getting status during active generation."""
+        # Create project with generation in progress
+        started_at = datetime.now(UTC).isoformat()
+        project = Project(
+            id=str(uuid.uuid4()),
+            name="Test Project",
+            site_url="https://test.com",
+            brand_wizard_state={
+                "generation": {
+                    "status": "generating",
+                    "current_step": "voice_dimensions",
+                    "steps_completed": 2,
+                    "steps_total": 10,
+                    "started_at": started_at,
+                    "completed_at": None,
+                    "error": None,
+                }
+            },
+        )
+        db_session.add(project)
+        await db_session.commit()
+
+        response = await async_client.get(
+            f"/api/v1/projects/{project.id}/brand-config/status"
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "generating"
+        assert data["current_step"] == "voice_dimensions"
+        assert data["steps_completed"] == 2
+        assert data["steps_total"] == 10
+        assert data["started_at"] == started_at
+        assert data["completed_at"] is None
+        assert data["error"] is None
+
+    async def test_get_status_complete(
+        self,
+        async_client: AsyncClient,
+        db_session,
+    ) -> None:
+        """Test getting status after generation completes."""
+        started_at = datetime.now(UTC).isoformat()
+        completed_at = datetime.now(UTC).isoformat()
+        project = Project(
+            id=str(uuid.uuid4()),
+            name="Test Project",
+            site_url="https://test.com",
+            brand_wizard_state={
+                "generation": {
+                    "status": "complete",
+                    "current_step": None,
+                    "steps_completed": 10,
+                    "steps_total": 10,
+                    "started_at": started_at,
+                    "completed_at": completed_at,
+                    "error": None,
+                }
+            },
+        )
+        db_session.add(project)
+        await db_session.commit()
+
+        response = await async_client.get(
+            f"/api/v1/projects/{project.id}/brand-config/status"
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "complete"
+        assert data["current_step"] is None
+        assert data["steps_completed"] == 10
+        assert data["steps_total"] == 10
+        assert data["completed_at"] == completed_at
+        assert data["error"] is None
+
+    async def test_get_status_failed(
+        self,
+        async_client: AsyncClient,
+        db_session,
+    ) -> None:
+        """Test getting status after generation fails."""
+        started_at = datetime.now(UTC).isoformat()
+        completed_at = datetime.now(UTC).isoformat()
+        project = Project(
+            id=str(uuid.uuid4()),
+            name="Test Project",
+            site_url="https://test.com",
+            brand_wizard_state={
+                "generation": {
+                    "status": "failed",
+                    "current_step": "brand_foundation",
+                    "steps_completed": 0,
+                    "steps_total": 10,
+                    "started_at": started_at,
+                    "completed_at": completed_at,
+                    "error": "No research data available - all sources failed",
+                }
+            },
+        )
+        db_session.add(project)
+        await db_session.commit()
+
+        response = await async_client.get(
+            f"/api/v1/projects/{project.id}/brand-config/status"
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "failed"
+        assert data["error"] == "No research data available - all sources failed"
+
+    async def test_get_status_project_not_found(
+        self,
+        async_client: AsyncClient,
+    ) -> None:
+        """Test getting status for nonexistent project returns 404."""
+        fake_id = str(uuid.uuid4())
+        response = await async_client.get(
+            f"/api/v1/projects/{fake_id}/brand-config/status"
+        )
+
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"]
 
 
 class TestGetBrandConfig:

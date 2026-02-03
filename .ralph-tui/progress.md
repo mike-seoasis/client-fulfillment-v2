@@ -273,3 +273,16 @@ after each iteration and it's included in prompts for context.
   - Pattern: Service methods raise HTTPException for client-facing errors (404 if brand config doesn't exist yet)
 ---
 
+## 2026-02-03 - S2-019
+- **What was implemented:** Added API tests for brand config generation (start + status) endpoints
+- **Files changed:**
+  - `backend/tests/api/test_brand_config.py` (added TestStartGeneration and TestGetGenerationStatus test classes, 8 new tests)
+- **Learnings:**
+  - Pattern: Test 409 Conflict by pre-setting `brand_wizard_state.generation.status = "generating"` on the Project model
+  - Pattern: Test generation status transitions (pending, generating, complete, failed) by setting appropriate JSONB state on fixture projects
+  - Pattern: Use `async_client_with_mocks` fixture for tests that trigger background tasks (mocks integration clients)
+  - Pattern: Use `async_client` fixture for tests that just read state (no external services needed)
+  - Pattern: Tests should cover all status states: pending (no state), generating, complete, failed
+  - Pattern: Group tests by endpoint into separate test classes for clarity
+---
+

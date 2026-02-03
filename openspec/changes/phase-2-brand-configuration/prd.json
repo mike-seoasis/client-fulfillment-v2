@@ -315,8 +315,9 @@
         "Test regenerate specific section"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Mock ClaudeClient and PerplexityClient for tests. Test status transitions."
+      "passes": true,
+      "notes": "Mock ClaudeClient and PerplexityClient for tests. Test status transitions.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S2-020",
@@ -669,6 +670,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T22:27:47.829Z"
+    "updatedAt": "2026-02-03T22:29:30.100Z"
   }
 }
