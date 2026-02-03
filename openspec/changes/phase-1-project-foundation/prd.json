@@ -30,8 +30,9 @@
         "Verify schema with: alembic current"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Run from backend directory with venv activated."
+      "passes": true,
+      "notes": "Run from backend directory with venv activated.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S1-003",
@@ -342,6 +343,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T17:20:31.645Z"
+    "updatedAt": "2026-02-03T17:21:55.932Z"
   }
 }
