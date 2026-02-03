@@ -217,3 +217,20 @@ after each iteration and it's included in prompts for context.
   - `'use client'` required for components using `useRouter` from next/navigation
 ---
 
+## 2026-02-03 - S1-013
+- Built Dashboard page at `frontend/src/app/page.tsx` replacing Next.js boilerplate
+- Dashboard features:
+  - Page title "Your Projects" with "+ New Project" button linking to /projects/new
+  - Responsive grid of ProjectCard components (1 col mobile, 2 col tablet, 3 col desktop)
+  - Loading skeleton with animate-pulse while fetching projects
+  - EmptyState with folder icon when no projects exist
+  - Error state with coral-themed alert for fetch failures
+  - Projects sorted by `updated_at` descending (most recent first)
+- Files changed: `frontend/src/app/page.tsx`
+- **Learnings:**
+  - `'use client'` required for pages using hooks like `useProjects()` from TanStack Query
+  - Use `Link` from `next/link` for client-side navigation without full page reload
+  - Sort data in component (not API) when display order differs from API response
+  - Skeleton loaders should mirror the layout/structure they replace for smooth transition
+---
+
