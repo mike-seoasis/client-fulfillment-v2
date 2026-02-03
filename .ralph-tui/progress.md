@@ -268,3 +268,23 @@ after each iteration and it's included in prompts for context.
   - For pages without a toast system, inline error messages using the same styling as error states (coral-50 bg, coral-200 border, coral-700 text) maintain consistency
 ---
 
+## 2026-02-03 - S1-016
+- Created Project Detail page at `frontend/src/app/projects/[id]/page.tsx`
+- Page features:
+  - Back link "← All Projects" returns to dashboard
+  - Header with project name and clickable site_url (opens in new tab)
+  - "Edit Brand" button (disabled) with tooltip "Coming in Phase 2"
+  - Onboarding section with clipboard icon, description, and disabled "Continue" button
+  - New Content section with plus icon, description, and disabled "+ New Cluster" button
+  - Loading skeleton state while fetching project data
+  - 404 state with styled error icon and "Back to Dashboard" button for invalid IDs
+- Uses `useProject(id)` hook for data fetching via TanStack Query
+- Files changed: `frontend/src/app/projects/[id]/page.tsx`
+- **Learnings:**
+  - Next.js App Router dynamic routes: `[id]` folder with `page.tsx` maps to `/projects/:id`
+  - Use `useParams()` from `next/navigation` to access dynamic route params in client components
+  - Disabled buttons accept `disabled` prop - they get opacity and cursor styling automatically
+  - CSS-only tooltips: use `group-hover:opacity-100` with `pointer-events-none` to show on parent hover
+  - For 404-like states in client components, handle error state from hook rather than calling Next.js `notFound()`
+---
+
