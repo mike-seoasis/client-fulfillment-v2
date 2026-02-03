@@ -3,10 +3,10 @@
   "sessionId": "ff2afc26-264e-43f3-8436-38f4f3abcb6b",
   "status": "running",
   "startedAt": "2026-02-03T18:16:03.433Z",
-  "updatedAt": "2026-02-03T18:21:13.622Z",
-  "currentIteration": 0,
+  "updatedAt": "2026-02-03T18:22:19.052Z",
+  "currentIteration": 1,
   "maxIterations": 10,
-  "tasksCompleted": 0,
+  "tasksCompleted": 1,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -125,8 +125,8 @@
       {
         "id": "S1-019",
         "title": "Integration testing and polish",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "S1-098",
@@ -142,7 +142,18 @@
       }
     ]
   },
-  "iterations": [],
+  "iterations": [
+    {
+      "iteration": 1,
+      "status": "completed",
+      "taskId": "S1-019",
+      "taskTitle": "Integration testing and polish",
+      "taskCompleted": true,
+      "durationMs": 305949,
+      "startedAt": "2026-02-03T18:16:07.670Z",
+      "endedAt": "2026-02-03T18:21:13.619Z"
+    }
+  ],
   "skippedTaskIds": [],
   "cwd": "/Users/mike/Projects/client-onboarding-v2",
   "activeTaskIds": [],
