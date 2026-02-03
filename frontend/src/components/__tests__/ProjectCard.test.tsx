@@ -18,8 +18,12 @@ const mockProject: Project = {
   name: 'Test Project',
   site_url: 'https://example.com',
   client_id: null,
+  additional_info: null,
   status: 'active',
   phase_status: {},
+  brand_config_status: 'pending',
+  has_brand_config: false,
+  uploaded_files_count: 0,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-15T10:30:00Z',
 };

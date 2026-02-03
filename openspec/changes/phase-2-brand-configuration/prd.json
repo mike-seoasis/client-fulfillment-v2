@@ -567,8 +567,9 @@
         "If generation in progress, show progress indicator"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Reference WIREFRAMES.md section 4 for project view layout."
+      "passes": true,
+      "notes": "Reference WIREFRAMES.md section 4 for project view layout.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S2-035",
@@ -684,6 +685,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T23:05:05.985Z"
+    "updatedAt": "2026-02-03T23:07:29.921Z"
   }
 }

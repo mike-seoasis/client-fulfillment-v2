@@ -30,8 +30,12 @@ export interface Project {
   name: string;
   site_url: string;
   client_id: string | null;
+  additional_info: string | null;
   status: string;
   phase_status: Record<string, PhaseStatusEntry | unknown>;
+  brand_config_status: 'pending' | 'generating' | 'complete' | 'failed';
+  has_brand_config: boolean;
+  uploaded_files_count: number;
   created_at: string;
   updated_at: string;
 }

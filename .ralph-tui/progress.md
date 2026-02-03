@@ -485,3 +485,18 @@ after each iteration and it's included in prompts for context.
   - Pattern: Hide both Regenerate and Edit buttons when in edit mode to avoid conflicting actions
 ---
 
+## 2026-02-03 - S2-034
+- **What was implemented:** Updated project detail page with brand config status, Edit Brand button, uploaded files count, and generation controls
+- **Files changed:**
+  - `frontend/src/hooks/use-projects.ts` (added additional_info, brand_config_status, has_brand_config, uploaded_files_count to Project interface)
+  - `frontend/src/app/projects/[id]/page.tsx` (added BrandConfigStatusBadge component, integrated generation hooks, updated header with status badge, Edit Brand button, files count)
+  - `frontend/src/components/__tests__/ProjectCard.test.tsx` (updated mockProject to include new required fields)
+- **Learnings:**
+  - Pattern: Use a BrandConfigStatusBadge component with switch statement for different status states (pending, generating, complete, failed)
+  - Pattern: Combine project data `brand_config_status` with real-time `generation.isGenerating` for accurate status display
+  - Pattern: Show "Generate Brand" button when no brand config exists, "Edit Brand" link when complete
+  - Pattern: SpinnerIcon component with `animate-spin` class for loading indicators
+  - Pattern: Toast message state should be separate from toast visibility to allow dynamic messages
+  - Pattern: When adding fields to shared interfaces, update all test mocks that use that interface
+---
+

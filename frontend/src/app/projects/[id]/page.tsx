@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useProject, useDeleteProject } from '@/hooks/use-projects';
+import { useStartBrandConfigGeneration, useBrandConfigGeneration } from '@/hooks/useBrandConfigGeneration';
 import { Button, Toast } from '@/components/ui';
 
 function LoadingSkeleton() {
@@ -99,6 +100,97 @@ function PlusIcon({ className }: { className?: string }) {
   );
 }
 
+function FileIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+    </svg>
+  );
+}
+
+function SpinnerIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={`animate-spin ${className}`}
+      viewBox="0 0 24 24"
+      fill="none"
+    >
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="4"
+      />
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+      />
+    </svg>
+  );
+}
+
+function BrandConfigStatusBadge({
+  status,
+  progress
+}: {
+  status: 'pending' | 'generating' | 'complete' | 'failed';
+  progress?: number;
+}) {
+  switch (status) {
+    case 'complete':
+      return (
+        <span className="inline-flex items-center gap-1 text-xs bg-palm-50 text-palm-700 px-2 py-1 rounded-sm border border-palm-200">
+          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          Brand Ready
+        </span>
+      );
+    case 'generating':
+      return (
+        <span className="inline-flex items-center gap-1 text-xs bg-lagoon-50 text-lagoon-700 px-2 py-1 rounded-sm border border-lagoon-200">
+          <SpinnerIcon className="w-3 h-3" />
+          Generating{progress !== undefined ? ` ${progress}%` : '...'}
+        </span>
+      );
+    case 'failed':
+      return (
+        <span className="inline-flex items-center gap-1 text-xs bg-coral-50 text-coral-700 px-2 py-1 rounded-sm border border-coral-200">
+          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="15" y1="9" x2="9" y2="15" />
+            <line x1="9" y1="9" x2="15" y2="15" />
+          </svg>
+          Generation Failed
+        </span>
+      );
+    case 'pending':
+    default:
+      return (
+        <span className="inline-flex items-center gap-1 text-xs bg-cream-100 text-warm-gray-600 px-2 py-1 rounded-sm border border-cream-300">
+          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          No Brand Config
+        </span>
+      );
+  }
+}
+
 export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -106,10 +198,13 @@ export default function ProjectDetailPage() {
 
   const { data: project, isLoading, error } = useProject(projectId);
   const deleteProject = useDeleteProject();
+  const generation = useBrandConfigGeneration(projectId);
+  const startGeneration = useStartBrandConfigGeneration(projectId);
 
   // Two-step delete confirmation
   const [isConfirming, setIsConfirming] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
   const confirmTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const deleteButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -145,6 +240,7 @@ export default function ProjectDetailPage() {
     // Second click: execute deletion
     try {
       await deleteProject.mutateAsync(projectId);
+      setToastMessage('Project deleted');
       setShowToast(true);
       // Delay redirect slightly to show toast
       setTimeout(() => {
@@ -232,28 +328,66 @@ export default function ProjectDetailPage() {
       {/* Project header */}
       <div className="flex items-start justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-semibold text-warm-gray-900 mb-1">
-            {project.name}
-          </h1>
-          <a
-            href={project.site_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-warm-gray-500 hover:text-palm-600 text-sm"
-          >
-            {project.site_url}
-          </a>
+          <div className="flex items-center gap-3 mb-1">
+            <h1 className="text-2xl font-semibold text-warm-gray-900">
+              {project.name}
+            </h1>
+            <BrandConfigStatusBadge
+              status={generation.isGenerating ? 'generating' : project.brand_config_status}
+              progress={generation.isGenerating ? generation.progress : undefined}
+            />
+          </div>
+          <div className="flex items-center gap-3 text-sm">
+            <a
+              href={project.site_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-warm-gray-500 hover:text-palm-600"
+            >
+              {project.site_url}
+            </a>
+            {project.uploaded_files_count > 0 && (
+              <span className="inline-flex items-center gap-1 text-warm-gray-500">
+                <FileIcon className="w-3.5 h-3.5" />
+                {project.uploaded_files_count} {project.uploaded_files_count === 1 ? 'file' : 'files'}
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="relative group">
+          {/* Brand config action button */}
+          {project.has_brand_config ? (
+            <Link href={`/projects/${projectId}/brand-config`}>
+              <Button variant="secondary">Edit Brand</Button>
+            </Link>
+          ) : generation.isGenerating ? (
             <Button variant="secondary" disabled>
-              Edit Brand
+              <SpinnerIcon className="w-4 h-4 mr-2" />
+              Generating...
             </Button>
-            {/* Tooltip */}
-            <div className="absolute right-0 top-full mt-2 px-3 py-1.5 bg-warm-gray-900 text-white text-xs rounded-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-              Coming in Phase 2
-            </div>
-          </div>
+          ) : (
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                try {
+                  await startGeneration.mutateAsync();
+                } catch {
+                  setToastMessage('Failed to start brand generation');
+                  setShowToast(true);
+                }
+              }}
+              disabled={startGeneration.isPending}
+            >
+              {startGeneration.isPending ? (
+                <>
+                  <SpinnerIcon className="w-4 h-4 mr-2" />
+                  Starting...
+                </>
+              ) : (
+                'Generate Brand'
+              )}
+            </Button>
+          )}
           <Button
             ref={deleteButtonRef}
             variant="danger"
@@ -273,9 +407,12 @@ export default function ProjectDetailPage() {
       {/* Toast notification */}
       {showToast && (
         <Toast
-          message="Project deleted"
-          variant="success"
-          onClose={() => setShowToast(false)}
+          message={toastMessage || 'Project deleted'}
+          variant={toastMessage?.includes('Failed') ? 'error' : 'success'}
+          onClose={() => {
+            setShowToast(false);
+            setToastMessage('');
+          }}
         />
       )}
 
