@@ -126,3 +126,23 @@ after each iteration and it's included in prompts for context.
   - `setQueryData` for immediate cache updates; `invalidateQueries` for background refetch
 ---
 
+## 2026-02-03 - S1-009
+- Configured Tailwind with warm color palette matching brand guidelines
+- Custom colors in `frontend/tailwind.config.ts`:
+  - `gold` - Primary colors (amber/gold tones, 50-900 scale)
+  - `cream` - Warm light neutrals for backgrounds
+  - `coral` - Soft accent colors
+  - `warm-gray` - Warm neutral grays for text/borders
+- Updated `frontend/src/app/globals.css`:
+  - Set `--background` to cream-100 (#FDFBF7)
+  - Set `--foreground` to warm-gray-900 (#302D29)
+  - Removed dark mode (light mode only per design spec)
+- Created test page at `/design-test` to verify palette renders correctly
+- Added `borderRadius` customizations for softer, more premium look
+- Files changed: `frontend/tailwind.config.ts` (already existed), `frontend/src/app/globals.css`, `frontend/src/app/design-test/page.tsx`
+- **Learnings:**
+  - Tailwind custom colors use same 50-900 scale as built-in colors for consistency
+  - CSS custom properties in globals.css integrate with Tailwind via `var(--name)` syntax in theme config
+  - Remove dark mode media query when building light-mode-only interfaces
+---
+
