@@ -1,6 +1,6 @@
 # Multi-stage build for Railway deployment
 # Build stage - install dependencies
-FROM python:3.11-slim AS build
+FROM python:3.12-slim AS build
 
 WORKDIR /app
 
@@ -17,7 +17,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY app ./app
 
 # Production stage
-FROM python:3.11-slim AS production
+FROM python:3.12-slim AS production
 
 WORKDIR /app
 
