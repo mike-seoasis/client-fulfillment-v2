@@ -251,3 +251,20 @@ after each iteration and it's included in prompts for context.
   - Use `defaultValues` in `useForm` with nullish coalescing (`??`) for proper initial state
 ---
 
+## 2026-02-03 - S1-015
+- Created Create Project page at `frontend/src/app/projects/new/page.tsx`
+- Page features:
+  - Back link "← Back to Dashboard" at top with arrow icon
+  - Page title "Create New Project"
+  - Centered card with ProjectForm component
+  - Cancel button (ghost variant) returns to dashboard
+  - Error message display using coral error styling (matches dashboard pattern)
+  - On successful creation, redirects to `/projects/{id}`
+- Uses `useCreateProject` mutation hook with `mutateAsync` for promise handling
+- Files changed: `frontend/src/app/projects/new/page.tsx`
+- **Learnings:**
+  - Next.js App Router: pages in `app/route/page.tsx` auto-map to `/route` URLs
+  - Use `mutateAsync` instead of `mutate` when you need to await the result and handle success/error in the component
+  - For pages without a toast system, inline error messages using the same styling as error states (coral-50 bg, coral-200 border, coral-700 text) maintain consistency
+---
+
