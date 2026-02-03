@@ -24,7 +24,8 @@ class Project(Base):
     Attributes:
         id: UUID primary key
         name: Project name
-        client_id: Reference to the client (external ID for now)
+        client_id: Reference to the client (external ID for now, optional)
+        site_url: Client website URL (required)
         status: Overall project status (e.g., 'active', 'completed', 'on_hold')
         phase_status: JSONB field storing status of each onboarding phase
         created_at: Timestamp when project was created
@@ -55,8 +56,14 @@ class Project(Base):
         index=True,
     )
 
-    client_id: Mapped[str] = mapped_column(
+    client_id: Mapped[str | None] = mapped_column(
         String(255),
+        nullable=True,
+        index=True,
+    )
+
+    site_url: Mapped[str] = mapped_column(
+        String(2048),
         nullable=False,
         index=True,
     )

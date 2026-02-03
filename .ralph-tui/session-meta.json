@@ -1,15 +1,14 @@
 {
-  "id": "4201c84a-7fd7-45c0-b31e-ca21c7bff954",
-  "status": "completed",
-  "startedAt": "2026-02-03T01:41:27.548Z",
-  "updatedAt": "2026-02-03T12:27:46.889Z",
+  "id": "4d509812-be3c-487f-8e41-32621515d77b",
+  "status": "running",
+  "startedAt": "2026-02-03T17:19:44.816Z",
+  "updatedAt": "2026-02-03T17:19:51.597Z",
   "agentPlugin": "claude",
   "trackerPlugin": "json",
-  "prdPath": "openspec/changes/phase-0-foundation-setup/prd.json",
-  "currentIteration": 17,
+  "prdPath": "openspec/changes/phase-1-project-foundation/prd.json",
+  "currentIteration": 0,
   "maxIterations": 100,
   "totalTasks": 0,
-  "tasksCompleted": 17,
-  "cwd": "/Users/mike/Projects/client-onboarding-v2",
-  "endedAt": "2026-02-03T12:27:46.889Z"
+  "tasksCompleted": 0,
+  "cwd": "/Users/mike/Projects/client-onboarding-v2"
 }
