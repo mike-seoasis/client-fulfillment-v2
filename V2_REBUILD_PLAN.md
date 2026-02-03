@@ -8,16 +8,17 @@
 
 | Field | Value |
 |-------|-------|
-| **Phase** | 0 - Foundation |
+| **Phase** | 1 - Project Foundation |
 | **Slice** | Not started |
 | **Last Session** | 2026-02-02 |
-| **Next Action** | Start Phase 0: Set up Railway staging, CI/CD, tooling |
+| **Next Action** | Start Phase 1: Dashboard, create project, project detail view |
 
 ### Session Log
 
 | Date | Completed | Next Up |
 |------|-----------|---------|
 | 2026-02-02 | Planning complete (FEATURE_SPEC, WIREFRAMES, V2_REBUILD_PLAN, decisions doc) | Phase 0 setup |
+| 2026-02-02 | Phase 0 complete (branch setup, backend cleanup, CircuitBreaker refactor, uv migration, Docker, Next.js 14, Tailwind, CI/CD, verification) | Phase 1 |
 
 ---
 
@@ -124,16 +125,16 @@
 
 ## Rebuild Phases
 
-### Phase 0: Foundation (Do Once)
-- [ ] Create `v2-rebuild` branch
-- [ ] Set up Railway staging environment
-- [ ] Set up CI/CD pipeline (GitHub Actions)
-- [ ] Configure Ruff + mypy + pre-commit hooks
-- [ ] Set up uv and project structure
-- [ ] Copy over: models, schemas, config, database layer, logging
-- [ ] Extract CircuitBreaker to `core/circuit_breaker.py`
-- [ ] Copy integration clients with refactor
-- [ ] Verify everything runs and tests pass
+### Phase 0: Foundation (Do Once) ✅
+- [x] Create `v2-rebuild` branch
+- [x] Set up Railway staging environment
+- [x] Set up CI/CD pipeline (GitHub Actions)
+- [x] Configure Ruff + mypy + pre-commit hooks
+- [x] Set up uv and project structure
+- [x] Copy over: models, schemas, config, database layer, logging
+- [x] Extract CircuitBreaker to `core/circuit_breaker.py`
+- [x] Copy integration clients with refactor
+- [x] Verify everything runs and tests pass
 
 ### Phase 1: Project Foundation
 - [ ] Dashboard (list projects)
