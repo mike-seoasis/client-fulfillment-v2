@@ -35,10 +35,10 @@ jobs:
         run: uv sync --frozen
 
       - name: Run Ruff linter
-        run: uv run ruff check app --output-format=github
+        run: uv run ruff check app --config pyproject.toml --output-format=github
 
       - name: Run Ruff formatter check
-        run: uv run ruff format --check app
+        run: uv run ruff format --check app --config pyproject.toml
 
   backend-type-check:
     name: Backend Type Check
@@ -61,7 +61,7 @@ jobs:
         run: uv sync --frozen
 
       - name: Run MyPy
-        run: uv run mypy app --show-error-context
+        run: uv run mypy app --config-file pyproject.toml --show-error-context
 
   backend-test:
     name: Backend Test
