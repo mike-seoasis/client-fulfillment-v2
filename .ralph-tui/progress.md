@@ -548,3 +548,22 @@ after each iteration and it's included in prompts for context.
   - Gotcha: SQLite/SQLAlchemy JSONB mutation tracking can be tricky - use `expire_all()` or verify via other methods rather than relying on direct status reads after nested service calls
 ---
 
+## 2026-02-03 - S2-038
+- **What was implemented:** Frontend component tests for FileUpload, GenerationProgress, and BrandConfigView page
+- **Files changed:**
+  - `frontend/src/components/__tests__/FileUpload.test.tsx` (created - 40 tests)
+  - `frontend/src/components/__tests__/GenerationProgress.test.tsx` (created - 34 tests)
+  - `frontend/src/app/projects/[id]/brand-config/__tests__/page.test.tsx` (created - 24 tests)
+- **Learnings:**
+  - Pattern: jsdom doesn't support `DataTransfer` API - create mock DataTransfer-like objects with `files` and `items` properties for drag-drop testing
+  - Pattern: Mock TanStack Query hooks by returning objects matching hook return shape: `{ data, isLoading, error }` for queries, `{ mutate, isPending }` for mutations
+  - Pattern: Mock hooks at module level with `vi.mock('@/hooks/useX', () => ({ useX: () => mockUseX() }))` and set return values in each test
+  - Pattern: For mutations with callbacks (onSuccess, onError), implement mock as `vi.fn().mockImplementation((_, options) => { options?.onSuccess?.() })`
+  - Pattern: Use `screen.getAllByText()` when multiple elements may have the same text (e.g., file sizes "1 KB")
+  - Pattern: Test user interactions with `userEvent.setup()` for realistic event simulation (async, types character by character)
+  - Pattern: File validation tests should cover: size limits (exact boundary), MIME types, extension fallback, mixed valid/invalid batches
+  - Pattern: For component tests with complex state, group tests by feature: `rendering`, `interactions`, `validation`, `error states`
+  - Gotcha: Button names in tests must match exact text content (e.g., "Save Changes" not "Save")
+  - Gotcha: When testing drag-drop, use `fireEvent.drop()` with mock dataTransfer object, not `userEvent`
+---
+
