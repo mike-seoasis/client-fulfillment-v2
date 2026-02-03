@@ -216,3 +216,15 @@ after each iteration and it's included in prompts for context.
   - Pattern: Use max_tokens=2048 for comprehensive brand section generation
 ---
 
+## 2026-02-03 - S2-015
+- **What was implemented:** Store brand config result method - saves synthesis output to BrandConfig.v2_schema
+- **Files changed:**
+  - `backend/app/services/brand_config.py` (added `store_brand_config` method, added `get_source_file_ids` helper, imported BrandConfig model)
+- **Learnings:**
+  - Pattern: Use `dict.pop("_errors", None)` to extract and remove error metadata before storing
+  - Pattern: v2_schema structure includes metadata (version, generated_at, source_documents) alongside the 9 generated sections + ai_prompt_snippet
+  - Pattern: Use "create or update" pattern - check if record exists with `select().where()`, then update existing or create new
+  - Pattern: Store partial success with `_generation_warnings` key when some non-critical sections failed but core sections succeeded
+  - Pattern: Mark generation complete even with warnings, but fail if required sections (brand_foundation) are missing
+---
+

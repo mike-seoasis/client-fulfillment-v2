@@ -247,8 +247,9 @@
         "Set generation status to 'failed' with error on failure"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "BrandConfig already has FK to project. Use v2_schema JSONB for flexible storage."
+      "passes": true,
+      "notes": "BrandConfig already has FK to project. Use v2_schema JSONB for flexible storage.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S2-016",
@@ -665,6 +666,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T22:17:21.872Z"
+    "updatedAt": "2026-02-03T22:19:13.329Z"
   }
 }

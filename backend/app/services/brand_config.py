@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.integrations.claude import ClaudeClient, CompletionResult
 from app.integrations.crawl4ai import Crawl4AIClient, CrawlResult
 from app.integrations.perplexity import BrandResearchResult, PerplexityClient
+from app.models.brand_config import BrandConfig
 from app.models.project import Project
 from app.models.project_file import ProjectFile
 
@@ -1083,3 +1084,146 @@ class BrandConfigService:
             generated_sections["_errors"] = errors
 
         return generated_sections
+
+    @staticmethod
+    async def store_brand_config(
+        db: AsyncSession,
+        project_id: str,
+        generated_sections: dict[str, Any],
+        source_file_ids: list[str],
+    ) -> BrandConfig:
+        """Store the generated brand config in BrandConfig.v2_schema.
+
+        Creates a new BrandConfig record if one doesn't exist for the project,
+        or updates the existing one. Also updates generation status to complete
+        or failed based on the result.
+
+        Args:
+            db: AsyncSession for database operations.
+            project_id: UUID string of the project.
+            generated_sections: Dictionary with all generated sections from synthesis.
+            source_file_ids: List of ProjectFile IDs used as source documents.
+
+        Returns:
+            BrandConfig instance with stored v2_schema.
+
+        Raises:
+            HTTPException: 404 if project not found.
+        """
+        # Get project to verify existence and get brand name
+        project = await BrandConfigService._get_project(db, project_id)
+
+        # Check for errors in generated sections
+        errors = generated_sections.pop("_errors", None)
+        has_errors = bool(errors)
+
+        # Determine if we have minimum required sections for success
+        # We need at least brand_foundation for a valid config
+        required_sections = ["brand_foundation"]
+        has_required = all(
+            section in generated_sections for section in required_sections
+        )
+
+        if not has_required:
+            # Mark as failed - not enough data to create brand config
+            error_msg = "Failed to generate required sections: " + ", ".join(
+                s for s in required_sections if s not in generated_sections
+            )
+            if errors:
+                error_msg += f". Additional errors: {errors}"
+
+            await BrandConfigService.fail_generation(db, project_id, error_msg)
+
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=error_msg,
+            )
+
+        # Build v2_schema structure
+        v2_schema: dict[str, Any] = {
+            "version": "2.0",
+            "generated_at": datetime.now(UTC).isoformat(),
+            "source_documents": source_file_ids,
+        }
+
+        # Add all 9 sections + ai_prompt_snippet
+        for section_name in GENERATION_STEPS:
+            if section_name in generated_sections:
+                v2_schema[section_name] = generated_sections[section_name]
+
+        # Include partial errors as metadata if any
+        if errors:
+            v2_schema["_generation_warnings"] = errors
+
+        # Check if BrandConfig already exists for this project
+        stmt = select(BrandConfig).where(BrandConfig.project_id == project_id)
+        result = await db.execute(stmt)
+        brand_config = result.scalar_one_or_none()
+
+        if brand_config:
+            # Update existing record
+            brand_config.v2_schema = v2_schema
+            brand_config.updated_at = datetime.now(UTC)
+            logger.info(
+                "Updated existing BrandConfig",
+                extra={
+                    "project_id": project_id,
+                    "brand_config_id": brand_config.id,
+                    "sections_stored": len(
+                        [s for s in GENERATION_STEPS if s in v2_schema]
+                    ),
+                },
+            )
+        else:
+            # Create new record
+            brand_config = BrandConfig(
+                project_id=project_id,
+                brand_name=project.name,
+                domain=project.site_url,
+                v2_schema=v2_schema,
+            )
+            db.add(brand_config)
+            logger.info(
+                "Created new BrandConfig",
+                extra={
+                    "project_id": project_id,
+                    "sections_stored": len(
+                        [s for s in GENERATION_STEPS if s in v2_schema]
+                    ),
+                },
+            )
+
+        await db.flush()
+        await db.refresh(brand_config)
+
+        # Mark generation as complete (even if there were some non-critical errors)
+        await BrandConfigService.complete_generation(db, project_id)
+
+        logger.info(
+            "Brand config stored successfully",
+            extra={
+                "project_id": project_id,
+                "brand_config_id": brand_config.id,
+                "has_warnings": has_errors,
+            },
+        )
+
+        return brand_config
+
+    @staticmethod
+    async def get_source_file_ids(db: AsyncSession, project_id: str) -> list[str]:
+        """Get all file IDs for a project that have extracted text.
+
+        Args:
+            db: AsyncSession for database operations.
+            project_id: UUID string of the project.
+
+        Returns:
+            List of ProjectFile UUIDs that were used as source documents.
+        """
+        stmt = select(ProjectFile.id).where(
+            ProjectFile.project_id == project_id,
+            ProjectFile.extracted_text.isnot(None),
+        )
+        result = await db.execute(stmt)
+        return [row[0] for row in result.fetchall()]
