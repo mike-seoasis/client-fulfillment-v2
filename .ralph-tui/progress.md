@@ -78,3 +78,16 @@ after each iteration and it's included in prompts for context.
   - Pattern: Add `EAGER_SERVICE_LOADING=1` to ensure S3 is ready before health check passes
 ---
 
+## 2026-02-03 - S2-006
+- **What was implemented:** Text extraction utilities for processing uploaded documents (PDF, DOCX, TXT)
+- **Files changed:**
+  - `backend/app/utils/__init__.py` (created - module init with exports)
+  - `backend/app/utils/text_extraction.py` (created - extract_text_from_pdf, extract_text_from_docx, extract_text_from_txt, extract_text dispatcher)
+- **Learnings:**
+  - Pattern: Use `pypdf` (not PyPDF2) for PDF text extraction - PyPDF2 is deprecated
+  - Pattern: Use `python-docx` and import as `docx` (e.g., `from docx import Document`)
+  - Pattern: For text files, try UTF-8 first then fall back to latin-1 which accepts any byte sequence
+  - Pattern: Normalize content_type by stripping parameters (e.g., `text/plain; charset=utf-8` → `text/plain`)
+  - Pattern: Use `io.BytesIO` to wrap file bytes for libraries expecting file-like objects
+---
+

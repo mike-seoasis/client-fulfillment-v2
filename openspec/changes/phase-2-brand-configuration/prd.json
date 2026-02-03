@@ -95,8 +95,9 @@
         "Truncate extracted text at 100,000 characters with warning log"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "pypdf replaces PyPDF2 (deprecated). python-docx handles .docx files."
+      "passes": true,
+      "notes": "pypdf replaces PyPDF2 (deprecated). python-docx handles .docx files.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S2-007",
@@ -656,6 +657,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T21:58:28.373Z"
+    "updatedAt": "2026-02-03T21:59:35.183Z"
   }
 }
