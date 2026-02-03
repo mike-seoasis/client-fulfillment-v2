@@ -123,3 +123,18 @@ after each iteration and it's included in prompts for context.
   - Pattern: Use `isinstance(file, bytes)` check rather than `hasattr(file, "read")` for cleaner type handling
 ---
 
+## 2026-02-03 - S2-009
+- **What was implemented:** File upload API endpoints for project file management
+- **Files changed:**
+  - `backend/app/api/v1/files.py` (created - router with POST, GET, DELETE endpoints)
+  - `backend/app/api/v1/__init__.py` (registered files router)
+- **Learnings:**
+  - Pattern: File endpoints nest under projects: `/projects/{project_id}/files`
+  - Pattern: Use `UploadFile` from FastAPI for multipart/form-data handling
+  - Pattern: Read file content with `await file.read()` before size validation
+  - Pattern: Validate project exists first (reuse `ProjectService.get_project` which raises 404)
+  - Pattern: File validation constants at module level: `MAX_FILE_SIZE_BYTES`, `ALLOWED_CONTENT_TYPES`
+  - Pattern: 413 for size exceeded, 415 for unsupported media type
+  - Pattern: Instantiate service in endpoint with injected S3Client: `FileService(s3)`
+---
+
