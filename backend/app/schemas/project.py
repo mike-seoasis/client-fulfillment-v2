@@ -78,6 +78,10 @@ class ProjectCreate(BaseModel):
         max_length=255,
         description="Client identifier (optional)",
     )
+    additional_info: str | None = Field(
+        None,
+        description="Additional notes or information about the project",
+    )
     status: str = Field(
         default="active",
         description="Project status",
@@ -244,8 +248,22 @@ class ProjectResponse(BaseModel):
     name: str = Field(..., description="Project name")
     site_url: str = Field(..., description="Client website URL")
     client_id: str | None = Field(None, description="Client identifier")
+    additional_info: str | None = Field(None, description="Additional project notes")
     status: str = Field(..., description="Project status")
     phase_status: dict[str, Any] = Field(..., description="Phase status dictionary")
+    brand_config_status: str = Field(
+        default="pending",
+        description="Brand config generation status (pending, generating, complete, failed)",
+    )
+    has_brand_config: bool = Field(
+        default=False,
+        description="Whether a brand config exists for this project",
+    )
+    uploaded_files_count: int = Field(
+        default=0,
+        ge=0,
+        description="Number of files uploaded for this project",
+    )
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 

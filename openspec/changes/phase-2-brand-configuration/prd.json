@@ -331,8 +331,9 @@
         "uploaded_files_count is count of ProjectFile records"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "These are computed fields in the response, not stored columns."
+      "passes": true,
+      "notes": "These are computed fields in the response, not stored columns.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S2-021",
@@ -670,6 +671,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T22:29:30.100Z"
+    "updatedAt": "2026-02-03T22:31:44.378Z"
   }
 }

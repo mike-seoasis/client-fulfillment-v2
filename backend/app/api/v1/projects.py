@@ -27,8 +27,9 @@ async def list_projects(
     Returns projects ordered by most recently updated.
     """
     projects = await ProjectService.list_projects(db)
+    items = await ProjectService.to_response_list(db, projects)
     return ProjectListResponse(
-        items=[ProjectResponse.model_validate(p) for p in projects],
+        items=items,
         total=len(projects),
         limit=max(len(projects), 1),  # Minimum of 1 to satisfy schema constraint
         offset=0,
@@ -49,7 +50,7 @@ async def create_project(
         The newly created project.
     """
     project = await ProjectService.create_project(db, data)
-    return ProjectResponse.model_validate(project)
+    return await ProjectService.to_response(db, project)
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
@@ -69,7 +70,7 @@ async def get_project(
         HTTPException: 404 if project not found.
     """
     project = await ProjectService.get_project(db, project_id)
-    return ProjectResponse.model_validate(project)
+    return await ProjectService.to_response(db, project)
 
 
 @router.patch("/{project_id}", response_model=ProjectResponse)
@@ -91,7 +92,7 @@ async def update_project(
         HTTPException: 404 if project not found.
     """
     project = await ProjectService.update_project(db, project_id, data)
-    return ProjectResponse.model_validate(project)
+    return await ProjectService.to_response(db, project)
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)

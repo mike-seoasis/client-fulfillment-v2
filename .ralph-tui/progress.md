@@ -286,3 +286,16 @@ after each iteration and it's included in prompts for context.
   - Pattern: Group tests by endpoint into separate test classes for clarity
 ---
 
+## 2026-02-03 - S2-020
+- **What was implemented:** Updated Project schemas to include additional_info and computed brand/file fields
+- **Files changed:**
+  - `backend/app/schemas/project.py` (added additional_info to ProjectCreate; added brand_config_status, has_brand_config, uploaded_files_count to ProjectResponse)
+  - `backend/app/services/project.py` (added to_response and to_response_list methods for computed fields; updated create_project to include additional_info)
+  - `backend/app/api/v1/projects.py` (updated all endpoints to use ProjectService.to_response instead of model_validate)
+- **Learnings:**
+  - Pattern: For computed fields that require DB queries (counts, existence checks), add a `to_response` method in the Service that builds the response schema
+  - Pattern: Use `select(func.count()).where(...)` for efficient existence/count checks instead of loading full records
+  - Pattern: Extract JSONB nested values safely with `.get("key", {}).get("nested_key")` pattern with defaults
+  - Pattern: `to_response_list` helper simplifies list endpoints that need computed fields
+---
+
