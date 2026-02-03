@@ -34,20 +34,19 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
-      - name: Check Python version
-        run: uv run python --version
+      - name: Debug environment
+        run: |
+          echo "PWD: $(pwd)"
+          echo "Python: $(which python || echo 'not found')"
+          echo "venv exists: $(ls -la .venv 2>&1 || echo 'no venv')"
+          echo "uv version: $(uv --version)"
+          uv pip list 2>&1 || echo "pip list failed"
 
-      - name: Check Ruff version
-        run: uv run ruff --version
-
-      - name: Show app directory
-        run: ls -la app/
-
-      - name: Run Ruff linter (verbose)
-        run: uv run ruff check app --config pyproject.toml 2>&1 || true
+      - name: Run Ruff linter
+        run: uv run ruff check app --output-format=github
 
       - name: Run Ruff formatter check
-        run: uv run ruff format --check app --config pyproject.toml || true
+        run: uv run ruff format --check app
 
   backend-type-check:
     name: Backend Type Check
