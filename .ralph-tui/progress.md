@@ -245,3 +245,16 @@ after each iteration and it's included in prompts for context.
   - Pattern: Alphabetical import order in `__init__.py` files to pass ruff linting (brand_config before categorize)
 ---
 
+## 2026-02-03 - S2-017
+- **What was implemented:** Pydantic schemas for brand config API - SectionUpdate and RegenerateRequest
+- **Files changed:**
+  - `backend/app/schemas/brand_config.py` (added SectionUpdate, RegenerateRequest, VALID_SECTION_NAMES)
+  - `backend/app/schemas/__init__.py` (added new schema exports including BrandConfigResponse)
+- **Learnings:**
+  - Pattern: Define valid field values as module-level constants (e.g., `VALID_SECTION_NAMES`) for reuse in validators
+  - Pattern: Use `model_config = ConfigDict(json_schema_extra={"examples": [...]})` for complex example structures with multiple variations
+  - Pattern: Add helper methods to request schemas (e.g., `get_sections_to_regenerate()`) to centralize business logic
+  - Pattern: Mutually exclusive fields (section vs sections) are easier to handle with a helper method than model validators
+  - Note: `BrandConfigResponse` already existed but wasn't exported in `__init__.py`
+---
+

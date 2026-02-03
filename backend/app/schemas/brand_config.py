@@ -387,3 +387,125 @@ class BrandConfigUpdateRequest(BaseModel):
         if not v:
             raise ValueError("Brand name cannot be empty or whitespace only")
         return v
+
+
+# =============================================================================
+# SECTION UPDATE AND REGENERATION SCHEMAS
+# =============================================================================
+
+# Valid section names for brand config v2_schema
+VALID_SECTION_NAMES = [
+    "brand_foundation",
+    "target_audience",
+    "voice_dimensions",
+    "voice_characteristics",
+    "writing_style",
+    "vocabulary",
+    "trust_elements",
+    "examples_bank",
+    "competitor_context",
+    "ai_prompt_snippet",
+]
+
+
+class SectionUpdate(BaseModel):
+    """Request schema for updating specific sections of a brand config.
+
+    Allows partial updates to individual sections without replacing the entire
+    v2_schema. Section content is provided as a dict that will be merged with
+    or replace the existing section.
+    """
+
+    sections: dict[str, dict[str, Any]] = Field(
+        ...,
+        description="Dict mapping section names to their updated content",
+        examples=[
+            {
+                "brand_foundation": {
+                    "company_name": "Acme Corp",
+                    "mission": "Making the world better",
+                },
+                "voice_characteristics": {
+                    "is": ["friendly", "professional"],
+                    "is_not": ["corporate", "stiff"],
+                },
+            }
+        ],
+    )
+
+    @field_validator("sections")
+    @classmethod
+    def validate_section_names(
+        cls, v: dict[str, dict[str, Any]]
+    ) -> dict[str, dict[str, Any]]:
+        """Validate that all section names are valid."""
+        invalid_sections = [name for name in v if name not in VALID_SECTION_NAMES]
+        if invalid_sections:
+            raise ValueError(
+                f"Invalid section names: {invalid_sections}. "
+                f"Valid sections are: {VALID_SECTION_NAMES}"
+            )
+        return v
+
+
+class RegenerateRequest(BaseModel):
+    """Request schema for regenerating brand config sections.
+
+    Supports regenerating either specific sections or the entire config.
+    When no sections are specified, regenerates all sections.
+    """
+
+    section: str | None = Field(
+        None,
+        description="Single section to regenerate (mutually exclusive with sections)",
+        examples=["brand_foundation", "voice_characteristics"],
+    )
+    sections: list[str] | None = Field(
+        None,
+        description="List of sections to regenerate (mutually exclusive with section)",
+        examples=[["brand_foundation", "target_audience"]],
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {"section": "brand_foundation"},
+                {"sections": ["voice_dimensions", "voice_characteristics"]},
+                {},  # Empty body = regenerate all
+            ]
+        }
+    )
+
+    @field_validator("section")
+    @classmethod
+    def validate_single_section(cls, v: str | None) -> str | None:
+        """Validate that single section name is valid."""
+        if v is not None and v not in VALID_SECTION_NAMES:
+            raise ValueError(
+                f"Invalid section name: {v}. Valid sections are: {VALID_SECTION_NAMES}"
+            )
+        return v
+
+    @field_validator("sections")
+    @classmethod
+    def validate_section_list(cls, v: list[str] | None) -> list[str] | None:
+        """Validate that all section names in list are valid."""
+        if v is None:
+            return None
+        invalid_sections = [name for name in v if name not in VALID_SECTION_NAMES]
+        if invalid_sections:
+            raise ValueError(
+                f"Invalid section names: {invalid_sections}. "
+                f"Valid sections are: {VALID_SECTION_NAMES}"
+            )
+        return v
+
+    def get_sections_to_regenerate(self) -> list[str] | None:
+        """Get the list of sections to regenerate.
+
+        Returns:
+            List of section names to regenerate, or None for all sections.
+        """
+        if self.section:
+            return [self.section]
+        return self.sections  # None means regenerate all

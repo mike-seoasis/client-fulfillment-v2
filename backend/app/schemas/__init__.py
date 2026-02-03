@@ -4,6 +4,12 @@ Schemas define the shape of data for API requests and responses.
 They handle validation, serialization, and documentation.
 """
 
+from app.schemas.brand_config import (
+    VALID_SECTION_NAMES,
+    BrandConfigResponse,
+    RegenerateRequest,
+    SectionUpdate,
+)
 from app.schemas.brand_config_generation import (
     GenerationStatusResponse,
 )
@@ -213,6 +219,11 @@ __all__ = [
     # Project File schemas
     "ProjectFileResponse",
     "ProjectFileList",
+    # Brand Config schemas
+    "BrandConfigResponse",
+    "RegenerateRequest",
+    "SectionUpdate",
+    "VALID_SECTION_NAMES",
     # Brand Config Generation schemas
     "GenerationStatusResponse",
 ]
