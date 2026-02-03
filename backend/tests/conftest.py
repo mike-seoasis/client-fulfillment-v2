@@ -25,6 +25,8 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.pool import StaticPool
 from sqlalchemy.types import JSON, String
 
+# Import all models to register them with Base.metadata before table creation
+import app.models  # noqa: F401
 from app.core.config import Settings, get_settings
 from app.core.database import Base, DatabaseManager, db_manager
 from app.core.redis import CircuitBreaker, CircuitBreakerConfig, RedisManager

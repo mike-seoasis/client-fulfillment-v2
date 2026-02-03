@@ -101,8 +101,9 @@
         "All tests pass: pytest backend/tests/api/test_projects.py -v"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Use pytest-asyncio and httpx AsyncClient. Create fixtures for test data."
+      "passes": true,
+      "notes": "Use pytest-asyncio and httpx AsyncClient. Create fixtures for test data.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S1-007",
@@ -349,6 +350,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T17:31:08.951Z"
+    "updatedAt": "2026-02-03T17:34:58.235Z"
   }
 }

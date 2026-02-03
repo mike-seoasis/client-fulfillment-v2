@@ -16,6 +16,7 @@ after each iteration and it's included in prompts for context.
 - **Frontend providers**: Create providers in `frontend/src/components/providers/`. Use `'use client'` directive. Wrap app in `layout.tsx`. For TanStack Query, use SSR-safe singleton pattern from `frontend/src/lib/query-client.ts`.
 - **API client**: Use `apiClient` from `frontend/src/lib/api.ts` for all API calls. Base URL from `NEXT_PUBLIC_API_URL` env var.
 - **TanStack Query hooks**: Create hooks in `frontend/src/hooks/`. Use query key factories (`resourceKeys.all`, `resourceKeys.detail(id)`) for cache consistency. For mutations: invalidate list queries, use `setQueryData` for optimistic updates.
+- **API tests**: Use pytest-asyncio with `async_client` fixture from conftest.py. Tests use httpx AsyncClient with ASGI transport. Validation errors return `{"error": ..., "code": ..., "request_id": ...}` format (not `detail`).
 
 ---
 
@@ -144,5 +145,25 @@ after each iteration and it's included in prompts for context.
   - Tailwind custom colors use same 50-900 scale as built-in colors for consistency
   - CSS custom properties in globals.css integrate with Tailwind via `var(--name)` syntax in theme config
   - Remove dark mode media query when building light-mode-only interfaces
+---
+
+## 2026-02-03 - S1-006
+- Created `backend/tests/api/test_projects.py` with comprehensive API tests
+- Tests cover all CRUD operations: list, create, get, update, delete
+- Test classes: `TestListProjects`, `TestCreateProject`, `TestGetProject`, `TestUpdateProject`, `TestDeleteProject`
+- 21 total tests covering:
+  - List projects (empty and with data)
+  - Create project (valid data, minimal fields, missing name, missing site_url, invalid URL, empty name, whitespace name, custom status, invalid status)
+  - Get project (exists, not found)
+  - Update project (partial update, update site_url, update status, not found, invalid status, invalid URL)
+  - Delete project (exists, not found)
+- Fixed `conftest.py` to import models before table creation
+- Fixed `projects.py` router to use `max(len(projects), 1)` for limit to satisfy schema constraint
+- Files changed: `backend/tests/api/__init__.py`, `backend/tests/api/test_projects.py`, `backend/tests/conftest.py`, `backend/app/api/v1/projects.py`
+- **Learnings:**
+  - Models MUST be imported in conftest.py before `Base.metadata.create_all()` is called, otherwise SQLite tables won't be created
+  - App uses custom error format `{"error": ..., "code": ..., "request_id": ...}` for validation errors, not FastAPI default `detail`
+  - `ProjectListResponse` schema requires `limit >= 1`, so router must ensure minimum of 1 even when returning empty list
+  - Use `uuid.uuid4()` for generating non-existent IDs in 404 tests
 ---
 

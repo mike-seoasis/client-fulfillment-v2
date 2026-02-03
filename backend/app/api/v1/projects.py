@@ -30,7 +30,7 @@ async def list_projects(
     return ProjectListResponse(
         items=[ProjectResponse.model_validate(p) for p in projects],
         total=len(projects),
-        limit=len(projects),
+        limit=max(len(projects), 1),  # Minimum of 1 to satisfy schema constraint
         offset=0,
     )
 
