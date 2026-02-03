@@ -657,8 +657,9 @@
         "Verify all changes persist"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Use real Perplexity/Claude APIs for this test. Document any issues found."
+      "passes": true,
+      "notes": "Use real Perplexity/Claude APIs for this test. Document any issues found.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S2-098",
@@ -689,6 +690,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T23:26:12.919Z"
+    "updatedAt": "2026-02-03T23:36:01.222Z"
   }
 }

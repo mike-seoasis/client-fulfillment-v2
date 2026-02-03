@@ -567,3 +567,80 @@ after each iteration and it's included in prompts for context.
   - Gotcha: When testing drag-drop, use `fireEvent.drop()` with mock dataTransfer object, not `userEvent`
 ---
 
+## 2026-02-03 - S2-039
+- **What was implemented:** Manual E2E verification of brand config generation flow
+- **Verification Status:** PARTIAL - Blocked by missing ANTHROPIC_API_KEY
+
+### What Was Verified ✅
+
+1. **Project Creation with Additional Notes**
+   - POST /api/v1/projects creates project correctly
+   - `additional_info` field is saved and returned in responses
+   - New response fields work: `brand_config_status`, `has_brand_config`, `uploaded_files_count`
+
+2. **File Upload (PDF and DOCX)**
+   - PDF upload works correctly with text extraction
+   - DOCX upload works correctly with text extraction
+   - Files stored in S3 (LocalStack) successfully
+   - `uploaded_files_count` updates correctly in project response
+
+3. **Brand Config Generation Start**
+   - POST /api/v1/projects/{id}/brand-config/generate returns 202 Accepted
+   - Status correctly set to "generating"
+   - Background task starts successfully
+
+4. **Research Phase (Perplexity)**
+   - Perplexity API call completed successfully (~17 seconds)
+   - Received comprehensive brand research (9012 chars, 8 citations)
+   - Document text extraction provided to research context
+
+5. **Generation Status Endpoint**
+   - GET /brand-config/status returns correct status structure
+   - Error field properly populated on failure
+   - Started/completed timestamps work correctly
+
+### Issues Found 🐛
+
+1. **CRITICAL: Missing ANTHROPIC_API_KEY blocks synthesis phase**
+   - Research phase completes but synthesis fails with "Claude LLM is not configured"
+   - **Root Cause:** `ANTHROPIC_API_KEY=` is empty in backend/.env
+   - **Impact:** Cannot complete full generation flow or test remaining acceptance criteria
+
+2. **BUG: fail_generation doesn't update database status**
+   - When synthesis fails, the error handler calls `BrandConfigService.fail_generation()`
+   - But the database status remains "generating" instead of "failed"
+   - **Evidence:** DB showed `status: "generating"` after logged error
+   - **Likely cause:** SQLAlchemy session state issue in background task
+   - **Workaround:** Manually updated DB to set failed status
+
+3. **MINOR: Backend server needs restart after .env changes**
+   - Adding S3 config required full server restart
+   - Hot reload doesn't pick up new env vars
+
+### Not Verified (Blocked) ❌
+
+- [ ] Watch progress through all 13 steps (synthesis never started)
+- [ ] View completed brand config
+- [ ] Edit a section and save
+- [ ] Regenerate a single section
+- [ ] Verify all changes persist
+
+### Environment Notes
+
+- LocalStack S3 must be started and bucket created: `docker exec onboarding-localstack awslocal s3 mb s3://onboarding-files`
+- Backend needs S3 config in .env: S3_BUCKET, S3_ENDPOINT_URL, S3_ACCESS_KEY, S3_SECRET_KEY, S3_REGION
+
+### Recommendations
+
+1. **Add ANTHROPIC_API_KEY to environment** to enable full E2E testing
+2. **Fix fail_generation bug** - investigate SQLAlchemy session handling in background tasks
+3. **Document required env vars** in setup instructions
+4. **Consider adding integration test** that uses mocked clients for CI/CD
+
+- **Learnings:**
+  - Pattern: Background tasks in FastAPI need careful session management - consider creating new sessions for error handlers
+  - Pattern: Always verify .env changes by checking startup logs for "X configured" vs "X not configured" messages
+  - Gotcha: LocalStack S3 bucket must be created manually if init script didn't run
+  - Gotcha: JSONB updates in SQLAlchemy async sessions may not track properly in exception handlers
+---
+
