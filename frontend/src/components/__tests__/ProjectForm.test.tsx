@@ -20,7 +20,7 @@ describe('ProjectForm', () => {
     it('renders the site URL input', () => {
       render(<ProjectForm onSubmit={mockOnSubmit} />);
 
-      expect(screen.getByLabelText('Site URL')).toBeInTheDocument();
+      expect(screen.getByLabelText('Website URL')).toBeInTheDocument();
     });
 
     it('renders Create Project button when no initialData', () => {
@@ -55,7 +55,7 @@ describe('ProjectForm', () => {
       );
 
       expect(screen.getByLabelText('Project Name')).toHaveValue('My Project');
-      expect(screen.getByLabelText('Site URL')).toHaveValue('https://mysite.com');
+      expect(screen.getByLabelText('Website URL')).toHaveValue('https://mysite.com');
     });
   });
 
@@ -65,7 +65,7 @@ describe('ProjectForm', () => {
       render(<ProjectForm onSubmit={mockOnSubmit} />);
 
       // Fill in URL but leave name empty
-      await user.type(screen.getByLabelText('Site URL'), 'https://example.com');
+      await user.type(screen.getByLabelText('Website URL'), 'https://example.com');
       await user.click(screen.getByRole('button', { name: 'Create Project' }));
 
       await waitFor(() => {
@@ -131,7 +131,7 @@ describe('ProjectForm', () => {
       render(<ProjectForm onSubmit={mockOnSubmit} />);
 
       await user.type(screen.getByLabelText('Project Name'), 'Test Project');
-      await user.type(screen.getByLabelText('Site URL'), 'https://example.com');
+      await user.type(screen.getByLabelText('Website URL'), 'https://example.com');
 
       // Use fireEvent.submit to bypass native validation in jsdom
       const form = screen.getByRole('button', { name: 'Create Project' }).closest('form')!;
@@ -143,6 +143,7 @@ describe('ProjectForm', () => {
         expect(mockOnSubmit.mock.calls[0][0]).toEqual({
           name: 'Test Project',
           site_url: 'https://example.com',
+          additional_info: '',
         });
       });
     });
@@ -152,7 +153,7 @@ describe('ProjectForm', () => {
       render(<ProjectForm onSubmit={mockOnSubmit} />);
 
       await user.type(screen.getByLabelText('Project Name'), 'Test Project');
-      await user.type(screen.getByLabelText('Site URL'), 'http://example.com');
+      await user.type(screen.getByLabelText('Website URL'), 'http://example.com');
 
       const form = screen.getByRole('button', { name: 'Create Project' }).closest('form')!;
       fireEvent.submit(form);
@@ -162,6 +163,7 @@ describe('ProjectForm', () => {
         expect(mockOnSubmit.mock.calls[0][0]).toEqual({
           name: 'Test Project',
           site_url: 'http://example.com',
+          additional_info: '',
         });
       });
     });
@@ -171,7 +173,7 @@ describe('ProjectForm', () => {
       render(<ProjectForm onSubmit={mockOnSubmit} />);
 
       await user.type(screen.getByLabelText('Project Name'), 'Test Project');
-      await user.type(screen.getByLabelText('Site URL'), 'https://example.com/path?query=1');
+      await user.type(screen.getByLabelText('Website URL'), 'https://example.com/path?query=1');
 
       const form = screen.getByRole('button', { name: 'Create Project' }).closest('form')!;
       fireEvent.submit(form);
@@ -181,6 +183,7 @@ describe('ProjectForm', () => {
         expect(mockOnSubmit.mock.calls[0][0]).toEqual({
           name: 'Test Project',
           site_url: 'https://example.com/path?query=1',
+          additional_info: '',
         });
       });
     });
@@ -191,7 +194,7 @@ describe('ProjectForm', () => {
 
       await user.type(screen.getByLabelText('Project Name'), 'Test Project');
       // Type invalid URL and manually set value to bypass native validation
-      const urlInput = screen.getByLabelText('Site URL');
+      const urlInput = screen.getByLabelText('Website URL');
       fireEvent.change(urlInput, { target: { value: 'not-a-valid-url' } });
 
       const form = screen.getByRole('button', { name: 'Create Project' }).closest('form')!;
@@ -209,7 +212,7 @@ describe('ProjectForm', () => {
       render(<ProjectForm onSubmit={mockOnSubmit} />);
 
       await user.type(screen.getByLabelText('Project Name'), 'Test Project');
-      const urlInput = screen.getByLabelText('Site URL');
+      const urlInput = screen.getByLabelText('Website URL');
       fireEvent.change(urlInput, { target: { value: 'example.com' } });
 
       const form = screen.getByRole('button', { name: 'Create Project' }).closest('form')!;
@@ -229,7 +232,7 @@ describe('ProjectForm', () => {
       render(<ProjectForm onSubmit={mockOnSubmit} />);
 
       await user.type(screen.getByLabelText('Project Name'), 'My New Project');
-      await user.type(screen.getByLabelText('Site URL'), 'https://myproject.com');
+      await user.type(screen.getByLabelText('Website URL'), 'https://myproject.com');
 
       const form = screen.getByRole('button', { name: 'Create Project' }).closest('form')!;
       fireEvent.submit(form);
@@ -240,6 +243,7 @@ describe('ProjectForm', () => {
         expect(mockOnSubmit.mock.calls[0][0]).toEqual({
           name: 'My New Project',
           site_url: 'https://myproject.com',
+          additional_info: '',
         });
       });
     });
