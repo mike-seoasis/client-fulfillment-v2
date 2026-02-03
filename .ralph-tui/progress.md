@@ -18,6 +18,7 @@ after each iteration and it's included in prompts for context.
 - **TanStack Query hooks**: Create hooks in `frontend/src/hooks/`. Use query key factories (`resourceKeys.all`, `resourceKeys.detail(id)`) for cache consistency. For mutations: invalidate list queries, use `setQueryData` for optimistic updates.
 - **API tests**: Use pytest-asyncio with `async_client` fixture from conftest.py. Tests use httpx AsyncClient with ASGI transport. Validation errors return `{"error": ..., "code": ..., "request_id": ...}` format (not `detail`).
 - **UI components**: Store in `frontend/src/components/ui/`. Use `forwardRef` for form elements. Export types and components from `index.ts`. Use warm palette classes: `gold-*` for primary, `cream-*` for secondary, `coral-*` for danger, `warm-gray-*` for text.
+- **Two-step confirmation pattern**: Use `useState` for confirmation state, `useRef` for timeout cleanup, reset on blur with `onBlur` handler checking `relatedTarget`, and auto-reset with `useEffect` timeout.
 
 ---
 
@@ -286,5 +287,29 @@ after each iteration and it's included in prompts for context.
   - Disabled buttons accept `disabled` prop - they get opacity and cursor styling automatically
   - CSS-only tooltips: use `group-hover:opacity-100` with `pointer-events-none` to show on parent hover
   - For 404-like states in client components, handle error state from hook rather than calling Next.js `notFound()`
+---
+
+## 2026-02-03 - S1-017
+- Implemented project deletion with two-step confirmation on Project Detail page
+- Created Toast component at `frontend/src/components/ui/Toast.tsx`:
+  - Supports `success`, `error`, `info` variants with appropriate styling
+  - Auto-dismisses after configurable duration (default 3s)
+  - Fixed position bottom-right with fade-out animation
+  - Includes close button and appropriate ARIA role
+- Updated Project Detail page with delete functionality:
+  - Added "Delete Project" button with danger variant next to "Edit Brand"
+  - First click changes button text to "Confirm Delete"
+  - Second click executes deletion via `useDeleteProject` mutation
+  - Confirmation resets after 3 seconds timeout
+  - Confirmation resets when button loses focus (clicking elsewhere)
+  - Shows "Project deleted" toast on success
+  - Redirects to dashboard after short delay
+- Files changed: `frontend/src/components/ui/Toast.tsx`, `frontend/src/components/ui/index.ts`, `frontend/src/app/projects/[id]/page.tsx`
+- **Learnings:**
+  - Two-step confirmation: Use `useState` for confirmation state, `useRef<NodeJS.Timeout>` for timeout cleanup
+  - Reset on blur: Check `e.relatedTarget` in `onBlur` handler to avoid resetting if focus stays within button
+  - Use `useCallback` for event handlers to maintain stable references
+  - For catch blocks where error variable is unused, use `catch { }` without variable (ES2019+)
+  - Toast components need `role="alert"` for accessibility and `z-50` for stacking above other content
 ---
 

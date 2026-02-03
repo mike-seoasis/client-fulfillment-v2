@@ -1,9 +1,10 @@
 'use client';
 
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { useProject } from '@/hooks/use-projects';
-import { Button } from '@/components/ui';
+import { useParams, useRouter } from 'next/navigation';
+import { useProject, useDeleteProject } from '@/hooks/use-projects';
+import { Button, Toast } from '@/components/ui';
 
 function LoadingSkeleton() {
   return (
@@ -100,9 +101,60 @@ function PlusIcon({ className }: { className?: string }) {
 
 export default function ProjectDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const projectId = params.id as string;
 
   const { data: project, isLoading, error } = useProject(projectId);
+  const deleteProject = useDeleteProject();
+
+  // Two-step delete confirmation
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  const confirmTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const deleteButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Reset confirmation state after 3 seconds
+  useEffect(() => {
+    if (isConfirming) {
+      confirmTimeoutRef.current = setTimeout(() => {
+        setIsConfirming(false);
+      }, 3000);
+    }
+    return () => {
+      if (confirmTimeoutRef.current) {
+        clearTimeout(confirmTimeoutRef.current);
+      }
+    };
+  }, [isConfirming]);
+
+  // Handle blur to reset confirmation
+  const handleBlur = useCallback((e: React.FocusEvent) => {
+    // Only reset if focus is moving outside the button
+    if (!deleteButtonRef.current?.contains(e.relatedTarget as Node)) {
+      setIsConfirming(false);
+    }
+  }, []);
+
+  const handleDeleteClick = async () => {
+    if (!isConfirming) {
+      // First click: show confirmation state
+      setIsConfirming(true);
+      return;
+    }
+
+    // Second click: execute deletion
+    try {
+      await deleteProject.mutateAsync(projectId);
+      setShowToast(true);
+      // Delay redirect slightly to show toast
+      setTimeout(() => {
+        router.push('/');
+      }, 500);
+    } catch {
+      // Error is already handled by optimistic update rollback
+      setIsConfirming(false);
+    }
+  };
 
   // Loading state
   if (isLoading) {
@@ -192,16 +244,40 @@ export default function ProjectDetailPage() {
             {project.site_url}
           </a>
         </div>
-        <div className="relative group">
-          <Button variant="secondary" disabled>
-            Edit Brand
-          </Button>
-          {/* Tooltip */}
-          <div className="absolute right-0 top-full mt-2 px-3 py-1.5 bg-warm-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-            Coming in Phase 2
+        <div className="flex items-center gap-3">
+          <div className="relative group">
+            <Button variant="secondary" disabled>
+              Edit Brand
+            </Button>
+            {/* Tooltip */}
+            <div className="absolute right-0 top-full mt-2 px-3 py-1.5 bg-warm-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+              Coming in Phase 2
+            </div>
           </div>
+          <Button
+            ref={deleteButtonRef}
+            variant="danger"
+            onClick={handleDeleteClick}
+            onBlur={handleBlur}
+            disabled={deleteProject.isPending}
+          >
+            {deleteProject.isPending
+              ? 'Deleting...'
+              : isConfirming
+              ? 'Confirm Delete'
+              : 'Delete Project'}
+          </Button>
         </div>
       </div>
+
+      {/* Toast notification */}
+      {showToast && (
+        <Toast
+          message="Project deleted"
+          variant="success"
+          onClose={() => setShowToast(false)}
+        />
+      )}
 
       {/* Divider */}
       <hr className="border-cream-200 mb-8" />
