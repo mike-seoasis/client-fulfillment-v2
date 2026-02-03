@@ -324,3 +324,17 @@ after each iteration and it's included in prompts for context.
   - Note: Cascade delete tests (files deleted when project deleted) were already implemented in S2-021
 ---
 
+## 2026-02-03 - S2-023
+- **What was implemented:** FileUpload React component with drag-and-drop support
+- **Files changed:**
+  - `frontend/src/components/FileUpload.tsx` (created - full file upload component)
+- **Learnings:**
+  - Pattern: Use native drag-drop API instead of react-dropzone to avoid adding dependencies; use `dragCounter` ref to handle nested element drag events correctly
+  - Pattern: Validate files by both MIME type and extension as fallback (MIME types can be unreliable across browsers/OS)
+  - Pattern: Export validation constants (`MAX_FILE_SIZE_BYTES`, `ALLOWED_EXTENSIONS`, `ALLOWED_MIME_TYPES`) so consumers can access them for consistent validation messaging
+  - Pattern: Component accepts `uploadedFiles` prop for controlled file list, allowing parent to manage upload state and progress
+  - Pattern: Use `UploadedFile` interface with `status: 'pending' | 'uploading' | 'complete' | 'error'` for flexible progress tracking
+  - Pattern: Tropical oasis styling: `palm-*` colors for success states, `coral-*` for errors, `cream-*` for neutral backgrounds
+  - Pattern: Reset file input value after selection (`fileInputRef.current.value = ''`) to allow re-selecting the same file
+---
+
