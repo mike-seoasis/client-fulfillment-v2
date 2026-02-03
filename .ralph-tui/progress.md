@@ -14,6 +14,8 @@ after each iteration and it's included in prompts for context.
 - **Service layer**: Services live in `backend/app/services/`. Use `@staticmethod` methods, async patterns with `select()` + `db.execute()`, and `db.flush()` + `db.refresh()` for writes. Let the route dependency handle commit/rollback.
 - **API routers**: Create routers in `backend/app/api/v1/`. Use `APIRouter(prefix="/resource", tags=["Resource"])`. Register in `__init__.py` with `router.include_router()`, then include v1 router in `main.py`.
 - **Frontend providers**: Create providers in `frontend/src/components/providers/`. Use `'use client'` directive. Wrap app in `layout.tsx`. For TanStack Query, use SSR-safe singleton pattern from `frontend/src/lib/query-client.ts`.
+- **API client**: Use `apiClient` from `frontend/src/lib/api.ts` for all API calls. Base URL from `NEXT_PUBLIC_API_URL` env var.
+- **TanStack Query hooks**: Create hooks in `frontend/src/hooks/`. Use query key factories (`resourceKeys.all`, `resourceKeys.detail(id)`) for cache consistency. For mutations: invalidate list queries, use `setQueryData` for optimistic updates.
 
 ---
 
@@ -99,5 +101,28 @@ after each iteration and it's included in prompts for context.
   - Use `'use client'` directive for provider components that use React context
   - Server-side rendering needs new QueryClient per request; browser should reuse singleton
   - Default staleTime of 60s and disabling refetchOnWindowFocus improves UX for admin tools
+---
+
+## 2026-02-03 - S1-008
+- Created API client and project hooks for frontend data fetching
+- Created `frontend/src/lib/api.ts` with:
+  - `ApiError` class for typed error handling
+  - `api<T>()` generic function with JSON handling
+  - `apiClient` object with `get`, `post`, `patch`, `delete` convenience methods
+  - Base URL configurable via `NEXT_PUBLIC_API_URL` env var
+- Created `frontend/src/hooks/use-projects.ts` with:
+  - `useProjects()` - fetches project list with query key `['projects']`
+  - `useProject(id)` - fetches single project with query key `['projects', id]`
+  - `useCreateProject()` - POST mutation, invalidates list on success
+  - `useUpdateProject()` - PATCH mutation, invalidates list and updates detail cache
+  - `useDeleteProject()` - DELETE mutation with optimistic update and rollback
+  - `projectKeys` factory for consistent query key management
+- TypeScript types mirror backend Pydantic schemas
+- Files changed: `frontend/src/lib/api.ts`, `frontend/src/hooks/use-projects.ts`
+- **Learnings:**
+  - Use query key factories (`projectKeys.all`, `projectKeys.detail(id)`) for consistency
+  - Optimistic updates: cancel queries, snapshot, update cache, return context for rollback
+  - Use `enabled: !!id` to prevent queries with undefined/empty IDs
+  - `setQueryData` for immediate cache updates; `invalidateQueries` for background refetch
 ---
 

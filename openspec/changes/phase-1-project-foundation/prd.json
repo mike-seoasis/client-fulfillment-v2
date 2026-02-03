@@ -135,8 +135,9 @@
         "Mutations invalidate ['projects'] query on success"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Query keys: ['projects'] for list, ['projects', id] for single."
+      "passes": true,
+      "notes": "Query keys: ['projects'] for list, ['projects', id] for single.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S1-009",
@@ -347,6 +348,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T17:28:01.045Z"
+    "updatedAt": "2026-02-03T17:29:38.986Z"
   }
 }
