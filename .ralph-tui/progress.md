@@ -258,3 +258,18 @@ after each iteration and it's included in prompts for context.
   - Note: `BrandConfigResponse` already existed but wasn't exported in `__init__.py`
 ---
 
+## 2026-02-03 - S2-018
+- **What was implemented:** Brand config management endpoints for get, update, and regenerate operations
+- **Files changed:**
+  - `backend/app/api/v1/brand_config.py` (added GET, PATCH, and POST /regenerate endpoints)
+  - `backend/app/services/brand_config.py` (added `get_brand_config`, `update_sections`, `regenerate_sections` methods)
+  - `backend/tests/api/test_brand_config.py` (created - 12 tests for new endpoints)
+- **Learnings:**
+  - Pattern: GET endpoint for single resource returns the object directly, 404 if not found
+  - Pattern: PATCH endpoint for partial updates - merge sections into existing v2_schema rather than replace
+  - Pattern: Regeneration reuses research phase to get fresh context before re-generating sections
+  - Pattern: Mock integration clients in tests by overriding FastAPI dependencies with `app.dependency_overrides`
+  - Pattern: For regeneration, pass existing sections as context to Claude for coherence
+  - Pattern: Service methods raise HTTPException for client-facing errors (404 if brand config doesn't exist yet)
+---
+

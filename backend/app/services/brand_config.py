@@ -1227,3 +1227,293 @@ class BrandConfigService:
         )
         result = await db.execute(stmt)
         return [row[0] for row in result.fetchall()]
+
+    @staticmethod
+    async def get_brand_config(
+        db: AsyncSession,
+        project_id: str,
+    ) -> BrandConfig:
+        """Get the brand config for a project.
+
+        Args:
+            db: AsyncSession for database operations.
+            project_id: UUID string of the project.
+
+        Returns:
+            BrandConfig instance.
+
+        Raises:
+            HTTPException: 404 if project not found or brand config not generated yet.
+        """
+        # Verify project exists
+        await BrandConfigService._get_project(db, project_id)
+
+        # Get brand config
+        stmt = select(BrandConfig).where(BrandConfig.project_id == project_id)
+        result = await db.execute(stmt)
+        brand_config = result.scalar_one_or_none()
+
+        if brand_config is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Brand config not generated yet for project '{project_id}'",
+            )
+
+        return brand_config
+
+    @staticmethod
+    async def update_sections(
+        db: AsyncSession,
+        project_id: str,
+        sections: dict[str, dict[str, Any]],
+    ) -> BrandConfig:
+        """Update specific sections of a brand config.
+
+        Args:
+            db: AsyncSession for database operations.
+            project_id: UUID string of the project.
+            sections: Dict mapping section names to their updated content.
+
+        Returns:
+            Updated BrandConfig instance.
+
+        Raises:
+            HTTPException: 404 if project not found or brand config not generated yet.
+        """
+        # Get existing brand config (validates project and config existence)
+        brand_config = await BrandConfigService.get_brand_config(db, project_id)
+
+        # Update the v2_schema with new section content
+        updated_schema = dict(brand_config.v2_schema)  # Copy existing schema
+
+        for section_name, section_content in sections.items():
+            updated_schema[section_name] = section_content
+
+        # Update the timestamp and schema
+        brand_config.v2_schema = updated_schema
+        brand_config.updated_at = datetime.now(UTC)
+
+        await db.flush()
+        await db.refresh(brand_config)
+
+        logger.info(
+            "Updated brand config sections",
+            extra={
+                "project_id": project_id,
+                "brand_config_id": brand_config.id,
+                "sections_updated": list(sections.keys()),
+            },
+        )
+
+        return brand_config
+
+    @staticmethod
+    async def regenerate_sections(
+        db: AsyncSession,
+        project_id: str,
+        sections: list[str] | None,
+        perplexity: PerplexityClient,
+        crawl4ai: Crawl4AIClient,
+        claude: ClaudeClient,
+    ) -> BrandConfig:
+        """Regenerate specific sections or all sections of a brand config.
+
+        Args:
+            db: AsyncSession for database operations.
+            project_id: UUID string of the project.
+            sections: List of section names to regenerate, or None for all.
+            perplexity: PerplexityClient for web research.
+            crawl4ai: Crawl4AIClient for website crawling.
+            claude: ClaudeClient for LLM generation.
+
+        Returns:
+            Updated BrandConfig instance.
+
+        Raises:
+            HTTPException: 404 if project not found or brand config not generated yet.
+            HTTPException: 503 if Claude is not available.
+        """
+        # Get existing brand config (validates project and config existence)
+        brand_config = await BrandConfigService.get_brand_config(db, project_id)
+
+        if not claude.available:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Claude LLM is not configured",
+            )
+
+        # Determine which sections to regenerate
+        sections_to_regenerate = sections if sections else GENERATION_STEPS
+
+        logger.info(
+            "Starting section regeneration",
+            extra={
+                "project_id": project_id,
+                "sections": sections_to_regenerate,
+            },
+        )
+
+        # Run research phase to get fresh context
+        research_context = await BrandConfigService._research_phase(
+            db=db,
+            project_id=project_id,
+            perplexity=perplexity,
+            crawl4ai=crawl4ai,
+        )
+
+        if not research_context.has_any_data():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No research data available for regeneration",
+            )
+
+        # Build research text for prompts
+        import json
+
+        research_text_parts: list[str] = []
+
+        if research_context.perplexity_research:
+            research_text_parts.append(
+                f"## Web Research\n{research_context.perplexity_research}"
+            )
+
+        if research_context.crawl_content:
+            crawl_preview = research_context.crawl_content[:8000]
+            if len(research_context.crawl_content) > 8000:
+                crawl_preview += "\n... (content truncated)"
+            research_text_parts.append(f"## Website Content\n{crawl_preview}")
+
+        if research_context.document_texts:
+            docs_combined = "\n---\n".join(research_context.document_texts)
+            if len(docs_combined) > 4000:
+                docs_combined = docs_combined[:4000] + "\n... (documents truncated)"
+            research_text_parts.append(f"## Uploaded Documents\n{docs_combined}")
+
+        research_text = "\n\n".join(research_text_parts)
+
+        # Get existing sections for context
+        existing_sections = dict(brand_config.v2_schema)
+
+        # Regenerate requested sections
+        regenerated_sections: dict[str, Any] = {}
+        errors: list[str] = []
+
+        for section_name in sections_to_regenerate:
+            if section_name not in SECTION_PROMPTS:
+                errors.append(f"Unknown section: {section_name}")
+                continue
+
+            logger.info(
+                "Regenerating section",
+                extra={"project_id": project_id, "section": section_name},
+            )
+
+            system_prompt = SECTION_PROMPTS[section_name]
+
+            # Build user prompt with research context and other existing sections
+            user_prompt_parts = [
+                "# Research Context",
+                research_text,
+            ]
+
+            # Add other existing sections as context (not being regenerated)
+            context_sections = {
+                k: v
+                for k, v in existing_sections.items()
+                if k in GENERATION_STEPS
+                and k != section_name
+                and k not in sections_to_regenerate
+            }
+            if context_sections:
+                user_prompt_parts.append("\n# Existing Brand Sections (for context)")
+                for prev_section, prev_data in context_sections.items():
+                    if isinstance(prev_data, dict):
+                        user_prompt_parts.append(
+                            f"\n## {prev_section}\n```json\n{json.dumps(prev_data, indent=2)}\n```"
+                        )
+
+            # Add already regenerated sections
+            if regenerated_sections:
+                user_prompt_parts.append("\n# Previously Regenerated Sections")
+                for prev_section, prev_data in regenerated_sections.items():
+                    user_prompt_parts.append(
+                        f"\n## {prev_section}\n```json\n{json.dumps(prev_data, indent=2)}\n```"
+                    )
+
+            user_prompt_parts.append(
+                f"\n\nRegenerate the {section_name.replace('_', ' ')} section now."
+            )
+            user_prompt = "\n".join(user_prompt_parts)
+
+            try:
+                result = await asyncio.wait_for(
+                    claude.complete(
+                        user_prompt=user_prompt,
+                        system_prompt=system_prompt,
+                        max_tokens=2048,
+                        temperature=0.3,
+                    ),
+                    timeout=SECTION_TIMEOUT_SECONDS,
+                )
+            except TimeoutError:
+                error_msg = f"Timeout regenerating {section_name}"
+                logger.error(error_msg, extra={"project_id": project_id})
+                errors.append(error_msg)
+                continue
+
+            if not result.success:
+                error_msg = f"Failed to regenerate {section_name}: {result.error}"
+                logger.error(error_msg, extra={"project_id": project_id})
+                errors.append(error_msg)
+                continue
+
+            # Parse JSON response
+            try:
+                response_text = result.text or ""
+                json_text = response_text.strip()
+
+                if json_text.startswith("```"):
+                    lines = json_text.split("\n")
+                    lines = lines[1:]
+                    if lines and lines[-1].strip() == "```":
+                        lines = lines[:-1]
+                    json_text = "\n".join(lines)
+
+                section_data = json.loads(json_text)
+                regenerated_sections[section_name] = section_data
+
+                logger.info(
+                    "Section regenerated successfully",
+                    extra={"project_id": project_id, "section": section_name},
+                )
+
+            except json.JSONDecodeError as e:
+                error_msg = f"Failed to parse {section_name} JSON: {e}"
+                logger.error(error_msg, extra={"project_id": project_id})
+                errors.append(error_msg)
+                continue
+
+        # Update brand config with regenerated sections
+        updated_schema = dict(brand_config.v2_schema)
+        for section_name, section_data in regenerated_sections.items():
+            updated_schema[section_name] = section_data
+
+        if errors:
+            updated_schema["_regeneration_warnings"] = errors
+
+        brand_config.v2_schema = updated_schema
+        brand_config.updated_at = datetime.now(UTC)
+
+        await db.flush()
+        await db.refresh(brand_config)
+
+        logger.info(
+            "Brand config regeneration completed",
+            extra={
+                "project_id": project_id,
+                "sections_regenerated": list(regenerated_sections.keys()),
+                "errors": errors if errors else None,
+            },
+        )
+
+        return brand_config

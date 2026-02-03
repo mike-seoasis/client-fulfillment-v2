@@ -1,7 +1,7 @@
 """Brand config API router.
 
 REST endpoints for managing brand configuration generation.
-Supports triggering generation and monitoring progress.
+Supports triggering generation, monitoring progress, and managing config.
 """
 
 import logging
@@ -13,6 +13,11 @@ from app.core.database import get_session
 from app.integrations.claude import ClaudeClient, get_claude
 from app.integrations.crawl4ai import Crawl4AIClient, get_crawl4ai
 from app.integrations.perplexity import PerplexityClient, get_perplexity
+from app.schemas.brand_config import (
+    BrandConfigResponse,
+    RegenerateRequest,
+    SectionUpdate,
+)
 from app.schemas.brand_config_generation import GenerationStatusResponse
 from app.services.brand_config import BrandConfigService
 from app.services.project import ProjectService
@@ -220,4 +225,145 @@ async def get_generation_status(
         error=generation_status.error,
         started_at=generation_status.started_at,
         completed_at=generation_status.completed_at,
+    )
+
+
+@router.get(
+    "",
+    response_model=BrandConfigResponse,
+    responses={
+        404: {"description": "Project not found or brand config not generated yet"},
+    },
+)
+async def get_brand_config(
+    project_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> BrandConfigResponse:
+    """Get the full brand config for a project.
+
+    Returns the complete brand configuration including all generated sections.
+
+    Args:
+        project_id: UUID of the project.
+
+    Returns:
+        BrandConfigResponse with the full brand config.
+
+    Raises:
+        HTTPException: 404 if project not found or brand config not generated yet.
+    """
+    brand_config = await BrandConfigService.get_brand_config(db, project_id)
+
+    return BrandConfigResponse(
+        id=brand_config.id,
+        project_id=brand_config.project_id,
+        brand_name=brand_config.brand_name,
+        domain=brand_config.domain,
+        v2_schema=brand_config.v2_schema,
+        created_at=brand_config.created_at,
+        updated_at=brand_config.updated_at,
+    )
+
+
+@router.patch(
+    "",
+    response_model=BrandConfigResponse,
+    responses={
+        404: {"description": "Project not found or brand config not generated yet"},
+        422: {"description": "Invalid section names"},
+    },
+)
+async def update_brand_config(
+    project_id: str,
+    request: SectionUpdate,
+    db: AsyncSession = Depends(get_session),
+) -> BrandConfigResponse:
+    """Update specific sections of a brand config.
+
+    Allows partial updates to individual sections without replacing
+    the entire v2_schema.
+
+    Args:
+        project_id: UUID of the project.
+        request: SectionUpdate with sections to update.
+
+    Returns:
+        BrandConfigResponse with the updated brand config.
+
+    Raises:
+        HTTPException: 404 if project not found or brand config not generated yet.
+        HTTPException: 422 if invalid section names provided.
+    """
+    brand_config = await BrandConfigService.update_sections(
+        db=db,
+        project_id=project_id,
+        sections=request.sections,
+    )
+    await db.commit()
+
+    return BrandConfigResponse(
+        id=brand_config.id,
+        project_id=brand_config.project_id,
+        brand_name=brand_config.brand_name,
+        domain=brand_config.domain,
+        v2_schema=brand_config.v2_schema,
+        created_at=brand_config.created_at,
+        updated_at=brand_config.updated_at,
+    )
+
+
+@router.post(
+    "/regenerate",
+    response_model=BrandConfigResponse,
+    responses={
+        404: {"description": "Project not found or brand config not generated yet"},
+        422: {"description": "Invalid section names"},
+        503: {"description": "Claude LLM not available"},
+    },
+)
+async def regenerate_brand_config(
+    project_id: str,
+    request: RegenerateRequest,
+    db: AsyncSession = Depends(get_session),
+    perplexity: PerplexityClient = Depends(get_perplexity),
+    crawl4ai: Crawl4AIClient = Depends(get_crawl4ai),
+    claude: ClaudeClient = Depends(get_claude),
+) -> BrandConfigResponse:
+    """Regenerate all or specific sections of a brand config.
+
+    Runs the research and synthesis phases again for the specified sections.
+    If no sections are specified, regenerates all sections.
+
+    Args:
+        project_id: UUID of the project.
+        request: RegenerateRequest with optional sections to regenerate.
+
+    Returns:
+        BrandConfigResponse with the regenerated brand config.
+
+    Raises:
+        HTTPException: 404 if project not found or brand config not generated yet.
+        HTTPException: 422 if invalid section names provided.
+        HTTPException: 503 if Claude LLM is not configured.
+    """
+    sections = request.get_sections_to_regenerate()
+
+    brand_config = await BrandConfigService.regenerate_sections(
+        db=db,
+        project_id=project_id,
+        sections=sections,
+        perplexity=perplexity,
+        crawl4ai=crawl4ai,
+        claude=claude,
+    )
+    await db.commit()
+
+    return BrandConfigResponse(
+        id=brand_config.id,
+        project_id=brand_config.project_id,
+        brand_name=brand_config.brand_name,
+        domain=brand_config.domain,
+        v2_schema=brand_config.v2_schema,
+        created_at=brand_config.created_at,
+        updated_at=brand_config.updated_at,
     )
