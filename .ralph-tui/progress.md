@@ -653,3 +653,22 @@ after each iteration and it's included in prompts for context.
   - Pattern: Phase completion updates require 3 changes: status table, checkboxes, and session log entry
 ---
 
+## 2026-02-03 - S2-099
+- **What was implemented:** Phase 2 verification and cleanup - removed stale test files, fixed test isolation, created phase completion commit
+- **Files changed:**
+  - `backend/tests/e2e/test_content_brief_scoring_workflow.py` (deleted - referenced non-existent pop_content_brief module)
+  - `backend/tests/e2e/test_crawl_to_content_workflow.py` (deleted - legacy test)
+  - `backend/tests/integrations/test_pop.py` (deleted - referenced non-existent CircuitState, CircuitBreaker, CircuitBreakerConfig)
+  - `backend/tests/integrations/test_pop_integration.py` (deleted - legacy test)
+  - `backend/tests/integrations/test_amazon_reviews_fallback.py` (deleted - legacy test)
+  - `backend/tests/migrations/test_staging_migration.py` (deleted - tests outdated implementation details)
+  - `backend/tests/api/test_projects.py` (fixed test isolation issues)
+  - `frontend/src/components/__tests__/ProjectForm.test.tsx` (updated labels and schema to match current implementation)
+- **Learnings:**
+  - Pattern: V2 rebuild leaves stale test files that reference removed modules - verify tests pass before phase completion
+  - Pattern: Session-scoped SQLite fixtures cause test pollution - tests should be independent of database state
+  - Pattern: When form labels change (Site URL → Website URL), update test selectors and expected values
+  - Pattern: When schema adds new fields (additional_info), update test assertions to include them
+  - Gotcha: Tests checking for "empty database" fail when other tests have run first in session-scoped fixtures
+---
+
