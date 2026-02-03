@@ -1,0 +1,139 @@
+Metadata-Version: 2.4
+Name: client-fulfillment-app
+Version: 2.0.0
+Summary: Client Fulfillment App V2 - SEO content generation pipeline
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi>=0.109.0
+Requires-Dist: uvicorn[standard]>=0.27.0
+Requires-Dist: pydantic>=2.5.0
+Requires-Dist: pydantic-settings>=2.1.0
+Requires-Dist: sqlalchemy>=2.0.0
+Requires-Dist: asyncpg>=0.29.0
+Requires-Dist: alembic>=1.13.0
+Requires-Dist: python-json-logger>=2.0.7
+Requires-Dist: httpx>=0.26.0
+Requires-Dist: redis>=5.0.0
+Requires-Dist: python-dotenv>=1.0.0
+Requires-Dist: apscheduler>=3.10.0
+Requires-Dist: pypdf>=4.0.0
+Requires-Dist: python-docx>=1.1.0
+Requires-Dist: aiosmtplib>=3.0.0
+Requires-Dist: websockets>=12.0
+Requires-Dist: python-multipart>=0.0.6
+Requires-Dist: psycopg2-binary>=2.9.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.4.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.23.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.1.0; extra == "dev"
+Requires-Dist: pytest-mock>=3.12.0; extra == "dev"
+Requires-Dist: httpx>=0.26.0; extra == "dev"
+Requires-Dist: factory-boy>=3.3.0; extra == "dev"
+Requires-Dist: faker>=22.0.0; extra == "dev"
+Requires-Dist: aiosqlite>=0.19.0; extra == "dev"
+Requires-Dist: ruff>=0.1.0; extra == "dev"
+Requires-Dist: mypy>=1.8.0; extra == "dev"
+
+# Client Onboarding Backend
+
+FastAPI backend for the client onboarding system.
+
+## Quick Start
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Copy environment file
+cp .env.example .env
+
+# Run migrations
+alembic upgrade head
+
+# Start server
+uvicorn app.main:app --reload
+```
+
+## Documentation
+
+- [POP Integration](docs/POP_INTEGRATION.md) - PageOptimizer Pro API integration for content scoring
+- [Logging Reference](docs/LOGGING.md) - Log fields and levels for ops/monitoring
+
+## External Integrations
+
+### PageOptimizer Pro (POP)
+
+SERP-based content optimization scoring. Provides:
+- **Content Brief**: Fetch word count targets, LSI terms, heading structure before content generation
+- **Content Scoring**: Score generated content against SERP competitors
+
+**Configuration:**
+```bash
+POP_API_KEY=your_api_key
+USE_POP_CONTENT_BRIEF=false  # Enable POP for content briefs
+USE_POP_SCORING=false        # Enable POP for content scoring
+POP_SHADOW_MODE=false        # Run both POP and legacy for comparison
+```
+
+**Endpoints:**
+- `POST /api/v1/projects/{project_id}/phases/content_brief/fetch`
+- `GET /api/v1/projects/{project_id}/phases/content_brief/pages/{page_id}/brief`
+- `POST /api/v1/projects/{project_id}/phases/content_score/score`
+- `POST /api/v1/projects/{project_id}/phases/content_score/batch`
+
+**Fallback:** When POP is unavailable (circuit open, timeout, API error), scoring automatically falls back to the legacy `ContentScoreService`.
+
+See [POP Integration docs](docs/POP_INTEGRATION.md) for full details.
+
+### DataForSEO
+
+SERP and keyword data. Used for:
+- Keyword research
+- Competitor analysis
+- SERP feature tracking
+
+### Anthropic (Claude)
+
+LLM for content generation and categorization.
+
+### Other Integrations
+
+- Perplexity - Website analysis
+- Keywords Everywhere - Keyword data
+- Google Cloud NLP - Entity extraction
+- Crawl4AI - Web crawling
+
+## Project Structure
+
+```
+backend/
+├── alembic/              # Database migrations
+├── app/
+│   ├── api/v1/          # API endpoints
+│   ├── core/            # Config, logging, database
+│   ├── integrations/    # External API clients
+│   ├── models/          # SQLAlchemy models
+│   ├── schemas/         # Pydantic schemas
+│   └── services/        # Business logic
+├── docs/                # Documentation
+└── tests/               # Test suite
+```
+
+## Testing
+
+```bash
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=app
+
+# Run specific test file
+pytest tests/services/test_pop_content_score.py
+```
+
+## API Documentation
+
+When running locally, visit:
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc

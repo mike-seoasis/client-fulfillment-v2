@@ -135,8 +135,9 @@
         "'uv run python -c \"import app.core.config\"' works"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Install: curl -LsSf https://astral.sh/uv/install.sh | sh. Run 'uv lock' in backend/."
+      "passes": true,
+      "notes": "Install: curl -LsSf https://astral.sh/uv/install.sh | sh. Run 'uv lock' in backend/.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "P0-009",
@@ -284,7 +285,7 @@
   ],
   "metadata": {
     "phase": 0,
-    "updatedAt": "2026-02-03T01:58:01.926Z",
+    "updatedAt": "2026-02-03T01:59:21.292Z",
     "openspecChange": "phase-0-foundation-setup"
   }
 }
