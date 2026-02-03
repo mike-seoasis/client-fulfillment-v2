@@ -63,8 +63,9 @@
         "Uses asyncio.Lock for thread-safe state transitions"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Use backend/app/core/redis.py lines 38-130 as reference implementation. Add name parameter."
+      "passes": true,
+      "notes": "Use backend/app/core/redis.py lines 38-130 as reference implementation. Add name parameter.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "P0-005",
@@ -280,7 +281,7 @@
   ],
   "metadata": {
     "phase": 0,
-    "updatedAt": "2026-02-03T01:47:19.136Z",
+    "updatedAt": "2026-02-03T01:48:28.252Z",
     "openspecChange": "phase-0-foundation-setup"
   }
 }

@@ -7,6 +7,7 @@ after each iteration and it's included in prompts for context.
 
 - **Empty string env vars**: Pydantic validates empty string `""` as URL input, not `None`. Comment out unused URL env vars (e.g., `# REDIS_URL=`) instead of leaving empty.
 - **Health endpoints**: Defined in `main.py` directly, not in routers. Routes: `/health`, `/health/db`, `/health/redis`, `/health/scheduler`
+- **CircuitBreaker**: Use shared `app.core.circuit_breaker` module. Pass `name` parameter for logging context. Config via `CircuitBreakerConfig(failure_threshold, recovery_timeout)`.
 
 ---
 
@@ -56,5 +57,16 @@ after each iteration and it's included in prompts for context.
   - The acceptance criteria mentioned `tests/models/` but this directory doesn't exist; core tests serve this purpose
   - `conftest.py` only imports from `app.core` which was preserved, so no changes needed
   - 37 tests now pass cleanly: `python3 -m pytest tests/core/ tests/test_fixtures.py`
+---
+
+## 2026-02-02 - P0-004
+- What was implemented: Created shared CircuitBreaker module to DRY up circuit breaker code
+- Files changed:
+  - Created `backend/app/core/circuit_breaker.py`
+- **Learnings:**
+  - Multiple loggers in `logging.py` have duplicate circuit breaker logging methods (RedisLogger, Crawl4AILogger, ClaudeLogger, etc.)
+  - The shared module uses generic logging with `circuit_name` in `extra` dict for context
+  - Reference implementation was in `redis.py` lines 38-158
+  - Module exports: `CircuitState` (enum), `CircuitBreakerConfig` (dataclass), `CircuitBreaker` (class)
 ---
 
