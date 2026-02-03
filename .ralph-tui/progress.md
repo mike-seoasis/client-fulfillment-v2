@@ -13,6 +13,13 @@ after each iteration and it's included in prompts for context.
 - Timestamps use `DateTime(timezone=True)` with `datetime.now(UTC)`
 - New models must be added to `app/models/__init__.py` (import + `__all__` list)
 
+### Service Pattern
+- Services coordinate between integrations (S3, etc.), utilities, and database
+- Take dependencies via constructor injection (e.g., `__init__(self, s3_client: S3Client)`)
+- Methods take `db: AsyncSession` as first param for database operations
+- Raise `HTTPException` for client-facing errors (404, 500)
+- New services must be added to `app/services/__init__.py` (import + `__all__` list)
+
 ---
 
 ## 2026-02-03 - S2-001
@@ -101,5 +108,18 @@ after each iteration and it's included in prompts for context.
   - Pattern: Don't expose internal fields (s3_key, extracted_text) in API responses - keep them internal
   - Pattern: File upload APIs use multipart/form-data, so no Create schema needed for the JSON body
   - Pattern: List schemas follow `items` + `total` convention (may omit `limit`/`offset` for simpler cases)
+---
+
+## 2026-02-03 - S2-008
+- **What was implemented:** FileService for coordinating file operations (S3 storage + text extraction + DB)
+- **Files changed:**
+  - `backend/app/services/file.py` (created - FileService class with upload_file, list_files, delete_file)
+  - `backend/app/services/__init__.py` (added FileService import and export)
+- **Learnings:**
+  - Pattern: Services take dependencies (like S3Client) via constructor injection for testability
+  - Pattern: Text extraction is best-effort on upload - don't fail the upload if extraction fails
+  - Pattern: S3 key format `projects/{project_id}/files/{file_id}/{filename}` provides clean organization
+  - Pattern: On delete, handle S3NotFoundError gracefully (file already gone) but still delete DB record
+  - Pattern: Use `isinstance(file, bytes)` check rather than `hasattr(file, "read")` for cleaner type handling
 ---
 
