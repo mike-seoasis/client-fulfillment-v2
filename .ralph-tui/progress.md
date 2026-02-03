@@ -204,3 +204,16 @@ after each iteration and it's included in prompts for context.
   - max-w-7xl with responsive padding (px-4 sm:px-6 lg:px-8) provides consistent container behavior
 ---
 
+## 2026-02-03 - S1-012
+- Created `frontend/src/components/ProjectCard.tsx` for displaying project cards on dashboard
+- Card displays: project name (title), site_url, placeholder metrics (0 pages, 0 clusters, 0 pending), relative time for last activity
+- Card is clickable and navigates to `/projects/{id}` using Next.js router
+- Uses existing Card component from UI library which provides hover effects and keyboard accessibility
+- Installed `date-fns` package for `formatDistanceToNow` relative time formatting
+- Files changed: `frontend/src/components/ProjectCard.tsx`, `frontend/package.json`
+- **Learnings:**
+  - `date-fns` `formatDistanceToNow` with `addSuffix: true` gives natural output like "2 days ago"
+  - Component-level cards (like ProjectCard) can compose UI primitives (Card) while adding domain-specific layout/content
+  - `'use client'` required for components using `useRouter` from next/navigation
+---
+
