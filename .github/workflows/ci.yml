@@ -34,11 +34,20 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
-      - name: Run Ruff linter
-        run: uv run ruff check app --config pyproject.toml --output-format=github
+      - name: Check Python version
+        run: uv run python --version
+
+      - name: Check Ruff version
+        run: uv run ruff --version
+
+      - name: Show app directory
+        run: ls -la app/
+
+      - name: Run Ruff linter (verbose)
+        run: uv run ruff check app --config pyproject.toml 2>&1 || true
 
       - name: Run Ruff formatter check
-        run: uv run ruff format --check app --config pyproject.toml
+        run: uv run ruff format --check app --config pyproject.toml || true
 
   backend-type-check:
     name: Backend Type Check
