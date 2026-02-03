@@ -480,8 +480,9 @@
         "Show 'Regenerate All' button in header"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "This is the container page. Section navigation and content come next."
+      "passes": true,
+      "notes": "This is the container page. Section navigation and content come next.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S2-030",
@@ -679,6 +680,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T22:51:02.375Z"
+    "updatedAt": "2026-02-03T22:52:24.834Z"
   }
 }
