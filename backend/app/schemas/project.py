@@ -6,7 +6,7 @@ Defines request/response models for Project API endpoints with validation rules.
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
 # Valid project statuses
 VALID_PROJECT_STATUSES = frozenset(
@@ -69,11 +69,14 @@ class ProjectCreate(BaseModel):
         max_length=255,
         description="Project name",
     )
-    client_id: str = Field(
+    site_url: HttpUrl = Field(
         ...,
-        min_length=1,
+        description="Client website URL",
+    )
+    client_id: str | None = Field(
+        None,
         max_length=255,
-        description="Client identifier",
+        description="Client identifier (optional)",
     )
     status: str = Field(
         default="active",
@@ -95,11 +98,13 @@ class ProjectCreate(BaseModel):
 
     @field_validator("client_id")
     @classmethod
-    def validate_client_id(cls, v: str) -> str:
+    def validate_client_id(cls, v: str | None) -> str | None:
         """Validate client ID."""
+        if v is None:
+            return None
         v = v.strip()
         if not v:
-            raise ValueError("Client ID cannot be empty or whitespace only")
+            return None
         return v
 
     @field_validator("status")
@@ -141,6 +146,10 @@ class ProjectUpdate(BaseModel):
         min_length=1,
         max_length=255,
         description="New project name",
+    )
+    site_url: HttpUrl | None = Field(
+        None,
+        description="New client website URL",
     )
     status: str | None = Field(
         None,
@@ -233,7 +242,8 @@ class ProjectResponse(BaseModel):
 
     id: str = Field(..., description="Project UUID")
     name: str = Field(..., description="Project name")
-    client_id: str = Field(..., description="Client identifier")
+    site_url: str = Field(..., description="Client website URL")
+    client_id: str | None = Field(None, description="Client identifier")
     status: str = Field(..., description="Project status")
     phase_status: dict[str, Any] = Field(..., description="Phase status dictionary")
     created_at: datetime = Field(..., description="Creation timestamp")

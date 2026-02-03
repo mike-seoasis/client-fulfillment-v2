@@ -47,8 +47,9 @@
         "Export schemas from backend/app/schemas/__init__.py"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Use Pydantic v2 patterns. HttpUrl validates URL format automatically."
+      "passes": true,
+      "notes": "Use Pydantic v2 patterns. HttpUrl validates URL format automatically.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S1-004",
@@ -343,6 +344,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T17:21:55.932Z"
+    "updatedAt": "2026-02-03T17:23:18.409Z"
   }
 }

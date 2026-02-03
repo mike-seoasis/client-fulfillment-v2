@@ -10,6 +10,7 @@ after each iteration and it's included in prompts for context.
 - **Linting**: Run `uv run ruff check <file>` from project root
 - **Alembic migrations**: Follow `0NNN_description.py` naming pattern. Use `op.add_column()`, `op.alter_column()`, `op.create_index()`. For new required columns on existing tables, add `server_default` temporarily, then remove it after.
 - **Alembic verification**: Use `alembic heads` to verify migration is detected (no DB required). Use `alembic history -r X:Y` to verify chain.
+- **Pydantic URL fields**: Use `HttpUrl` in request schemas for automatic URL validation. Use `str` in response schemas (DB stores as string, `from_attributes=True` handles conversion).
 
 ---
 
@@ -32,5 +33,18 @@ after each iteration and it's included in prompts for context.
   - `greenlet` package required for async SQLAlchemy Alembic - installed via `uv add greenlet`
   - For adding required columns to existing tables: use `server_default` temporarily, then `op.alter_column(..., server_default=None)` to remove it
   - `alembic heads` and `alembic history` don't require DB connection, useful for verification
+---
+
+## 2026-02-03 - S1-003
+- Updated `backend/app/schemas/project.py` for v2 rebuild
+- Added `site_url: HttpUrl` to `ProjectCreate` (required field)
+- Added `site_url: HttpUrl | None` to `ProjectUpdate` (optional field)
+- Added `site_url: str` to `ProjectResponse`
+- Made `client_id` optional in both `ProjectCreate` and `ProjectResponse` to match model
+- Files changed: `backend/app/schemas/project.py`
+- **Learnings:**
+  - Pydantic v2 `HttpUrl` type provides automatic URL validation
+  - Use `HttpUrl` in request schemas for validation, but `str` in response schemas (since DB stores as string)
+  - Schemas already exported in `__init__.py`, no changes needed there
 ---
 
