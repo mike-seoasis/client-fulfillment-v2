@@ -299,3 +299,17 @@ after each iteration and it's included in prompts for context.
   - Pattern: `to_response_list` helper simplifies list endpoints that need computed fields
 ---
 
+## 2026-02-03 - S2-021
+- **What was implemented:** Updated Project API for new fields and cascade S3 deletion
+- **Files changed:**
+  - `backend/app/services/project.py` (updated delete_project to accept optional S3Client and delete files from S3 before project deletion)
+  - `backend/app/api/v1/projects.py` (added S3Client dependency to delete endpoint, passes S3 client to service)
+  - `backend/tests/api/test_projects.py` (added MockS3Client, async_client_with_s3_for_projects fixture, and 3 tests for cascade delete behavior)
+- **Learnings:**
+  - Pattern: When cascade-deleting related entities that have external storage (S3), delete from external storage BEFORE DB delete since DB cascade happens automatically
+  - Pattern: S3 delete errors should be logged but not fail the main operation - the DB cascade will clean up records anyway
+  - Pattern: Handle S3NotFoundError gracefully (file may already be deleted) during cascade delete
+  - Pattern: Pass optional S3Client to service methods to allow cascade delete while maintaining backward compatibility
+  - Pattern: Test fixtures can return tuples like `tuple[AsyncClient, MockS3Client]` to give tests access to mocks for verification
+---
+

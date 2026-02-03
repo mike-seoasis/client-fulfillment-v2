@@ -6,12 +6,111 @@ Tests all CRUD operations on the /api/v1/projects endpoints:
 - Get project (exists, not found)
 - Update project (partial update, not found)
 - Delete project (exists, not found)
+- Delete project with cascade S3 file deletion
 """
 
 import uuid
+from collections.abc import AsyncGenerator
+from io import BytesIO
+from typing import Any
 
 import pytest
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
+
+# ---------------------------------------------------------------------------
+# Mock S3 Client for Cascade Delete Tests
+# ---------------------------------------------------------------------------
+
+
+class MockS3Client:
+    """Mock S3 client for testing cascade delete behavior."""
+
+    def __init__(self) -> None:
+        self._files: dict[str, tuple[bytes, str]] = {}
+        self._available = True
+        self._delete_calls: list[str] = []  # Track delete calls for assertions
+
+    @property
+    def available(self) -> bool:
+        return self._available
+
+    @property
+    def bucket(self) -> str:
+        return "test-bucket"
+
+    @property
+    def delete_calls(self) -> list[str]:
+        """Return list of S3 keys that were deleted."""
+        return self._delete_calls
+
+    async def upload_file(
+        self,
+        key: str,
+        file_obj: Any,
+        content_type: str = "application/octet-stream",
+    ) -> str:
+        if isinstance(file_obj, bytes):
+            content = file_obj
+        elif isinstance(file_obj, BytesIO):
+            content = file_obj.read()
+        else:
+            content = file_obj.read()
+        self._files[key] = (content, content_type)
+        return key
+
+    async def get_file(self, key: str) -> bytes:
+        if key not in self._files:
+            raise Exception(f"Object not found: {key}")
+        return self._files[key][0]
+
+    async def delete_file(self, key: str) -> bool:
+        self._delete_calls.append(key)
+        if key in self._files:
+            del self._files[key]
+        return True
+
+    async def file_exists(self, key: str) -> bool:
+        return key in self._files
+
+    async def get_file_metadata(self, key: str) -> dict[str, Any]:
+        if key not in self._files:
+            raise Exception(f"Object not found: {key}")
+        content, content_type = self._files[key]
+        return {"content_length": len(content), "content_type": content_type}
+
+    def clear(self) -> None:
+        self._files.clear()
+        self._delete_calls.clear()
+
+
+@pytest.fixture
+def mock_s3_for_projects() -> MockS3Client:
+    """Create a mock S3 client for project tests."""
+    return MockS3Client()
+
+
+@pytest.fixture
+async def async_client_with_s3_for_projects(
+    app,
+    mock_db_manager,
+    mock_redis_manager,
+    mock_s3_for_projects: MockS3Client,
+) -> AsyncGenerator[tuple[AsyncClient, MockS3Client], None]:
+    """Create async test client with mocked S3 and return both client and mock."""
+    from app.core.config import get_settings
+    from app.integrations.s3 import get_s3
+    from tests.conftest import get_test_settings
+
+    app.dependency_overrides[get_settings] = get_test_settings
+    app.dependency_overrides[get_s3] = lambda: mock_s3_for_projects
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as ac:
+        yield ac, mock_s3_for_projects
+
+    app.dependency_overrides.clear()
 
 
 class TestListProjects:
@@ -386,3 +485,126 @@ class TestDeleteProject:
         assert response.status_code == 404
         data = response.json()
         assert "detail" in data
+
+
+class TestDeleteProjectWithFiles:
+    """Tests for DELETE /api/v1/projects/{id} with S3 file cascade deletion."""
+
+    @pytest.mark.asyncio
+    async def test_delete_project_cascades_s3_files(
+        self,
+        async_client_with_s3_for_projects: tuple[AsyncClient, MockS3Client],
+    ) -> None:
+        """Should delete all project files from S3 when deleting a project."""
+        client, mock_s3 = async_client_with_s3_for_projects
+
+        # Create a project
+        create_response = await client.post(
+            "/api/v1/projects",
+            json={"name": "Project With Files", "site_url": "https://files.example.com"},
+        )
+        assert create_response.status_code == 201
+        project_id = create_response.json()["id"]
+
+        # Upload multiple files
+        await client.post(
+            f"/api/v1/projects/{project_id}/files",
+            files={"file": ("doc1.txt", b"content 1", "text/plain")},
+        )
+        await client.post(
+            f"/api/v1/projects/{project_id}/files",
+            files={"file": ("doc2.txt", b"content 2", "text/plain")},
+        )
+
+        # Verify files are in S3
+        assert len(mock_s3._files) == 2
+
+        # Clear delete call tracking before delete
+        mock_s3._delete_calls.clear()
+
+        # Delete the project
+        response = await client.delete(f"/api/v1/projects/{project_id}")
+        assert response.status_code == 204
+
+        # Verify S3 delete was called for each file
+        assert len(mock_s3.delete_calls) == 2
+        # Verify all files are gone from mock S3
+        assert len(mock_s3._files) == 0
+
+    @pytest.mark.asyncio
+    async def test_delete_project_no_files_still_succeeds(
+        self,
+        async_client_with_s3_for_projects: tuple[AsyncClient, MockS3Client],
+    ) -> None:
+        """Should successfully delete project even when it has no files."""
+        client, mock_s3 = async_client_with_s3_for_projects
+
+        # Create a project without any files
+        create_response = await client.post(
+            "/api/v1/projects",
+            json={"name": "Empty Project", "site_url": "https://empty.example.com"},
+        )
+        assert create_response.status_code == 201
+        project_id = create_response.json()["id"]
+
+        # Delete the project
+        response = await client.delete(f"/api/v1/projects/{project_id}")
+        assert response.status_code == 204
+
+        # Verify no S3 delete calls were made
+        assert len(mock_s3.delete_calls) == 0
+
+        # Verify project is gone
+        get_response = await client.get(f"/api/v1/projects/{project_id}")
+        assert get_response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_delete_project_files_only_for_that_project(
+        self,
+        async_client_with_s3_for_projects: tuple[AsyncClient, MockS3Client],
+    ) -> None:
+        """Should only delete files belonging to the deleted project."""
+        client, mock_s3 = async_client_with_s3_for_projects
+
+        # Create two projects
+        create1 = await client.post(
+            "/api/v1/projects",
+            json={"name": "Project One", "site_url": "https://one.example.com"},
+        )
+        create2 = await client.post(
+            "/api/v1/projects",
+            json={"name": "Project Two", "site_url": "https://two.example.com"},
+        )
+        assert create1.status_code == 201
+        assert create2.status_code == 201
+        project1_id = create1.json()["id"]
+        project2_id = create2.json()["id"]
+
+        # Upload files to both projects
+        await client.post(
+            f"/api/v1/projects/{project1_id}/files",
+            files={"file": ("project1_file.txt", b"p1 content", "text/plain")},
+        )
+        await client.post(
+            f"/api/v1/projects/{project2_id}/files",
+            files={"file": ("project2_file.txt", b"p2 content", "text/plain")},
+        )
+
+        # Verify both files are in S3
+        assert len(mock_s3._files) == 2
+
+        # Delete project 1
+        mock_s3._delete_calls.clear()
+        response = await client.delete(f"/api/v1/projects/{project1_id}")
+        assert response.status_code == 204
+
+        # Verify only 1 file was deleted from S3
+        assert len(mock_s3.delete_calls) == 1
+        # Verify the deleted file was from project 1
+        assert project1_id in mock_s3.delete_calls[0]
+
+        # Verify project 2's file is still in S3
+        assert len(mock_s3._files) == 1
+        # Verify the remaining file belongs to project 2
+        remaining_key = list(mock_s3._files.keys())[0]
+        assert project2_id in remaining_key

@@ -10,6 +10,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.integrations.s3 import S3Client, S3Error, S3NotFoundError
 from app.models.brand_config import BrandConfig
 from app.models.project import Project
 from app.models.project_file import ProjectFile
@@ -119,17 +120,48 @@ class ProjectService:
         return project
 
     @staticmethod
-    async def delete_project(db: AsyncSession, project_id: str) -> None:
-        """Delete a project by ID.
+    async def delete_project(
+        db: AsyncSession, project_id: str, s3_client: S3Client | None = None
+    ) -> None:
+        """Delete a project by ID, including S3 files.
+
+        This method:
+        1. Verifies the project exists
+        2. Finds all ProjectFile records for the project
+        3. Deletes each file from S3 (if s3_client provided)
+        4. Deletes the project (DB cascade handles ProjectFile records)
 
         Args:
             db: AsyncSession for database operations.
             project_id: UUID string of the project.
+            s3_client: Optional S3Client for deleting files from storage.
+                       If not provided, S3 files will NOT be deleted.
 
         Raises:
             HTTPException: 404 if project not found.
         """
         project = await ProjectService.get_project(db, project_id)
+
+        # Delete files from S3 before deleting the project
+        if s3_client is not None:
+            # Get all project files
+            files_stmt = select(ProjectFile).where(ProjectFile.project_id == project_id)
+            files_result = await db.execute(files_stmt)
+            project_files = list(files_result.scalars().all())
+
+            # Delete each file from S3
+            for project_file in project_files:
+                try:
+                    await s3_client.delete_file(project_file.s3_key)
+                except S3NotFoundError:
+                    # File already gone from S3 - continue
+                    pass
+                except S3Error:
+                    # Log but don't fail the project deletion
+                    # The DB records will be cascade deleted anyway
+                    pass
+
+        # Delete the project (DB cascade handles ProjectFile records)
         await db.delete(project)
         await db.flush()
 

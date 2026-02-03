@@ -346,8 +346,9 @@
         "Update DELETE to cascade delete files from S3"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Cascade delete: delete ProjectFile records AND call S3Client.delete_file() for each."
+      "passes": true,
+      "notes": "Cascade delete: delete ProjectFile records AND call S3Client.delete_file() for each.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S2-022",
@@ -671,6 +672,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T22:31:44.378Z"
+    "updatedAt": "2026-02-03T22:34:45.818Z"
   }
 }

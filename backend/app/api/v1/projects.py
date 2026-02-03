@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
+from app.integrations.s3 import S3Client, get_s3
 from app.schemas.project import (
     ProjectCreate,
     ProjectListResponse,
@@ -99,8 +100,13 @@ async def update_project(
 async def delete_project(
     project_id: str,
     db: AsyncSession = Depends(get_session),
+    s3: S3Client = Depends(get_s3),
 ) -> None:
-    """Delete a project.
+    """Delete a project and all associated files from storage.
+
+    This endpoint:
+    1. Deletes all project files from S3 storage
+    2. Deletes the project record (cascades to delete ProjectFile records)
 
     Args:
         project_id: UUID of the project.
@@ -108,4 +114,4 @@ async def delete_project(
     Raises:
         HTTPException: 404 if project not found.
     """
-    await ProjectService.delete_project(db, project_id)
+    await ProjectService.delete_project(db, project_id, s3_client=s3)
