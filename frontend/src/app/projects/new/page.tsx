@@ -161,6 +161,11 @@ export default function CreateProjectPage() {
     }
   }
 
+  // Handle retry - restart generation
+  async function handleRetry() {
+    await startGeneration.mutateAsync();
+  }
+
   const isSubmitting =
     createProject.isPending ||
     isUploadingFiles ||
@@ -245,6 +250,7 @@ export default function CreateProjectPage() {
               projectName={formData?.name}
               onBack={handleBack}
               onGoToProject={handleGoToProject}
+              onRetry={handleRetry}
             />
           )}
         </div>

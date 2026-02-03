@@ -379,3 +379,14 @@ after each iteration and it's included in prompts for context.
   - Pattern: useEffect with dependency on generation.isComplete triggers onComplete callback for navigation
 ---
 
+## 2026-02-03 - S2-027
+- **What was implemented:** Added retry functionality to generation completion screen for handling generation failures
+- **Files changed:**
+  - `frontend/src/components/GenerationProgress.tsx` (added onRetry prop and Retry button in failure state)
+  - `frontend/src/app/projects/new/page.tsx` (added handleRetry function and passed onRetry prop)
+- **Learnings:**
+  - Pattern: For retry functionality, pass an async callback prop (onRetry) from parent rather than calling the hook directly in the component
+  - Pattern: Use local state (isRetrying) to manage button loading state while async retry is in progress
+  - Pattern: Existing implementation already met most acceptance criteria - generation completion screen had checkmark, message, and navigation
+---
+

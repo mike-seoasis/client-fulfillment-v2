@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useBrandConfigGeneration } from '@/hooks/useBrandConfigGeneration';
 import { Button } from '@/components/ui';
 
@@ -61,6 +61,8 @@ interface GenerationProgressProps {
   onBack?: () => void;
   /** Called when user clicks "Go to Project" */
   onGoToProject?: () => void;
+  /** Called when user wants to retry generation (on failure) */
+  onRetry?: () => Promise<void>;
 }
 
 /**
@@ -80,8 +82,10 @@ export function GenerationProgress({
   onComplete,
   onBack,
   onGoToProject,
+  onRetry,
 }: GenerationProgressProps) {
   const generation = useBrandConfigGeneration(projectId);
+  const [isRetrying, setIsRetrying] = useState(false);
 
   // Call onComplete when generation finishes successfully
   useEffect(() => {
@@ -385,6 +389,22 @@ export function GenerationProgress({
             <Button variant="ghost" onClick={onBack}>
               Back
             </Button>
+            {onRetry && (
+              <Button
+                variant="secondary"
+                onClick={async () => {
+                  setIsRetrying(true);
+                  try {
+                    await onRetry();
+                  } finally {
+                    setIsRetrying(false);
+                  }
+                }}
+                disabled={isRetrying}
+              >
+                {isRetrying ? 'Retrying...' : 'Retry'}
+              </Button>
+            )}
             <Button onClick={onGoToProject}>
               Go to Project Anyway
             </Button>
