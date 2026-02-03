@@ -1,0 +1,284 @@
+{
+  "name": "Phase 0: Foundation Setup",
+  "description": "Establish clean foundation for V2 rebuild - delete tangled code, extract CircuitBreaker, migrate to uv, replace frontend with Next.js 14, set up Docker dev environment.",
+  "branchName": "v2-rebuild",
+  "userStories": [
+    {
+      "id": "P0-001",
+      "title": "Create v2-rebuild branch",
+      "description": "As a developer, I need a new branch so that destructive changes don't affect main.",
+      "acceptanceCriteria": [
+        "Branch v2-rebuild created from main",
+        "Branch pushed to origin with upstream tracking"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Run: git checkout -b v2-rebuild && git push -u origin v2-rebuild",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "P0-002",
+      "title": "Delete tangled backend code",
+      "description": "As a developer, I need to remove broken services and endpoints so that we can rebuild fresh.",
+      "acceptanceCriteria": [
+        "Directory backend/app/services/ deleted",
+        "Directory backend/app/api/v1/endpoints/ deleted",
+        "Directory backend/app/repositories/ deleted",
+        "Directory backend/app/utils/ deleted",
+        "Directory backend/app/clients/ deleted",
+        "backend/app/main.py updated to remove all deleted router imports",
+        "App still starts with health endpoint working"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Keep: models/, schemas/, core/, integrations/, alembic/. Update main.py to only have health routes."
+    },
+    {
+      "id": "P0-003",
+      "title": "Clean up tests referencing deleted code",
+      "description": "As a developer, I need to remove tests that depend on deleted code so that pytest runs clean.",
+      "acceptanceCriteria": [
+        "Delete tests/services/ directory if exists",
+        "Delete tests/api/ directory if exists",
+        "Delete tests/repositories/ directory if exists",
+        "Keep tests/core/, tests/models/, tests/integrations/",
+        "pytest tests/core/ tests/models/ runs without import errors"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "We only need core and model tests for Phase 0. Integration tests may need review."
+    },
+    {
+      "id": "P0-004",
+      "title": "Create shared CircuitBreaker module",
+      "description": "As a developer, I need a single CircuitBreaker implementation so that code is DRY.",
+      "acceptanceCriteria": [
+        "File backend/app/core/circuit_breaker.py created",
+        "Contains CircuitState enum with CLOSED, OPEN, HALF_OPEN values",
+        "Contains CircuitBreakerConfig dataclass with failure_threshold and recovery_timeout",
+        "Contains CircuitBreaker class with can_execute(), record_success(), record_failure() methods",
+        "CircuitBreaker accepts name parameter for logging context",
+        "Uses asyncio.Lock for thread-safe state transitions"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Use backend/app/core/redis.py lines 38-130 as reference implementation. Add name parameter."
+    },
+    {
+      "id": "P0-005",
+      "title": "Refactor redis.py to use shared CircuitBreaker",
+      "description": "As a developer, I need redis.py to use the shared module so that duplication is removed.",
+      "acceptanceCriteria": [
+        "Import CircuitState, CircuitBreakerConfig, CircuitBreaker from app.core.circuit_breaker",
+        "Remove local CircuitState enum definition",
+        "Remove local CircuitBreakerConfig dataclass definition",
+        "Remove local CircuitBreaker class definition",
+        "CircuitBreaker instantiated with name='redis'",
+        "File has no class CircuitBreaker definition"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "File: backend/app/core/redis.py"
+    },
+    {
+      "id": "P0-006",
+      "title": "Refactor integration clients to use shared CircuitBreaker",
+      "description": "As a developer, I need all integration clients to use the shared module.",
+      "acceptanceCriteria": [
+        "backend/app/integrations/dataforseo.py uses shared CircuitBreaker with name='dataforseo'",
+        "backend/app/integrations/pop.py uses shared CircuitBreaker with name='pop'",
+        "backend/app/integrations/claude.py uses shared CircuitBreaker with name='claude'",
+        "backend/app/integrations/perplexity.py uses shared CircuitBreaker with name='perplexity'",
+        "backend/app/integrations/google_nlp.py uses shared CircuitBreaker with name='google_nlp'",
+        "backend/app/integrations/keywords_everywhere.py uses shared CircuitBreaker with name='keywords_everywhere'",
+        "backend/app/integrations/crawl4ai.py uses shared CircuitBreaker with name='crawl4ai'",
+        "backend/app/integrations/email.py uses shared CircuitBreaker with name='email'",
+        "backend/app/integrations/webhook.py uses shared CircuitBreaker with name='webhook'",
+        "No integration file contains 'class CircuitBreaker' definition"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Each file: remove local CircuitState/Config/Breaker, add import from app.core.circuit_breaker"
+    },
+    {
+      "id": "P0-007",
+      "title": "Create CircuitBreaker unit tests",
+      "description": "As a developer, I need tests for the CircuitBreaker so that behavior is verified.",
+      "acceptanceCriteria": [
+        "File backend/tests/core/test_circuit_breaker.py created",
+        "Test: initial state is CLOSED",
+        "Test: opens after failure_threshold failures",
+        "Test: transitions to HALF_OPEN after recovery_timeout",
+        "Test: closes on success in HALF_OPEN state",
+        "Test: reopens on failure in HALF_OPEN state",
+        "All tests pass with pytest tests/core/test_circuit_breaker.py"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Use pytest-asyncio for async tests. Mock time.monotonic for timeout tests."
+    },
+    {
+      "id": "P0-008",
+      "title": "Migrate to uv package manager",
+      "description": "As a developer, I need uv for faster dependency management.",
+      "acceptanceCriteria": [
+        "uv installed and available in PATH",
+        "backend/uv.lock file created via 'uv lock'",
+        "pyproject.toml compatible with uv (no changes needed if using standard format)",
+        "'uv run pytest tests/core/' executes successfully",
+        "'uv run python -c \"import app.core.config\"' works"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Install: curl -LsSf https://astral.sh/uv/install.sh | sh. Run 'uv lock' in backend/."
+    },
+    {
+      "id": "P0-009",
+      "title": "Create Backend Dockerfile",
+      "description": "As a developer, I need a Dockerfile so that the backend can be containerized for Railway.",
+      "acceptanceCriteria": [
+        "File backend/Dockerfile created",
+        "Uses multi-stage build with python:3.11-slim base",
+        "Installs uv and uses 'uv sync' for dependencies",
+        "Creates non-root user 'appuser' and switches to it",
+        "Exposes PORT environment variable (default 8000)",
+        "CMD runs uvicorn with --host 0.0.0.0 --port $PORT",
+        "'docker build -t backend-test ./backend' succeeds"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reference frontend/Dockerfile for multi-stage pattern. Railway sets PORT dynamically."
+    },
+    {
+      "id": "P0-010",
+      "title": "Delete existing frontend and create Next.js 14 project",
+      "description": "As a developer, I need a fresh Next.js 14 frontend to replace the broken Vite app.",
+      "acceptanceCriteria": [
+        "Existing frontend/ directory deleted",
+        "New Next.js 14 project created with: npx create-next-app@14 frontend --typescript --tailwind --eslint --app --src-dir",
+        "Project uses App Router (src/app/ directory exists)",
+        "TypeScript configured with strict mode",
+        "'npm run build' in frontend/ succeeds"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Answer 'Yes' to all create-next-app prompts. This gives us TypeScript, Tailwind, ESLint, App Router."
+    },
+    {
+      "id": "P0-011",
+      "title": "Configure Next.js frontend dependencies",
+      "description": "As a developer, I need TanStack Query, Zustand, and testing tools configured.",
+      "acceptanceCriteria": [
+        "@tanstack/react-query@5 installed",
+        "zustand installed",
+        "axios installed",
+        "vitest and @vitejs/plugin-react installed as dev dependencies",
+        "@playwright/test installed as dev dependency",
+        "Vitest config file created (vitest.config.ts)",
+        "Basic Playwright config created (playwright.config.ts)",
+        "'npm run build' still succeeds after all installs"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Run: npm install @tanstack/react-query@5 zustand axios && npm install -D vitest @vitejs/plugin-react @playwright/test"
+    },
+    {
+      "id": "P0-012",
+      "title": "Configure Tailwind with warm color palette",
+      "description": "As a developer, I need Tailwind configured with the project's warm design aesthetic.",
+      "acceptanceCriteria": [
+        "tailwind.config.ts has custom colors defined",
+        "Warm palette includes: gold, cream, coral, warm-gray variants",
+        "Default border-radius slightly increased for softer look",
+        "Content paths correctly configured for src/app and src/components"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reference CLAUDE.md Design Context: warm palette, golds, creams, soft corals, warm grays."
+    },
+    {
+      "id": "P0-013",
+      "title": "Create docker-compose.yml for local development",
+      "description": "As a developer, I need docker-compose so that I can run all services locally.",
+      "acceptanceCriteria": [
+        "File docker-compose.yml created at project root",
+        "PostgreSQL 15 service defined with health check using pg_isready",
+        "Redis 7 service defined with health check using redis-cli ping",
+        "Backend service builds from ./backend/Dockerfile",
+        "Backend has DATABASE_URL and REDIS_URL environment variables",
+        "Backend depends_on db and redis with condition: service_healthy",
+        "Named volumes for postgres_data and redis_data",
+        "'docker-compose config' validates without errors"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Use postgres:15-alpine and redis:7-alpine images. Backend mounts app/ for hot reload."
+    },
+    {
+      "id": "P0-014",
+      "title": "Update GitHub Actions CI",
+      "description": "As a developer, I need CI to work with v2-rebuild branch and new tooling.",
+      "acceptanceCriteria": [
+        ".github/workflows/ci.yml triggers on push/PR to v2-rebuild branch",
+        "Python jobs use uv for dependency installation",
+        "Frontend jobs use npm commands for Next.js (not Vite)",
+        "Docker build step added to verify backend Dockerfile builds",
+        "Test commands updated: 'uv run pytest tests/core/ tests/models/'"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Add 'v2-rebuild' to branches array. Install uv with: curl -LsSf https://astral.sh/uv/install.sh | sh"
+    },
+    {
+      "id": "P0-015",
+      "title": "Run full verification suite",
+      "description": "As a developer, I need to verify all Phase 0 work is complete and working.",
+      "acceptanceCriteria": [
+        "'uv run ruff check app' passes with no errors",
+        "'uv run ruff format --check app' passes (code is formatted)",
+        "'uv run mypy app' passes with no errors",
+        "'uv run pytest tests/core/ tests/models/' all tests pass",
+        "'docker build -t backend-test ./backend' succeeds",
+        "'docker-compose up -d' starts all services",
+        "curl http://localhost:8000/health returns 200 OK",
+        "'pre-commit run --all-files' passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Run each command and verify exit code 0. Fix any issues before proceeding."
+    },
+    {
+      "id": "P0-098",
+      "title": "Update V2_REBUILD_PLAN.md",
+      "description": "As a developer, I need to update the plan status so that progress is tracked.",
+      "acceptanceCriteria": [
+        "All Phase 0 checkboxes marked as [x] complete in V2_REBUILD_PLAN.md",
+        "Current Status table updated: Phase=1, Slice=Not started, Next Action=Start Phase 1",
+        "New row added to Session Log table with date and 'Phase 0 complete' summary"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "This task maintains our planning discipline."
+    },
+    {
+      "id": "P0-099",
+      "title": "Commit and verify Phase 0 completion",
+      "description": "As a developer, I need to commit all changes and verify Phase 0 is complete.",
+      "acceptanceCriteria": [
+        "All changes staged and committed with message: feat(phase-0): Foundation setup complete",
+        "Commit includes Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>",
+        "v2-rebuild branch pushed to origin",
+        "No uncommitted changes remain (git status clean)",
+        "CI pipeline passes on GitHub"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Do not proceed to Phase 1 until CI passes. This is the foundation for all future work."
+    }
+  ],
+  "metadata": {
+    "phase": 0,
+    "updatedAt": "2026-02-03T01:42:44.011Z",
+    "openspecChange": "phase-0-foundation-setup"
+  }
+}

@@ -364,7 +364,7 @@ class Settings(BaseSettings):
         description="PageOptimizer Pro API key for content scoring",
     )
     pop_api_url: str = Field(
-        default="https://api.pageoptimizer.pro",
+        default="https://app.pageoptimizer.pro",
         description="PageOptimizer Pro API base URL",
     )
     pop_task_poll_interval: float = Field(

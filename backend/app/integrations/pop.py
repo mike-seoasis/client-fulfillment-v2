@@ -617,7 +617,13 @@ class POPClient:
 
                 if response.status_code >= 400:
                     # Client error - don't retry
-                    error_body = response.json() if response.content else None
+                    error_body = None
+                    if response.content:
+                        try:
+                            error_body = response.json()
+                        except (ValueError, TypeError):
+                            # Non-JSON response (e.g., HTML error page)
+                            error_body = {"raw": response.text[:500]}
                     error_msg = str(error_body) if error_body else "Client error"
                     logger.warning(
                         f"POP API call failed: {method} {endpoint}",
@@ -779,6 +785,8 @@ class POPClient:
         self,
         keyword: str,
         url: str,
+        location_name: str = "United States",
+        target_language: str = "english",
     ) -> POPTaskResult:
         """Create a POP report task for content scoring.
 
@@ -788,6 +796,8 @@ class POPClient:
         Args:
             keyword: Target keyword for content optimization
             url: URL of the page to analyze
+            location_name: Google search location (default: "United States")
+            target_language: Target language for analysis (default: "english")
 
         Returns:
             POPTaskResult with task_id if successful
@@ -811,20 +821,47 @@ class POPClient:
             extra={
                 "keyword": keyword[:50],
                 "url": url[:100],
+                "location": location_name,
+                "language": target_language,
             },
         )
 
+        # POP API uses /api/expose/get-terms/ endpoint with specific parameter names
         payload = {
             "keyword": keyword,
-            "url": url,
+            "targetUrl": url,
+            "locationName": location_name,
+            "targetLanguage": target_language,
         }
 
         try:
             response_data, request_id = await self._make_request(
-                "/api/report",
+                "/api/expose/get-terms/",
                 payload,
                 method="POST",
             )
+
+            duration_ms = (time.monotonic() - start_time) * 1000
+
+            # Check for API-level failure (POP returns status: "FAILURE" for errors)
+            api_status = response_data.get("status", "").upper()
+            if api_status == "FAILURE":
+                error_msg = response_data.get("msg") or response_data.get("message") or "API returned FAILURE status"
+                logger.warning(
+                    "POP API returned failure status",
+                    extra={
+                        "error": error_msg,
+                        "response": response_data,
+                        "request_id": request_id,
+                    },
+                )
+                return POPTaskResult(
+                    success=False,
+                    error=error_msg,
+                    data=response_data,
+                    duration_ms=duration_ms,
+                    request_id=request_id,
+                )
 
             # Extract task_id from response
             task_id = response_data.get("task_id") or response_data.get("taskId")
@@ -834,8 +871,6 @@ class POPClient:
                 task_id = response_data.get("id") or response_data.get("data", {}).get(
                     "task_id"
                 )
-
-            duration_ms = (time.monotonic() - start_time) * 1000
 
             if task_id:
                 logger.info(

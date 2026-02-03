@@ -61,9 +61,10 @@ def real_pop_client(requires_pop_api_key: str | None) -> POPClient:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skip(
+@pytest.mark.skipif(
+    not os.environ.get("POP_API_KEY"),
     reason="Integration test - requires real POP API credentials. "
-    "Run manually with POP_API_KEY env var set."
+    "Run manually with POP_API_KEY env var set.",
 )
 class TestPOPRealAPI:
     """Integration tests against real POP API.
@@ -190,16 +191,18 @@ class TestPOPRealAPI:
             },
         )
 
-        # The API should either fail or return an error status
-        # This tests that we handle real API error responses correctly
+        # The API should either fail or return some status
+        # This tests that we handle real API responses correctly
+        # Note: POP API returns PENDING for non-existent task IDs (doesn't error)
         if result.success:
-            # If API returns 200, status should indicate failure/unknown
+            # If API returns 200, status should be one of the known statuses
             assert result.status in (
+                POPTaskStatus.PENDING,
                 POPTaskStatus.FAILURE,
                 POPTaskStatus.UNKNOWN,
-            ), "Expected failure status for non-existent task"
+            ), f"Unexpected status for non-existent task: {result.status}"
         else:
-            # API returned an error - this is expected
+            # API returned an error - this is also acceptable
             assert result.error is not None
 
     @pytest.mark.asyncio
@@ -256,7 +259,7 @@ class TestPOPRealAPI:
         # Should fail with auth error
         assert result.success is False
         assert result.error is not None
-        # Error should mention authentication or be a client error
+        # Error should mention authentication, invalid key, or API key issue
         error_lower = result.error.lower()
         assert (
             "auth" in error_lower
@@ -264,4 +267,6 @@ class TestPOPRealAPI:
             or "403" in error_lower
             or "invalid" in error_lower
             or "unauthorized" in error_lower
+            or "api key" in error_lower
+            or "apikey" in error_lower
         ), f"Expected auth error, got: {result.error}"

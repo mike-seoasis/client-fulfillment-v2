@@ -280,9 +280,11 @@ class TestCreateReportTask:
         mock_httpx_client.request.assert_called_once()
         call_args = mock_httpx_client.request.call_args
         assert call_args.args[0] == "POST"
-        assert "/api/report" in call_args.args[1]
+        assert "/api/expose/get-terms/" in call_args.args[1]
         assert call_args.kwargs["json"]["keyword"] == "test keyword"
-        assert call_args.kwargs["json"]["url"] == "https://example.com/page"
+        assert call_args.kwargs["json"]["targetUrl"] == "https://example.com/page"
+        assert call_args.kwargs["json"]["locationName"] == "United States"
+        assert call_args.kwargs["json"]["targetLanguage"] == "english"
         assert "apiKey" in call_args.kwargs["json"]
 
     @pytest.mark.asyncio

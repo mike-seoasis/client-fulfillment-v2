@@ -1,0 +1,313 @@
+# Client Onboarding V2 Rebuild Plan
+
+> This document captures everything we've discussed. Use it to pick up where we left off in any new session.
+
+---
+
+## Current Status
+
+| Field | Value |
+|-------|-------|
+| **Phase** | 0 - Foundation |
+| **Slice** | Not started |
+| **Last Session** | 2026-02-02 |
+| **Next Action** | Start Phase 0: Set up Railway staging, CI/CD, tooling |
+
+### Session Log
+
+| Date | Completed | Next Up |
+|------|-----------|---------|
+| 2026-02-02 | Planning complete (FEATURE_SPEC, WIREFRAMES, V2_REBUILD_PLAN, decisions doc) | Phase 0 setup |
+
+---
+
+## Project Overview
+
+**What we're building:** A client onboarding/content fulfillment tool that crawls client URLs, does keyword research, generates optimized content using POP API for guidance, and manages brand voice.
+
+**Current state:** Brute-forced an entire app using Ralph loop in ~1 day. It's broken in unknown ways. Decided to rebuild properly with a stepwise approach.
+
+**Decision:** Scorched-earth rebuild on a new branch, salvaging only the solid foundation pieces.
+
+---
+
+## Tech Stack (Finalized)
+
+### Backend (Python/FastAPI)
+| Tool | Purpose | Notes |
+|------|---------|-------|
+| **uv** | Package manager | Fast, modern, replaces pip |
+| **FastAPI** | API framework | Already using |
+| **SQLAlchemy 2.0** | ORM (async) | Already using |
+| **Alembic** | Database migrations | Already using |
+| **Ruff** | Linting + formatting | Replaces black, isort, flake8 |
+| **mypy** | Type checking | |
+| **pytest + pytest-asyncio** | Testing | |
+| **factory_boy** | Test data factories | |
+
+### Frontend (React/Next.js)
+| Tool | Purpose |
+|------|---------|
+| **Next.js 14** | App Router |
+| **TanStack Query v5** | Server state (data fetching) |
+| **Zustand** | Client state (if needed) |
+| **Vitest** | Unit/component tests |
+| **Playwright** | E2E tests |
+
+### DevOps
+| Tool | Purpose |
+|------|---------|
+| **GitHub Actions** | CI/CD pipeline |
+| **Pre-commit hooks** | Ruff + mypy before every commit |
+| **Railway** | Staging + production environments |
+| **Docker** | Optimized builds |
+
+**All tools predate Claude Opus 4.5's May 2025 training cutoff** — safe to use.
+
+---
+
+## What's Salvageable from Current Codebase
+
+| Area | Verdict | Action |
+|------|---------|--------|
+| **Database Models** | ✅ Keep | Copy directly |
+| **Pydantic Schemas** | ✅ Keep | Copy directly |
+| **Core Config** | ✅ Keep | Copy directly |
+| **Database Layer** | ✅ Keep | Copy directly |
+| **Logging** | ✅ Keep | Copy directly |
+| **Integration Clients** | 🔄 Refactor | Extract CircuitBreaker to shared module, then copy |
+| **Services** | ❌ Rebuild | Too tangled |
+| **API Routes** | ❌ Rebuild | Too tangled |
+| **Frontend Components** | 🔄 Review | Audit before copying |
+
+---
+
+## MVP Features (Must Work Perfectly)
+
+> **Full spec:** See `FEATURE_SPEC.md` for complete details
+
+### App Structure
+1. **Main Dashboard** — Grid of client project cards with metrics
+2. **Create Project** — URL, name, upload brand docs, generate brand config
+3. **Project View** — Access to brand config and onboarding workflows
+
+### Workflow 1: Collection Page Copy (Onboarding)
+1. Upload URLs to crawl
+2. Crawl pages (extract content, structure, metadata)
+3. Keyword research (POP-informed)
+4. Human approval (view/edit/approve keywords per page)
+5. Content generation (research → write → check)
+6. Content review & editing (HTML toggle, keyword highlighting)
+7. Export to Matrixify (Shopify upload format)
+
+### Workflow 2: Keyword Cluster Creation (New Content)
+1. Enter seed keyword
+2. POP returns cluster/secondary keyword suggestions
+3. Human approval (same interface as onboarding)
+4. Content generation (SAME pipeline as onboarding)
+5. Content review & editing (SAME interface)
+6. Export to Matrixify (SAME export)
+
+### Content Fields (All Pages)
+- Page title
+- Meta description
+- Top description
+- Bottom description
+
+### Later (Not MVP)
+- Authentication (Google OAuth, username/password)
+- SEMrush integration (auto-import keywords, tag by cluster)
+- Schema markup generation
+- Template code updates
+
+---
+
+## Rebuild Phases
+
+### Phase 0: Foundation (Do Once)
+- [ ] Create `v2-rebuild` branch
+- [ ] Set up Railway staging environment
+- [ ] Set up CI/CD pipeline (GitHub Actions)
+- [ ] Configure Ruff + mypy + pre-commit hooks
+- [ ] Set up uv and project structure
+- [ ] Copy over: models, schemas, config, database layer, logging
+- [ ] Extract CircuitBreaker to `core/circuit_breaker.py`
+- [ ] Copy integration clients with refactor
+- [ ] Verify everything runs and tests pass
+
+### Phase 1: Project Foundation
+- [ ] Dashboard (list projects)
+- [ ] Create project (basic - name, URL only)
+- [ ] Project detail view (Onboarding + New Content sections)
+- [ ] **Verify:** Can create and view projects
+
+### Phase 2: Brand Configuration
+- [ ] Upload docs in project creation
+- [ ] Brand config generation (using skill/bible)
+- [ ] View/edit brand config
+- [ ] **Verify:** Can generate and view brand config
+
+### Phase 3: URL Upload + Crawling
+- [ ] Upload URLs interface
+- [ ] Crawling pipeline
+- [ ] View crawl results
+- [ ] **Verify:** Can upload URLs and see crawled data
+
+### Phase 4: Primary Keyword + Approval (SHARED)
+- [ ] Generate primary keyword candidates
+- [ ] Primary keyword approval interface (reusable component)
+- [ ] Edit primary keyword
+- [ ] **Verify:** Can see primary keyword, edit, approve
+- [ ] **Note:** No secondary keywords — POP provides LSI terms in Phase 5
+
+### Phase 5: Content Generation (SHARED)
+- [ ] POP Content Brief service (returns LSI terms, related questions, targets)
+- [ ] Content writing service (Claude) using brief data
+- [ ] Quality checks (AI tropes + POP scoring API)
+- [ ] **Verify:** Can generate content that passes checks and achieves POP score ≥70
+- [ ] **Architecture:** Build as standalone shared services
+- [ ] **Reference:** See `backend/PLAN-remove-secondary-keywords-and-paa.md`
+
+### Phase 6: Content Review + Editing (SHARED)
+- [ ] Content detail view
+- [ ] HTML/rendered toggle
+- [ ] Keyword highlighting
+- [ ] Inline editing
+- [ ] **Verify:** Can review, edit, re-check content
+
+### Phase 7: Export (SHARED)
+- [ ] Matrixify export format
+- [ ] Download functionality
+- [ ] **Verify:** Export works in Matrixify
+
+### Phase 8: Keyword Cluster Creation
+- [ ] Seed keyword input UI
+- [ ] POP API for cluster suggestions
+- [ ] Wire into shared components
+- [ ] **Verify:** Full cluster flow works (create → generate → export)
+
+### Phase 9: Polish
+- [ ] Dashboard metrics (clusters pending, content pending)
+- [ ] Progress indicators
+- [ ] Error handling
+- [ ] Edge cases
+
+---
+
+## Development Workflow
+
+### For Each Feature (Vertical Slice)
+
+```
+1. YOU define what it does (clear spec)
+2. YOU sketch the approach (which files, patterns)
+3. AI implements with your guidance
+4. YOU review the code (actually read it)
+5. AI writes tests
+6. YOU run tests and verify behavior
+7. Commit only when YOU understand it
+8. Deploy to staging, verify it works
+9. Move to next feature
+```
+
+### Branch Strategy
+
+- `main` → Production (protected)
+- `staging` → Staging environment
+- `feature/*` → Feature branches, merge to staging first
+
+### Commit Flow
+
+```
+feature/add-crawling → staging (test) → main (production)
+```
+
+---
+
+## Railway Setup
+
+### Environments
+- **Staging:** Separate Railway project/environment, deploys from `staging` branch
+- **Production:** Deploys from `main` branch
+
+### Optimization
+- Slim Docker base image (`python:3.11-slim`)
+- Dependencies cached (install before code copy)
+- Fast health checks (no DB calls)
+- Watch patterns to avoid unnecessary rebuilds
+
+---
+
+## Testing Strategy
+
+### Test Pyramid
+- **Unit tests** — Fast, no DB, test individual functions
+- **Integration tests** — Real DB, test services and data flow
+- **E2E tests** — Full user journeys through the app
+
+### When to Write Tests
+- Write tests **alongside** implementation, not after
+- Each feature must have tests before marking complete
+- CI blocks merges if tests fail
+
+---
+
+## Questions Status
+
+### Resolved
+| Question | Answer |
+|----------|--------|
+| Dashboard metrics | Clusters built/pending, content generations pending |
+| Keyword sources | **POP only** — no DataForSEO. See `backend/PLAN-remove-secondary-keywords-and-paa.md` |
+| Content structure | Page title, meta description, top description, bottom description |
+| Secondary keywords | **Removed** — POP's LSI terms replace them |
+| PAA questions | **Removed** — POP's related_questions replace them |
+
+### Still Open
+1. **Crawl data** — What specific data do we need from crawled pages? Current list sufficient?
+2. **Matrixify format** — Need example Matrixify file for export format
+
+---
+
+## Architecture Decisions (2026-02-02)
+
+Decisions made during planning session:
+
+| Topic | Decision | Rationale |
+|-------|----------|-----------|
+| **Background Jobs** | FastAPI BackgroundTasks + polling | Simpler than Celery for MVP, can add later |
+| **File Storage** | S3 + extract text to DB | Keep originals, extracted text for AI |
+| **Label Generation** | Project-wide taxonomy first, then apply | Ensures consistency for internal linking |
+| **Link Map Storage** | Separate `InternalLink` table | Easier to query and update |
+| **Content Versioning** | Skip for MVP | Too complex, add later if needed |
+| **POP Score Threshold** | Aim for 100, research meaning | Higher = better, need to understand metric |
+| **Retry Logic** | 2-3 retries before human review | Balance automation vs. human oversight |
+| **Real-time Updates** | Polling (2-3s) for MVP | Simpler than WebSockets, good enough UX |
+| **Auth** | Single user for MVP | Multi-user later |
+| **Delete Confirmation** | Two-step for items, type-to-confirm for projects | Prevent accidents |
+| **Keyword Change** | Rerun downstream for that page only | Don't redo everything |
+| **Pause/Resume** | Table if complex | Nice-to-have, not critical |
+
+---
+
+## Files to Reference
+
+- `/Users/mike/Downloads/PageOptimizer_Pro_API_Documentation.md` — POP API docs
+- `backend/app/integrations/dataforseo.py` — Example integration client
+- `backend/app/models/` — Database models (salvageable)
+- `backend/app/schemas/` — Pydantic schemas (salvageable)
+- `backend/app/core/config.py` — Configuration pattern (salvageable)
+
+---
+
+## Next Steps
+
+1. **You:** Brain dump feature list
+2. **Me:** Structure into proper spec with clear slices
+3. **Together:** Define slice order
+4. **Execute:** Phase 0 foundation setup
+5. **Build:** First vertical slice
+
+---
+
+*Last updated: This session*

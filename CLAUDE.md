@@ -70,6 +70,73 @@ Be pragmatic. Be reliable. Self-anneal.
 
 ---
 
+## V2 Rebuild: Slice-Based Development
+
+This project is being rebuilt using vertical slices. Each slice is a complete feature from database to UI.
+
+### Session Start Protocol
+
+At the start of EVERY session:
+1. Read `V2_REBUILD_PLAN.md` — Check current status, where we are
+2. Read relevant section of `FEATURE_SPEC.md` — Feature details for current slice
+3. Read relevant section of `WIREFRAMES.md` — UI reference for current slice
+4. Tell the user: "We're on Phase X, Slice Y. Last session we completed Z. Next up is W."
+
+If user says "Let's continue" — follow this protocol automatically.
+
+### Slice Completion Protocol
+
+When completing ANY slice or significant milestone, you MUST:
+
+1. **Update V2_REBUILD_PLAN.md:**
+   - Mark completed checkboxes with `[x]`
+   - Update the "Current Status" section at the top
+   - Add a row to the Session Log table
+
+2. **Commit with slice reference:**
+   - Format: `feat(slice-X): Description`
+   - Example: `feat(slice-1): Add project list endpoint and dashboard UI`
+
+3. **Verify before moving on:**
+   - All tests passing
+   - Manual verification criteria met
+   - Status file updated
+
+**DO NOT proceed to next slice without completing these steps.**
+
+### OpenSpec + Ralph Integration
+
+Each slice uses OpenSpec for planning and Ralph TUI for execution:
+- `/opsx:new "Slice X: Name"` — Start planning
+- Convert tasks to `prd.json` for Ralph execution
+- Final tasks always include status file updates
+- `/opsx:verify` — Confirm completion before archiving
+
+**IMPORTANT:** When converting tasks to prd.json for Ralph, ALWAYS read `openspec/templates/slice-template.md` first and follow its structure exactly. This ensures:
+- Correct task ID format (S{X}-NNN)
+- Required final tasks are included (status update + verification)
+- Proper prd.json schema for Ralph TUI
+
+### Pre-Flight Checklist (Before Starting Any Slice)
+
+Before writing any code for a new slice, verify:
+- [ ] Previous slice is complete and archived
+- [ ] V2_REBUILD_PLAN.md status is current
+- [ ] You've read the relevant FEATURE_SPEC.md section
+- [ ] You've read the relevant WIREFRAMES.md section
+- [ ] Branch created: `feature/slice-X-[name]`
+
+### Post-Flight Checklist (After Completing Any Slice)
+
+Before moving to the next slice, verify:
+- [ ] All tests passing
+- [ ] Manual verification criteria met
+- [ ] V2_REBUILD_PLAN.md updated (checkboxes, status, session log)
+- [ ] Commit made with `feat(slice-X):` prefix
+- [ ] OpenSpec change archived
+
+---
+
 ## Design Context
 
 ### Users
