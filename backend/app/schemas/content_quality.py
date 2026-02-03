@@ -78,7 +78,10 @@ class PatternMatchItem(BaseModel):
     matched_text: str = Field(
         ...,
         description="The actual text that matched the pattern",
-        examples=["Fast. Simple. Powerful.", "aren't just wallets, they're investments"],
+        examples=[
+            "Fast. Simple. Powerful.",
+            "aren't just wallets, they're investments",
+        ],
     )
     position: int = Field(
         ...,

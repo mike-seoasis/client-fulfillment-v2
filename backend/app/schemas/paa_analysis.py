@@ -119,7 +119,9 @@ class PAAAnalysisRequest(BaseModel):
 
     @field_validator("questions")
     @classmethod
-    def validate_questions(cls, v: list[PAAQuestionResponse]) -> list[PAAQuestionResponse]:
+    def validate_questions(
+        cls, v: list[PAAQuestionResponse]
+    ) -> list[PAAQuestionResponse]:
         """Validate questions list."""
         if not v:
             raise ValueError("At least one question is required for analysis")

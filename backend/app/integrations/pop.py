@@ -698,7 +698,11 @@ class POPClient:
             # Check for API-level failure (POP returns status: "FAILURE" for errors)
             api_status = response_data.get("status", "").upper()
             if api_status == "FAILURE":
-                error_msg = response_data.get("msg") or response_data.get("message") or "API returned FAILURE status"
+                error_msg = (
+                    response_data.get("msg")
+                    or response_data.get("message")
+                    or "API returned FAILURE status"
+                )
                 logger.warning(
                     "POP API returned failure status",
                     extra={

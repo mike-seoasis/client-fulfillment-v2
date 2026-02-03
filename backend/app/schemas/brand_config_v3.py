@@ -48,7 +48,9 @@ class CompanyOverviewSchema(BaseModel):
 class ProductsServicesSchema(BaseModel):
     """Products and services details."""
 
-    primary: list[str] = Field(default_factory=list, description="Primary products/services")
+    primary: list[str] = Field(
+        default_factory=list, description="Primary products/services"
+    )
     secondary: list[str] = Field(
         default_factory=list, description="Secondary/supporting offerings"
     )
@@ -56,7 +58,8 @@ class ProductsServicesSchema(BaseModel):
         None, description="Price positioning (Budget/Mid-range/Premium/Luxury)"
     )
     sales_channels: list[str] = Field(
-        default_factory=list, description="Sales channels (Online, retail, wholesale, etc.)"
+        default_factory=list,
+        description="Sales channels (Online, retail, wholesale, etc.)",
     )
 
     model_config = ConfigDict(extra="allow")
@@ -70,7 +73,8 @@ class PositioningSchema(BaseModel):
         None, description="One-sentence description of the company"
     )
     category_position: str | None = Field(
-        None, description="Category position (Leader, challenger, specialist, disruptor)"
+        None,
+        description="Category position (Leader, challenger, specialist, disruptor)",
     )
 
     model_config = ConfigDict(extra="allow")
@@ -118,7 +122,9 @@ class FoundationSchema(BaseModel):
     )
     positioning: PositioningSchema = Field(default_factory=PositioningSchema)
     mission_values: MissionValuesSchema = Field(default_factory=MissionValuesSchema)
-    differentiators: DifferentiatorsSchema = Field(default_factory=DifferentiatorsSchema)
+    differentiators: DifferentiatorsSchema = Field(
+        default_factory=DifferentiatorsSchema
+    )
 
     model_config = ConfigDict(extra="allow")
 
@@ -144,7 +150,9 @@ class DemographicsSchema(BaseModel):
 class PsychographicsSchema(BaseModel):
     """Psychographics for a customer persona."""
 
-    values: list[str] = Field(default_factory=list, description="What matters most to them")
+    values: list[str] = Field(
+        default_factory=list, description="What matters most to them"
+    )
     aspirations: list[str] = Field(
         default_factory=list, description="What they're working toward"
     )
@@ -216,7 +224,9 @@ class PersonaSchema(BaseModel):
     )
     demographics: DemographicsSchema = Field(default_factory=DemographicsSchema)
     psychographics: PsychographicsSchema = Field(default_factory=PsychographicsSchema)
-    behavioral: BehavioralInsightsSchema = Field(default_factory=BehavioralInsightsSchema)
+    behavioral: BehavioralInsightsSchema = Field(
+        default_factory=BehavioralInsightsSchema
+    )
     communication: CommunicationPrefsSchema = Field(
         default_factory=CommunicationPrefsSchema
     )
@@ -259,11 +269,13 @@ class VoiceDimensionSchema(BaseModel):
     description: str | None = Field(
         None, description="How this manifests in actual writing"
     )
-    example: str | None = Field(
-        None, description="Sample sentence at this level"
+    example: str | None = Field(None, description="Sample sentence at this level")
+    low_label: str | None = Field(
+        None, description="What 1 means (e.g., 'Very Casual')"
     )
-    low_label: str | None = Field(None, description="What 1 means (e.g., 'Very Casual')")
-    high_label: str | None = Field(None, description="What 10 means (e.g., 'Very Formal')")
+    high_label: str | None = Field(
+        None, description="What 10 means (e.g., 'Very Formal')"
+    )
 
     model_config = ConfigDict(extra="allow")
 
@@ -314,13 +326,11 @@ class VoiceDimensionsSchema(BaseModel):
 class VoiceCharacteristicSchema(BaseModel):
     """A single voice characteristic (we are / we are not)."""
 
-    trait: str = Field(..., description="The characteristic trait (e.g., 'Knowledgeable')")
-    description: str | None = Field(
-        None, description="What this means for writing"
+    trait: str = Field(
+        ..., description="The characteristic trait (e.g., 'Knowledgeable')"
     )
-    do_example: str | None = Field(
-        None, description="Example of correct usage (DO)"
-    )
+    description: str | None = Field(None, description="What this means for writing")
+    do_example: str | None = Field(None, description="Example of correct usage (DO)")
     dont_example: str | None = Field(
         None, description="Example of incorrect usage (DON'T)"
     )
@@ -374,8 +384,12 @@ class CapitalizationRulesSchema(BaseModel):
     headlines: str | None = Field(
         None, description="Headlines format (Title Case / Sentence case)"
     )
-    product_names: str | None = Field(None, description="How to capitalize product names")
-    feature_names: str | None = Field(None, description="How to capitalize feature names")
+    product_names: str | None = Field(
+        None, description="How to capitalize product names"
+    )
+    feature_names: str | None = Field(
+        None, description="How to capitalize feature names"
+    )
 
     model_config = ConfigDict(extra="allow")
 
@@ -390,9 +404,7 @@ class PunctuationRulesSchema(BaseModel):
     exclamation_limit: int | None = Field(
         None, description="Max exclamation points per page"
     )
-    ellipses: str | None = Field(
-        None, description="Ellipsis usage (Use / Avoid)"
-    )
+    ellipses: str | None = Field(None, description="Ellipsis usage (Use / Avoid)")
 
     model_config = ConfigDict(extra="allow")
 
@@ -429,9 +441,7 @@ class FormattingRulesSchema(BaseModel):
 class WritingRulesSchema(BaseModel):
     """Section 5: Writing Style Rules."""
 
-    sentence_structure: SentenceRulesSchema = Field(
-        default_factory=SentenceRulesSchema
-    )
+    sentence_structure: SentenceRulesSchema = Field(default_factory=SentenceRulesSchema)
     capitalization: CapitalizationRulesSchema = Field(
         default_factory=CapitalizationRulesSchema
     )
@@ -683,15 +693,11 @@ class QuickReferenceSchema(BaseModel):
     we_never_sound_like: str | None = Field(
         None, description="1-sentence description of what we avoid"
     )
-    primary_audience: str | None = Field(
-        None, description="Primary audience summary"
-    )
+    primary_audience: str | None = Field(None, description="Primary audience summary")
     key_differentiator: str | None = Field(
         None, description="The #1 thing that makes us different"
     )
-    default_cta: str | None = Field(
-        None, description="Default call-to-action to use"
-    )
+    default_cta: str | None = Field(None, description="Default call-to-action to use")
     avoid_list: list[str] = Field(
         default_factory=list, description="Top things to avoid (quick reference)"
     )

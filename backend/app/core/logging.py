@@ -185,7 +185,9 @@ class DatabaseLogger:
             },
         )
 
-    def rollback_executed(self, from_version: str, to_version: str, success: bool) -> None:
+    def rollback_executed(
+        self, from_version: str, to_version: str, success: bool
+    ) -> None:
         """Log rollback execution."""
         level = logging.INFO if success else logging.ERROR
         self.logger.log(
@@ -385,7 +387,11 @@ class Crawl4AILogger:
     ) -> None:
         """Log failed API call at WARNING or ERROR level based on status."""
         # 4xx at WARNING, 5xx and others at ERROR
-        level = logging.WARNING if status_code and 400 <= status_code < 500 else logging.ERROR
+        level = (
+            logging.WARNING
+            if status_code and 400 <= status_code < 500
+            else logging.ERROR
+        )
         self.logger.log(
             level,
             f"Crawl4AI API call failed: {method} {endpoint}",
@@ -470,12 +476,16 @@ class Crawl4AILogger:
             },
         )
 
-    def _truncate_body(self, body: dict[str, Any], max_length: int = 500) -> dict[str, Any]:
+    def _truncate_body(
+        self, body: dict[str, Any], max_length: int = 500
+    ) -> dict[str, Any]:
         """Truncate large string values in body for logging."""
         result: dict[str, Any] = {}
         for key, value in body.items():
             if isinstance(value, str) and len(value) > max_length:
-                result[key] = value[:max_length] + f"... (truncated, {len(value)} chars)"
+                result[key] = (
+                    value[:max_length] + f"... (truncated, {len(value)} chars)"
+                )
             elif isinstance(value, dict):
                 result[key] = self._truncate_body(value, max_length)
             elif isinstance(value, list) and len(value) > 10:
@@ -626,7 +636,11 @@ class ClaudeLogger:
     ) -> None:
         """Log failed API call at WARNING or ERROR level based on status."""
         # 4xx at WARNING, 5xx and others at ERROR
-        level = logging.WARNING if status_code and 400 <= status_code < 500 else logging.ERROR
+        level = (
+            logging.WARNING
+            if status_code and 400 <= status_code < 500
+            else logging.ERROR
+        )
         self.logger.log(
             level,
             f"Claude API call failed: {model}",
@@ -917,7 +931,9 @@ class ClaudeLogger:
                 "duration_ms": round(duration_ms, 2),
                 "total_input_tokens": total_input_tokens,
                 "total_output_tokens": total_output_tokens,
-                "average_ms_per_page": round(duration_ms / total_pages, 2) if total_pages > 0 else 0,
+                "average_ms_per_page": round(duration_ms / total_pages, 2)
+                if total_pages > 0
+                else 0,
                 "project_id": project_id,
             },
         )
@@ -993,7 +1009,11 @@ class PerplexityLogger:
     ) -> None:
         """Log failed API call at WARNING or ERROR level based on status."""
         # 4xx at WARNING, 5xx and others at ERROR
-        level = logging.WARNING if status_code and 400 <= status_code < 500 else logging.ERROR
+        level = (
+            logging.WARNING
+            if status_code and 400 <= status_code < 500
+            else logging.ERROR
+        )
         self.logger.log(
             level,
             f"Perplexity API call failed: {model}",
@@ -1486,7 +1506,11 @@ class KeywordsEverywhereLogger:
     ) -> None:
         """Log failed API call at WARNING or ERROR level based on status."""
         # 4xx at WARNING, 5xx and others at ERROR
-        level = logging.WARNING if status_code and 400 <= status_code < 500 else logging.ERROR
+        level = (
+            logging.WARNING
+            if status_code and 400 <= status_code < 500
+            else logging.ERROR
+        )
         self.logger.log(
             level,
             f"Keywords Everywhere API call failed: {endpoint}",
@@ -1624,7 +1648,9 @@ class KeywordsEverywhereLogger:
 
     def circuit_closed(self) -> None:
         """Log circuit breaker closing at INFO level."""
-        self.logger.info("Keywords Everywhere circuit breaker closed - API calls restored")
+        self.logger.info(
+            "Keywords Everywhere circuit breaker closed - API calls restored"
+        )
 
     def graceful_fallback(self, operation: str, reason: str) -> None:
         """Log graceful fallback when Keywords Everywhere is unavailable."""
@@ -1780,7 +1806,11 @@ class DataForSEOLogger:
     ) -> None:
         """Log failed API call at WARNING or ERROR level based on status."""
         # 4xx at WARNING, 5xx and others at ERROR
-        level = logging.WARNING if status_code and 400 <= status_code < 500 else logging.ERROR
+        level = (
+            logging.WARNING
+            if status_code and 400 <= status_code < 500
+            else logging.ERROR
+        )
         self.logger.log(
             level,
             f"DataForSEO API call failed: {method} {endpoint}",
@@ -1879,7 +1909,9 @@ class DataForSEOLogger:
             result: dict[str, Any] = {}
             for key, value in body.items():
                 if isinstance(value, str) and len(value) > max_length:
-                    result[key] = value[:max_length] + f"... (truncated, {len(value)} chars)"
+                    result[key] = (
+                        value[:max_length] + f"... (truncated, {len(value)} chars)"
+                    )
                 elif isinstance(value, dict):
                     result[key] = self._truncate_body(value, max_length)
                 elif isinstance(value, list) and len(value) > 10:
@@ -1977,7 +2009,9 @@ class DataForSEOLogger:
         level = logging.INFO if success else logging.WARNING
         self.logger.log(
             level,
-            "DataForSEO keyword search completed" if success else "DataForSEO keyword search failed",
+            "DataForSEO keyword search completed"
+            if success
+            else "DataForSEO keyword search failed",
             extra={
                 "keyword_count": keyword_count,
                 "duration_ms": round(duration_ms, 2),
@@ -2015,7 +2049,9 @@ class DataForSEOLogger:
         level = logging.INFO if success else logging.WARNING
         self.logger.log(
             level,
-            "DataForSEO SERP search completed" if success else "DataForSEO SERP search failed",
+            "DataForSEO SERP search completed"
+            if success
+            else "DataForSEO SERP search failed",
             extra={
                 "keyword": keyword[:100],
                 "duration_ms": round(duration_ms, 2),
@@ -2137,7 +2173,11 @@ class GoogleNLPLogger:
     ) -> None:
         """Log failed API call at WARNING or ERROR level based on status."""
         # 4xx at WARNING, 5xx and others at ERROR
-        level = logging.WARNING if status_code and 400 <= status_code < 500 else logging.ERROR
+        level = (
+            logging.WARNING
+            if status_code and 400 <= status_code < 500
+            else logging.ERROR
+        )
         self.logger.log(
             level,
             f"Google Cloud NLP API call failed: {endpoint}",
@@ -2692,8 +2732,15 @@ class ServiceLogger:
             Sanitized parameters safe for logging
         """
         sensitive_keys = {
-            "password", "token", "api_key", "apikey", "secret",
-            "credential", "auth", "authorization", "key",
+            "password",
+            "token",
+            "api_key",
+            "apikey",
+            "secret",
+            "credential",
+            "auth",
+            "authorization",
+            "key",
         }
         result: dict[str, Any] = {}
 
@@ -2731,7 +2778,10 @@ class ServiceLogger:
         if isinstance(value, dict):
             if len(value) > 20:
                 return f"{{dict with {len(value)} keys}}"
-            return {k: self._sanitize_value(v, max_length) for k, v in list(value.items())[:20]}
+            return {
+                k: self._sanitize_value(v, max_length)
+                for k, v in list(value.items())[:20]
+            }
         # For other types, convert to string and truncate
         str_value = str(value)
         if len(str_value) > max_length:
@@ -2784,11 +2834,13 @@ class OperationContext:
     def duration_ms(self) -> float:
         """Get current duration in milliseconds."""
         import time
+
         return (time.monotonic() - self._start_time) * 1000
 
     def __enter__(self) -> "OperationContext":
         """Enter context: log method entry and start timer."""
         import time
+
         self._start_time = time.monotonic()
         self._logger.method_entry(
             self._method_name,
@@ -2806,6 +2858,7 @@ class OperationContext:
     ) -> None:
         """Exit context: log method exit or exception."""
         import time
+
         duration_ms = (time.monotonic() - self._start_time) * 1000
 
         if exc_val is not None:

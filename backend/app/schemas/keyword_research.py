@@ -27,7 +27,6 @@ Railway Deployment Requirements:
 
 from pydantic import BaseModel, Field, field_validator
 
-
 # =============================================================================
 # KEYWORD IDEA GENERATION (Step 1)
 # =============================================================================
@@ -166,7 +165,9 @@ class VolumeStatsResponse(BaseModel):
     cache_misses: int = Field(default=0, description="Keywords not in cache")
     api_lookups: int = Field(default=0, description="Keywords looked up via API")
     api_errors: int = Field(default=0, description="API lookup failures")
-    cache_hit_rate: float = Field(default=0.0, description="Cache hit rate (0.0 to 1.0)")
+    cache_hit_rate: float = Field(
+        default=0.0, description="Cache hit rate (0.0 to 1.0)"
+    )
 
 
 class KeywordVolumeResponse(BaseModel):

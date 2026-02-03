@@ -143,7 +143,9 @@ class GoogleNLPRateLimitError(GoogleNLPError):
         response_body: dict[str, Any] | None = None,
         request_id: str | None = None,
     ) -> None:
-        super().__init__(message, status_code=429, response_body=response_body, request_id=request_id)
+        super().__init__(
+            message, status_code=429, response_body=response_body, request_id=request_id
+        )
         self.retry_after = retry_after
 
 
@@ -255,7 +257,9 @@ class GoogleNLPClient:
             )
 
         if not await self._circuit_breaker.can_execute():
-            google_nlp_logger.graceful_fallback("analyze_entities", "Circuit breaker open")
+            google_nlp_logger.graceful_fallback(
+                "analyze_entities", "Circuit breaker open"
+            )
             return EntityExtractionResult(
                 success=False,
                 text=text,
@@ -462,11 +466,12 @@ class GoogleNLPClient:
                     entity_count=len(entities),
                     request_id=request_id,
                 )
-                google_nlp_logger.response_body(
-                    endpoint, len(entities), duration_ms
-                )
+                google_nlp_logger.response_body(endpoint, len(entities), duration_ms)
                 google_nlp_logger.entity_extraction_complete(
-                    len(text), total_duration_ms, success=True, entity_count=len(entities)
+                    len(text),
+                    total_duration_ms,
+                    success=True,
+                    entity_count=len(entities),
                 )
 
                 await self._circuit_breaker.record_success()

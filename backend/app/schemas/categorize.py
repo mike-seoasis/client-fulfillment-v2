@@ -12,7 +12,23 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.utils.url_categorizer import VALID_PAGE_CATEGORIES
+# Valid page categories for categorization
+VALID_PAGE_CATEGORIES = frozenset(
+    [
+        "homepage",
+        "product",
+        "collection",
+        "blog",
+        "policy",
+        "about",
+        "contact",
+        "faq",
+        "account",
+        "cart",
+        "search",
+        "other",
+    ]
+)
 
 
 class CategorizeRequest(BaseModel):
@@ -203,9 +219,13 @@ class CategorizeBatchRequest(BaseModel):
 class ContentSignalResponse(BaseModel):
     """Response schema for a content signal detection."""
 
-    signal_type: str = Field(..., description="Type of signal (title, heading, schema, etc.)")
+    signal_type: str = Field(
+        ..., description="Type of signal (title, heading, schema, etc.)"
+    )
     category: str = Field(..., description="Category indicated by signal")
-    confidence_boost: float = Field(..., description="Confidence boost from this signal")
+    confidence_boost: float = Field(
+        ..., description="Confidence boost from this signal"
+    )
     matched_text: str | None = Field(None, description="Text that matched the pattern")
 
 
@@ -217,8 +237,12 @@ class ContentAnalysisResponse(BaseModel):
     signals: list[ContentSignalResponse] = Field(
         default_factory=list, description="Detected content signals"
     )
-    boosted_confidence: float = Field(..., description="Final confidence after boosting")
-    final_category: str = Field(..., description="Final category (may differ if signals override)")
+    boosted_confidence: float = Field(
+        ..., description="Final confidence after boosting"
+    )
+    final_category: str = Field(
+        ..., description="Final category (may differ if signals override)"
+    )
 
 
 class CategorizeResponse(BaseModel):
@@ -241,7 +265,9 @@ class CategorizeResponse(BaseModel):
     llm_result: dict[str, Any] | None = Field(
         None, description="LLM categorization result (if used)"
     )
-    labels: list[str] = Field(default_factory=list, description="Additional labels from LLM")
+    labels: list[str] = Field(
+        default_factory=list, description="Additional labels from LLM"
+    )
     reasoning: str | None = Field(None, description="LLM reasoning for category choice")
     error: str | None = Field(None, description="Error message if failed")
     duration_ms: float = Field(..., description="Total processing time in milliseconds")
@@ -268,9 +294,7 @@ class CategorizePageIdsResponse(BaseModel):
     total: int = Field(..., description="Total pages requested")
     categorized: int = Field(..., description="Pages successfully categorized")
     failed: int = Field(..., description="Pages that failed")
-    results: list[CategorizedPageResponse] = Field(
-        ..., description="Per-page results"
-    )
+    results: list[CategorizedPageResponse] = Field(..., description="Per-page results")
     duration_ms: float = Field(..., description="Total processing time")
 
 

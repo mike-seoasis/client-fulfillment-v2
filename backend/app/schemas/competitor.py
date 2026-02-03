@@ -171,7 +171,9 @@ class CompetitorScrapeProgressResponse(BaseModel):
     project_id: str = Field(..., description="Project UUID")
     status: str = Field(..., description="Current scraping status")
     pages_scraped: int = Field(0, description="Pages successfully scraped")
-    scrape_started_at: datetime | None = Field(None, description="When scraping started")
+    scrape_started_at: datetime | None = Field(
+        None, description="When scraping started"
+    )
     scrape_completed_at: datetime | None = Field(
         None, description="When scraping completed"
     )

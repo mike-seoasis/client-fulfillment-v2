@@ -301,7 +301,11 @@ class EmailClient:
                     await asyncio.sleep(delay)
                     continue
 
-            except (aiosmtplib.SMTPConnectError, aiosmtplib.SMTPServerDisconnected, OSError) as e:
+            except (
+                aiosmtplib.SMTPConnectError,
+                aiosmtplib.SMTPServerDisconnected,
+                OSError,
+            ) as e:
                 duration_ms = (time.monotonic() - attempt_start) * 1000
                 logger.warning(
                     "Email connection error",

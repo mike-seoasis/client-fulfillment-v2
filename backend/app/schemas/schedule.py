@@ -188,7 +188,9 @@ class ScheduleConfigResponse(BaseModel):
     config: dict[str, Any] = Field(..., description="Additional configuration")
     is_active: bool = Field(..., description="Whether schedule is active")
     last_run_at: datetime | None = Field(None, description="When schedule last ran")
-    next_run_at: datetime | None = Field(None, description="When schedule will next run")
+    next_run_at: datetime | None = Field(
+        None, description="When schedule will next run"
+    )
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 

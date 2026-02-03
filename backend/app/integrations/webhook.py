@@ -328,7 +328,9 @@ class WebhookClient:
                         extra={
                             "url": url[:100],
                             "status_code": response.status_code,
-                            "response_body": str(response_body)[:200] if response_body else None,
+                            "response_body": str(response_body)[:200]
+                            if response_body
+                            else None,
                             "duration_ms": round(duration_ms, 2),
                             "retry_attempt": attempt,
                         },

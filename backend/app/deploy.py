@@ -35,7 +35,13 @@ logger = get_logger("deployment")
 def mask_env_value(key: str, value: str) -> str:
     """Mask sensitive environment variable values for logging."""
     sensitive_patterns = [
-        "password", "secret", "key", "token", "credential", "auth", "api_key"
+        "password",
+        "secret",
+        "key",
+        "token",
+        "credential",
+        "auth",
+        "api_key",
     ]
 
     key_lower = key.lower()
@@ -64,7 +70,9 @@ def log_deployment_start() -> dict[str, Any]:
         "railway_deployment_id": os.getenv("RAILWAY_DEPLOYMENT_ID", "local"),
         "railway_service_name": os.getenv("RAILWAY_SERVICE_NAME", "unknown"),
         "railway_environment": os.getenv("RAILWAY_ENVIRONMENT_NAME", "unknown"),
-        "git_commit_sha": os.getenv("RAILWAY_GIT_COMMIT_SHA", "unknown")[:8] if os.getenv("RAILWAY_GIT_COMMIT_SHA") else "unknown",
+        "git_commit_sha": os.getenv("RAILWAY_GIT_COMMIT_SHA", "unknown")[:8]
+        if os.getenv("RAILWAY_GIT_COMMIT_SHA")
+        else "unknown",
     }
 
     logger.info(
@@ -75,7 +83,9 @@ def log_deployment_start() -> dict[str, Any]:
     return deployment_info
 
 
-def log_deployment_end(success: bool, deployment_info: dict[str, Any], duration_seconds: float) -> None:
+def log_deployment_end(
+    success: bool, deployment_info: dict[str, Any], duration_seconds: float
+) -> None:
     """Log deployment completion with status."""
     log_data = {
         **deployment_info,
@@ -105,10 +115,16 @@ def validate_environment_variables() -> bool:
         if value:
             masked = mask_env_value(var, value)
             env_status["required"][var] = {"present": True, "value": masked}
-            logger.info(f"Environment variable {var} validated", extra={"variable": var, "value": masked})
+            logger.info(
+                f"Environment variable {var} validated",
+                extra={"variable": var, "value": masked},
+            )
         else:
             env_status["required"][var] = {"present": False}
-            logger.error(f"Required environment variable {var} is missing", extra={"variable": var})
+            logger.error(
+                f"Required environment variable {var} is missing",
+                extra={"variable": var},
+            )
             validation_success = False
 
     # Log optional variables
@@ -117,15 +133,25 @@ def validate_environment_variables() -> bool:
         if value:
             masked = mask_env_value(var, value)
             env_status["optional"][var] = {"present": True, "value": masked}
-            logger.debug(f"Optional environment variable {var} set", extra={"variable": var, "value": masked})
+            logger.debug(
+                f"Optional environment variable {var} set",
+                extra={"variable": var, "value": masked},
+            )
         else:
             env_status["optional"][var] = {"present": False}
-            logger.debug(f"Optional environment variable {var} not set, using default", extra={"variable": var})
+            logger.debug(
+                f"Optional environment variable {var} not set, using default",
+                extra={"variable": var},
+            )
 
     if validation_success:
-        logger.info("Environment variable validation passed", extra={"env_status": env_status})
+        logger.info(
+            "Environment variable validation passed", extra={"env_status": env_status}
+        )
     else:
-        logger.error("Environment variable validation failed", extra={"env_status": env_status})
+        logger.error(
+            "Environment variable validation failed", extra={"env_status": env_status}
+        )
 
     return validation_success
 
@@ -184,7 +210,10 @@ def run_migrations() -> bool:
                 if line.strip():
                     # Log each migration step
                     if "Running upgrade" in line:
-                        logger.info("Migration step executed", extra={"step": line.strip(), "status": "success"})
+                        logger.info(
+                            "Migration step executed",
+                            extra={"step": line.strip(), "status": "success"},
+                        )
                     elif "INFO" in line:
                         logger.debug("Migration output", extra={"output": line.strip()})
 

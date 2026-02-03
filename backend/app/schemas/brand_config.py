@@ -49,7 +49,9 @@ class ColorsSchema(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    @field_validator("primary", "secondary", "accent", "background", "text", mode="before")
+    @field_validator(
+        "primary", "secondary", "accent", "background", "text", mode="before"
+    )
     @classmethod
     def normalize_hex_color(cls, v: str | None) -> str | None:
         """Normalize hex color codes."""

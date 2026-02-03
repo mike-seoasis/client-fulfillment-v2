@@ -108,7 +108,9 @@ class ClaudeRateLimitError(ClaudeError):
         response_body: dict[str, Any] | None = None,
         request_id: str | None = None,
     ) -> None:
-        super().__init__(message, status_code=429, response_body=response_body, request_id=request_id)
+        super().__init__(
+            message, status_code=429, response_body=response_body, request_id=request_id
+        )
         self.retry_after = retry_after
 
 
@@ -814,7 +816,7 @@ Respond with JSON only."""
                 )
 
                 # Create failure results for remaining pages in batch
-                for page in batch[len(batch_results):]:
+                for page in batch[len(batch_results) :]:
                     batch_results.append(
                         CategorizationResult(
                             success=False,

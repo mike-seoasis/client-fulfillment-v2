@@ -164,8 +164,12 @@ class KeywordsEverywhereClient:
         self._timeout = timeout or settings.keywords_everywhere_timeout
         self._max_retries = max_retries or settings.keywords_everywhere_max_retries
         self._retry_delay = retry_delay or settings.keywords_everywhere_retry_delay
-        self._default_country = default_country or settings.keywords_everywhere_default_country
-        self._default_currency = default_currency or settings.keywords_everywhere_default_currency
+        self._default_country = (
+            default_country or settings.keywords_everywhere_default_country
+        )
+        self._default_currency = (
+            default_currency or settings.keywords_everywhere_default_currency
+        )
         self._default_data_source = (
             default_data_source or settings.keywords_everywhere_default_data_source
         )
@@ -448,7 +452,11 @@ class KeywordsEverywhereClient:
                     kw = item.get("keyword", "")
                     vol = item.get("vol")
                     cpc_data = item.get("cpc", {})
-                    cpc = cpc_data.get("value") if isinstance(cpc_data, dict) else cpc_data
+                    cpc = (
+                        cpc_data.get("value")
+                        if isinstance(cpc_data, dict)
+                        else cpc_data
+                    )
                     competition = item.get("competition")
                     trend = item.get("trend")
 
@@ -457,7 +465,9 @@ class KeywordsEverywhereClient:
                             keyword=kw,
                             volume=vol,
                             cpc=float(cpc) if cpc is not None else None,
-                            competition=float(competition) if competition is not None else None,
+                            competition=float(competition)
+                            if competition is not None
+                            else None,
                             trend=trend if isinstance(trend, list) else None,
                         )
                     )
@@ -474,18 +484,26 @@ class KeywordsEverywhereClient:
                     request_id=request_id,
                 )
                 keywords_everywhere_logger.response_body(
-                    endpoint, len(keyword_results), duration_ms, credits_used=credits_used
+                    endpoint,
+                    len(keyword_results),
+                    duration_ms,
+                    credits_used=credits_used,
                 )
 
                 # Log credit usage if available
                 if credits_used is not None:
                     credits_remaining = response_data.get("credits_remaining")
-                    keywords_everywhere_logger.credit_usage(credits_used, credits_remaining)
+                    keywords_everywhere_logger.credit_usage(
+                        credits_used, credits_remaining
+                    )
 
                 await self._circuit_breaker.record_success()
 
                 keywords_everywhere_logger.keyword_lookup_complete(
-                    len(keywords), total_duration_ms, success=True, results_count=len(keyword_results)
+                    len(keywords),
+                    total_duration_ms,
+                    success=True,
+                    results_count=len(keyword_results),
                 )
 
                 return KeywordDataResult(
@@ -633,20 +651,21 @@ class KeywordsEverywhereClient:
         total_credits = 0
         errors: list[str] = []
 
-        async def process_batch(batch_index: int, batch: list[str]) -> tuple[int, KeywordDataResult]:
+        async def process_batch(
+            batch_index: int, batch: list[str]
+        ) -> tuple[int, KeywordDataResult]:
             """Process a single batch with semaphore control."""
             async with semaphore:
                 keywords_everywhere_logger.batch_start(
                     batch_index, len(batch), total_batches, len(keywords)
                 )
-                result = await self.get_keyword_data(batch, country, currency, data_source)
+                result = await self.get_keyword_data(
+                    batch, country, currency, data_source
+                )
                 return batch_index, result
 
         # Create tasks for all batches
-        tasks = [
-            process_batch(i, batch)
-            for i, batch in enumerate(batches)
-        ]
+        tasks = [process_batch(i, batch) for i, batch in enumerate(batches)]
 
         # Execute all tasks
         results = await asyncio.gather(*tasks)

@@ -173,9 +173,7 @@ class DataIntegrityValidator:
         start_time = time.monotonic()
 
         try:
-            result = await self.session.execute(
-                text(query), params or {}
-            )
+            result = await self.session.execute(text(query), params or {})
             rows = result.fetchall()
 
             duration_ms = (time.monotonic() - start_time) * 1000

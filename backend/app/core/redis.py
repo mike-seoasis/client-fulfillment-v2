@@ -77,9 +77,6 @@ class RedisManager:
             name="redis",
         )
 
-        # Determine if SSL should be used (Railway Redis uses SSL)
-        use_ssl = redis_url.startswith("rediss://")
-
         try:
             # Create connection pool
             self._pool = ConnectionPool.from_url(

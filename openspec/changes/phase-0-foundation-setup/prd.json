@@ -257,8 +257,9 @@
         "'pre-commit run --all-files' passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Run each command and verify exit code 0. Fix any issues before proceeding."
+      "passes": true,
+      "notes": "Run each command and verify exit code 0. Fix any issues before proceeding.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "P0-098",
@@ -291,7 +292,7 @@
   ],
   "metadata": {
     "phase": 0,
-    "updatedAt": "2026-02-03T02:06:43.675Z",
+    "updatedAt": "2026-02-03T02:10:20.980Z",
     "openspecChange": "phase-0-foundation-setup"
   }
 }

@@ -21,11 +21,11 @@ VALID_PHASE_STATUSES = frozenset(
 # Valid phase names (renamed for UX clarity)
 VALID_PHASES = frozenset(
     {
-        "brand_setup",       # was: discovery
-        "site_analysis",     # was: requirements
+        "brand_setup",  # was: discovery
+        "site_analysis",  # was: requirements
         "content_generation",  # was: implementation
-        "review_edit",       # was: review
-        "export",            # was: launch
+        "review_edit",  # was: review
+        "export",  # was: launch
     }
 )
 

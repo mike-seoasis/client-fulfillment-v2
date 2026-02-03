@@ -378,7 +378,11 @@ class Crawl4AIClient:
                 if response.status_code >= 400:
                     # Client error - don't retry
                     error_body = response.json() if response.content else None
-                    error_msg = error_body.get("error", str(error_body)) if error_body else "Client error"
+                    error_msg = (
+                        error_body.get("error", str(error_body))
+                        if error_body
+                        else "Client error"
+                    )
                     crawl4ai_logger.api_call_error(
                         method,
                         endpoint,
@@ -584,7 +588,10 @@ class Crawl4AIClient:
             }
 
             response = await self._request(
-                "POST", "/crawl", json=request_body, target_url=f"batch ({len(urls)} URLs)"
+                "POST",
+                "/crawl",
+                json=request_body,
+                target_url=f"batch ({len(urls)} URLs)",
             )
 
             duration_ms = (time.monotonic() - start_time) * 1000
@@ -596,7 +603,9 @@ class Crawl4AIClient:
 
             results: list[CrawlResult] = []
             for i, result_data in enumerate(results_data):
-                result_url = result_data.get("url", urls[i] if i < len(urls) else "unknown")
+                result_url = result_data.get(
+                    "url", urls[i] if i < len(urls) else "unknown"
+                )
                 results.append(
                     CrawlResult(
                         success=result_data.get("success", True),

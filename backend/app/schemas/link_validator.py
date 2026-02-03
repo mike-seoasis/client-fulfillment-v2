@@ -264,8 +264,12 @@ class BatchLinkValidationItemResponse(BaseModel):
     invalid_count: int = Field(0, description="Number of invalid links")
     external_count: int = Field(0, description="Number of external links")
     validation_score: float = Field(100.0, description="Validation score 0-100")
-    passed_validation: bool = Field(True, description="Whether all internal links are valid")
-    invalid_urls: list[str] = Field(default_factory=list, description="List of invalid URLs")
+    passed_validation: bool = Field(
+        True, description="Whether all internal links are valid"
+    )
+    invalid_urls: list[str] = Field(
+        default_factory=list, description="List of invalid URLs"
+    )
     error: str | None = Field(None, description="Error message if failed")
 
 
