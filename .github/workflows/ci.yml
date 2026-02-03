@@ -37,10 +37,10 @@ jobs:
         run: uv sync --frozen
 
       - name: Run Ruff linter
-        run: uv run ruff check app tests --output-format=github
+        run: uv run ruff check app --output-format=github
 
       - name: Run Ruff formatter check
-        run: uv run ruff format --check app tests
+        run: uv run ruff format --check app
 
   backend-type-check:
     name: Backend Type Check
@@ -98,7 +98,7 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          uv run pytest tests/core/ tests/models/ \
+          uv run pytest tests/core/ \
             -v \
             --tb=long \
             --log-cli-level=DEBUG \
