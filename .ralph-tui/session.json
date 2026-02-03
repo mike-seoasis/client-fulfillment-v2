@@ -3,10 +3,10 @@
   "sessionId": "6943362d-2f3d-4b49-a343-77824578f920",
   "status": "running",
   "startedAt": "2026-02-03T21:49:10.158Z",
-  "updatedAt": "2026-02-03T23:36:01.224Z",
-  "currentIteration": 38,
+  "updatedAt": "2026-02-03T23:36:58.757Z",
+  "currentIteration": 39,
   "maxIterations": 10,
-  "tasksCompleted": 38,
+  "tasksCompleted": 39,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -245,8 +245,8 @@
       {
         "id": "S2-039",
         "title": "Manual E2E verification",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "S2-098",
@@ -642,6 +642,16 @@
       "durationMs": 384516,
       "startedAt": "2026-02-03T23:19:48.402Z",
       "endedAt": "2026-02-03T23:26:12.918Z"
+    },
+    {
+      "iteration": 39,
+      "status": "completed",
+      "taskId": "S2-039",
+      "taskTitle": "Manual E2E verification",
+      "taskCompleted": true,
+      "durationMs": 587194,
+      "startedAt": "2026-02-03T23:26:14.027Z",
+      "endedAt": "2026-02-03T23:36:01.221Z"
     }
   ],
   "skippedTaskIds": [],
