@@ -19,6 +19,7 @@ after each iteration and it's included in prompts for context.
 - **API tests**: Use pytest-asyncio with `async_client` fixture from conftest.py. Tests use httpx AsyncClient with ASGI transport. Validation errors return `{"error": ..., "code": ..., "request_id": ...}` format (not `detail`).
 - **UI components**: Store in `frontend/src/components/ui/`. Use `forwardRef` for form elements. Export types and components from `index.ts`. Use warm palette classes: `gold-*` for primary, `cream-*` for secondary, `coral-*` for danger, `warm-gray-*` for text.
 - **Two-step confirmation pattern**: Use `useState` for confirmation state, `useRef` for timeout cleanup, reset on blur with `onBlur` handler checking `relatedTarget`, and auto-reset with `useEffect` timeout.
+- **Frontend component tests**: Store in `frontend/src/components/__tests__/`. Mock `next/navigation` for router testing. Use `fireEvent.submit(form)` to bypass native `type="url"` validation in jsdom. For react-hook-form callbacks, test first argument via `mockFn.mock.calls[0][0]`.
 
 ---
 
@@ -311,5 +312,27 @@ after each iteration and it's included in prompts for context.
   - Use `useCallback` for event handlers to maintain stable references
   - For catch blocks where error variable is unused, use `catch { }` without variable (ES2019+)
   - Toast components need `role="alert"` for accessibility and `z-50` for stacking above other content
+---
+
+## 2026-02-03 - S1-018
+- Created frontend component tests for ProjectCard and ProjectForm
+- Created `frontend/src/components/__tests__/ProjectCard.test.tsx`:
+  - Tests for rendering: project name, site URL, placeholder metrics, relative activity time
+  - Tests for navigation: click navigates to project detail, keyboard Enter/Space support
+  - 9 tests covering core functionality
+- Created `frontend/src/components/__tests__/ProjectForm.test.tsx`:
+  - Tests for rendering: inputs, buttons, isSubmitting state, initialData population
+  - Tests for required field validation: empty name, empty URL, both empty
+  - Tests for URL format validation: valid http/https URLs, invalid formats, URLs without protocol
+  - Tests for form submission: calls onSubmit with correct data
+  - 17 tests covering validation and submission
+- Installed `@testing-library/user-event` dev dependency for user interaction simulation
+- Files changed: `frontend/src/components/__tests__/ProjectCard.test.tsx`, `frontend/src/components/__tests__/ProjectForm.test.tsx`, `frontend/package.json`
+- **Learnings:**
+  - Mock `useRouter` from `next/navigation` for testing navigation: `vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))`
+  - Input with `type="url"` triggers native browser validation in jsdom - use `fireEvent.submit(form)` and `fireEvent.change(input)` to bypass for Zod validation testing
+  - react-hook-form's `handleSubmit` callback receives `(data, event)` - test first argument with `mockFn.mock.calls[0][0]`
+  - Card components with `onClick` have `role="button"` and `tabIndex={0}` - test keyboard accessibility with `user.keyboard('{Enter}')` and `user.keyboard(' ')`
+  - Use `waitFor()` for assertions that depend on async validation state updates
 ---
 
