@@ -156,6 +156,8 @@ module = [
     "websockets.*",
     "boto3",
     "boto3.*",
+    "botocore",
+    "botocore.*",
 ]
 ignore_missing_imports = true
 

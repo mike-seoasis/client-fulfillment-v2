@@ -27,8 +27,8 @@ from io import BytesIO
 from typing import Any, BinaryIO
 
 import boto3
-from botocore.config import Config as BotoConfig  # type: ignore[import-not-found]
-from botocore.exceptions import (  # type: ignore[import-not-found]
+from botocore.config import Config as BotoConfig
+from botocore.exceptions import (
     BotoCoreError,
     ClientError,
     ConnectionError,

@@ -5,6 +5,7 @@ app/deploy.py
 app/main.py
 app/api/__init__.py
 app/api/v1/__init__.py
+app/api/v1/brand_config.py
 app/api/v1/files.py
 app/api/v1/projects.py
 app/core/__init__.py
@@ -47,6 +48,7 @@ app/models/project_file.py
 app/schemas/__init__.py
 app/schemas/amazon_reviews.py
 app/schemas/brand_config.py
+app/schemas/brand_config_generation.py
 app/schemas/brand_config_v3.py
 app/schemas/categorize.py
 app/schemas/competitor.py
@@ -72,6 +74,7 @@ app/schemas/project_file.py
 app/schemas/review_platforms.py
 app/schemas/schedule.py
 app/services/__init__.py
+app/services/brand_config.py
 app/services/file.py
 app/services/project.py
 app/utils/__init__.py

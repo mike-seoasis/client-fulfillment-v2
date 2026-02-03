@@ -514,3 +514,20 @@ after each iteration and it's included in prompts for context.
   - Pattern: Text extraction tests are synchronous (no async fixtures needed) - simpler than API tests
 ---
 
+## 2026-02-03 - S2-036
+- **What was implemented:** Unit tests for S3 client integration (upload, get, delete, circuit breaker, retry logic)
+- **Files changed:**
+  - `backend/tests/integrations/test_s3.py` (created - 41 tests covering all S3Client methods and error handling)
+  - `backend/app/integrations/s3.py` (removed unused type ignore comments)
+  - `backend/pyproject.toml` (added botocore to mypy ignore list)
+- **Learnings:**
+  - Pattern: Use `MagicMock()` to mock boto3 client directly - simpler than moto for unit tests
+  - Pattern: Create helper function `make_client_error(code, message)` to generate botocore ClientError with specific error codes
+  - Pattern: Test circuit breaker behavior requires configuring `s3_max_retries=1` to prevent multiple failures per call from tripping circuit unexpectedly
+  - Pattern: S3NotFoundError (NoSuchKey/404) should NOT trip circuit breaker - test this explicitly
+  - Pattern: Auth errors (AccessDenied, InvalidAccessKeyId, SignatureDoesNotMatch) should NOT retry - test with call count assertion
+  - Pattern: Connection errors (EndpointConnectionError) are retryable - test with side_effect list transitioning from error to success
+  - Pattern: Test classes follow method grouping: `TestUploadFile`, `TestGetFile`, `TestDeleteFile`, `TestFileExists`, `TestGetFileMetadata`, `TestCircuitBreaker`, `TestRetryLogic`, `TestS3Exceptions`, `TestEdgeCases`
+  - Gotcha: botocore needs to be added to mypy ignore list in pyproject.toml (alongside boto3)
+---
+
