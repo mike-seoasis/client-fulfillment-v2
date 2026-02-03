@@ -26,3 +26,15 @@ after each iteration and it's included in prompts for context.
   - Gotcha: Must use `uv run` prefix for python/mypy/ruff commands in this project
 ---
 
+## 2026-02-03 - S2-002
+- **What was implemented:** Alembic migration for project_files table
+- **Files changed:**
+  - `backend/alembic/versions/0017_create_project_files_table.py` (created)
+- **Learnings:**
+  - Pattern: Migrations follow format `0NNN_description.py` with sequential numbering
+  - Pattern: Use `sa.ForeignKeyConstraint` with `name` param for explicit FK naming (e.g., `fk_table_column`)
+  - Pattern: Use `sa.UniqueConstraint` with `name` param for explicit constraint naming (e.g., `uq_table_column`)
+  - Pattern: Index naming convention uses `ix_table_column` via `op.f()` helper
+  - Verified: Both upgrade and downgrade paths work correctly
+---
+
