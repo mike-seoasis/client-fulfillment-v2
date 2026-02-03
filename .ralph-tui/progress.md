@@ -173,3 +173,16 @@ after each iteration and it's included in prompts for context.
   - Reference: skills/brand_guidelines_bible.md contains the authoritative structure for brand guidelines
 ---
 
+## 2026-02-03 - S2-012
+- **What was implemented:** BrandConfigService to orchestrate brand config generation
+- **Files changed:**
+  - `backend/app/services/brand_config.py` (created - BrandConfigService, GenerationStatus, GenerationStatusValue)
+  - `backend/app/services/__init__.py` (added BrandConfigService and GenerationStatus exports)
+- **Learnings:**
+  - Pattern: Use dataclass for status objects that need both dict serialization (for JSONB) and typed access
+  - Pattern: Store generation status under a `generation` key in the JSONB state field to namespace it from other wizard state data
+  - Pattern: Use str enum (inheriting from both str and Enum) for values that need to be JSON-serializable
+  - Pattern: Return 409 Conflict when trying to start a process that's already in progress
+  - Pattern: Include timestamps (started_at, completed_at) in status objects for debugging and UX
+---
+

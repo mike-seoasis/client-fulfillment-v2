@@ -196,8 +196,9 @@
         "Status includes: status, current_step, steps_completed, steps_total, error"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Use project.brand_wizard_state for status tracking. Status values: pending, generating, complete, failed."
+      "passes": true,
+      "notes": "Use project.brand_wizard_state for status tracking. Status values: pending, generating, complete, failed.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S2-013",
@@ -662,6 +663,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T22:09:58.865Z"
+    "updatedAt": "2026-02-03T22:11:21.248Z"
   }
 }
