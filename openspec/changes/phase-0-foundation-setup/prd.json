@@ -30,8 +30,9 @@
         "App still starts with health endpoint working"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Keep: models/, schemas/, core/, integrations/, alembic/. Update main.py to only have health routes."
+      "passes": true,
+      "notes": "Keep: models/, schemas/, core/, integrations/, alembic/. Update main.py to only have health routes.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "P0-003",
@@ -278,7 +279,7 @@
   ],
   "metadata": {
     "phase": 0,
-    "updatedAt": "2026-02-03T01:42:44.011Z",
+    "updatedAt": "2026-02-03T01:45:22.767Z",
     "openspecChange": "phase-0-foundation-setup"
   }
 }
