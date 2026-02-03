@@ -34,30 +34,11 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
-      - name: Debug environment
-        run: |
-          echo "PWD: $(pwd)"
-          echo "Python: $(which python || echo 'not found')"
-          echo "venv exists: $(ls -la .venv 2>&1 || echo 'no venv')"
-          echo "uv version: $(uv --version)"
-          uv pip list 2>&1 || echo "pip list failed"
-
-      - name: Run Ruff linter (with error output)
-        shell: bash
-        run: |
-          set +e
-          echo "=== Running ruff check ==="
-          output=$(uv run ruff check app 2>&1)
-          exit_code=$?
-          echo "$output"
-          echo "=== Exit code: $exit_code ==="
-          if [ $exit_code -ne 0 ]; then
-            echo "::error::Ruff check failed"
-            exit $exit_code
-          fi
+      - name: Run Ruff linter
+        run: uv run ruff check app
 
       - name: Run Ruff formatter check
-        run: uv run ruff format --check app || (echo "Format check failed"; exit 1)
+        run: uv run ruff format --check app
 
   backend-type-check:
     name: Backend Type Check
@@ -80,7 +61,7 @@ jobs:
         run: uv sync --frozen
 
       - name: Run MyPy
-        run: uv run mypy app --config-file pyproject.toml --show-error-context
+        run: uv run mypy app
 
   backend-test:
     name: Backend Test
@@ -109,28 +90,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
-      - name: Run tests with coverage
-        run: |
-          uv run pytest tests/core/ \
-            -v \
-            --tb=long \
-            --log-cli-level=DEBUG \
-            --log-cli-format="%(asctime)s %(levelname)s %(name)s: %(message)s" \
-            --durations=10 \
-            --cov=app \
-            --cov-report=term-missing \
-            --cov-report=xml \
-            --cov-fail-under=0
-        env:
-          PYTHONUNBUFFERED: "1"
-
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: coverage-report
-          path: backend/coverage.xml
-          retention-days: 7
+      - name: Run tests
+        run: uv run pytest tests/core/ -v
 
   backend-docker-build:
     name: Backend Docker Build
