@@ -531,3 +531,20 @@ after each iteration and it's included in prompts for context.
   - Gotcha: botocore needs to be added to mypy ignore list in pyproject.toml (alongside boto3)
 ---
 
+## 2026-02-03 - S2-037
+- **What was implemented:** Integration tests for BrandConfigService covering full generation flow
+- **Files changed:**
+  - `backend/tests/services/__init__.py` (created - module init)
+  - `backend/tests/services/test_brand_config_service.py` (created - 29 tests covering all service methods)
+- **Learnings:**
+  - Pattern: Create mock clients (MockPerplexityClient, MockCrawl4AIClient, MockClaudeClient) matching the interface of real clients with `available` property and async methods
+  - Pattern: Mock clients accept `should_fail` and `fail_message` parameters for testing error scenarios
+  - Pattern: For Claude mock, use `_get_section_response(section_name)` method that returns realistic JSON for each brand config section
+  - Pattern: Test research phase failure handling by setting `should_fail=True` on individual mock clients while keeping others working
+  - Pattern: Test synthesis phase with status callback using `list[tuple[str, int]]` to track callback invocations
+  - Pattern: Use `pytest.raises(HTTPException)` instead of generic `Exception` for service methods that raise HTTPException
+  - Pattern: Test classes follow feature grouping: `TestResearchPhase`, `TestSynthesisPhase`, `TestStatusUpdates`, `TestStoreBrandConfig`, `TestFullGenerationFlow`
+  - Pattern: Include dataclass tests (ResearchContext, GenerationStatus) with `to_dict`, `from_dict`, helper methods
+  - Gotcha: SQLite/SQLAlchemy JSONB mutation tracking can be tricky - use `expire_all()` or verify via other methods rather than relying on direct status reads after nested service calls
+---
+

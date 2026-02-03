@@ -619,8 +619,9 @@
         "Test graceful handling of Crawl4AI failure"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Mock PerplexityClient, Crawl4AIClient, ClaudeClient. Test status transitions."
+      "passes": true,
+      "notes": "Mock PerplexityClient, Crawl4AIClient, ClaudeClient. Test status transitions.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S2-038",
@@ -687,6 +688,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T23:14:27.928Z"
+    "updatedAt": "2026-02-03T23:19:47.278Z"
   }
 }
