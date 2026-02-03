@@ -13,6 +13,7 @@ after each iteration and it's included in prompts for context.
 - **Pydantic URL fields**: Use `HttpUrl` in request schemas for automatic URL validation. Use `str` in response schemas (DB stores as string, `from_attributes=True` handles conversion).
 - **Service layer**: Services live in `backend/app/services/`. Use `@staticmethod` methods, async patterns with `select()` + `db.execute()`, and `db.flush()` + `db.refresh()` for writes. Let the route dependency handle commit/rollback.
 - **API routers**: Create routers in `backend/app/api/v1/`. Use `APIRouter(prefix="/resource", tags=["Resource"])`. Register in `__init__.py` with `router.include_router()`, then include v1 router in `main.py`.
+- **Frontend providers**: Create providers in `frontend/src/components/providers/`. Use `'use client'` directive. Wrap app in `layout.tsx`. For TanStack Query, use SSR-safe singleton pattern from `frontend/src/lib/query-client.ts`.
 
 ---
 
@@ -83,5 +84,20 @@ after each iteration and it's included in prompts for context.
   - Use `status_code=status.HTTP_201_CREATED` for POST and `status.HTTP_204_NO_CONTENT` for DELETE
   - `get_session` dependency handles commit/rollback automatically, routes just call service methods
   - Router registration: domain routers → v1 __init__.py → main.py `include_router()`
+---
+
+## 2026-02-03 - S1-007
+- Set up TanStack Query in frontend for data fetching
+- Created `frontend/src/lib/query-client.ts` with QueryClient factory functions:
+  - `makeQueryClient()` - creates configured QueryClient with sensible defaults
+  - `getQueryClient()` - SSR-safe singleton pattern (new client on server, reused on browser)
+- Created `frontend/src/components/providers/QueryProvider.tsx` with 'use client' directive
+- Updated `frontend/src/app/layout.tsx` to wrap app with QueryProvider
+- Files changed: `frontend/src/lib/query-client.ts`, `frontend/src/components/providers/QueryProvider.tsx`, `frontend/src/app/layout.tsx`
+- **Learnings:**
+  - TanStack Query v5 requires SSR-aware setup for Next.js App Router
+  - Use `'use client'` directive for provider components that use React context
+  - Server-side rendering needs new QueryClient per request; browser should reuse singleton
+  - Default staleTime of 60s and disabling refetchOnWindowFocus improves UX for admin tools
 ---
 
