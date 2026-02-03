@@ -184,3 +184,23 @@ after each iteration and it's included in prompts for context.
   - Barrel exports (`index.ts`) allow clean imports: `import { Button, Card } from '@/components/ui'`
 ---
 
+## 2026-02-03 - S1-011
+- Created Header component at `frontend/src/components/Header.tsx`:
+  - Sticky positioning at top with z-50 for proper stacking
+  - Warm cream-100 background with cream-300 border
+  - Logo placeholder (gold-500 square with "C" initial)
+  - "Client Onboarding" title text
+  - User dropdown placeholder with avatar and chevron icon
+  - Uses warm palette classes consistent with design system
+- Updated `frontend/src/app/layout.tsx`:
+  - Added Header import and component
+  - Set page title/description to "Client Onboarding"
+  - Wrapped children in div with min-h-screen and cream-100 background
+  - Main content area with max-w-7xl, horizontal padding (px-4/6/8), and py-8 vertical padding
+- Files changed: `frontend/src/components/Header.tsx`, `frontend/src/app/layout.tsx`
+- **Learnings:**
+  - Header components at layout level (not page level) don't need `'use client'` unless they have interactivity, but it's safe to include for future dropdown functionality
+  - Sticky headers need z-index (z-50) to stay above scrollable content
+  - max-w-7xl with responsive padding (px-4 sm:px-6 lg:px-8) provides consistent container behavior
+---
+
