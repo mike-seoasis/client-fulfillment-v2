@@ -153,8 +153,9 @@
         "'docker build -t backend-test ./backend' succeeds"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Reference frontend/Dockerfile for multi-stage pattern. Railway sets PORT dynamically."
+      "passes": true,
+      "notes": "Reference frontend/Dockerfile for multi-stage pattern. Railway sets PORT dynamically.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "P0-010",
@@ -285,7 +286,7 @@
   ],
   "metadata": {
     "phase": 0,
-    "updatedAt": "2026-02-03T01:59:21.292Z",
+    "updatedAt": "2026-02-03T02:00:30.024Z",
     "openspecChange": "phase-0-foundation-setup"
   }
 }

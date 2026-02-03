@@ -9,6 +9,7 @@ after each iteration and it's included in prompts for context.
 - **Health endpoints**: Defined in `main.py` directly, not in routers. Routes: `/health`, `/health/db`, `/health/redis`, `/health/scheduler`
 - **CircuitBreaker**: Use shared `app.core.circuit_breaker` module. Pass `name` parameter for logging context. Config via `CircuitBreakerConfig(failure_threshold, recovery_timeout)`.
 - **uv package manager**: uv installed at `~/.local/bin/uv`. Run `uv lock` in backend/ to regenerate lockfile. Use `uv run pytest` or `uv run python` to execute commands with dependencies.
+- **uv in Docker**: Use `COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv` to get uv binary. Install deps with `uv sync --frozen --no-dev --no-install-project`.
 
 ---
 
@@ -123,5 +124,18 @@ after each iteration and it's included in prompts for context.
   - Fix: add `[tool.setuptools.packages.find]` with `include = ["app*"]` to pyproject.toml
   - uv automatically creates a virtual environment and installs dependencies on first `uv run` command
   - 45 tests pass via `uv run pytest tests/core/`
+---
+
+## 2026-02-02 - P0-009
+- What was implemented: Created Backend Dockerfile for Railway deployment
+- Files changed:
+  - Created `backend/Dockerfile` - multi-stage build with uv for dependencies
+- **Learnings:**
+  - Use `COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv` to get uv in Docker without installing from scratch
+  - `uv sync --frozen --no-dev --no-install-project` installs only production dependencies using lockfile
+  - Dockerfile `EXPOSE` directive doesn't support variable substitution; use fixed port value as documentation
+  - CMD in shell form (`CMD command $VAR`) expands environment variables at runtime
+  - Non-root user pattern: `useradd --create-home --shell /bin/bash appuser` then `USER appuser`
+  - Virtual environment path from uv: `/app/.venv` - add to PATH with `ENV PATH="/app/.venv/bin:$PATH"`
 ---
 
