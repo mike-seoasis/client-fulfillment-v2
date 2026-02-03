@@ -414,3 +414,17 @@ after each iteration and it's included in prompts for context.
   - Pattern: Handle both project-not-found and brand-config-not-found states with informative messages
 ---
 
+## 2026-02-03 - S2-030
+- **What was implemented:** SectionNav component with vertical tabs for brand config section navigation
+- **Files changed:**
+  - `frontend/src/components/SectionNav.tsx` (created - vertical tab navigation with 10 section tabs and source documents list)
+  - `frontend/src/app/projects/[id]/brand-config/page.tsx` (updated - integrated SectionNav with two-column layout)
+- **Learnings:**
+  - Pattern: Export section definitions as const array (`BRAND_SECTIONS`) with `as const` for type safety - allows deriving `SectionKey` type
+  - Pattern: Use `useState<SectionKey>` to track active section in parent page, pass handler to nav component
+  - Pattern: Transform `useProjectFiles` data to simpler `SourceDocument` interface for nav component decoupling
+  - Pattern: Two-column layouts use `flex gap-6` with `w-56 flex-shrink-0` for fixed sidebar and `flex-1` for content area
+  - Pattern: Active tab styling uses tropical palette: `bg-palm-50 text-palm-700` with `bg-palm-500` dot indicator
+  - Pattern: Section nav accepts optional `onUploadClick` callback for future upload modal integration
+---
+

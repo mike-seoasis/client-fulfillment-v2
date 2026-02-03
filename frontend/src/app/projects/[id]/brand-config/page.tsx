@@ -1,10 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useProject } from '@/hooks/use-projects';
 import { useBrandConfig, useRegenerateBrandConfig } from '@/hooks/useBrandConfig';
+import { useProjectFiles } from '@/hooks/useProjectFiles';
 import { Button } from '@/components/ui';
+import { SectionNav, BRAND_SECTIONS, type SectionKey } from '@/components/SectionNav';
 
 function LoadingSkeleton() {
   return (
@@ -108,11 +111,20 @@ export default function BrandConfigPage() {
   const params = useParams();
   const projectId = params.id as string;
 
+  const [activeSection, setActiveSection] = useState<SectionKey>(BRAND_SECTIONS[0].key);
+
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
   const { data: brandConfig, isLoading: isBrandConfigLoading, error: brandConfigError } = useBrandConfig(projectId);
+  const { data: filesData } = useProjectFiles(projectId);
   const regenerateMutation = useRegenerateBrandConfig(projectId);
 
   const isLoading = isProjectLoading || isBrandConfigLoading;
+
+  // Transform project files to source documents format
+  const sourceDocuments = filesData?.items.map((file) => ({
+    id: file.id,
+    filename: file.filename,
+  })) ?? [];
 
   const handleRegenerateAll = () => {
     regenerateMutation.mutate(undefined);
@@ -200,11 +212,38 @@ export default function BrandConfigPage() {
       {/* Divider */}
       <hr className="border-cream-500 mb-6" />
 
-      {/* Content placeholder - section navigation and content will be added in subsequent stories */}
-      <div className="bg-white rounded-sm border border-cream-500 p-6 shadow-sm min-h-[400px]">
-        <p className="text-warm-gray-500 text-sm">
-          Brand configuration sections will appear here.
-        </p>
+      {/* Two-column layout: Section Nav + Content */}
+      <div className="flex gap-6">
+        {/* Left sidebar: Section navigation */}
+        <SectionNav
+          activeSection={activeSection}
+          onSectionChange={setActiveSection}
+          sourceDocuments={sourceDocuments}
+        />
+
+        {/* Right content: Active section content */}
+        <div className="flex-1 bg-white rounded-sm border border-cream-500 p-6 shadow-sm min-h-[500px]">
+          {/* Section header */}
+          <div className="flex items-start justify-between mb-6">
+            <h2 className="text-lg font-semibold text-warm-gray-900">
+              {BRAND_SECTIONS.find((s) => s.key === activeSection)?.label}
+            </h2>
+            <Button variant="ghost" size="sm">
+              Edit
+            </Button>
+          </div>
+
+          {/* Section content placeholder - will be populated in subsequent stories */}
+          <div className="text-warm-gray-500 text-sm">
+            <p>
+              Content for{' '}
+              <span className="font-medium">
+                {BRAND_SECTIONS.find((s) => s.key === activeSection)?.label}
+              </span>{' '}
+              will be displayed here.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );

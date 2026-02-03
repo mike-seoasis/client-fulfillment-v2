@@ -496,8 +496,9 @@
         "Show source documents list in sidebar"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Reference WIREFRAMES.md section 14 for layout. Left sidebar with section list."
+      "passes": true,
+      "notes": "Reference WIREFRAMES.md section 14 for layout. Left sidebar with section list.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S2-031",
@@ -680,6 +681,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T22:52:24.834Z"
+    "updatedAt": "2026-02-03T22:54:21.926Z"
   }
 }
