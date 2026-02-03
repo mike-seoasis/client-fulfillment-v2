@@ -27,7 +27,8 @@ async function handleResponse<T>(response: Response): Promise<T> {
     let message: string | undefined;
     try {
       const data = await response.json();
-      message = data.detail || data.message;
+      // Backend uses {"error": ..., "code": ..., "request_id": ...} format
+      message = data.error || data.detail || data.message;
     } catch {
       // Response body is not JSON
     }
