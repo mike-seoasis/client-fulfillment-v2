@@ -80,3 +80,23 @@ after each iteration and it's included in prompts for context.
   - Pre-existing `use_ssl` variable is defined but unused (not part of this refactor)
 ---
 
+## 2026-02-02 - P0-006
+- What was implemented: Refactored all 9 integration clients to use shared CircuitBreaker module
+- Files changed:
+  - Modified `backend/app/integrations/dataforseo.py` - uses shared CircuitBreaker with name='dataforseo'
+  - Modified `backend/app/integrations/pop.py` - uses shared CircuitBreaker with name='pop'
+  - Modified `backend/app/integrations/claude.py` - uses shared CircuitBreaker with name='claude'
+  - Modified `backend/app/integrations/perplexity.py` - uses shared CircuitBreaker with name='perplexity'
+  - Modified `backend/app/integrations/google_nlp.py` - uses shared CircuitBreaker with name='google_nlp'
+  - Modified `backend/app/integrations/keywords_everywhere.py` - uses shared CircuitBreaker with name='keywords_everywhere'
+  - Modified `backend/app/integrations/crawl4ai.py` - uses shared CircuitBreaker with name='crawl4ai'
+  - Modified `backend/app/integrations/email.py` - uses shared CircuitBreaker with name='email'
+  - Modified `backend/app/integrations/webhook.py` - uses shared CircuitBreaker with name='webhook'
+- **Learnings:**
+  - Each integration had its own local CircuitState, CircuitBreakerConfig, and CircuitBreaker class definitions (~100+ lines each)
+  - Some integrations used specialized loggers (e.g., dataforseo_logger, claude_logger) while others used the generic logger for circuit breaker events
+  - The shared module uses generic logging with `circuit_name` in the `extra` dict, which is simpler and consistent
+  - No CircuitState import needed since it's only used internally by CircuitBreaker
+  - Removed ~900 lines of duplicate code across the 9 integration files
+---
+

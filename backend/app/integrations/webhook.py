@@ -28,112 +28,15 @@ import json
 import time
 import traceback
 from dataclasses import dataclass
-from enum import Enum
 from typing import Any
 
 import httpx
 
+from app.core.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from app.core.config import get_settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
-
-
-class CircuitState(Enum):
-    """Circuit breaker states."""
-
-    CLOSED = "closed"
-    OPEN = "open"
-    HALF_OPEN = "half_open"
-
-
-@dataclass
-class CircuitBreakerConfig:
-    """Circuit breaker configuration."""
-
-    failure_threshold: int
-    recovery_timeout: float
-
-
-class CircuitBreaker:
-    """Circuit breaker for webhook operations."""
-
-    def __init__(self, config: CircuitBreakerConfig) -> None:
-        self._config = config
-        self._state = CircuitState.CLOSED
-        self._failure_count = 0
-        self._last_failure_time: float | None = None
-        self._lock = asyncio.Lock()
-
-    @property
-    def state(self) -> CircuitState:
-        """Get current circuit state."""
-        return self._state
-
-    @property
-    def is_open(self) -> bool:
-        """Check if circuit is open."""
-        return self._state == CircuitState.OPEN
-
-    async def can_execute(self) -> bool:
-        """Check if operation can be executed."""
-        async with self._lock:
-            if self._state == CircuitState.CLOSED:
-                return True
-
-            if self._state == CircuitState.OPEN:
-                if self._last_failure_time is not None:
-                    elapsed = time.monotonic() - self._last_failure_time
-                    if elapsed >= self._config.recovery_timeout:
-                        logger.info(
-                            "Webhook circuit breaker transitioning to half-open",
-                            extra={
-                                "from_state": self._state.value,
-                                "failure_count": self._failure_count,
-                            },
-                        )
-                        self._state = CircuitState.HALF_OPEN
-                        return True
-                return False
-
-            return True  # HALF_OPEN
-
-    async def record_success(self) -> None:
-        """Record successful operation."""
-        async with self._lock:
-            if self._state == CircuitState.HALF_OPEN:
-                logger.info(
-                    "Webhook circuit breaker closed after recovery",
-                    extra={"failure_count": self._failure_count},
-                )
-                self._state = CircuitState.CLOSED
-            self._failure_count = 0
-            self._last_failure_time = None
-
-    async def record_failure(self) -> None:
-        """Record failed operation."""
-        async with self._lock:
-            self._failure_count += 1
-            self._last_failure_time = time.monotonic()
-
-            if self._state == CircuitState.HALF_OPEN:
-                logger.warning(
-                    "Webhook circuit breaker reopened after failed recovery",
-                    extra={"failure_count": self._failure_count},
-                )
-                self._state = CircuitState.OPEN
-            elif (
-                self._state == CircuitState.CLOSED
-                and self._failure_count >= self._config.failure_threshold
-            ):
-                logger.warning(
-                    "Webhook circuit breaker opened",
-                    extra={
-                        "failure_count": self._failure_count,
-                        "recovery_timeout": self._config.recovery_timeout,
-                    },
-                )
-                self._state = CircuitState.OPEN
 
 
 @dataclass
@@ -227,7 +130,8 @@ class WebhookClient:
             CircuitBreakerConfig(
                 failure_threshold=settings.webhook_circuit_failure_threshold,
                 recovery_timeout=settings.webhook_circuit_recovery_timeout,
-            )
+            ),
+            name="webhook",
         )
 
         # HTTP client (created lazily)

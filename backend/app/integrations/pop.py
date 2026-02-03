@@ -47,160 +47,11 @@ from typing import Any
 
 import httpx
 
+from app.core.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from app.core.config import get_settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
-
-
-class CircuitState(Enum):
-    """Circuit breaker states."""
-
-    CLOSED = "closed"  # Normal operation
-    OPEN = "open"  # Failing, reject all requests
-    HALF_OPEN = "half_open"  # Testing if service recovered
-
-
-@dataclass
-class CircuitBreakerConfig:
-    """Circuit breaker configuration."""
-
-    failure_threshold: int
-    recovery_timeout: float
-
-
-class CircuitBreaker:
-    """Circuit breaker implementation for POP operations.
-
-    Prevents cascading failures by stopping requests to a failing service.
-    After recovery_timeout, allows a test request through (half-open state).
-    If test succeeds, circuit closes. If fails, circuit opens again.
-    """
-
-    def __init__(self, config: CircuitBreakerConfig) -> None:
-        self._config = config
-        self._state = CircuitState.CLOSED
-        self._failure_count = 0
-        self._last_failure_time: float | None = None
-        self._lock = asyncio.Lock()
-
-    @property
-    def state(self) -> CircuitState:
-        """Get current circuit state."""
-        return self._state
-
-    @property
-    def is_closed(self) -> bool:
-        """Check if circuit is closed (normal operation)."""
-        return self._state == CircuitState.CLOSED
-
-    @property
-    def is_open(self) -> bool:
-        """Check if circuit is open (rejecting requests)."""
-        return self._state == CircuitState.OPEN
-
-    async def _check_recovery(self) -> bool:
-        """Check if enough time has passed to attempt recovery."""
-        if self._last_failure_time is None:
-            return False
-        elapsed = time.monotonic() - self._last_failure_time
-        return elapsed >= self._config.recovery_timeout
-
-    async def can_execute(self) -> bool:
-        """Check if operation can be executed based on circuit state."""
-        async with self._lock:
-            if self._state == CircuitState.CLOSED:
-                return True
-
-            if self._state == CircuitState.OPEN:
-                if await self._check_recovery():
-                    # Transition to half-open for testing
-                    previous_state = self._state.value
-                    self._state = CircuitState.HALF_OPEN
-                    logger.warning(
-                        "POP circuit breaker state changed",
-                        extra={
-                            "previous_state": previous_state,
-                            "new_state": self._state.value,
-                            "failure_count": self._failure_count,
-                        },
-                    )
-                    logger.info("POP circuit breaker attempting recovery")
-                    return True
-                return False
-
-            # HALF_OPEN state - allow single test request
-            return True
-
-    async def record_success(self) -> None:
-        """Record successful operation."""
-        async with self._lock:
-            if self._state == CircuitState.HALF_OPEN:
-                # Recovery successful, close circuit
-                previous_state = self._state.value
-                self._state = CircuitState.CLOSED
-                self._failure_count = 0
-                self._last_failure_time = None
-                logger.warning(
-                    "POP circuit breaker state changed",
-                    extra={
-                        "previous_state": previous_state,
-                        "new_state": self._state.value,
-                        "failure_count": self._failure_count,
-                    },
-                )
-                logger.info("POP circuit breaker closed - API calls restored")
-            elif self._state == CircuitState.CLOSED:
-                # Reset failure count on success
-                self._failure_count = 0
-
-    async def record_failure(self) -> None:
-        """Record failed operation."""
-        async with self._lock:
-            self._failure_count += 1
-            self._last_failure_time = time.monotonic()
-
-            if self._state == CircuitState.HALF_OPEN:
-                # Recovery failed, open circuit again
-                previous_state = self._state.value
-                self._state = CircuitState.OPEN
-                logger.warning(
-                    "POP circuit breaker state changed",
-                    extra={
-                        "previous_state": previous_state,
-                        "new_state": self._state.value,
-                        "failure_count": self._failure_count,
-                    },
-                )
-                logger.error(
-                    "POP circuit breaker opened - API calls disabled",
-                    extra={
-                        "failure_count": self._failure_count,
-                        "recovery_timeout_seconds": self._config.recovery_timeout,
-                    },
-                )
-            elif (
-                self._state == CircuitState.CLOSED
-                and self._failure_count >= self._config.failure_threshold
-            ):
-                # Too many failures, open circuit
-                previous_state = self._state.value
-                self._state = CircuitState.OPEN
-                logger.warning(
-                    "POP circuit breaker state changed",
-                    extra={
-                        "previous_state": previous_state,
-                        "new_state": self._state.value,
-                        "failure_count": self._failure_count,
-                    },
-                )
-                logger.error(
-                    "POP circuit breaker opened - API calls disabled",
-                    extra={
-                        "failure_count": self._failure_count,
-                        "recovery_timeout_seconds": self._config.recovery_timeout,
-                    },
-                )
 
 
 class POPError(Exception):
@@ -369,7 +220,8 @@ class POPClient:
             CircuitBreakerConfig(
                 failure_threshold=settings.pop_circuit_failure_threshold,
                 recovery_timeout=settings.pop_circuit_recovery_timeout,
-            )
+            ),
+            name="pop",
         )
 
         # HTTP client (created lazily)
