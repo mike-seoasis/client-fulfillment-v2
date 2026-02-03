@@ -43,7 +43,9 @@ jobs:
           uv pip list 2>&1 || echo "pip list failed"
 
       - name: Run Ruff linter
-        run: uv run ruff check app --output-format=github
+        run: |
+          uv run ruff check app --output-format=text 2>&1 || echo "Ruff check failed with code $?"
+          uv run ruff check app --output-format=github
 
       - name: Run Ruff formatter check
         run: uv run ruff format --check app
