@@ -46,8 +46,9 @@
         "pytest tests/core/ tests/models/ runs without import errors"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "We only need core and model tests for Phase 0. Integration tests may need review."
+      "passes": true,
+      "notes": "We only need core and model tests for Phase 0. Integration tests may need review.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "P0-004",
@@ -279,7 +280,7 @@
   ],
   "metadata": {
     "phase": 0,
-    "updatedAt": "2026-02-03T01:45:22.767Z",
+    "updatedAt": "2026-02-03T01:47:19.136Z",
     "openspecChange": "phase-0-foundation-setup"
   }
 }

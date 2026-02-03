@@ -37,3 +37,24 @@ after each iteration and it's included in prompts for context.
   - FastAPI TestClient is useful for quick endpoint verification without starting server
 ---
 
+## 2026-02-02 - P0-003
+- What was implemented: Cleaned up tests referencing deleted code
+- Files changed:
+  - Deleted `backend/tests/services/` (28 test files - tests for deleted services)
+  - Deleted `backend/tests/api/` (3 test files - tests for deleted API endpoints)
+  - Deleted `backend/tests/clients/` (1 test file - tests for deleted websocket client)
+  - Deleted `backend/tests/utils/` (5 test files - tests for deleted utils)
+- **Remaining test directories:**
+  - `tests/core/` - data integrity tests (kept)
+  - `tests/integrations/` - third-party integration tests (kept)
+  - `tests/e2e/` - end-to-end tests (kept, may need review later)
+  - `tests/migrations/` - migration tests (kept)
+  - `tests/test_fixtures.py` - fixture validation tests (kept)
+  - `tests/conftest.py` - shared fixtures (kept)
+- **Learnings:**
+  - Tests live in `backend/tests/`, not project root `tests/`
+  - The acceptance criteria mentioned `tests/models/` but this directory doesn't exist; core tests serve this purpose
+  - `conftest.py` only imports from `app.core` which was preserved, so no changes needed
+  - 37 tests now pass cleanly: `python3 -m pytest tests/core/ tests/test_fixtures.py`
+---
+
