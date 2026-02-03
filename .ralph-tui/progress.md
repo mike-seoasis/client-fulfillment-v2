@@ -162,3 +162,14 @@ after each iteration and it's included in prompts for context.
   - Gotcha: boto3 was missing from pyproject.toml dependencies - added `boto3>=1.34.0`
 ---
 
+## 2026-02-03 - S2-011
+- **What was implemented:** Updated BRAND_RESEARCH_SYSTEM_PROMPT to cover all 9 brand config sections
+- **Files changed:**
+  - `backend/app/integrations/perplexity.py` (expanded BRAND_RESEARCH_SYSTEM_PROMPT, updated docstring)
+- **Learnings:**
+  - Pattern: Brand config follows 9 sections: Foundation, Target Audience, Voice Dimensions, Voice Characteristics, Writing Style, Vocabulary, Trust Elements, Examples Bank, Competitor Context
+  - Pattern: System prompts for comprehensive research should request structured output with clear headers for each section
+  - Pattern: max_tokens=4096 is appropriate for comprehensive brand research responses
+  - Reference: skills/brand_guidelines_bible.md contains the authoritative structure for brand guidelines
+---
+

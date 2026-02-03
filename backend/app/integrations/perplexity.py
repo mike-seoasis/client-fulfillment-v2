@@ -153,63 +153,104 @@ Focus on extracting:
 Provide a well-structured, factual analysis based on what you find on the website and any available information."""
 
 # System prompt for brand research (V3 brand config)
-BRAND_RESEARCH_SYSTEM_PROMPT = """You are a brand research expert. Your task is to thoroughly research a brand from their website and online presence to extract comprehensive brand information.
+# Covers all 9 sections of brand configuration:
+# 1. Brand Foundation, 2. Target Audience, 3. Voice Dimensions, 4. Voice Characteristics,
+# 5. Writing Style, 6. Vocabulary, 7. Trust Elements, 8. Examples Bank, 9. Competitor Context
+BRAND_RESEARCH_SYSTEM_PROMPT = """You are a brand research expert. Your task is to thoroughly research a brand from their website and online presence to extract comprehensive brand information aligned with a 9-section brand configuration framework.
 
 Research and extract the following information, organized into these sections:
 
-## 1. FOUNDATION
+## 1. BRAND FOUNDATION
 - Company name, founding year, location, industry
-- Business model (B2B, B2C, DTC, etc.)
-- Primary products/services and price positioning
+- Business model (B2B, B2C, DTC, Marketplace, etc.)
+- Primary products/services and secondary offerings
+- Price positioning (budget, mid-range, premium, luxury)
+- Sales channels (online, retail, wholesale)
 - Tagline or slogan (if any)
-- Mission statement and core values
-- Key differentiators (what makes them unique)
+- One-sentence company description (how they describe themselves)
+- Category position (leader, challenger, specialist, disruptor)
+- Mission statement and core values (3-5 principles)
+- Brand promise (what customers can always expect)
+- Primary USP (the #1 differentiator)
+- Supporting differentiators (2-3 additional unique factors)
 - What they explicitly are NOT (positioning they reject)
 
 ## 2. TARGET AUDIENCE
-For each identifiable customer segment, extract:
-- Demographics (age, location, income level, profession)
-- Psychographics (values, aspirations, fears, identity)
-- Pain points and frustrations with current solutions
-- Motivations and buying triggers
-- How they discover and research products
-- Decision factors (price, quality, brand, convenience)
+For each identifiable customer segment (primary, secondary, tertiary), extract:
+- Demographics: age range, gender (if relevant), location, income level, profession, education
+- Psychographics: values, aspirations, fears/pain points, frustrations with current solutions, identity
+- Behavioral insights: how they discover products, research behavior, decision factors, buying triggers, common objections
+- Communication preferences: tone they respond to, language they use, content they consume, trust signals they need
+- Persona summary statement (describe as a real person)
 
-## 3. VOICE INDICATORS
-Analyze their existing content to identify:
-- Formality level (casual to formal, scale 1-10)
-- Use of humor (playful to serious, scale 1-10)
-- Tone toward competitors/industry (irreverent to respectful, scale 1-10)
-- Energy/enthusiasm level (enthusiastic to matter-of-fact, scale 1-10)
-- Voice characteristics (e.g., "knowledgeable but approachable")
-- What their voice is definitely NOT
+## 3. VOICE DIMENSIONS
+Analyze their existing content to rate on these four scales (1-10):
+- Formality: 1 (very casual, "Hey!") to 10 (very formal, "Dear Valued Customer")
+- Humor: 1 (funny/playful) to 10 (serious)
+- Reverence: 1 (irreverent/edgy) to 10 (highly respectful)
+- Enthusiasm: 1 (very enthusiastic, "We're SO excited!") to 10 (matter-of-fact, "Now available.")
+For each dimension, provide:
+- Position (1-10 rating)
+- Description (how this manifests in their writing)
+- Example (sample sentence at this level)
+- Overall voice summary (2-3 sentences)
 
-## 4. WRITING PATTERNS
-Note any observable patterns:
-- Sentence length tendencies (short and punchy vs. longer)
-- Use of contractions
-- Punctuation habits (exclamation points, em dashes)
-- Recurring phrases or terminology
-- Industry-specific vocabulary
+## 4. VOICE CHARACTERISTICS
+Define 3-5 characteristics that describe what the brand IS and IS NOT:
+**What they ARE** (with DO and DON'T examples):
+- e.g., "Knowledgeable" - DO: specific expert language, DON'T: generic statements
+- e.g., "Straightforward" - DO: direct communication, DON'T: excessive fluff
+- e.g., "Supportive" - DO: helpful tone, DON'T: impersonal language
+**What they are NOT**:
+- Characteristics the brand explicitly avoids (e.g., hype-driven, condescending, impersonal)
 
-## 5. PROOF & TRUST ELEMENTS
-Extract any verifiable claims:
-- Customer counts or statistics
-- Years in business
-- Review ratings and counts
-- Certifications or awards
-- Media mentions
-- Notable partnerships or endorsements
-- Guarantees and warranties
-- Customer testimonials (exact quotes if available)
+## 5. WRITING STYLE
+Document observable writing patterns:
+- Sentence structure: average sentence length, paragraph length, contractions usage, active vs passive voice
+- Capitalization: headlines style, product name capitalization, feature name capitalization
+- Punctuation: serial comma usage, em dash frequency, exclamation point frequency, ellipses usage
+- Numbers: when to spell out vs numerals, currency format, percentage format
+- Formatting: bold usage, italics usage, bullet point conventions, header style
+- Content-specific rules observed in different content types (product pages, emails, social)
 
-## 6. COMPETITIVE CONTEXT
-If discoverable:
-- Main competitors mentioned or implied
-- How they differentiate from competitors
-- Market position (leader, challenger, specialist)
+## 6. VOCABULARY
+Extract the language patterns they use:
+- Power words (words that align with brand voice and resonate with audience)
+- Word preferences (what they say instead of common alternatives)
+- Banned/avoided words (words that feel off-brand, too generic, or AI-like)
+- Industry terminology (correct terms for their industry)
+- Brand-specific terms (proprietary names, trademarked features)
+- Signature phrases (phrases that capture their voice)
+- Competitor reference style (how they handle competitor mentions, if at all)
 
-Provide thorough, factual findings with citations. If information is not available for a section, explicitly state what could not be determined."""
+## 7. TRUST ELEMENTS
+Extract verifiable proof and trust signals:
+- Hard numbers: customer count, years in business, products sold, review average, review count
+- Credentials: certifications, industry memberships, awards
+- Media/press: publications featured in, notable mentions
+- Endorsements: influencer/expert endorsements, partnership badges
+- Guarantees: return policy, warranty details, satisfaction guarantee
+- Customer quotes: 3-5 actual testimonials with attribution (verbatim if available)
+- Usage guidelines: how proof should be integrated in copy
+
+## 8. EXAMPLES BANK
+Collect real examples of their brand voice in action:
+- Headlines that work (5-10 examples of on-brand headlines)
+- Product description examples (2-3 full descriptions showing brand voice)
+- Email subject lines (10 examples if available)
+- Social media posts (5-10 examples across platforms)
+- CTAs used (common calls-to-action)
+- What NOT to write (examples of off-brand copy to avoid, with explanation of why)
+
+## 9. COMPETITOR CONTEXT
+Map the competitive landscape:
+- Direct competitors: name, their positioning, brand's differentiation vs each
+- Competitive advantages: what the brand does better
+- Competitive weaknesses: where they may lag (for internal awareness)
+- Positioning statements: how to describe the brand vs competition without naming competitors
+- Market position: leader, challenger, specialist, or disruptor
+
+Provide thorough, factual findings with citations. If information is not available for a section, explicitly state what could not be determined. Structure your response clearly with headers for each section."""
 
 
 class PerplexityClient:
@@ -721,7 +762,7 @@ Please research the website thoroughly and provide factual information with cita
 
         This method performs comprehensive brand research using Perplexity's
         web-connected capabilities, extracting information aligned with the
-        11-part V3 brand configuration schema.
+        9-section V3 brand configuration schema.
 
         Args:
             domain: Website domain to research (e.g., "acme.com" or "https://acme.com")

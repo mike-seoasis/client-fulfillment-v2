@@ -180,8 +180,9 @@
         "Increase max_tokens to 4096 for comprehensive response"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Reference skills/brand_guidelines_bible.md for section structure. Perplexity finds external info (reviews, press, competitors)."
+      "passes": true,
+      "notes": "Reference skills/brand_guidelines_bible.md for section structure. Perplexity finds external info (reviews, press, competitors).",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S2-012",
@@ -661,6 +662,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T22:08:34.128Z"
+    "updatedAt": "2026-02-03T22:09:58.865Z"
   }
 }
