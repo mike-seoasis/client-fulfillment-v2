@@ -551,8 +551,9 @@
         "'Regenerate All' in page header regenerates entire config"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Regeneration uses stored research context, doesn't re-run Perplexity/crawl."
+      "passes": true,
+      "notes": "Regeneration uses stored research context, doesn't re-run Perplexity/crawl.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S2-034",
@@ -683,6 +684,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-03T23:03:25.580Z"
+    "updatedAt": "2026-02-03T23:05:05.985Z"
   }
 }

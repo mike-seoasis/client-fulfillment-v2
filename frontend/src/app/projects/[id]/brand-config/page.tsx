@@ -183,6 +183,8 @@ export default function BrandConfigPage() {
   const [activeSection, setActiveSection] = useState<SectionKey>(BRAND_SECTIONS[0].key);
   const [isEditing, setIsEditing] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('Section saved successfully');
+  const [regeneratingSection, setRegeneratingSection] = useState<SectionKey | null>(null);
 
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
   const { data: brandConfig, isLoading: isBrandConfigLoading, error: brandConfigError } = useBrandConfig(projectId);
@@ -191,6 +193,8 @@ export default function BrandConfigPage() {
   const updateMutation = useUpdateBrandConfig(projectId);
 
   const isLoading = isProjectLoading || isBrandConfigLoading;
+  const isRegeneratingAll = regenerateMutation.isPending && regeneratingSection === null;
+  const isRegeneratingSection = regenerateMutation.isPending && regeneratingSection !== null;
 
   // Transform project files to source documents format
   const sourceDocuments = filesData?.items.map((file) => ({
@@ -198,9 +202,29 @@ export default function BrandConfigPage() {
     filename: file.filename,
   })) ?? [];
 
-  const handleRegenerateAll = () => {
-    regenerateMutation.mutate(undefined);
-  };
+  const handleRegenerateAll = useCallback(() => {
+    setRegeneratingSection(null);
+    regenerateMutation.mutate(undefined, {
+      onSuccess: () => {
+        setToastMessage('All sections regenerated successfully');
+        setShowToast(true);
+      },
+    });
+  }, [regenerateMutation]);
+
+  const handleRegenerateSection = useCallback((section: SectionKey) => {
+    setRegeneratingSection(section);
+    regenerateMutation.mutate({ section }, {
+      onSuccess: () => {
+        setRegeneratingSection(null);
+        setToastMessage(`${BRAND_SECTIONS.find((s) => s.key === section)?.label ?? 'Section'} regenerated successfully`);
+        setShowToast(true);
+      },
+      onError: () => {
+        setRegeneratingSection(null);
+      },
+    });
+  }, [regenerateMutation]);
 
   const handleEditClick = useCallback(() => {
     setIsEditing(true);
@@ -221,6 +245,7 @@ export default function BrandConfigPage() {
     updateMutation.mutate(updatePayload, {
       onSuccess: () => {
         setIsEditing(false);
+        setToastMessage('Section saved successfully');
         setShowToast(true);
       },
     });
@@ -306,8 +331,8 @@ export default function BrandConfigPage() {
           disabled={regenerateMutation.isPending}
           variant="secondary"
         >
-          <RefreshIcon className={`w-4 h-4 mr-2 ${regenerateMutation.isPending ? 'animate-spin' : ''}`} />
-          {regenerateMutation.isPending ? 'Regenerating...' : 'Regenerate All'}
+          <RefreshIcon className={`w-4 h-4 mr-2 ${isRegeneratingAll ? 'animate-spin' : ''}`} />
+          {isRegeneratingAll ? 'Regenerating...' : 'Regenerate All'}
         </Button>
       </div>
 
@@ -331,9 +356,20 @@ export default function BrandConfigPage() {
               {BRAND_SECTIONS.find((s) => s.key === activeSection)?.label}
             </h2>
             {!isEditing && (
-              <Button variant="ghost" size="sm" onClick={handleEditClick}>
-                Edit
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleRegenerateSection(activeSection)}
+                  disabled={regenerateMutation.isPending}
+                >
+                  <RefreshIcon className={`w-4 h-4 mr-1.5 ${isRegeneratingSection && regeneratingSection === activeSection ? 'animate-spin' : ''}`} />
+                  {isRegeneratingSection && regeneratingSection === activeSection ? 'Regenerating...' : 'Regenerate'}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={handleEditClick}>
+                  Edit
+                </Button>
+              </div>
             )}
           </div>
 
@@ -352,7 +388,7 @@ export default function BrandConfigPage() {
       {/* Success toast */}
       {showToast && (
         <Toast
-          message="Section saved successfully"
+          message={toastMessage}
           variant="success"
           onClose={() => setShowToast(false)}
         />

@@ -472,3 +472,16 @@ after each iteration and it's included in prompts for context.
   - Pattern: TanStack Query `setQueryData` on mutation success provides instant UI feedback with server-confirmed data
 ---
 
+## 2026-02-03 - S2-033
+- **What was implemented:** Regenerate buttons for individual brand config sections and improved Regenerate All functionality
+- **Files changed:**
+  - `frontend/src/app/projects/[id]/brand-config/page.tsx` (added Regenerate button to section header, track which section is regenerating, dynamic toast messages)
+- **Learnings:**
+  - Pattern: Track `regeneratingSection` state to distinguish between "Regenerate All" (null) and section-specific regeneration
+  - Pattern: Use `isRegeneratingAll` and `isRegeneratingSection` computed booleans for cleaner conditional rendering
+  - Pattern: Derive loading state from combined mutation pending state AND tracked section: `regenerateMutation.isPending && regeneratingSection === activeSection`
+  - Pattern: Dynamic toast messages use section label lookup from BRAND_SECTIONS array
+  - Pattern: Clear regeneratingSection on both success and error to prevent stuck loading states
+  - Pattern: Hide both Regenerate and Edit buttons when in edit mode to avoid conflicting actions
+---
+
