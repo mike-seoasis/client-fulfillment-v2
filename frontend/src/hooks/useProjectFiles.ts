@@ -39,6 +39,40 @@ export const projectFileKeys = {
 };
 
 /**
+ * Standalone file upload function.
+ * Use this when you need to upload to a dynamic project ID (not from a hook).
+ */
+export async function uploadFileToProject(
+  projectId: string,
+  file: File
+): Promise<ProjectFile> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(
+    `${API_BASE_URL}/projects/${projectId}/files`,
+    {
+      method: "POST",
+      body: formData,
+      // Note: Don't set Content-Type header - browser sets it with boundary
+    }
+  );
+
+  if (!response.ok) {
+    let message: string | undefined;
+    try {
+      const data = await response.json();
+      message = data.error || data.detail || data.message;
+    } catch {
+      // Response body is not JSON
+    }
+    throw new ApiError(response.status, response.statusText, message);
+  }
+
+  return response.json();
+}
+
+/**
  * Fetch all files for a project.
  */
 export function useProjectFiles(

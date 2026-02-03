@@ -349,3 +349,20 @@ after each iteration and it's included in prompts for context.
   - Pattern: Don't set Content-Type header for FormData uploads - browser handles it automatically with correct boundary
 ---
 
+## 2026-02-03 - S2-025
+- **What was implemented:** Multi-step wizard for project creation with file upload and brand config generation
+- **Files changed:**
+  - `frontend/src/components/ui/Textarea.tsx` (created - Textarea component matching Input pattern)
+  - `frontend/src/components/ui/index.ts` (added Textarea export)
+  - `frontend/src/components/ProjectForm.tsx` (added additional_info field, file upload integration, formId prop)
+  - `frontend/src/hooks/useBrandConfigGeneration.ts` (created - hooks for brand config generation status and polling)
+  - `frontend/src/hooks/useProjectFiles.ts` (added uploadFileToProject standalone function)
+  - `frontend/src/app/projects/new/page.tsx` (converted to 2-step wizard: project details → generation progress)
+- **Learnings:**
+  - Pattern: Use `formId` prop + HTML `form` attribute on external buttons to submit forms from outside their DOM hierarchy
+  - Pattern: For wizard flows with file uploads, use standalone upload functions instead of hooks when the parent ID changes mid-flow (hooks have stale closures)
+  - Pattern: TanStack Query's refetchInterval can be a function that returns `false` to stop polling or a number to continue
+  - Pattern: Use `&ldquo;` and `&rdquo;` for curly quotes in JSX to satisfy react/no-unescaped-entities rule
+  - Pattern: Generation progress checklist uses steps_completed vs array index to determine isComplete, isCurrent states
+---
+
