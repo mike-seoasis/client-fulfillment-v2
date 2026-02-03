@@ -64,3 +64,17 @@ after each iteration and it's included in prompts for context.
   - Gotcha: Type ignores must match the exact error code (e.g., `no-any-return` not `return-value`)
 ---
 
+## 2026-02-03 - S2-005
+- **What was implemented:** LocalStack service for local S3 development
+- **Files changed:**
+  - `docker-compose.yml` (added localstack service with S3, health check, auto-bucket init; added S3 env vars to backend; added localstack_data volume)
+  - `backend/.env.example` (added S3 configuration section with S3_BUCKET, S3_ENDPOINT_URL, S3_ACCESS_KEY, S3_SECRET_KEY, S3_REGION)
+  - `scripts/localstack-init.sh` (created - auto-creates onboarding-files bucket on startup)
+- **Learnings:**
+  - Pattern: LocalStack uses `/etc/localstack/init/ready.d/` for init scripts that run after services are ready
+  - Pattern: Use `awslocal` CLI in LocalStack init scripts (pre-configured AWS CLI wrapper)
+  - Pattern: LocalStack S3 endpoint is `http://localhost:4566` for local access, `http://localstack:4566` for container-to-container
+  - Pattern: LocalStack accepts any credentials for local dev (use "test" for simplicity)
+  - Pattern: Add `EAGER_SERVICE_LOADING=1` to ensure S3 is ready before health check passes
+---
+
