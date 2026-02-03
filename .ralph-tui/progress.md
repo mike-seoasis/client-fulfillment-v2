@@ -70,3 +70,13 @@ after each iteration and it's included in prompts for context.
   - Module exports: `CircuitState` (enum), `CircuitBreakerConfig` (dataclass), `CircuitBreaker` (class)
 ---
 
+## 2026-02-02 - P0-005
+- What was implemented: Refactored redis.py to use shared CircuitBreaker module
+- Files changed:
+  - Modified `backend/app/core/redis.py` - removed local CircuitState, CircuitBreakerConfig, CircuitBreaker definitions; now imports from shared module
+- **Learnings:**
+  - The local CircuitBreaker used `redis_logger` for logging; the shared module uses generic logging with `circuit_name` in extra dict
+  - CircuitState was imported but not actually used in redis.py (only used internally by CircuitBreaker), so import was removed
+  - Pre-existing `use_ssl` variable is defined but unused (not part of this refactor)
+---
+
