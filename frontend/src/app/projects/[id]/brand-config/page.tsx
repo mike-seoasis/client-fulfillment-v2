@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useProject } from '@/hooks/use-projects';
-import { useBrandConfig, useRegenerateBrandConfig } from '@/hooks/useBrandConfig';
+import { useBrandConfig, useRegenerateBrandConfig, useUpdateBrandConfig } from '@/hooks/useBrandConfig';
 import { useProjectFiles } from '@/hooks/useProjectFiles';
-import { Button } from '@/components/ui';
+import { Button, Toast } from '@/components/ui';
 import { SectionNav, BRAND_SECTIONS, type SectionKey } from '@/components/SectionNav';
 import {
   BrandFoundationSection,
@@ -19,6 +19,7 @@ import {
   ExamplesBankSection,
   CompetitorContextSection,
   AIPromptSection,
+  SectionEditor,
 } from '@/components/brand-sections';
 
 function LoadingSkeleton() {
@@ -122,15 +123,32 @@ function RefreshIcon({ className }: { className?: string }) {
 interface SectionContentProps {
   sectionKey: SectionKey;
   v2Schema: Record<string, unknown>;
+  isEditing: boolean;
+  isSaving: boolean;
+  onSave: (data: Record<string, unknown>) => void;
+  onCancel: () => void;
 }
 
 /**
  * Renders the appropriate section component based on the active section key.
+ * In edit mode, shows the SectionEditor instead.
  */
-function SectionContent({ sectionKey, v2Schema }: SectionContentProps) {
+function SectionContent({ sectionKey, v2Schema, isEditing, isSaving, onSave, onCancel }: SectionContentProps) {
   // Extract section data from v2_schema
   // The v2_schema structure has section keys matching our SectionKey type
   const sectionData = v2Schema[sectionKey] as Record<string, unknown> | undefined;
+
+  // Show editor in edit mode
+  if (isEditing) {
+    return (
+      <SectionEditor
+        sectionData={sectionData}
+        isSaving={isSaving}
+        onSave={onSave}
+        onCancel={onCancel}
+      />
+    );
+  }
 
   switch (sectionKey) {
     case 'brand_foundation':
@@ -163,11 +181,14 @@ export default function BrandConfigPage() {
   const projectId = params.id as string;
 
   const [activeSection, setActiveSection] = useState<SectionKey>(BRAND_SECTIONS[0].key);
+  const [isEditing, setIsEditing] = useState(false);
+  const [showToast, setShowToast] = useState(false);
 
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
   const { data: brandConfig, isLoading: isBrandConfigLoading, error: brandConfigError } = useBrandConfig(projectId);
   const { data: filesData } = useProjectFiles(projectId);
   const regenerateMutation = useRegenerateBrandConfig(projectId);
+  const updateMutation = useUpdateBrandConfig(projectId);
 
   const isLoading = isProjectLoading || isBrandConfigLoading;
 
@@ -180,6 +201,36 @@ export default function BrandConfigPage() {
   const handleRegenerateAll = () => {
     regenerateMutation.mutate(undefined);
   };
+
+  const handleEditClick = useCallback(() => {
+    setIsEditing(true);
+  }, []);
+
+  const handleCancelEdit = useCallback(() => {
+    setIsEditing(false);
+  }, []);
+
+  const handleSaveSection = useCallback((sectionData: Record<string, unknown>) => {
+    // Build the sections update payload
+    const updatePayload = {
+      sections: {
+        [activeSection]: sectionData,
+      },
+    };
+
+    updateMutation.mutate(updatePayload, {
+      onSuccess: () => {
+        setIsEditing(false);
+        setShowToast(true);
+      },
+    });
+  }, [activeSection, updateMutation]);
+
+  // Reset edit mode when changing sections
+  const handleSectionChange = useCallback((section: SectionKey) => {
+    setActiveSection(section);
+    setIsEditing(false);
+  }, []);
 
   // Loading state
   if (isLoading) {
@@ -268,7 +319,7 @@ export default function BrandConfigPage() {
         {/* Left sidebar: Section navigation */}
         <SectionNav
           activeSection={activeSection}
-          onSectionChange={setActiveSection}
+          onSectionChange={handleSectionChange}
           sourceDocuments={sourceDocuments}
         />
 
@@ -279,18 +330,33 @@ export default function BrandConfigPage() {
             <h2 className="text-lg font-semibold text-warm-gray-900">
               {BRAND_SECTIONS.find((s) => s.key === activeSection)?.label}
             </h2>
-            <Button variant="ghost" size="sm">
-              Edit
-            </Button>
+            {!isEditing && (
+              <Button variant="ghost" size="sm" onClick={handleEditClick}>
+                Edit
+              </Button>
+            )}
           </div>
 
           {/* Section content */}
           <SectionContent
             sectionKey={activeSection}
             v2Schema={brandConfig.v2_schema}
+            isEditing={isEditing}
+            isSaving={updateMutation.isPending}
+            onSave={handleSaveSection}
+            onCancel={handleCancelEdit}
           />
         </div>
       </div>
+
+      {/* Success toast */}
+      {showToast && (
+        <Toast
+          message="Section saved successfully"
+          variant="success"
+          onClose={() => setShowToast(false)}
+        />
+      )}
     </div>
   );
 }

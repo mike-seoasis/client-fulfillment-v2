@@ -12,6 +12,7 @@ export { AIPromptSection } from './AIPromptSection';
 
 // Shared components
 export { SectionCard, InfoRow, BulletList, TagList, EmptySection } from './SectionCard';
+export { SectionEditor } from './SectionEditor';
 
 // Types
 export * from './types';

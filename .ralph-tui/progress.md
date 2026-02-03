@@ -456,3 +456,19 @@ after each iteration and it's included in prompts for context.
   - Pattern: Group section components in `brand-sections/` folder with barrel export for clean imports
 ---
 
+## 2026-02-03 - S2-032
+- **What was implemented:** Inline editing for brand config sections with Edit button, JSON editor, Save/Cancel, loading states, and success toast
+- **Files changed:**
+  - `frontend/src/components/brand-sections/SectionEditor.tsx` (created - JSON-based section editor with validation, keyboard shortcuts)
+  - `frontend/src/components/brand-sections/index.ts` (added SectionEditor export)
+  - `frontend/src/app/projects/[id]/brand-config/page.tsx` (added edit state, Toast import, SectionEditor integration, Save/Cancel handling)
+- **Learnings:**
+  - Pattern: Use `useCallback` for event handlers passed as props to prevent unnecessary re-renders
+  - Pattern: Reset edit mode when changing sections to prevent stale edit state across sections
+  - Pattern: Pass mutation's `onSuccess` callback inline at call site for page-specific behavior (setting toast, exiting edit mode)
+  - Pattern: JSON editor is pragmatic v1 approach for complex nested data - can enhance with field-by-field editing later
+  - Pattern: Keyboard shortcuts (Cmd+S to save, Esc to cancel) improve editor UX for power users
+  - Pattern: Hide Edit button when already in edit mode to prevent confusion
+  - Pattern: TanStack Query `setQueryData` on mutation success provides instant UI feedback with server-confirmed data
+---
+
