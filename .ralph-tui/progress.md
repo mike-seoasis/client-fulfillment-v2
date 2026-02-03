@@ -91,3 +91,15 @@ after each iteration and it's included in prompts for context.
   - Pattern: Use `io.BytesIO` to wrap file bytes for libraries expecting file-like objects
 ---
 
+## 2026-02-03 - S2-007
+- **What was implemented:** Pydantic schemas for ProjectFile API responses
+- **Files changed:**
+  - `backend/app/schemas/project_file.py` (created - ProjectFileResponse, ProjectFileList)
+  - `backend/app/schemas/__init__.py` (added imports and exports)
+- **Learnings:**
+  - Pattern: Response schemas use `ConfigDict(from_attributes=True)` for ORM model serialization
+  - Pattern: Don't expose internal fields (s3_key, extracted_text) in API responses - keep them internal
+  - Pattern: File upload APIs use multipart/form-data, so no Create schema needed for the JSON body
+  - Pattern: List schemas follow `items` + `total` convention (may omit `limit`/`offset` for simpler cases)
+---
+

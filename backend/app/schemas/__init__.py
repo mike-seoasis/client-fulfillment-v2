@@ -106,6 +106,10 @@ from app.schemas.project import (
     ProjectResponse,
     ProjectUpdate,
 )
+from app.schemas.project_file import (
+    ProjectFileList,
+    ProjectFileResponse,
+)
 
 __all__ = [
     # Content Brief schemas
@@ -203,4 +207,7 @@ __all__ = [
     "KeywordResearchFullRequest",
     "KeywordResearchFullResponse",
     "KeywordResearchStatsResponse",
+    # Project File schemas
+    "ProjectFileResponse",
+    "ProjectFileList",
 ]
