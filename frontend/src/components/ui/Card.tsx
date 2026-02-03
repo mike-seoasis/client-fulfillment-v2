@@ -12,7 +12,7 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
     const isClickable = !!onClick || hoverable;
 
     const baseClasses =
-      'bg-white rounded-xl border border-cream-300 shadow-sm transition-all duration-150';
+      'bg-white rounded-sm border border-cream-500 shadow transition-all duration-150';
 
     const interactiveClasses = isClickable
       ? 'cursor-pointer hover:shadow-md hover:border-cream-400 hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm'

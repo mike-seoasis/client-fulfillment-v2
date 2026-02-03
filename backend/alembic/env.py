@@ -104,7 +104,8 @@ async def run_async_migrations() -> None:
         connect_args={
             "timeout": settings.db_connect_timeout,
             "command_timeout": settings.db_command_timeout,
-            "ssl": "require",  # Railway requires SSL (asyncpg uses 'ssl' not 'sslmode')
+            # Only require SSL in production (Railway), disable for local dev
+            **({"ssl": "require"} if settings.environment == "production" else {}),
         },
     )
 

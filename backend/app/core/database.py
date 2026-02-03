@@ -81,7 +81,8 @@ class DatabaseManager:
                 connect_args={
                     "timeout": settings.db_connect_timeout,
                     "command_timeout": settings.db_command_timeout,
-                    "ssl": "require",  # Railway requires SSL
+                    # Only require SSL in production (Railway), disable for local dev
+                    **({"ssl": "require"} if settings.environment == "production" else {}),
                 },
             )
 

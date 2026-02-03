@@ -8,7 +8,7 @@ export function Header() {
           {/* Logo and title */}
           <div className="flex items-center gap-3">
             {/* Logo placeholder */}
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold-500 text-warm-gray-900 font-bold text-lg">
+            <div className="flex h-9 w-9 items-center justify-center rounded-sm bg-palm-500 text-white font-bold text-lg">
               C
             </div>
             <span className="text-lg font-semibold text-warm-gray-900">
@@ -20,7 +20,7 @@ export function Header() {
           <div className="flex items-center">
             <button
               type="button"
-              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-warm-gray-700 hover:bg-cream-200 transition-colors duration-150"
+              className="flex items-center gap-2 rounded-sm px-3 py-2 text-sm text-warm-gray-700 hover:bg-cream-200 transition-colors duration-150"
             >
               <div className="h-8 w-8 rounded-full bg-cream-300 flex items-center justify-center text-warm-gray-600 font-medium">
                 U

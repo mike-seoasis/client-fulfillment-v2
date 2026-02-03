@@ -49,7 +49,7 @@ export default function CreateProjectPage() {
 
       {/* Form card */}
       <div className="max-w-xl mx-auto">
-        <div className="bg-white rounded-2xl border border-cream-200 p-8 shadow-sm">
+        <div className="bg-white rounded-sm border border-cream-500 p-8 shadow-sm">
           {/* Page title */}
           <h1 className="text-2xl font-semibold text-warm-gray-900 mb-6">
             Create New Project
@@ -57,7 +57,7 @@ export default function CreateProjectPage() {
 
           {/* Error message */}
           {error && (
-            <div className="rounded-lg bg-coral-50 border border-coral-200 p-4 text-coral-700 mb-6">
+            <div className="rounded-sm bg-coral-50 border border-coral-200 p-4 text-coral-700 mb-6">
               {error}
             </div>
           )}

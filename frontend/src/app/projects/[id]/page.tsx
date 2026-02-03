@@ -20,12 +20,12 @@ function LoadingSkeleton() {
 
       {/* Sections skeleton */}
       <div className="space-y-6">
-        <div className="bg-white rounded-xl border border-cream-200 p-6">
+        <div className="bg-white rounded-sm border border-cream-500 p-6">
           <div className="h-6 bg-cream-300 rounded w-40 mb-4" />
           <div className="h-4 bg-cream-300 rounded w-full mb-2" />
           <div className="h-10 bg-cream-300 rounded w-32" />
         </div>
-        <div className="bg-white rounded-xl border border-cream-200 p-6">
+        <div className="bg-white rounded-sm border border-cream-500 p-6">
           <div className="h-6 bg-cream-300 rounded w-32 mb-4" />
           <div className="h-4 bg-cream-300 rounded w-3/4" />
         </div>
@@ -239,7 +239,7 @@ export default function ProjectDetailPage() {
             href={project.site_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-warm-gray-500 hover:text-gold-600 text-sm"
+            className="text-warm-gray-500 hover:text-palm-600 text-sm"
           >
             {project.site_url}
           </a>
@@ -250,7 +250,7 @@ export default function ProjectDetailPage() {
               Edit Brand
             </Button>
             {/* Tooltip */}
-            <div className="absolute right-0 top-full mt-2 px-3 py-1.5 bg-warm-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+            <div className="absolute right-0 top-full mt-2 px-3 py-1.5 bg-warm-gray-900 text-white text-xs rounded-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
               Coming in Phase 2
             </div>
           </div>
@@ -280,14 +280,14 @@ export default function ProjectDetailPage() {
       )}
 
       {/* Divider */}
-      <hr className="border-cream-200 mb-8" />
+      <hr className="border-cream-500 mb-8" />
 
       {/* Sections */}
       <div className="space-y-6">
         {/* Onboarding section */}
-        <div className="bg-white rounded-xl border border-cream-200 p-6 shadow-sm">
+        <div className="bg-white rounded-sm border border-cream-500 p-6 shadow-sm">
           <div className="flex items-center gap-3 mb-3">
-            <ClipboardIcon className="w-5 h-5 text-gold-500" />
+            <ClipboardIcon className="w-5 h-5 text-palm-500" />
             <h2 className="text-lg font-semibold text-warm-gray-900">
               Onboarding
             </h2>
@@ -302,9 +302,9 @@ export default function ProjectDetailPage() {
         </div>
 
         {/* New Content section */}
-        <div className="bg-white rounded-xl border border-cream-200 p-6 shadow-sm">
+        <div className="bg-white rounded-sm border border-cream-500 p-6 shadow-sm">
           <div className="flex items-center gap-3 mb-3">
-            <PlusIcon className="w-5 h-5 text-gold-500" />
+            <PlusIcon className="w-5 h-5 text-palm-500" />
             <h2 className="text-lg font-semibold text-warm-gray-900">
               New Content
             </h2>

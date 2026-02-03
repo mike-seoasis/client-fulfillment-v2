@@ -8,31 +8,34 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Warm palette for premium, approachable aesthetic
-        gold: {
-          50: "#FFFDF5",
-          100: "#FFF9E6",
-          200: "#FFF0C2",
-          300: "#FFE499",
-          400: "#FFD666",
-          500: "#F5C242",
-          600: "#D9A832",
-          700: "#B8892A",
-          800: "#8C6820",
-          900: "#5C4515",
+        // Tropical oasis palette - light, airy, lush greens
+        // Primary accent: sage/palm green
+        palm: {
+          50: "#F6FAF7",
+          100: "#E8F5EC",
+          200: "#D1EADA",
+          300: "#AEDABE",
+          400: "#82C49D",
+          500: "#5AAD7A",
+          600: "#458C60",
+          700: "#38704E",
+          800: "#2F5A40",
+          900: "#284A36",
         },
-        cream: {
-          50: "#FFFEFB",
-          100: "#FDFBF7",
-          200: "#FAF6EE",
-          300: "#F5EEE1",
-          400: "#EDE3D0",
-          500: "#E2D5BD",
-          600: "#C9BCA3",
-          700: "#A89A82",
-          800: "#7D7260",
-          900: "#524A3E",
+        // Background tones: warm sand/cream
+        sand: {
+          50: "#FDFCFA",
+          100: "#FAF8F5",
+          200: "#F5F1EB",
+          300: "#EDE7DD",
+          400: "#E2D9CB",
+          500: "#D4C8B5",
+          600: "#BBA992",
+          700: "#9A8A72",
+          800: "#736654",
+          900: "#4D443A",
         },
+        // Secondary accent: coral/terracotta (tropical flowers)
         coral: {
           50: "#FFF8F6",
           100: "#FFEFEB",
@@ -45,6 +48,20 @@ const config: Config = {
           800: "#854234",
           900: "#5A2C23",
         },
+        // Deeper accent: lagoon teal
+        lagoon: {
+          50: "#F0FAFA",
+          100: "#D6F3F3",
+          200: "#AEE6E6",
+          300: "#7AD3D5",
+          400: "#4AB8BD",
+          500: "#319A9F",
+          600: "#297C82",
+          700: "#266469",
+          800: "#245256",
+          900: "#224549",
+        },
+        // Neutral warm grays (unchanged - works well with greens)
         "warm-gray": {
           50: "#FAF9F7",
           100: "#F5F3F0",
@@ -57,19 +74,46 @@ const config: Config = {
           800: "#4D4842",
           900: "#302D29",
         },
+        // Legacy alias for cream (points to sand now)
+        cream: {
+          50: "#FDFCFA",
+          100: "#FAF8F5",
+          200: "#F5F1EB",
+          300: "#EDE7DD",
+          400: "#E2D9CB",
+          500: "#D4C8B5",
+          600: "#BBA992",
+          700: "#9A8A72",
+          800: "#736654",
+          900: "#4D443A",
+        },
+        // Legacy alias for gold (points to palm now)
+        gold: {
+          50: "#F6FAF7",
+          100: "#E8F5EC",
+          200: "#D1EADA",
+          300: "#AEDABE",
+          400: "#82C49D",
+          500: "#5AAD7A",
+          600: "#458C60",
+          700: "#38704E",
+          800: "#2F5A40",
+          900: "#284A36",
+        },
         // Semantic colors using warm palette
         background: "var(--background)",
         foreground: "var(--foreground)",
       },
       borderRadius: {
-        // Slightly increased defaults for softer look
+        // Sharp, refined corners - our design standard
+        // Use rounded-sm (0.25rem) as default for most UI elements
         sm: "0.25rem",
-        DEFAULT: "0.375rem",
-        md: "0.5rem",
-        lg: "0.75rem",
-        xl: "1rem",
-        "2xl": "1.25rem",
-        "3xl": "1.75rem",
+        DEFAULT: "0.25rem",
+        md: "0.375rem",
+        lg: "0.5rem",
+        xl: "0.625rem",
+        "2xl": "0.75rem",
+        "3xl": "1rem",
       },
     },
   },

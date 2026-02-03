@@ -39,7 +39,7 @@ function Toast({ message, variant = 'success', duration = 3000, onClose }: Toast
     <div
       className={`
         fixed bottom-4 right-4 z-50
-        flex items-center gap-3 px-4 py-3 rounded-lg border shadow-lg
+        flex items-center gap-3 px-4 py-3 rounded-sm border shadow-lg
         transition-opacity duration-150
         ${variantClasses[variant]}
         ${isVisible ? 'opacity-100' : 'opacity-0'}

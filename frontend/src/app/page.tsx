@@ -11,7 +11,7 @@ function ProjectsGridSkeleton() {
       {[1, 2, 3].map((i) => (
         <div
           key={i}
-          className="bg-cream-200/50 rounded-xl p-5 animate-pulse"
+          className="bg-cream-200/50 rounded-sm p-5 animate-pulse"
         >
           <div className="space-y-3">
             <div className="h-6 bg-cream-300 rounded w-3/4" />
@@ -66,7 +66,7 @@ export default function Dashboard() {
 
       {/* Error state */}
       {error && (
-        <div className="rounded-lg bg-coral-50 border border-coral-200 p-4 text-coral-700">
+        <div className="rounded-sm bg-coral-50 border border-coral-200 p-4 text-coral-700">
           Failed to load projects. Please try again.
         </div>
       )}
