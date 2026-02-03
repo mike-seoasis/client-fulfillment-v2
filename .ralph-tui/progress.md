@@ -12,6 +12,7 @@ after each iteration and it's included in prompts for context.
 - **Alembic verification**: Use `alembic heads` to verify migration is detected (no DB required). Use `alembic history -r X:Y` to verify chain.
 - **Pydantic URL fields**: Use `HttpUrl` in request schemas for automatic URL validation. Use `str` in response schemas (DB stores as string, `from_attributes=True` handles conversion).
 - **Service layer**: Services live in `backend/app/services/`. Use `@staticmethod` methods, async patterns with `select()` + `db.execute()`, and `db.flush()` + `db.refresh()` for writes. Let the route dependency handle commit/rollback.
+- **API routers**: Create routers in `backend/app/api/v1/`. Use `APIRouter(prefix="/resource", tags=["Resource"])`. Register in `__init__.py` with `router.include_router()`, then include v1 router in `main.py`.
 
 ---
 
@@ -64,5 +65,23 @@ after each iteration and it's included in prompts for context.
   - Use `db.flush()` + `db.refresh()` to get updated object state without committing (transaction handled by dependency)
   - Convert `HttpUrl` to `str()` when storing to database
   - Use `model_dump(exclude_unset=True)` to only update fields that were provided in the request
+---
+
+## 2026-02-03 - S1-005
+- Created `backend/app/api/v1/projects.py` with REST endpoints:
+  - `GET /api/v1/projects` - returns ProjectListResponse
+  - `POST /api/v1/projects` - accepts ProjectCreate, returns ProjectResponse with 201
+  - `GET /api/v1/projects/{id}` - returns ProjectResponse or 404
+  - `PATCH /api/v1/projects/{id}` - accepts ProjectUpdate, returns ProjectResponse
+  - `DELETE /api/v1/projects/{id}` - returns 204 No Content
+- Updated `backend/app/api/v1/__init__.py` to include projects router with `/api/v1` prefix
+- Updated `backend/app/main.py` to register the v1 router
+- Files changed: `backend/app/api/v1/projects.py`, `backend/app/api/v1/__init__.py`, `backend/app/main.py`
+- **Learnings:**
+  - API routers use `APIRouter(prefix="/projects", tags=["Projects"])` for path prefix and OpenAPI grouping
+  - Use `response_model=ProjectResponse` to auto-serialize SQLAlchemy models via `model_validate()`
+  - Use `status_code=status.HTTP_201_CREATED` for POST and `status.HTTP_204_NO_CONTENT` for DELETE
+  - `get_session` dependency handles commit/rollback automatically, routes just call service methods
+  - Router registration: domain routers → v1 __init__.py → main.py `include_router()`
 ---
 

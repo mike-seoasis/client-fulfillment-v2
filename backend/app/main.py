@@ -30,6 +30,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.api.v1 import router as api_v1_router
 from app.core.config import get_settings
 from app.core.database import db_manager
 from app.core.logging import get_logger, setup_logging
@@ -386,6 +387,9 @@ def create_app() -> FastAPI:
         """Check scheduler status."""
         health = scheduler_manager.check_health()
         return health
+
+    # Include API routers
+    app.include_router(api_v1_router)
 
     return app
 
