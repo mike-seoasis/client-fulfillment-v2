@@ -489,3 +489,17 @@ This prevents "objects are not valid as a React child" errors when backend data 
   - Type assertions (as TypeData | undefined) are necessary when routing to specific components since the union type is broader
 ---
 
+## 2026-02-04 - BC-028
+- **What was implemented:** Updated brand-config page to use SectionEditorSwitch instead of JSON editor
+- **Files changed:**
+  - `frontend/src/app/projects/[id]/brand-config/page.tsx`:
+    - Replaced `SectionEditor` import with `SectionEditorSwitch` and `SectionData` type from editors module
+    - Updated `SectionContentProps.onSave` signature from `Record<string, unknown>` to `SectionData`
+    - Changed edit mode rendering from `SectionEditor` to `SectionEditorSwitch`, passing `sectionKey` and `data` props
+    - Updated `handleSaveSection` callback to accept `SectionData` and cast to `Record<string, unknown>` for API compatibility
+- **Learnings:**
+  - When switching from generic JSON editing to typed section editors, the callback signature changes from `Record<string, unknown>` to a specific union type
+  - API mutation types may remain as generic `Record<string, unknown>` for flexibility - use `as unknown as Record<string, unknown>` cast to bridge typed editor data to generic API payloads
+  - The existing save/cancel flow remains intact - only the editor component and data types change
+---
+

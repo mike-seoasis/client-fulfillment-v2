@@ -19,8 +19,8 @@ import {
   ExamplesBankSection,
   CompetitorContextSection,
   AIPromptSection,
-  SectionEditor,
 } from '@/components/brand-sections';
+import { SectionEditorSwitch, type SectionData } from '@/components/brand-sections/editors';
 
 function LoadingSkeleton() {
   return (
@@ -125,7 +125,7 @@ interface SectionContentProps {
   v2Schema: Record<string, unknown>;
   isEditing: boolean;
   isSaving: boolean;
-  onSave: (data: Record<string, unknown>) => void;
+  onSave: (data: SectionData) => void;
   onCancel: () => void;
 }
 
@@ -138,11 +138,12 @@ function SectionContent({ sectionKey, v2Schema, isEditing, isSaving, onSave, onC
   // The v2_schema structure has section keys matching our SectionKey type
   const sectionData = v2Schema[sectionKey] as Record<string, unknown> | undefined;
 
-  // Show editor in edit mode
+  // Show inline editor in edit mode
   if (isEditing) {
     return (
-      <SectionEditor
-        sectionData={sectionData}
+      <SectionEditorSwitch
+        sectionKey={sectionKey}
+        data={sectionData}
         isSaving={isSaving}
         onSave={onSave}
         onCancel={onCancel}
@@ -234,11 +235,12 @@ export default function BrandConfigPage() {
     setIsEditing(false);
   }, []);
 
-  const handleSaveSection = useCallback((sectionData: Record<string, unknown>) => {
+  const handleSaveSection = useCallback((sectionData: SectionData) => {
     // Build the sections update payload
+    // Cast to Record<string, unknown> for API compatibility
     const updatePayload = {
       sections: {
-        [activeSection]: sectionData,
+        [activeSection]: sectionData as unknown as Record<string, unknown>,
       },
     };
 
