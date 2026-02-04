@@ -544,3 +544,29 @@ after each iteration and it's included in prompts for context.
   - Error handling: catch and display, only reset loading state on error (not success, since we navigate away)
 ---
 
+## 2026-02-04 - S3-028
+- **What was implemented**: Component tests for UrlUploader, CsvDropzone, and UrlPreviewList
+- **Files changed**: `frontend/src/components/onboarding/__tests__/UrlUploader.test.tsx` (new file - 68 tests)
+- **Test coverage**:
+  - `parseUrls` unit tests: Basic parsing (4 tests), validation (6 tests), deduplication (5 tests), normalization (2 tests)
+  - `isValidUrl` unit tests: Various protocols and edge cases (6 tests)
+  - `normalizeUrl` unit tests: Domain lowercasing, path preservation, trailing slashes, ports, query params (7 tests)
+  - `getDomain` unit tests: Domain extraction, case handling, subdomains (4 tests)
+  - `extractUrlsFromCsv` unit tests: Column handling, fallback, empty filtering (6 tests)
+  - `UrlUploader` component: Rendering (4 tests), URL parsing from textarea (4 tests)
+  - `CsvDropzone` component: Rendering (2 tests), drag/drop (2 tests), validation (3 tests), keyboard (2 tests)
+  - `UrlPreviewList` component: Rendering (5 tests), validation display (3 tests), remove (3 tests)
+- **Acceptance criteria verification**:
+  - ✅ Test URL parsing from textarea - covered in `UrlUploader Component > URL parsing from textarea`
+  - ✅ Test CSV file parsing - covered in `extractUrlsFromCsv` and `CsvDropzone Component`
+  - ✅ Test validation marks invalid URLs - covered in `parseUrls > validation` and `UrlPreviewList > validation status`
+  - ✅ Test deduplication works - covered in `parseUrls > deduplication` (5 tests)
+  - ✅ Test remove button removes URL - covered in `UrlPreviewList > remove functionality` (3 tests)
+  - ✅ Tests in frontend/src/components/onboarding/__tests__/
+- **Learnings:**
+  - Use more specific CSS selectors when testing DOM classes (e.g., `.bg-coral-100.rounded-full` vs just `.bg-coral-100`) to avoid matching unrelated elements
+  - Test utility functions separately from components for better isolation and maintainability
+  - Follow existing FileUpload.test.tsx patterns: use `fireEvent` for events, `userEvent` for interactions, mock functions with `vi.fn()`
+  - For drag-drop testing, `fireEvent.dragOver/dragLeave/drop` work well with jsdom
+---
+
