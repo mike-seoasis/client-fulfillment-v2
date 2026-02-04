@@ -3,10 +3,10 @@
   "sessionId": "5dda031c-4422-43ab-8459-422fd5b43e68",
   "status": "running",
   "startedAt": "2026-02-04T16:43:12.368Z",
-  "updatedAt": "2026-02-04T16:48:00.578Z",
-  "currentIteration": 0,
+  "updatedAt": "2026-02-04T16:52:30.136Z",
+  "currentIteration": 1,
   "maxIterations": 10,
-  "tasksCompleted": 0,
+  "tasksCompleted": 1,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -203,8 +203,8 @@
       {
         "id": "BC-032",
         "title": "Test VoiceCharacteristics with both data formats",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "BC-033",
@@ -232,7 +232,18 @@
       }
     ]
   },
-  "iterations": [],
+  "iterations": [
+    {
+      "iteration": 1,
+      "status": "completed",
+      "taskId": "BC-032",
+      "taskTitle": "Test VoiceCharacteristics with both data formats",
+      "taskCompleted": true,
+      "durationMs": 281736,
+      "startedAt": "2026-02-04T16:43:18.838Z",
+      "endedAt": "2026-02-04T16:48:00.574Z"
+    }
+  ],
   "skippedTaskIds": [],
   "cwd": "/Users/mike/Projects/client-onboarding-v2",
   "activeTaskIds": [],

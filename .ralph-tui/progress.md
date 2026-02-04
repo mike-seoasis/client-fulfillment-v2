@@ -28,6 +28,19 @@ The `BulletListEditor` component displays items as `<span>` text, not `<input>` 
 
 ---
 
+## 2026-02-04 - BC-033
+- Added comprehensive unit tests for VoiceDimensionsSection slider positioning
+- **Files changed:**
+  - `frontend/src/components/brand-sections/__tests__/VoiceDimensionsSection.test.tsx` (created)
+- **Learnings:**
+  - Position validation: must be number, not NaN, in range 1-10; defaults to 5 otherwise
+  - Position to percentage formula: `((position - 1) / 9) * 100`
+  - Position 1 = 0%, Position 5 ≈ 44.44%, Position 10 = 100%
+  - Use `container.querySelector('[class*="className"]')` to find elements by partial class match
+  - Check `style` property for dynamic inline styles like `width` and `left`
+  - Avoid test data that conflicts with static labels (e.g., description "Casual" conflicts with scale label "Casual")
+---
+
 ## 2026-02-04 - BC-032
 - Verified VoiceCharacteristics crash fix for `we_are_not` data format mismatch
 - Added comprehensive unit tests for VoiceCharacteristicsSection and VoiceCharacteristicsEditor
