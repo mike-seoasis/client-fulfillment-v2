@@ -72,6 +72,15 @@ from app.schemas.crawl import (
     CrawlStartRequest,
     CrawlStopResponse,
 )
+from app.schemas.crawled_page import (
+    CrawledPageCreate,
+    CrawlStatusResponse,
+    PageLabelsUpdate,
+    UrlsUploadRequest,
+)
+from app.schemas.crawled_page import (
+    CrawledPageResponse as CrawledPageFullResponse,
+)
 from app.schemas.keyword_research import (
     KeywordIdeaRequest,
     KeywordIdeaResponse,
@@ -226,4 +235,10 @@ __all__ = [
     "VALID_SECTION_NAMES",
     # Brand Config Generation schemas
     "GenerationStatusResponse",
+    # CrawledPage schemas
+    "CrawledPageCreate",
+    "CrawledPageFullResponse",
+    "CrawlStatusResponse",
+    "UrlsUploadRequest",
+    "PageLabelsUpdate",
 ]

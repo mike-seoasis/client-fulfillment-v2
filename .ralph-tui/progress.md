@@ -57,3 +57,20 @@ after each iteration and it's included in prompts for context.
   - Field validation is handled by type annotation (int) - pydantic coerces string env vars automatically
 ---
 
+## 2026-02-04 - S3-004
+- **What was implemented**: Created Pydantic schemas for CrawledPage API endpoints
+- **Files changed**:
+  - `backend/app/schemas/crawled_page.py` (new file)
+  - `backend/app/schemas/__init__.py` (added exports)
+- **Schemas created**:
+  - `CrawledPageCreate` - Request schema with url field and validation
+  - `CrawledPageResponse` - Full response schema with all fields (status, meta_description, body_content, headings, product_count, crawl_error, word_count)
+  - `CrawlStatusResponse` - Progress response with counts by status and pages array
+  - `UrlsUploadRequest` - Request schema with urls: list[str] and validation
+  - `PageLabelsUpdate` - Request schema with labels: list[str] and normalization
+- **Learnings:**
+  - Existing `crawl.py` has a simpler `CrawledPageResponse` without new S3-001 fields - new schema in `crawled_page.py` is the full version
+  - Aliased import as `CrawledPageFullResponse` in __init__.py to avoid collision with existing `CrawledPageResponse`
+  - Can import enum from model file (`from app.models.crawled_page import CrawlStatus`) for reuse in schema defaults
+---
+
