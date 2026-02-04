@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useProject } from '@/hooks/use-projects';
 import { Button } from '@/components/ui';
-import { UrlUploader, type ParsedUrl } from '@/components/onboarding/UrlUploader';
+import { UrlUploader, type ParsedUrl, isValidUrl } from '@/components/onboarding/UrlUploader';
+import { CsvDropzone, type CsvParseResult } from '@/components/onboarding/CsvDropzone';
 
 // Step indicator data
 const ONBOARDING_STEPS = [
@@ -146,9 +147,32 @@ function NotFoundState() {
 export default function UrlUploadPage() {
   const params = useParams();
   const projectId = params.id as string;
-  const [parsedUrls, setParsedUrls] = useState<ParsedUrl[]>([]);
+  const [textareaUrls, setTextareaUrls] = useState<ParsedUrl[]>([]);
+  const [csvResult, setCsvResult] = useState<CsvParseResult>({
+    urls: [],
+    error: null,
+    filename: null,
+  });
 
   const { data: project, isLoading, error } = useProject(projectId);
+
+  // Combine URLs from textarea and CSV, deduplicating by URL
+  const parsedUrls = useMemo(() => {
+    const combined: ParsedUrl[] = [...textareaUrls];
+    const existingUrls = new Set(textareaUrls.map((u) => u.url.toLowerCase()));
+
+    for (const url of csvResult.urls) {
+      if (!existingUrls.has(url.toLowerCase())) {
+        combined.push({
+          url,
+          isValid: isValidUrl(url),
+        });
+        existingUrls.add(url.toLowerCase());
+      }
+    }
+
+    return combined;
+  }, [textareaUrls, csvResult.urls]);
 
   const validUrls = parsedUrls.filter((u) => u.isValid);
   const invalidUrls = parsedUrls.filter((u) => !u.isValid);
@@ -210,13 +234,25 @@ export default function UrlUploadPage() {
         </h2>
 
         <UrlUploader
-          onChange={setParsedUrls}
+          onChange={setTextareaUrls}
           placeholder={`https://${project.site_url.replace(/^https?:\/\//, '')}/collections/example-collection\nhttps://${project.site_url.replace(/^https?:\/\//, '')}/collections/another-collection`}
         />
 
-        <p className="text-sm text-warm-gray-500 mt-3 mb-6">
-          Or upload a CSV file: <span className="text-warm-gray-400">(Coming soon)</span>
-        </p>
+        <div className="mt-6">
+          <h3 className="text-sm font-medium text-warm-gray-700 mb-2">
+            Or upload a CSV file
+          </h3>
+          <CsvDropzone onParsed={setCsvResult} />
+          {csvResult.error && (
+            <p className="mt-2 text-sm text-coral-600">{csvResult.error}</p>
+          )}
+          {csvResult.filename && !csvResult.error && (
+            <p className="mt-2 text-sm text-warm-gray-500">
+              Loaded {csvResult.urls.length} URLs from{' '}
+              <span className="font-medium">{csvResult.filename}</span>
+            </p>
+          )}
+        </div>
 
         <hr className="border-cream-300 my-6" />
 

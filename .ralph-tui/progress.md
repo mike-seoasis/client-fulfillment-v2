@@ -420,3 +420,26 @@ after each iteration and it's included in prompts for context.
   - Textarea styling: Use `font-mono` for URL input to help users spot formatting issues
 ---
 
+## 2026-02-04 - S3-023
+- **What was implemented**: CSV file upload with drag-and-drop for URL upload page
+- **Files changed**:
+  - `frontend/src/components/onboarding/CsvDropzone.tsx` (new file)
+  - `frontend/src/app/projects/[id]/onboarding/upload/page.tsx` (integrated CsvDropzone)
+  - `frontend/package.json` (added papaparse dependency)
+- **Features**:
+  - CsvDropzone component with drag-and-drop zone and click-to-browse file picker
+  - CSV parsing using papaparse library (header mode)
+  - Extracts URLs from 'url' column (case-insensitive) or first column as fallback
+  - Shows error for invalid file types (non-CSV)
+  - Shows error when no URLs found in CSV
+  - Combines CSV URLs with textarea URLs, deduplicating by URL
+  - Success state shows loaded filename and URL count
+  - Remove file button to clear loaded CSV
+- **Learnings:**
+  - Use `import * as Papa from 'papaparse'` (not default import) for TypeScript compatibility with papaparse types
+  - CSV file MIME types vary: `text/csv`, `application/vnd.ms-excel` - also check `.csv` extension as fallback
+  - Use `Papa.parse<Record<string, string>>()` with `header: true` to get named columns
+  - Access column names via `results.meta.fields` array
+  - Keyboard accessibility: Add `onKeyDown` handler for Enter/Space on div[role="button"]
+---
+
