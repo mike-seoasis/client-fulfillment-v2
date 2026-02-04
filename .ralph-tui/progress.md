@@ -454,3 +454,21 @@ This prevents "objects are not valid as a React child" errors when backend data 
   - Column widths for multi-column tables should be balanced to give more space to text-heavy columns (w-5/12 for our_difference, w-3/4 for statement)
 ---
 
+## 2026-02-04 - BC-026
+- **What was implemented:** Created AIPromptEditor component for inline editing of AI Prompt section
+- **Files changed:**
+  - `frontend/src/components/brand-sections/editors/AIPromptEditor.tsx` - New component with:
+    - Large Textarea for prompt_snippet (200px min-height, monospace font for code-like editing)
+    - TagInput for voice_in_three_words (array of words)
+    - Input fields for we_sound_like and we_never_sound_like
+    - TagInput for never_use_words with danger variant (coral styling)
+    - Keyboard shortcuts: ⌘S to save, Esc to cancel
+    - isSaving state to disable form during save
+    - Data cleanup on save: trim strings, convert empty arrays/strings to undefined
+  - `frontend/src/components/brand-sections/editors/index.ts` - Added AIPromptEditor export
+- **Learnings:**
+  - For the main snippet field, using monospace font (`font-mono`) provides better visual clarity for prompt text that will be copy-pasted into AI tools
+  - voice_in_three_words is an array of strings, so TagInput is appropriate; the acceptance criteria said "Text inputs" but TagInput is more appropriate for the array field
+  - Section editors follow consistent pattern across all 11 editors: data + onSave/onCancel props, individual useState hooks, keyboard shortcuts, isSaving state, data cleanup on save
+---
+

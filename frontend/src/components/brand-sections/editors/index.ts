@@ -11,3 +11,4 @@ export { VocabularyEditor, type VocabularyEditorProps } from './VocabularyEditor
 export { TrustElementsEditor, type TrustElementsEditorProps } from './TrustElementsEditor';
 export { ExamplesBankEditor, type ExamplesBankEditorProps } from './ExamplesBankEditor';
 export { CompetitorContextEditor, type CompetitorContextEditorProps } from './CompetitorContextEditor';
+export { AIPromptEditor, type AIPromptEditorProps } from './AIPromptEditor';
