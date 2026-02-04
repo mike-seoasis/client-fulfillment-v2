@@ -408,8 +408,8 @@ Output ONLY valid JSON in this exact format:
     "customer_count": "string or null",
     "years_in_business": "string or null",
     "products_sold": "string or null",
-    "review_average": "string or null",
-    "review_count": "string or null"
+    "average_store_rating": "string or null (e.g., '4.8 out of 5 stars')",
+    "review_count": "string or null (e.g., '2,500+ reviews')"
   },
   "credentials": {
     "certifications": ["string"],
@@ -440,7 +440,11 @@ Output ONLY valid JSON in this exact format:
   }
 }
 
-Extract real data from research when available. For missing data, leave as null or empty array.""",
+REQUIREMENTS:
+- average_store_rating: Actively search for the brand's overall store/product rating (e.g., from their website, Amazon, Google reviews, Trustpilot, etc.). Format as "X.X out of 5 stars" or similar. This is a key trust signal for e-commerce.
+- review_count: When a rating is found, also capture the total number of reviews to add credibility (e.g., "2,500+ reviews"). Rating without count is less impactful.
+- Both fields are optional (use null if not found), but should be actively sought in research as they are high-value trust signals.
+- Extract real data from research when available. For missing data, leave as null or empty array.""",
     "examples_bank": """You are a brand strategist creating the Examples Bank section of a brand guidelines document.
 
 Based on the research context and all previous sections, create example copy that demonstrates the brand voice:

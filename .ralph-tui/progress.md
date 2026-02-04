@@ -120,3 +120,20 @@ This prevents "objects are not valid as a React child" errors when backend data 
   - This reinforces the em dash rule from BC-007 (writing_style) - now banned in both stylistic rules AND vocabulary
 ---
 
+## 2026-02-04 - BC-009
+- **What was implemented:** Updated trust_elements prompt to include average_store_rating with proper formatting
+- **Files changed:**
+  - `backend/app/services/brand_config.py` (lines 401-447) - Renamed `review_average` to `average_store_rating` in JSON schema, added format examples, added REQUIREMENTS section emphasizing store rating as a key e-commerce trust signal
+  - `frontend/src/components/brand-sections/types.ts` (line 168) - Updated type from `review_average` to `average_store_rating`
+  - `frontend/src/components/brand-sections/TrustElementsSection.tsx` (line 53) - Updated display label from "Review average" to "Store rating" and property access
+  - `backend/tests/services/test_brand_config_service.py` (lines 319-320) - Updated mock data to use new field name and format
+- **Learnings:**
+  - When renaming a field in the LLM prompt, remember to update:
+    1. The JSON schema example in the prompt
+    2. The TypeScript types that define the shape
+    3. The React components that render the data
+    4. Test mock data that simulates the response
+  - Field naming matters for clarity: `average_store_rating` is more descriptive than `review_average` for e-commerce context
+  - Adding format examples in the JSON schema (e.g., `"4.8 out of 5 stars"`) guides the LLM to produce consistent, human-readable output
+---
+

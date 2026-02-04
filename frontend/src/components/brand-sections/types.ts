@@ -165,7 +165,7 @@ export interface TrustElementsData {
     customer_count?: string;
     years_in_business?: string;
     products_sold?: string;
-    review_average?: string;
+    average_store_rating?: string;
     review_count?: string;
   };
   credentials?: string[];

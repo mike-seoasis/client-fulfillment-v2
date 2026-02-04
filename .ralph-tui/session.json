@@ -3,10 +3,10 @@
   "sessionId": "0d66a092-1147-4c2d-a140-1be3ee3a203f",
   "status": "running",
   "startedAt": "2026-02-04T15:32:53.974Z",
-  "updatedAt": "2026-02-04T15:44:24.342Z",
-  "currentIteration": 7,
+  "updatedAt": "2026-02-04T15:46:12.994Z",
+  "currentIteration": 8,
   "maxIterations": 10,
-  "tasksCompleted": 7,
+  "tasksCompleted": 8,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -59,8 +59,8 @@
       {
         "id": "BC-008",
         "title": "Update vocabulary prompt for more words",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "BC-009",
@@ -302,6 +302,16 @@
       "durationMs": 56902,
       "startedAt": "2026-02-04T15:42:23.290Z",
       "endedAt": "2026-02-04T15:43:20.192Z"
+    },
+    {
+      "iteration": 8,
+      "status": "completed",
+      "taskId": "BC-008",
+      "taskTitle": "Update vocabulary prompt for more words",
+      "taskCompleted": true,
+      "durationMs": 63055,
+      "startedAt": "2026-02-04T15:43:21.285Z",
+      "endedAt": "2026-02-04T15:44:24.340Z"
     }
   ],
   "skippedTaskIds": [],

@@ -316,8 +316,8 @@ class MockClaudeClient:
                     "customer_count": "1000+",
                     "years_in_business": "9",
                     "products_sold": "N/A",
-                    "review_average": "4.8/5",
-                    "review_count": "500+",
+                    "average_store_rating": "4.8 out of 5 stars",
+                    "review_count": "500+ reviews",
                 },
                 "credentials": {
                     "certifications": ["SOC 2 Type II", "ISO 27001"],

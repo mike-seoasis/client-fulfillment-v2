@@ -50,7 +50,7 @@ export function TrustElementsSection({ data }: TrustElementsSectionProps) {
           <InfoRow label="Customers" value={hard_numbers.customer_count} />
           <InfoRow label="Years in business" value={hard_numbers.years_in_business} />
           <InfoRow label="Products sold" value={hard_numbers.products_sold} />
-          <InfoRow label="Review average" value={hard_numbers.review_average} />
+          <InfoRow label="Store rating" value={hard_numbers.average_store_rating} />
           <InfoRow label="Review count" value={hard_numbers.review_count} />
         </SectionCard>
       )}
