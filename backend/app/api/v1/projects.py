@@ -3,18 +3,28 @@
 REST endpoints for managing projects with CRUD operations.
 """
 
-from fastapi import APIRouter, Depends, status
+from uuid import uuid4
+
+from fastapi import APIRouter, BackgroundTasks, Depends, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
+from app.core.logging import get_logger
+from app.integrations.crawl4ai import Crawl4AIClient, get_crawl4ai
 from app.integrations.s3 import S3Client, get_s3
+from app.models.crawled_page import CrawledPage, CrawlStatus
+from app.schemas.crawled_page import UrlsUploadRequest, UrlUploadResponse
 from app.schemas.project import (
     ProjectCreate,
     ProjectListResponse,
     ProjectResponse,
     ProjectUpdate,
 )
+from app.services.crawling import CrawlingService
 from app.services.project import ProjectService
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
@@ -115,3 +125,193 @@ async def delete_project(
         HTTPException: 404 if project not found.
     """
     await ProjectService.delete_project(db, project_id, s3_client=s3)
+
+
+def _normalize_url(url: str) -> str:
+    """Normalize a URL for deduplication.
+
+    Strips whitespace and removes trailing slashes (except for root paths).
+
+    Args:
+        url: Raw URL string.
+
+    Returns:
+        Normalized URL.
+    """
+    url = url.strip()
+    # Remove trailing slash unless it's the root path
+    if url.endswith("/") and not url.endswith("://"):
+        # Count slashes after protocol
+        protocol_end = url.find("://")
+        if protocol_end != -1:
+            path_part = url[protocol_end + 3 :]
+            # Only strip if there's more than just the domain
+            if "/" in path_part and path_part != "/":
+                url = url.rstrip("/")
+    return url
+
+
+@router.post(
+    "/{project_id}/urls",
+    response_model=UrlUploadResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def upload_urls(
+    project_id: str,
+    data: UrlsUploadRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_session),
+    crawl4ai: Crawl4AIClient = Depends(get_crawl4ai),
+) -> UrlUploadResponse:
+    """Upload URLs for crawling.
+
+    Creates CrawledPage records for each new URL and starts a background
+    task to crawl them. Duplicate URLs (already exist for this project)
+    are skipped.
+
+    Args:
+        project_id: UUID of the project.
+        data: Request with list of URLs to upload.
+        background_tasks: FastAPI background tasks.
+        db: AsyncSession for database operations.
+        crawl4ai: Crawl4AI client for crawling.
+
+    Returns:
+        Response with task_id, pages_created count, and pages_skipped count.
+
+    Raises:
+        HTTPException: 404 if project not found.
+    """
+    # Verify project exists (raises 404 if not)
+    await ProjectService.get_project(db, project_id)
+
+    # Normalize URLs
+    normalized_urls = [_normalize_url(url) for url in data.urls]
+
+    # Find existing URLs for this project
+    stmt = select(CrawledPage.normalized_url).where(
+        CrawledPage.project_id == project_id,
+        CrawledPage.normalized_url.in_(normalized_urls),
+    )
+    result = await db.execute(stmt)
+    existing_urls = set(result.scalars().all())
+
+    # Create CrawledPage records for new URLs only
+    new_page_ids: list[str] = []
+    pages_created = 0
+    pages_skipped = 0
+
+    for i, normalized_url in enumerate(normalized_urls):
+        if normalized_url in existing_urls:
+            pages_skipped += 1
+            logger.debug(
+                "Skipping duplicate URL",
+                extra={"url": normalized_url, "project_id": project_id},
+            )
+            continue
+
+        # Create new CrawledPage record
+        page = CrawledPage(
+            project_id=project_id,
+            normalized_url=normalized_url,
+            raw_url=data.urls[i],  # Store original URL
+            status=CrawlStatus.PENDING.value,
+        )
+        db.add(page)
+        await db.flush()  # Get the page ID
+        new_page_ids.append(page.id)
+        pages_created += 1
+
+        # Add to existing set to handle duplicates within the batch
+        existing_urls.add(normalized_url)
+
+    # Commit all new pages
+    await db.commit()
+
+    # Generate task ID for tracking
+    task_id = str(uuid4())
+
+    logger.info(
+        "URLs uploaded for crawling",
+        extra={
+            "project_id": project_id,
+            "task_id": task_id,
+            "total_urls": len(data.urls),
+            "pages_created": pages_created,
+            "pages_skipped": pages_skipped,
+        },
+    )
+
+    # Start background crawl task if there are new pages
+    if new_page_ids:
+        background_tasks.add_task(
+            _crawl_pages_background,
+            project_id=project_id,
+            page_ids=new_page_ids,
+            task_id=task_id,
+            crawl4ai_client=crawl4ai,
+        )
+
+    return UrlUploadResponse(
+        task_id=task_id,
+        pages_created=pages_created,
+        pages_skipped=pages_skipped,
+        total_urls=len(data.urls),
+    )
+
+
+async def _crawl_pages_background(
+    project_id: str,
+    page_ids: list[str],
+    task_id: str,
+    crawl4ai_client: Crawl4AIClient,
+) -> None:
+    """Background task to crawl pages.
+
+    This function runs outside the request context, so it creates
+    its own database session.
+
+    Args:
+        project_id: Project ID for logging.
+        page_ids: List of CrawledPage IDs to crawl.
+        task_id: Task ID for tracking/logging.
+        crawl4ai_client: Crawl4AI client instance.
+    """
+    from app.core.database import db_manager
+
+    logger.info(
+        "Starting background crawl task",
+        extra={
+            "project_id": project_id,
+            "task_id": task_id,
+            "page_count": len(page_ids),
+        },
+    )
+
+    try:
+        async with db_manager.session_factory() as db:
+            service = CrawlingService(crawl4ai_client)
+            results = await service.crawl_urls(db, page_ids)
+            await db.commit()
+
+            success_count = sum(1 for r in results.values() if r.success)
+            logger.info(
+                "Background crawl task completed",
+                extra={
+                    "project_id": project_id,
+                    "task_id": task_id,
+                    "total_pages": len(page_ids),
+                    "successful": success_count,
+                    "failed": len(page_ids) - success_count,
+                },
+            )
+    except Exception as e:
+        logger.error(
+            "Background crawl task failed",
+            extra={
+                "project_id": project_id,
+                "task_id": task_id,
+                "error": str(e),
+                "error_type": type(e).__name__,
+            },
+        )

@@ -251,3 +251,28 @@ after each iteration and it's included in prompts for context.
   - Projects with existing taxonomy need separate fixture (test_project_with_taxonomy) to test assignment path
 ---
 
+## 2026-02-04 - S3-014
+- **What was implemented**: POST /projects/{id}/urls endpoint for URL upload and background crawling
+- **Files changed**:
+  - `backend/app/api/v1/projects.py` (added upload_urls endpoint and _crawl_pages_background helper)
+  - `backend/app/schemas/crawled_page.py` (added UrlUploadResponse schema)
+  - `backend/app/schemas/__init__.py` (added UrlUploadResponse export)
+- **Endpoint features**:
+  - Accepts UrlsUploadRequest with urls array (1-10000 URLs)
+  - Creates CrawledPage record for each URL with status='pending'
+  - Skips duplicate URLs (already exist for project) using normalized_url lookup
+  - URL normalization: strips whitespace, removes trailing slashes (except root paths)
+  - Starts background task using FastAPI BackgroundTasks to crawl pages
+  - Returns UrlUploadResponse with task_id, pages_created, pages_skipped, total_urls
+  - Uses HTTP 202 Accepted status code (async processing)
+- **Background task**:
+  - Creates own database session via db_manager.session_factory()
+  - Uses CrawlingService.crawl_urls() for parallel crawling
+  - Logs task start/completion with success/failure counts
+- **Learnings:**
+  - FastAPI BackgroundTasks runs after response is sent, need separate db session
+  - Use `db_manager.session_factory()` from `app.core.database` for background sessions
+  - URL normalization is important for deduplication - handle trailing slashes carefully
+  - Keep raw_url for reference, use normalized_url for deduplication
+---
+

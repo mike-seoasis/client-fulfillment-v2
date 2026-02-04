@@ -77,6 +77,7 @@ from app.schemas.crawled_page import (
     CrawlStatusResponse,
     PageLabelsUpdate,
     UrlsUploadRequest,
+    UrlUploadResponse,
 )
 from app.schemas.crawled_page import (
     CrawledPageResponse as CrawledPageFullResponse,
@@ -240,5 +241,6 @@ __all__ = [
     "CrawledPageFullResponse",
     "CrawlStatusResponse",
     "UrlsUploadRequest",
+    "UrlUploadResponse",
     "PageLabelsUpdate",
 ]

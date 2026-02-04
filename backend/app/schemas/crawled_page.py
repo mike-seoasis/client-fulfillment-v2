@@ -69,9 +69,7 @@ class CrawledPageResponse(BaseModel):
     product_count: int | None = Field(
         None, description="Number of products detected on page"
     )
-    crawl_error: str | None = Field(
-        None, description="Error message if crawl failed"
-    )
+    crawl_error: str | None = Field(None, description="Error message if crawl failed")
     word_count: int | None = Field(None, description="Number of words in body content")
     content_hash: str | None = Field(
         None, description="Content hash for change detection"
@@ -129,9 +127,7 @@ class UrlsUploadRequest(BaseModel):
             if not url:
                 continue
             if not url.startswith(("http://", "https://")):
-                raise ValueError(
-                    f"URL must start with http:// or https://: {url[:50]}"
-                )
+                raise ValueError(f"URL must start with http:// or https://: {url[:50]}")
             validated.append(url)
         if not validated:
             raise ValueError("At least one valid URL is required")
@@ -161,3 +157,18 @@ class PageLabelsUpdate(BaseModel):
                 raise ValueError(f"Label too long (max 100 chars): {label[:50]}...")
             validated.append(label)
         return validated
+
+
+class UrlUploadResponse(BaseModel):
+    """Response schema for URL upload endpoint."""
+
+    task_id: str = Field(
+        ..., description="Background task ID for tracking crawl progress"
+    )
+    pages_created: int = Field(
+        ..., ge=0, description="Number of new CrawledPage records created"
+    )
+    pages_skipped: int = Field(
+        ..., ge=0, description="Number of duplicate URLs skipped"
+    )
+    total_urls: int = Field(..., ge=0, description="Total URLs in request")
