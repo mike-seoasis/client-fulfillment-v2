@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import { Button, Input, Textarea } from '@/components/ui';
 import { BulletListEditor } from './BulletListEditor';
 import { EditableTable, type ColumnSchema } from './EditableTable';
+import { useEditorKeyboardShortcuts } from './useEditorKeyboardShortcuts';
 import { type TrustElementsData, type CustomerQuote } from '../types';
 
 interface TrustElementsEditorProps {
@@ -114,24 +115,15 @@ export function TrustElementsEditor({
     onSave,
   ]);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      // Save on Cmd/Ctrl + S
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-        e.preventDefault();
-        handleSave();
-      }
-      // Cancel on Escape
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onCancel();
-      }
-    },
-    [handleSave, onCancel]
-  );
+  // Use document-level keyboard shortcuts for consistent behavior
+  useEditorKeyboardShortcuts({
+    onSave: handleSave,
+    onCancel,
+    disabled: isSaving,
+  });
 
   return (
-    <div className="space-y-6" onKeyDown={handleKeyDown}>
+    <div className="space-y-6">
       {/* Instructions */}
       <div className="bg-cream-50 border border-cream-300 rounded-sm p-3">
         <p className="text-sm text-warm-gray-600 mb-1">

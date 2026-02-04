@@ -14,6 +14,36 @@ const displayText = typeof item === 'string'
 ```
 This prevents "objects are not valid as a React child" errors when backend data shape varies.
 
+### Document-Level Keyboard Shortcuts Pattern
+For reliable keyboard shortcuts in editors with nested focusable elements, use document-level event listeners:
+```tsx
+import { useEffect, useCallback } from 'react';
+
+export function useEditorKeyboardShortcuts({ onSave, onCancel, disabled = false }) {
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (disabled) return;
+    if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+      e.preventDefault();
+      onSave();
+    }
+    if (e.key === 'Escape') {
+      // Check for nested components that handle Escape (use data attributes)
+      const isInEditableCell = document.activeElement?.closest('[data-editable-cell]');
+      if (!isInEditableCell) {
+        e.preventDefault();
+        onCancel();
+      }
+    }
+  }, [disabled, onSave, onCancel]);
+
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
+}
+```
+This ensures shortcuts work regardless of focus and allows nested components to handle Escape first.
+
 ---
 
 ## 2026-02-04 - BC-001
@@ -501,5 +531,30 @@ This prevents "objects are not valid as a React child" errors when backend data 
   - When switching from generic JSON editing to typed section editors, the callback signature changes from `Record<string, unknown>` to a specific union type
   - API mutation types may remain as generic `Record<string, unknown>` for flexibility - use `as unknown as Record<string, unknown>` cast to bridge typed editor data to generic API payloads
   - The existing save/cancel flow remains intact - only the editor component and data types change
+---
+
+## 2026-02-04 - BC-029
+- **What was implemented:** Added keyboard shortcut support across all section editors via custom hook
+- **Files changed:**
+  - `frontend/src/components/brand-sections/editors/useEditorKeyboardShortcuts.ts` - New custom hook for document-level keyboard shortcut handling (Cmd/Ctrl+S for save, Escape for cancel)
+  - `frontend/src/components/brand-sections/editors/EditableTable.tsx` - Added `data-editable-cell` attribute to inline edit inputs for Escape key conflict detection
+  - `frontend/src/components/brand-sections/editors/index.ts` - Added export for useEditorKeyboardShortcuts hook
+  - Updated all 10 section editors to use the new hook:
+    - `BrandFoundationEditor.tsx`
+    - `TargetAudienceEditor.tsx`
+    - `VoiceDimensionsEditor.tsx`
+    - `VoiceCharacteristicsEditor.tsx`
+    - `WritingStyleEditor.tsx`
+    - `VocabularyEditor.tsx`
+    - `TrustElementsEditor.tsx`
+    - `ExamplesBankEditor.tsx`
+    - `CompetitorContextEditor.tsx`
+    - `AIPromptEditor.tsx`
+- **Learnings:**
+  - Document-level keyboard event listeners (`document.addEventListener`) provide more consistent behavior than `onKeyDown` on container divs, especially when focus may be on deeply nested elements
+  - When handling Escape key with nested components that have their own Escape handling (like EditableTable inline editing), use data attributes (`data-editable-cell`) to detect context and allow incremental escape behavior (first Escape cancels cell edit, second cancels entire editor)
+  - Custom hooks that attach event listeners should always clean up in the useEffect return function to prevent memory leaks
+  - The `disabled` option on keyboard shortcuts prevents accidental saves during async operations (when isSaving is true)
+  - Cmd/Ctrl+S must call `e.preventDefault()` to prevent the browser's native save dialog from appearing
 ---
 

@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import { Button, Textarea } from '@/components/ui';
 import { SliderInput } from './SliderInput';
+import { useEditorKeyboardShortcuts } from './useEditorKeyboardShortcuts';
 import { type VoiceDimensionsData, type VoiceDimensionScale } from '../types';
 
 interface VoiceDimensionsEditorProps {
@@ -83,24 +84,15 @@ export function VoiceDimensionsEditor({
     onSave(updatedData);
   }, [formality, humor, reverence, enthusiasm, voiceSummary, onSave]);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      // Save on Cmd/Ctrl + S
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-        e.preventDefault();
-        handleSave();
-      }
-      // Cancel on Escape
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onCancel();
-      }
-    },
-    [handleSave, onCancel]
-  );
+  // Use document-level keyboard shortcuts for consistent behavior
+  useEditorKeyboardShortcuts({
+    onSave: handleSave,
+    onCancel,
+    disabled: isSaving,
+  });
 
   return (
-    <div className="space-y-6" onKeyDown={handleKeyDown}>
+    <div className="space-y-6">
       {/* Instructions */}
       <div className="bg-cream-50 border border-cream-300 rounded-sm p-3">
         <p className="text-sm text-warm-gray-600 mb-1">

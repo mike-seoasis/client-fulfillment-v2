@@ -13,3 +13,4 @@ export { ExamplesBankEditor, type ExamplesBankEditorProps } from './ExamplesBank
 export { CompetitorContextEditor, type CompetitorContextEditorProps } from './CompetitorContextEditor';
 export { AIPromptEditor, type AIPromptEditorProps } from './AIPromptEditor';
 export { SectionEditorSwitch, type SectionEditorSwitchProps, type SectionKey, type SectionData } from './SectionEditorSwitch';
+export { useEditorKeyboardShortcuts, type UseEditorKeyboardShortcutsOptions } from './useEditorKeyboardShortcuts';

@@ -207,6 +207,7 @@ export function EditableTable({
                             onBlur={handleSaveCell}
                             onKeyDown={handleKeyDown}
                             placeholder={col.placeholder}
+                            data-editable-cell="true"
                             className="w-full py-2 px-3 text-sm text-warm-gray-900 bg-white border-2 border-palm-400 outline-none"
                           />
                         ) : (
