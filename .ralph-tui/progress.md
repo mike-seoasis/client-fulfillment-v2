@@ -853,3 +853,29 @@ after each iteration and it's included in prompts for context.
   - Test for both the presence and absence of elements (e.g., disabled states, error messages appearing/disappearing)
 ---
 
+## 2026-02-04 - S3-042
+- **What was implemented**: Updated project detail Onboarding section with progress display
+- **Files changed**:
+  - `frontend/src/hooks/use-crawl-status.ts` (new file)
+  - `frontend/src/app/projects/[id]/page.tsx` (updated Onboarding section)
+- **Features**:
+  - Created `useCrawlStatus` hook for fetching crawl status on project detail page
+  - Created `getOnboardingStep` helper to determine current step and navigation target
+  - Added `OnboardingStepIndicator` component showing step completion status
+  - Progress bar showing "X of Y pages complete" when pages exist
+  - Dynamic button text: "Start Onboarding" vs "Continue Onboarding"
+  - Navigation to correct step based on progress (upload → crawl → keywords)
+  - Status text showing "Crawl complete", "Labeling pages...", or "Crawling pages..."
+  - Failed page count displayed when applicable
+- **Acceptance criteria verification**:
+  - ✅ Show crawl progress when pages exist (e.g., '8 of 12 pages complete') - Progress bar with count
+  - ✅ Show step indicators with completion status - OnboardingStepIndicator component
+  - ✅ Update button text: 'Start Onboarding' vs 'Continue Onboarding' - Conditional text based on hasStarted
+  - ✅ Navigate to correct step based on progress - Link href changes based on currentStep
+- **Learnings:**
+  - Create reusable hooks for data fetching (useCrawlStatus) to share between components
+  - Use helper functions (getOnboardingStep) to encapsulate business logic for determining UI state
+  - Handle 404 responses gracefully by returning null (no pages uploaded yet case)
+  - CrawlStatusResponse has three states: 'crawling', 'labeling', 'complete' - use for UI text
+---
+

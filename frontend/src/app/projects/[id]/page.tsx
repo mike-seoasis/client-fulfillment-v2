@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useProject, useDeleteProject } from '@/hooks/use-projects';
 import { useStartBrandConfigGeneration, useBrandConfigGeneration } from '@/hooks/useBrandConfigGeneration';
+import { useCrawlStatus, getOnboardingStep } from '@/hooks/use-crawl-status';
 import { Button, Toast } from '@/components/ui';
 
 function LoadingSkeleton() {
@@ -141,6 +142,95 @@ function SpinnerIcon({ className }: { className?: string }) {
   );
 }
 
+function CheckCircleIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="9 12 12 15 16 10" />
+    </svg>
+  );
+}
+
+function CircleIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+    </svg>
+  );
+}
+
+// Onboarding steps definition
+const ONBOARDING_STEPS = [
+  { key: 'upload', label: 'Upload' },
+  { key: 'crawl', label: 'Crawl' },
+  { key: 'keywords', label: 'Keywords' },
+  { key: 'content', label: 'Content' },
+  { key: 'export', label: 'Export' },
+] as const;
+
+type OnboardingStepKey = typeof ONBOARDING_STEPS[number]['key'];
+
+interface OnboardingStepIndicatorProps {
+  currentStep: OnboardingStepKey;
+  hasStarted: boolean;
+}
+
+function OnboardingStepIndicator({ currentStep, hasStarted }: OnboardingStepIndicatorProps) {
+  if (!hasStarted) {
+    return null;
+  }
+
+  const currentIndex = ONBOARDING_STEPS.findIndex(s => s.key === currentStep);
+
+  return (
+    <div className="flex items-center gap-1.5">
+      {ONBOARDING_STEPS.map((step, index) => {
+        const isComplete = index < currentIndex;
+        const isCurrent = index === currentIndex;
+
+        return (
+          <div
+            key={step.key}
+            className="flex items-center gap-1"
+            title={step.label}
+          >
+            {isComplete ? (
+              <CheckCircleIcon className="w-4 h-4 text-palm-500" />
+            ) : isCurrent ? (
+              <div className="w-4 h-4 rounded-full border-2 border-palm-500 bg-palm-50" />
+            ) : (
+              <CircleIcon className="w-4 h-4 text-cream-400" />
+            )}
+            {index < ONBOARDING_STEPS.length - 1 && (
+              <div
+                className={`w-3 h-0.5 ${
+                  isComplete ? 'bg-palm-500' : 'bg-cream-300'
+                }`}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function BrandConfigStatusBadge({
   status,
   progress
@@ -200,6 +290,12 @@ export default function ProjectDetailPage() {
   const deleteProject = useDeleteProject();
   const generation = useBrandConfigGeneration(projectId);
   const startGeneration = useStartBrandConfigGeneration(projectId);
+
+  // Fetch crawl status for onboarding progress
+  const { data: crawlStatus } = useCrawlStatus(projectId, {
+    enabled: !!projectId && !isLoading && !error,
+  });
+  const onboardingProgress = getOnboardingStep(crawlStatus);
 
   // Two-step delete confirmation
   const [isConfirming, setIsConfirming] = useState(false);
@@ -423,19 +519,76 @@ export default function ProjectDetailPage() {
       <div className="space-y-6">
         {/* Onboarding section */}
         <div className="bg-white rounded-sm border border-cream-500 p-6 shadow-sm">
-          <div className="flex items-center gap-3 mb-3">
-            <ClipboardIcon className="w-5 h-5 text-palm-500" />
-            <h2 className="text-lg font-semibold text-warm-gray-900">
-              Onboarding
-            </h2>
-            <span className="text-xs bg-cream-100 text-warm-gray-600 px-2 py-0.5 rounded-full">
-              Existing Pages
-            </span>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <ClipboardIcon className="w-5 h-5 text-palm-500" />
+              <h2 className="text-lg font-semibold text-warm-gray-900">
+                Onboarding
+              </h2>
+              <span className="text-xs bg-cream-100 text-warm-gray-600 px-2 py-0.5 rounded-full">
+                Existing Pages
+              </span>
+            </div>
+            <OnboardingStepIndicator
+              currentStep={onboardingProgress.currentStep}
+              hasStarted={onboardingProgress.hasStarted}
+            />
           </div>
-          <p className="text-warm-gray-600 text-sm mb-4">
-            Optimize existing collection pages with new copy
-          </p>
-          <Button disabled>Continue</Button>
+
+          {/* Progress display when pages exist */}
+          {crawlStatus && crawlStatus.progress.total > 0 && (
+            <div className="mb-4">
+              <div className="flex items-center justify-between text-sm text-warm-gray-600 mb-1.5">
+                <span>
+                  {crawlStatus.status === 'complete'
+                    ? 'Crawl complete'
+                    : crawlStatus.status === 'labeling'
+                    ? 'Labeling pages...'
+                    : 'Crawling pages...'}
+                </span>
+                <span className="font-medium">
+                  {crawlStatus.progress.completed} of {crawlStatus.progress.total} pages complete
+                </span>
+              </div>
+              <div className="h-2 bg-cream-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-palm-500 transition-all duration-500 ease-out rounded-full"
+                  style={{
+                    width: `${Math.round(
+                      (crawlStatus.progress.completed / crawlStatus.progress.total) * 100
+                    )}%`,
+                  }}
+                />
+              </div>
+              {crawlStatus.progress.failed > 0 && (
+                <p className="text-xs text-coral-600 mt-1">
+                  {crawlStatus.progress.failed} page{crawlStatus.progress.failed !== 1 ? 's' : ''} failed
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Description when no pages */}
+          {(!crawlStatus || crawlStatus.progress.total === 0) && (
+            <p className="text-warm-gray-600 text-sm mb-4">
+              Optimize existing collection pages with new copy
+            </p>
+          )}
+
+          {/* Action button */}
+          <Link
+            href={
+              onboardingProgress.currentStep === 'upload'
+                ? `/projects/${projectId}/onboarding/upload`
+                : onboardingProgress.currentStep === 'crawl'
+                ? `/projects/${projectId}/onboarding/crawl`
+                : `/projects/${projectId}/onboarding/keywords`
+            }
+          >
+            <Button>
+              {onboardingProgress.hasStarted ? 'Continue Onboarding' : 'Start Onboarding'}
+            </Button>
+          </Link>
         </div>
 
         {/* New Content section */}
