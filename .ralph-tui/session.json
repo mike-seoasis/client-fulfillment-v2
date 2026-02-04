@@ -3,10 +3,10 @@
   "sessionId": "5dda031c-4422-43ab-8459-422fd5b43e68",
   "status": "running",
   "startedAt": "2026-02-04T16:43:12.368Z",
-  "updatedAt": "2026-02-04T16:52:30.136Z",
-  "currentIteration": 1,
+  "updatedAt": "2026-02-04T16:53:46.061Z",
+  "currentIteration": 2,
   "maxIterations": 10,
-  "tasksCompleted": 1,
+  "tasksCompleted": 2,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -209,8 +209,8 @@
       {
         "id": "BC-033",
         "title": "Test VoiceDimensions slider with various values",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "BC-034",
@@ -242,6 +242,16 @@
       "durationMs": 281736,
       "startedAt": "2026-02-04T16:43:18.838Z",
       "endedAt": "2026-02-04T16:48:00.574Z"
+    },
+    {
+      "iteration": 2,
+      "status": "completed",
+      "taskId": "BC-033",
+      "taskTitle": "Test VoiceDimensions slider with various values",
+      "taskCompleted": true,
+      "durationMs": 268440,
+      "startedAt": "2026-02-04T16:48:01.693Z",
+      "endedAt": "2026-02-04T16:52:30.133Z"
     }
   ],
   "skippedTaskIds": [],
