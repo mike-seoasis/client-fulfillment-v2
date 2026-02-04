@@ -252,3 +252,25 @@ This prevents "objects are not valid as a React child" errors when backend data 
   - Key/index combo for React keys (`${item}-${index}`) handles potential duplicates safely
 ---
 
+## 2026-02-04 - BC-016
+- **What was implemented:** Created reusable SliderInput component for 1-10 scale inputs
+- **Files changed:**
+  - `frontend/src/components/brand-sections/editors/SliderInput.tsx` - New component with:
+    - Native HTML range input (1-10) with custom styling
+    - Custom track with palm-500 gradient fill showing current position
+    - Prominent value display in header (large palm-600 number)
+    - Visual tick marks (10 marks) that change color based on value
+    - Accepts `value` (number), `onChange`, `label`, `leftLabel`, `rightLabel` props
+    - Disabled state support
+    - Cross-browser thumb styling (webkit + moz)
+    - Proper ARIA attributes for accessibility
+    - Validation/clamping of input value to 1-10 range
+  - `frontend/src/components/brand-sections/editors/index.ts` - Added SliderInput export
+- **Learnings:**
+  - Used native range input with custom styling via Tailwind's arbitrary selectors `[&::-webkit-slider-thumb]` for cross-browser support
+  - Layered approach: track background with fill div underneath, transparent range input on top
+  - Tick marks provide visual reference for discrete values on the scale
+  - Used `tabular-nums` for the value display to prevent layout shifts when number changes
+  - The existing VoiceDimensionsSection uses read-only `DimensionScale` component - SliderInput is the editable counterpart for edit mode
+---
+
