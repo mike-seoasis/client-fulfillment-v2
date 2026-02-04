@@ -3,14 +3,16 @@
 This service uses Claude to:
 1. Analyze all crawled pages and generate a taxonomy of labels
 2. Assign labels from the taxonomy to each page
+3. Validate labels for both AI assignment and user edits
 
 The taxonomy is stored in Project.phase_status.onboarding.taxonomy.
 Labels are stored in CrawledPage.labels array.
 """
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +23,201 @@ from app.models.crawled_page import CrawledPage, CrawlStatus
 from app.models.project import Project
 
 logger = get_logger(__name__)
+
+
+# Constants for label validation
+MIN_LABELS_PER_PAGE = 2
+MAX_LABELS_PER_PAGE = 5
+
+
+@dataclass
+class LabelValidationError:
+    """Represents a single validation error."""
+
+    code: str
+    message: str
+    details: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class LabelValidationResult:
+    """Result of label validation."""
+
+    valid: bool
+    labels: list[str]
+    errors: list[LabelValidationError] = field(default_factory=list)
+
+    @property
+    def error_messages(self) -> list[str]:
+        """Return list of error messages for simple display."""
+        return [e.message for e in self.errors]
+
+
+def validate_labels(
+    labels: list[str],
+    taxonomy_labels: set[str] | list[str],
+    *,
+    min_labels: int = MIN_LABELS_PER_PAGE,
+    max_labels: int = MAX_LABELS_PER_PAGE,
+) -> LabelValidationResult:
+    """Validate labels against a taxonomy and count constraints.
+
+    This function validates:
+    1. All labels exist in the provided taxonomy
+    2. The label count is within the allowed range (default 2-5)
+    3. Labels are normalized (lowercase, stripped)
+
+    Use this for both AI label assignment validation and user edit validation.
+
+    Args:
+        labels: List of labels to validate.
+        taxonomy_labels: Set or list of valid label names from taxonomy.
+        min_labels: Minimum number of labels required (default 2).
+        max_labels: Maximum number of labels allowed (default 5).
+
+    Returns:
+        LabelValidationResult with valid flag, normalized labels, and any errors.
+
+    Examples:
+        >>> taxonomy = {"product-detail", "outdoor-gear", "trail-running"}
+        >>> result = validate_labels(["product-detail", "outdoor-gear"], taxonomy)
+        >>> result.valid
+        True
+
+        >>> result = validate_labels(["product-detail", "invalid-label"], taxonomy)
+        >>> result.valid
+        False
+        >>> result.error_messages
+        ["Invalid labels: 'invalid-label'. Must be from project taxonomy."]
+    """
+    errors: list[LabelValidationError] = []
+
+    # Convert taxonomy to set for O(1) lookup
+    valid_taxonomy = set(taxonomy_labels) if isinstance(taxonomy_labels, list) else taxonomy_labels
+
+    # Normalize labels (lowercase, strip whitespace)
+    normalized_labels = [label.strip().lower() for label in labels if label.strip()]
+
+    # Remove duplicates while preserving order
+    seen: set[str] = set()
+    unique_labels: list[str] = []
+    for label in normalized_labels:
+        if label not in seen:
+            seen.add(label)
+            unique_labels.append(label)
+    normalized_labels = unique_labels
+
+    # Validate label count
+    if len(normalized_labels) < min_labels:
+        errors.append(
+            LabelValidationError(
+                code="too_few_labels",
+                message=f"At least {min_labels} labels are required. Got {len(normalized_labels)}.",
+                details={
+                    "min_required": min_labels,
+                    "actual_count": len(normalized_labels),
+                },
+            )
+        )
+
+    if len(normalized_labels) > max_labels:
+        errors.append(
+            LabelValidationError(
+                code="too_many_labels",
+                message=f"Maximum {max_labels} labels allowed. Got {len(normalized_labels)}.",
+                details={
+                    "max_allowed": max_labels,
+                    "actual_count": len(normalized_labels),
+                },
+            )
+        )
+
+    # Validate all labels are in taxonomy
+    invalid_labels = [label for label in normalized_labels if label not in valid_taxonomy]
+    if invalid_labels:
+        # Format list nicely for error message
+        if len(invalid_labels) == 1:
+            invalid_str = f"'{invalid_labels[0]}'"
+        else:
+            invalid_str = ", ".join(f"'{label}'" for label in invalid_labels)
+
+        errors.append(
+            LabelValidationError(
+                code="invalid_labels",
+                message=f"Invalid labels: {invalid_str}. Must be from project taxonomy.",
+                details={
+                    "invalid_labels": invalid_labels,
+                    "valid_labels": sorted(valid_taxonomy),
+                },
+            )
+        )
+
+    return LabelValidationResult(
+        valid=len(errors) == 0,
+        labels=normalized_labels,
+        errors=errors,
+    )
+
+
+async def get_project_taxonomy_labels(
+    db: AsyncSession,
+    project_id: str,
+) -> set[str] | None:
+    """Get the set of valid taxonomy label names for a project.
+
+    Args:
+        db: AsyncSession for database operations.
+        project_id: Project ID to get taxonomy for.
+
+    Returns:
+        Set of valid label names, or None if no taxonomy exists.
+    """
+    project = await db.get(Project, project_id)
+    if not project:
+        return None
+
+    stored_taxonomy = project.phase_status.get("onboarding", {}).get("taxonomy")
+    if not stored_taxonomy:
+        return None
+
+    labels = stored_taxonomy.get("labels", [])
+    return {label.get("name", "") for label in labels if label.get("name")}
+
+
+async def validate_page_labels(
+    db: AsyncSession,
+    project_id: str,
+    labels: list[str],
+) -> LabelValidationResult:
+    """Validate labels for a page against the project's taxonomy.
+
+    Convenience function that loads the taxonomy and validates labels in one call.
+    Use this in API endpoints for user label edits.
+
+    Args:
+        db: AsyncSession for database operations.
+        project_id: Project ID to validate against.
+        labels: List of labels to validate.
+
+    Returns:
+        LabelValidationResult with valid flag, normalized labels, and any errors.
+    """
+    taxonomy_labels = await get_project_taxonomy_labels(db, project_id)
+
+    if taxonomy_labels is None:
+        return LabelValidationResult(
+            valid=False,
+            labels=[],
+            errors=[
+                LabelValidationError(
+                    code="no_taxonomy",
+                    message="No taxonomy exists for this project. Generate taxonomy first.",
+                    details={"project_id": project_id},
+                )
+            ],
+        )
+
+    return validate_labels(labels, taxonomy_labels)
 
 
 # System prompt for taxonomy generation
@@ -458,18 +655,32 @@ Respond with JSON only."""
             parsed = json.loads(json_text)
 
             labels = parsed.get("labels", [])
-            # Validate labels against taxonomy
-            valid_assigned = [label for label in labels if label in valid_labels]
 
-            if len(valid_assigned) != len(labels):
-                invalid = set(labels) - set(valid_assigned)
-                logger.warning(
-                    "Some assigned labels not in taxonomy",
-                    extra={
-                        "page_id": page.id,
-                        "invalid_labels": list(invalid),
-                    },
-                )
+            # Validate labels using the validation function
+            validation_result = validate_labels(labels, valid_labels)
+
+            if not validation_result.valid:
+                # Log validation issues but still use the valid labels we got
+                for error in validation_result.errors:
+                    if error.code == "invalid_labels":
+                        logger.warning(
+                            "AI assigned labels not in taxonomy",
+                            extra={
+                                "page_id": page.id,
+                                "invalid_labels": error.details.get("invalid_labels", []),
+                            },
+                        )
+                    elif error.code in ("too_few_labels", "too_many_labels"):
+                        logger.warning(
+                            f"AI label count validation: {error.message}",
+                            extra={"page_id": page.id},
+                        )
+
+            # Filter to only valid labels from taxonomy
+            valid_assigned = [
+                label for label in validation_result.labels
+                if label in valid_labels
+            ]
 
             return LabelAssignment(
                 page_id=page.id,

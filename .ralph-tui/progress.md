@@ -210,3 +210,25 @@ after each iteration and it's included in prompts for context.
   - Prompt engineering: providing context about WHY labels exist (internal linking) improves assignment quality
 ---
 
+## 2026-02-04 - S3-012
+- **What was implemented**: Label validation system for taxonomy conformance and count constraints
+- **Files changed**:
+  - `backend/app/services/label_taxonomy.py` (added validation dataclasses and functions)
+  - `backend/app/services/__init__.py` (added exports for validation functions)
+- **Features added**:
+  - `LabelValidationError` dataclass with code, message, and details
+  - `LabelValidationResult` dataclass with valid flag, normalized labels, and errors list
+  - `validate_labels()` - Core validation function that checks:
+    - Labels exist in taxonomy (code: "invalid_labels")
+    - Count within 2-5 range (codes: "too_few_labels", "too_many_labels")
+    - Normalizes labels (lowercase, stripped, deduplicated)
+  - `get_project_taxonomy_labels()` - Helper to load taxonomy from project
+  - `validate_page_labels()` - Convenience function for API endpoints (loads taxonomy + validates)
+  - Constants `MIN_LABELS_PER_PAGE = 2` and `MAX_LABELS_PER_PAGE = 5`
+- **Updated `_assign_labels_to_page()`** to use the new validation function instead of ad-hoc filtering
+- **Learnings:**
+  - Validation functions should return structured results (not just bool) for clear error handling
+  - Using dataclasses with `field(default_factory=dict)` for mutable defaults in Python 3.12+
+  - Export both sync functions (`validate_labels`) and async functions (`validate_page_labels`) for flexibility
+---
+
