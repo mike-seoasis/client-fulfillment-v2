@@ -12,3 +12,4 @@ export { TrustElementsEditor, type TrustElementsEditorProps } from './TrustEleme
 export { ExamplesBankEditor, type ExamplesBankEditorProps } from './ExamplesBankEditor';
 export { CompetitorContextEditor, type CompetitorContextEditorProps } from './CompetitorContextEditor';
 export { AIPromptEditor, type AIPromptEditorProps } from './AIPromptEditor';
+export { SectionEditorSwitch, type SectionEditorSwitchProps, type SectionKey, type SectionData } from './SectionEditorSwitch';

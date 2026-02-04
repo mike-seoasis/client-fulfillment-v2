@@ -472,3 +472,20 @@ This prevents "objects are not valid as a React child" errors when backend data 
   - Section editors follow consistent pattern across all 11 editors: data + onSave/onCancel props, individual useState hooks, keyboard shortcuts, isSaving state, data cleanup on save
 ---
 
+## 2026-02-04 - BC-027
+- **What was implemented:** Created SectionEditorSwitch router component for selecting correct editor by section key
+- **Files changed:**
+  - `frontend/src/components/brand-sections/editors/SectionEditorSwitch.tsx` - New component with:
+    - Switch statement mapping all 10 section keys to their editor components
+    - SectionKey type union: brand_foundation, target_audience, voice_dimensions, voice_characteristics, writing_style, vocabulary, trust_elements, examples_bank, competitor_context, ai_prompt_snippet
+    - SectionData union type for all section data types
+    - Props: sectionKey, data, isSaving, onSave, onCancel
+    - Type assertions for each editor's data prop
+    - TypeScript exhaustiveness check in default case
+  - `frontend/src/components/brand-sections/editors/index.ts` - Added SectionEditorSwitch, SectionKey, SectionData exports
+- **Learnings:**
+  - Router/switch components should use TypeScript's never type in default case for exhaustiveness checking
+  - Union types for section keys and data allow type-safe routing while the switch handles runtime selection
+  - Type assertions (as TypeData | undefined) are necessary when routing to specific components since the union type is broader
+---
+
