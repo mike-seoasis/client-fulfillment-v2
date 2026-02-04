@@ -805,3 +805,23 @@ after each iteration and it's included in prompts for context.
   - Re-throwing error after showing toast allows the dropdown to also react (e.g., keeping form open)
 ---
 
+## 2026-02-04 - S3-040
+- **What was implemented**: Continue to Keywords button (already existed in crawl page) + placeholder keywords page
+- **Files changed**:
+  - `frontend/src/app/projects/[id]/onboarding/keywords/page.tsx` (new file)
+- **Features**:
+  - Button already existed in crawl page at lines 741-749 with correct conditional rendering
+  - Created placeholder keywords page at `/projects/[id]/onboarding/keywords`
+  - Keywords page shows "Coming Soon" message with clock icon
+  - Includes breadcrumb navigation, step indicator (showing Keywords as step 3)
+  - Navigation buttons: "Back to Crawl" and "Go to Project"
+- **Acceptance criteria verification**:
+  - ✅ Button appears when labeling is complete - `{isComplete ? <Link...>Continue to Keywords</Link> : ...}`
+  - ✅ Button disabled during crawling/labeling - Shows disabled "Crawling..." button when `!isComplete`
+  - ✅ Navigates to keywords step (Phase 4 placeholder for now) - Links to `/projects/{id}/onboarding/keywords`
+- **Learnings:**
+  - When navigating to a future phase, create a placeholder page with "Coming Soon" message
+  - Follow existing page patterns: breadcrumb, step indicator, consistent card layout
+  - Reuse shared components like ONBOARDING_STEPS, icon components, LoadingSkeleton, NotFoundState
+---
+
