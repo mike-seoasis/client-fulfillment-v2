@@ -62,3 +62,19 @@ This prevents "objects are not valid as a React child" errors when backend data 
   - This is a prompt-only change with no code logic changes, so no tests needed
 ---
 
+## 2026-02-04 - BC-005
+- **What was implemented:** Updated target_audience prompt in SECTION_PROMPTS for detailed personas
+- **Files changed:** `backend/app/services/brand_config.py` (lines 152-268)
+- **Learnings:**
+  - The target_audience prompt drives persona generation quality - explicit requirements in the prompt ensure complete output
+  - Key changes for detailed personas:
+    - Added explicit "REQUIREMENTS" section mandating minimum 2 personas (primary + at least 1 secondary)
+    - Changed `secondary_personas` from empty array `[]` to require at least 1 fully detailed persona in the JSON schema example
+    - Added new fields: `buying_behavior`, `preferred_tone`, `preferred_channels` to capture comprehensive persona data
+    - Expanded `trust_signals_needed` and `content_they_consume` arrays from 2 to 3 items
+    - Added clear instructions that ALL fields must be populated with no nulls or empty values
+    - Added instruction for percentages to add up to ~100%
+    - Included guidance for creating distinct personas (different motivations, behaviors, needs)
+  - Prompt engineering principle: showing the expected array structure with a full object example (not empty `[]`) guides the LLM to produce complete output
+---
+

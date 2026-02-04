@@ -151,52 +151,121 @@ Output ONLY valid JSON in this exact format:
 Be specific and concrete based on the research. If information is not available, make reasonable inferences based on industry norms.""",
     "target_audience": """You are a brand strategist creating the Target Audience section of a brand guidelines document.
 
-Based on the research context and brand foundation provided, identify and describe the target audience:
-- Demographics (age range, gender if relevant, location, income level, profession, education)
-- Psychographics (values, aspirations, fears/pain points, frustrations, identity)
-- Behavioral Insights (discovery channels, research behavior, decision factors, buying triggers, common objections)
-- Communication Preferences (tone they respond to, language they use, content they consume, trust signals needed)
-- Persona Summary Statement (one paragraph describing them as a real person)
+Based on the research context and brand foundation provided, create DETAILED TARGET AUDIENCE PERSONAS.
+
+REQUIREMENTS:
+- You MUST create a minimum of 2 fully detailed personas (primary + at least 1 secondary)
+- Each persona MUST have ALL fields populated - no nulls or empty values
+- Be specific and concrete based on the research - avoid generic placeholder text
+
+For each persona, provide:
+
+DEMOGRAPHICS (all required):
+- Age range (specific, e.g., "32-45" not just "adults")
+- Location (geographic regions, urban/suburban/rural, specific markets if known)
+- Income level (specific range, e.g., "$75,000-$120,000 household income")
+- Profession (specific job titles or industries)
+- Education level
+
+PSYCHOGRAPHICS (all required):
+- Core values (minimum 3 specific values that drive decisions)
+- Pain points (specific frustrations and challenges they face)
+- Aspirations (what they're trying to achieve)
+
+BEHAVIORAL INSIGHTS (all required):
+- Buying behavior (how they research, evaluate, and purchase)
+- Decision factors (what matters most when choosing)
+- Discovery channels (where they find new brands/products)
+
+COMMUNICATION PREFERENCES (all required for each persona):
+- Preferred tone (formal/casual, technical/accessible, etc.)
+- Content formats they engage with (video, long-form, social, email, etc.)
+- Trust signals they need (reviews, certifications, testimonials, etc.)
+- Language style (jargon comfort level, emotional vs. rational appeals)
 
 Output ONLY valid JSON in this exact format:
 {
   "primary_persona": {
-    "name": "string (e.g., 'Professional Pat')",
-    "percentage_of_customers": "string (e.g., '60%')",
+    "name": "string (descriptive name, e.g., 'The Conscious Curator')",
+    "percentage_of_customers": "string (e.g., '55%')",
     "demographics": {
-      "age_range": "string",
-      "gender": "string or null",
-      "location": "string",
-      "income_level": "string",
-      "profession": "string",
-      "education": "string or null"
+      "age_range": "string (specific range)",
+      "gender": "string (or 'All genders' if not relevant)",
+      "location": "string (specific regions/characteristics)",
+      "income_level": "string (specific range)",
+      "profession": "string (specific roles/industries)",
+      "education": "string (specific level)"
     },
     "psychographics": {
       "values": ["string", "string", "string"],
-      "aspirations": "string",
-      "fears_pain_points": "string",
-      "frustrations": "string",
-      "identity": "string"
+      "aspirations": "string (detailed)",
+      "fears_pain_points": "string (specific challenges)",
+      "frustrations": "string (what frustrates them about current options)",
+      "identity": "string (how they see themselves)"
     },
     "behavioral_insights": {
-      "discovery_channels": ["string", "string"],
-      "research_behavior": "string",
+      "discovery_channels": ["string", "string", "string"],
+      "research_behavior": "string (how they evaluate options)",
       "decision_factors": ["string", "string", "string"],
-      "buying_triggers": "string",
+      "buying_triggers": "string (what prompts purchase)",
+      "buying_behavior": "string (purchase patterns, frequency, basket size)",
       "common_objections": ["string", "string"]
     },
     "communication_preferences": {
-      "tone_they_respond_to": "string",
-      "language_they_use": "string",
-      "content_they_consume": ["string", "string"],
-      "trust_signals_needed": ["string", "string"]
+      "preferred_tone": "string (specific tone description)",
+      "tone_they_respond_to": "string (what resonates)",
+      "language_they_use": "string (vocabulary, formality)",
+      "content_they_consume": ["string", "string", "string"],
+      "preferred_channels": ["string", "string"],
+      "trust_signals_needed": ["string", "string", "string"]
     },
-    "summary_statement": "string"
+    "summary_statement": "string (one paragraph describing them as a real person)"
   },
-  "secondary_personas": []
+  "secondary_personas": [
+    {
+      "name": "string",
+      "percentage_of_customers": "string",
+      "demographics": {
+        "age_range": "string",
+        "gender": "string",
+        "location": "string",
+        "income_level": "string",
+        "profession": "string",
+        "education": "string"
+      },
+      "psychographics": {
+        "values": ["string", "string", "string"],
+        "aspirations": "string",
+        "fears_pain_points": "string",
+        "frustrations": "string",
+        "identity": "string"
+      },
+      "behavioral_insights": {
+        "discovery_channels": ["string", "string", "string"],
+        "research_behavior": "string",
+        "decision_factors": ["string", "string", "string"],
+        "buying_triggers": "string",
+        "buying_behavior": "string",
+        "common_objections": ["string", "string"]
+      },
+      "communication_preferences": {
+        "preferred_tone": "string",
+        "tone_they_respond_to": "string",
+        "language_they_use": "string",
+        "content_they_consume": ["string", "string", "string"],
+        "preferred_channels": ["string", "string"],
+        "trust_signals_needed": ["string", "string", "string"]
+      },
+      "summary_statement": "string"
+    }
+  ]
 }
 
-Be specific and concrete based on the research. Create realistic personas.""",
+IMPORTANT:
+- secondary_personas array MUST contain at least 1 fully detailed persona
+- ALL fields in the schema must be populated with specific, research-based content
+- Create personas that are distinct from each other (different motivations, behaviors, needs)
+- Percentages should add up to approximately 100%""",
     "voice_dimensions": """You are a brand strategist creating the Voice Dimensions section of a brand guidelines document.
 
 Based on the research context and previous sections, rate the brand voice on the Nielsen Norman Group 4 dimensions (1-10 scale):
