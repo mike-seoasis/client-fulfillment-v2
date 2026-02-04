@@ -597,3 +597,25 @@ after each iteration and it's included in prompts for context.
   - Display URL path only (not full URL) for cleaner list using `new URL().pathname`
 ---
 
+## 2026-02-04 - S3-030
+- **What was implemented**: Created reusable CrawlProgress component with animated progress bar
+- **Files changed**: `frontend/src/components/onboarding/CrawlProgress.tsx` (new file)
+- **Features**:
+  - Reusable progress bar component with TypeScript interface
+  - Shows "X of Y" pages completed
+  - Displays percentage value in parentheses (optional via showPercentage prop)
+  - Animated progress bar using `transition-all duration-500 ease-out`
+  - Uses `palm-500` for progress fill color (tropical oasis design)
+  - Accessibility: proper `role="progressbar"` with aria attributes
+  - Configurable label prop (defaults to "Progress")
+- **Acceptance criteria verification**:
+  - ✅ Progress bar shows X of Y pages complete
+  - ✅ Percentage displayed
+  - ✅ Animated progress bar
+  - ✅ Component in frontend/src/components/onboarding/CrawlProgress.tsx
+- **Learnings:**
+  - Add `ease-out` to transitions for smoother progress bar animations
+  - Use `role="progressbar"` with `aria-valuenow`, `aria-valuemin`, `aria-valuemax` for accessibility
+  - Export both named export and default export for flexibility in imports
+---
+
