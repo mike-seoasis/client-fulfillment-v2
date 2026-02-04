@@ -174,3 +174,22 @@ This prevents "objects are not valid as a React child" errors when backend data 
   - Field naming matters: `product_descriptions` (plural) makes the array nature clear vs `product_description_example` (singular)
 ---
 
+## 2026-02-04 - BC-012
+- **What was implemented:** Updated ai_prompt_snippet prompt for complete, standalone output
+- **Files changed:**
+  - `backend/app/services/brand_config.py` (lines 567-607) - Expanded ai_prompt_snippet prompt with:
+    - Increased snippet length from "100-200 words" to "150-200 words" with explicit content requirements
+    - Added explicit REQUIREMENTS section detailing what the snippet MUST include (voice description, audience summary, differentiators, writing rules)
+    - Expanded `never_use_words` from 5 to at least 10 items, with "—" (em dash) as mandatory first item
+    - Expanded `always_include` from 2 to at least 5 items
+    - Expanded `key_differentiators` from 3 to at least 5 items
+    - Enhanced `primary_audience_summary` from 1 sentence to 2-3 sentences
+    - Added guidance that snippet should be "COMPLETE and STANDALONE" - usable without full brand guidelines
+  - `frontend/src/components/brand-sections/types.ts` (lines 224-232) - Added all metadata fields to AIPromptSnippetData interface for future use (voice_in_three_words, we_sound_like, we_never_sound_like, primary_audience_summary, key_differentiators, never_use_words, always_include)
+- **Learnings:**
+  - For "summary" sections like ai_prompt_snippet that condense other sections, the prompt must explicitly state what content to include - otherwise the LLM may produce a generic/thin summary
+  - The snippet is the KEY DELIVERABLE of brand config - it should be self-contained enough that someone can write on-brand content using only the snippet
+  - Explicit minimum counts (e.g., "at least 10 items") are more effective than ranges (e.g., "5-10 items") for ensuring comprehensive output
+  - Adding metadata fields to TypeScript types (even if not displayed yet) enables future UI enhancements without backend changes
+---
+

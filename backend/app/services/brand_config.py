@@ -566,24 +566,38 @@ REQUIREMENTS:
 - Positioning statements should be usable in copy without naming competitors.""",
     "ai_prompt_snippet": """You are a brand strategist creating the AI Prompt Snippet for a brand guidelines document.
 
-This snippet will be prepended to AI writing requests to ensure consistent brand voice.
+This snippet will be prepended to AI writing requests to ensure consistent brand voice. It must be COMPLETE and STANDALONE - anyone using this snippet should be able to write on-brand content without needing to reference the full brand guidelines.
 
-Based on ALL the brand sections provided, create a concise but comprehensive prompt snippet.
+Based on ALL the brand sections provided, create a comprehensive prompt snippet that captures the FULL essence of the brand.
 
 Output ONLY valid JSON in this exact format:
 {
-  "snippet": "string (the full prompt snippet, 100-200 words)",
+  "snippet": "string (the full prompt snippet, 150-200 words - MUST include: brand voice descriptors, target audience summary, key differentiators, tone guidance, and critical do's/don'ts)",
   "voice_in_three_words": ["string", "string", "string"],
-  "we_sound_like": "string (1-sentence comparison)",
+  "we_sound_like": "string (1-sentence comparison to a recognizable brand/personality)",
   "we_never_sound_like": "string (1-sentence anti-comparison)",
-  "primary_audience_summary": "string (1-sentence)",
-  "key_differentiators": ["string", "string", "string"],
-  "never_use_words": ["string", "string", "string", "string", "string"],
-  "always_include": ["string", "string"]
+  "primary_audience_summary": "string (2-3 sentences covering who they are, what they want, and how they buy)",
+  "key_differentiators": ["string", "string", "string", "string", "string"],
+  "never_use_words": ["—", "string", "string", "string", "string", "string", "string", "string", "string", "string"],
+  "always_include": ["string", "string", "string", "string", "string"]
 }
 
-The snippet should be immediately usable before any AI writing request.
-It should capture the essence of the entire brand guidelines document.""",
+REQUIREMENTS:
+- snippet: MUST be 150-200 words. This is the most important field. It should be a complete, ready-to-use prompt that includes:
+  - Brand voice description (personality, tone, how we communicate)
+  - Target audience summary (who we're writing for)
+  - Key differentiators (what makes this brand unique)
+  - Critical writing rules (must-dos and must-avoids)
+  - The snippet should read naturally, not like a bulleted list
+- voice_in_three_words: Exactly 3 distinctive voice descriptors (e.g., "confident", "warm", "expert")
+- we_sound_like: Compare to a well-known brand or personality for instant clarity
+- we_never_sound_like: Anti-comparison for what to avoid
+- primary_audience_summary: 2-3 sentences that give a complete picture of the target customer
+- key_differentiators: At least 5 unique selling points or brand differentiators
+- never_use_words: At least 10 banned words/phrases. MUST include "—" (em dash) as the first item. Include generic/AI-sounding words (utilize, leverage, synergy, etc.) and any brand-specific words to avoid.
+- always_include: At least 5 elements that should appear in brand communications (e.g., "social proof", "benefit-focused headlines", "conversational tone", etc.)
+
+The snippet is the KEY DELIVERABLE - it should be immediately usable and comprehensive enough that someone can write on-brand content using only this snippet.""",
 }
 
 

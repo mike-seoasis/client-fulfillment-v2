@@ -223,6 +223,13 @@ export interface CompetitorContextData {
 // AI Prompt Snippet type
 export interface AIPromptSnippetData {
   snippet: string;
+  voice_in_three_words?: string[];
+  we_sound_like?: string;
+  we_never_sound_like?: string;
+  primary_audience_summary?: string;
+  key_differentiators?: string[];
+  never_use_words?: string[];
+  always_include?: string[];
 }
 
 // Base props for all section components
