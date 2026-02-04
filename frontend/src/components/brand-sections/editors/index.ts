@@ -6,3 +6,4 @@ export { BrandFoundationEditor, type BrandFoundationEditorProps } from './BrandF
 export { TargetAudienceEditor, type TargetAudienceEditorProps } from './TargetAudienceEditor';
 export { VoiceDimensionsEditor, type VoiceDimensionsEditorProps } from './VoiceDimensionsEditor';
 export { VoiceCharacteristicsEditor, type VoiceCharacteristicsEditorProps } from './VoiceCharacteristicsEditor';
+export { WritingStyleEditor, type WritingStyleEditorProps } from './WritingStyleEditor';

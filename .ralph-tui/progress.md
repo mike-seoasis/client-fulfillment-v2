@@ -356,3 +356,22 @@ This prevents "objects are not valid as a React child" errors when backend data 
   - The BulletListEditor component handles string arrays cleanly - no need to create custom list editing for simple cases
 ---
 
+## 2026-02-04 - BC-021
+- **What was implemented:** Created WritingStyleEditor component for inline editing of Writing Style section
+- **Files changed:**
+  - `frontend/src/components/brand-sections/editors/WritingStyleEditor.tsx` - New component with:
+    - Four grouped sections matching display component: Sentence Structure, Capitalization, Punctuation, Numbers & Formatting
+    - Input components for most fields, Textarea for em_dashes (longer explanation)
+    - Individual useState hooks for each of the 16 fields
+    - Keyboard shortcuts: ⌘S to save, Esc to cancel
+    - isSaving state to disable form during save
+    - Data cleanup on save (trim strings, convert empty to undefined)
+    - Helpful placeholder examples for each field
+  - `frontend/src/components/brand-sections/editors/index.ts` - Added WritingStyleEditor export
+- **Learnings:**
+  - For editors with simple string fields in grouped sub-objects, individual useState hooks are cleaner than nested state objects
+  - Using Input components for single-line rules and Textarea for multi-line rules (like em_dashes explanation) provides appropriate UX
+  - Placeholder text with examples helps users understand the expected format for style rules
+  - Section grouping in editor should match the display component for consistency
+---
+
