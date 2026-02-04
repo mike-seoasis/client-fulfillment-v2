@@ -3,3 +3,4 @@ export { EditableTable, type EditableTableProps, type ColumnSchema } from './Edi
 export { BulletListEditor, type BulletListEditorProps } from './BulletListEditor';
 export { SliderInput, type SliderInputProps } from './SliderInput';
 export { BrandFoundationEditor, type BrandFoundationEditorProps } from './BrandFoundationEditor';
+export { TargetAudienceEditor, type TargetAudienceEditorProps } from './TargetAudienceEditor';

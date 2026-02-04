@@ -293,3 +293,26 @@ This prevents "objects are not valid as a React child" errors when backend data 
   - Use `|| undefined` when building save data to avoid sending empty strings to backend
 ---
 
+## 2026-02-04 - BC-018
+- **What was implemented:** Created TargetAudienceEditor component for inline editing of Target Audience section
+- **Files changed:**
+  - `frontend/src/components/brand-sections/editors/TargetAudienceEditor.tsx` - New component with:
+    - PersonaEditorCard sub-component for individual persona editing
+    - Full demographics editing: age_range, gender, location, income_level, profession, education
+    - Full psychographics editing: values, aspirations, fears, frustrations, identity (arrays use TagInput)
+    - Full behavioral editing: discovery_channels, research_behavior, decision_factors, buying_triggers, objections
+    - Full communication editing: tone_preference, language_style, content_consumed, trust_signals
+    - Add/remove personas functionality (minimum 1 persona required)
+    - Audience overview editing (primary/secondary/tertiary persona names)
+    - Keyboard shortcuts: ⌘S to save, Esc to cancel
+    - isSaving state to disable form during save
+    - Data cleanup on save (trim strings, convert empty arrays/strings to undefined)
+  - `frontend/src/components/brand-sections/editors/index.ts` - Added TargetAudienceEditor export
+- **Learnings:**
+  - For editors with repeating complex items (like personas), create a sub-component (PersonaEditorCard) to keep the main editor component clean
+  - Use helper functions (updateDemographics, updatePsychographics, etc.) for updating nested object fields to reduce boilerplate
+  - TagInput component works well for array fields - use variant="danger" for negative fields (fears, frustrations, objections) and variant="success" for positive ones (buying_triggers, trust_signals)
+  - When cleaning data on save, filter out personas without names to allow users to add empty personas while working
+  - Keep at least one item in repeatable sections (canDelete={personas.length > 1}) to prevent users from accidentally removing all items
+---
+
