@@ -27,3 +27,21 @@ after each iteration and it's included in prompts for context.
   - Gotchas encountered: Import order matters - ruff E402 error if imports not at top of file
 ---
 
+## 2026-02-04 - S3-002
+- **What was implemented**: Created Alembic migration 0019 to add crawl status and content extraction fields to crawled_pages table
+- **Files changed**: `backend/alembic/versions/0019_add_crawl_status_and_extraction_fields.py`
+- **Migration adds**:
+  - `status` column (String(20), non-null, server_default='pending', indexed)
+  - `meta_description` (Text, nullable)
+  - `body_content` (Text, nullable)
+  - `headings` (JSONB, nullable)
+  - `product_count` (Integer, nullable)
+  - `crawl_error` (Text, nullable)
+  - `word_count` (Integer, nullable)
+- **Verified**: Migration upgrade and downgrade both work correctly
+- **Learnings:**
+  - Migrations use sequential numbering (0001, 0002, etc.) in this project
+  - Use `server_default=sa.text("'pending'")` for string defaults in migrations
+  - Index must be dropped before column in downgrade
+---
+

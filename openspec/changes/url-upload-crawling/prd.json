@@ -32,8 +32,9 @@
         "Default value for status is 'pending'"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Run: cd backend && alembic revision --autogenerate -m 'Add crawl status and extraction fields to CrawledPage'"
+      "passes": true,
+      "notes": "Run: cd backend && alembic revision --autogenerate -m 'Add crawl status and extraction fields to CrawledPage'",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S3-003",
@@ -719,6 +720,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-04T19:08:08.713Z"
+    "updatedAt": "2026-02-04T19:09:10.698Z"
   }
 }
