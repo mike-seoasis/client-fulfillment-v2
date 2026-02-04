@@ -33,6 +33,59 @@ logger = logging.getLogger(__name__)
 SECTION_TIMEOUT_SECONDS = 60
 
 
+def fix_json_control_chars(json_text: str) -> str:
+    """Fix unescaped control characters in JSON strings.
+
+    LLMs sometimes return JSON with literal newlines inside string values
+    instead of escaped \\n. This function finds string values and escapes
+    control characters properly.
+
+    Args:
+        json_text: Raw JSON text that may have unescaped control chars
+
+    Returns:
+        JSON text with control characters escaped in string values
+    """
+    # Process the JSON character by character to find string values
+    # and escape control characters within them
+    result = []
+    in_string = False
+    escape_next = False
+
+    for char in json_text:
+        if escape_next:
+            result.append(char)
+            escape_next = False
+            continue
+
+        if char == '\\' and in_string:
+            result.append(char)
+            escape_next = True
+            continue
+
+        if char == '"' and not escape_next:
+            in_string = not in_string
+            result.append(char)
+            continue
+
+        if in_string:
+            # Escape control characters inside strings
+            if char == '\n':
+                result.append('\\n')
+            elif char == '\r':
+                result.append('\\r')
+            elif char == '\t':
+                result.append('\\t')
+            elif ord(char) < 32:  # Other control characters
+                result.append(f'\\u{ord(char):04x}')
+            else:
+                result.append(char)
+        else:
+            result.append(char)
+
+    return ''.join(result)
+
+
 class GenerationStatusValue(str, Enum):
     """Possible status values for brand config generation."""
 
@@ -1234,12 +1287,14 @@ class BrandConfigService:
             user_prompt = "\n".join(user_prompt_parts)
 
             # Call Claude with timeout
+            # ai_prompt_snippet needs more tokens for comprehensive output
+            section_max_tokens = 4096 if section_name == "ai_prompt_snippet" else 2048
             try:
                 result: CompletionResult = await asyncio.wait_for(
                     claude.complete(
                         user_prompt=user_prompt,
                         system_prompt=system_prompt,
-                        max_tokens=2048,
+                        max_tokens=section_max_tokens,
                         temperature=0.3,  # Slight creativity for brand voice
                     ),
                     timeout=SECTION_TIMEOUT_SECONDS,
@@ -1278,6 +1333,18 @@ class BrandConfigService:
                     if lines and lines[-1].strip() == "```":
                         lines = lines[:-1]
                     json_text = "\n".join(lines)
+
+                # Extract JSON from response that may have preamble text
+                # Look for the first { and last } to extract JSON object
+                if not json_text.startswith("{"):
+                    first_brace = json_text.find("{")
+                    if first_brace != -1:
+                        last_brace = json_text.rfind("}")
+                        if last_brace != -1 and last_brace > first_brace:
+                            json_text = json_text[first_brace : last_brace + 1]
+
+                # Fix unescaped control characters in string values
+                json_text = fix_json_control_chars(json_text)
 
                 section_data = json.loads(json_text)
                 generated_sections[section_name] = section_data
@@ -1702,12 +1769,14 @@ class BrandConfigService:
             )
             user_prompt = "\n".join(user_prompt_parts)
 
+            # ai_prompt_snippet needs more tokens for comprehensive output
+            section_max_tokens = 4096 if section_name == "ai_prompt_snippet" else 2048
             try:
                 result = await asyncio.wait_for(
                     claude.complete(
                         user_prompt=user_prompt,
                         system_prompt=system_prompt,
-                        max_tokens=2048,
+                        max_tokens=section_max_tokens,
                         temperature=0.3,
                     ),
                     timeout=SECTION_TIMEOUT_SECONDS,
@@ -1735,6 +1804,17 @@ class BrandConfigService:
                     if lines and lines[-1].strip() == "```":
                         lines = lines[:-1]
                     json_text = "\n".join(lines)
+
+                # Extract JSON from response that may have preamble text
+                if not json_text.startswith("{"):
+                    first_brace = json_text.find("{")
+                    if first_brace != -1:
+                        last_brace = json_text.rfind("}")
+                        if last_brace != -1 and last_brace > first_brace:
+                            json_text = json_text[first_brace : last_brace + 1]
+
+                # Fix unescaped control characters in string values
+                json_text = fix_json_control_chars(json_text)
 
                 section_data = json.loads(json_text)
                 regenerated_sections[section_name] = section_data
