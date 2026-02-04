@@ -42,22 +42,25 @@ export function VocabularyEditor({
   onSave,
   onCancel,
 }: VocabularyEditorProps) {
+  // Defensive helper to ensure array
+  const toArray = <T,>(val: T[] | undefined | null): T[] => (Array.isArray(val) ? val : []);
+
   // State for each field
-  const [powerWords, setPowerWords] = useState<string[]>(data?.power_words ?? []);
-  const [bannedWords, setBannedWords] = useState<string[]>(data?.banned_words ?? []);
+  const [powerWords, setPowerWords] = useState<string[]>(toArray(data?.power_words));
+  const [bannedWords, setBannedWords] = useState<string[]>(toArray(data?.banned_words));
   const [wordSubstitutions, setWordSubstitutions] = useState<Record<string, string>[]>(
-    (data?.word_substitutions ?? []).map((sub) => ({
+    toArray(data?.word_substitutions).map((sub) => ({
       instead_of: sub.instead_of,
       we_say: sub.we_say,
     }))
   );
   const [industryTerms, setIndustryTerms] = useState<Record<string, string>[]>(
-    (data?.industry_terms ?? []).map((term) => ({
+    toArray(data?.industry_terms).map((term) => ({
       term: term.term,
       usage: term.usage,
     }))
   );
-  const [signaturePhrases, setSignaturePhrases] = useState<string[]>(data?.signature_phrases ?? []);
+  const [signaturePhrases, setSignaturePhrases] = useState<string[]>(toArray(data?.signature_phrases));
 
   const handleSave = useCallback(() => {
     // Convert table data back to typed arrays, filtering out empty rows

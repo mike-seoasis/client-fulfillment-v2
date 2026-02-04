@@ -42,9 +42,12 @@ export function CompetitorContextEditor({
   onSave,
   onCancel,
 }: CompetitorContextEditorProps) {
+  // Defensive helper to ensure array
+  const toArray = <T,>(val: T[] | undefined | null): T[] => (Array.isArray(val) ? val : []);
+
   // Direct competitors state (convert to table format)
   const [competitors, setCompetitors] = useState<Record<string, string>[]>(
-    (data?.direct_competitors ?? []).map((c) => ({
+    toArray(data?.direct_competitors).map((c) => ({
       name: c.name,
       positioning: c.positioning ?? '',
       our_difference: c.our_difference ?? '',
@@ -52,19 +55,19 @@ export function CompetitorContextEditor({
   );
 
   // Competitive advantages and weaknesses state
-  const [advantages, setAdvantages] = useState<string[]>(data?.competitive_advantages ?? []);
-  const [weaknesses, setWeaknesses] = useState<string[]>(data?.competitive_weaknesses ?? []);
+  const [advantages, setAdvantages] = useState<string[]>(toArray(data?.competitive_advantages));
+  const [weaknesses, setWeaknesses] = useState<string[]>(toArray(data?.competitive_weaknesses));
 
   // Positioning statements state (convert to table format)
   const [positioningStatements, setPositioningStatements] = useState<Record<string, string>[]>(
-    (data?.positioning_statements ?? []).map((p) => ({
+    toArray(data?.positioning_statements).map((p) => ({
       context: p.context ?? '',
       statement: p.statement,
     }))
   );
 
   // Rules state
-  const [rules, setRules] = useState<string[]>(data?.rules ?? []);
+  const [rules, setRules] = useState<string[]>(toArray(data?.rules));
 
   const handleSave = useCallback(() => {
     // Convert competitors table data back to typed array, filtering empty rows

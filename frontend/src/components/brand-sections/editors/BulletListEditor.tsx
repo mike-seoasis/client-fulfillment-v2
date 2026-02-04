@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, type KeyboardEvent, type ChangeEvent } from 'react';
+import { useState, useCallback, useRef, useEffect, type KeyboardEvent, type ChangeEvent } from 'react';
 
 interface BulletListEditorProps {
   /** Current array of items */
@@ -20,7 +20,7 @@ interface BulletListEditorProps {
 /**
  * Bullet list editor component for array of strings.
  * Supports adding new items via input + button, reordering via up/down buttons,
- * and removing items.
+ * inline editing of existing items, and removing items.
  * Styled with tropical oasis palette.
  */
 export function BulletListEditor({
@@ -31,8 +31,22 @@ export function BulletListEditor({
   disabled = false,
   addButtonText = 'Add item',
 }: BulletListEditorProps) {
+  // Defensive: ensure value is always an array
+  const items = Array.isArray(value) ? value : [];
+
   const [inputValue, setInputValue] = useState('');
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const editTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Focus textarea when entering edit mode
+  useEffect(() => {
+    if (editingIndex !== null && editTextareaRef.current) {
+      editTextareaRef.current.focus();
+      editTextareaRef.current.select();
+    }
+  }, [editingIndex]);
 
   const handleInputChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value);
@@ -41,11 +55,11 @@ export function BulletListEditor({
   const handleAddItem = useCallback(() => {
     const trimmed = inputValue.trim();
     if (trimmed) {
-      onChange([...value, trimmed]);
+      onChange([...items, trimmed]);
       setInputValue('');
       inputRef.current?.focus();
     }
-  }, [inputValue, value, onChange]);
+  }, [inputValue, items, onChange]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
@@ -59,29 +73,71 @@ export function BulletListEditor({
 
   const handleRemoveItem = useCallback(
     (indexToRemove: number) => {
-      onChange(value.filter((_, index) => index !== indexToRemove));
+      onChange(items.filter((_, index) => index !== indexToRemove));
     },
-    [value, onChange]
+    [items, onChange]
   );
 
   const handleMoveUp = useCallback(
     (index: number) => {
       if (index <= 0) return;
-      const newItems = [...value];
+      const newItems = [...items];
       [newItems[index - 1], newItems[index]] = [newItems[index], newItems[index - 1]];
       onChange(newItems);
     },
-    [value, onChange]
+    [items, onChange]
   );
 
   const handleMoveDown = useCallback(
     (index: number) => {
-      if (index >= value.length - 1) return;
-      const newItems = [...value];
+      if (index >= items.length - 1) return;
+      const newItems = [...items];
       [newItems[index], newItems[index + 1]] = [newItems[index + 1], newItems[index]];
       onChange(newItems);
     },
-    [value, onChange]
+    [items, onChange]
+  );
+
+  // Inline editing handlers
+  const handleStartEdit = useCallback(
+    (index: number) => {
+      if (disabled) return;
+      setEditingIndex(index);
+      setEditValue(items[index]);
+    },
+    [disabled, items]
+  );
+
+  const handleSaveEdit = useCallback(() => {
+    if (editingIndex === null) return;
+    const trimmed = editValue.trim();
+    if (trimmed) {
+      const newItems = [...items];
+      newItems[editingIndex] = trimmed;
+      onChange(newItems);
+    }
+    setEditingIndex(null);
+    setEditValue('');
+  }, [editingIndex, editValue, items, onChange]);
+
+  const handleCancelEdit = useCallback(() => {
+    setEditingIndex(null);
+    setEditValue('');
+  }, []);
+
+  const handleEditKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      // Cmd/Ctrl+Enter to save
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        handleSaveEdit();
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        handleCancelEdit();
+      }
+    },
+    [handleSaveEdit, handleCancelEdit]
   );
 
   return (
@@ -95,28 +151,58 @@ export function BulletListEditor({
       <div className="border border-cream-400 rounded-sm overflow-hidden">
         {/* List of items */}
         <ul className="divide-y divide-cream-200">
-          {value.length === 0 ? (
+          {items.length === 0 ? (
             <li className="py-6 text-center text-warm-gray-400 text-sm">
               No items yet. Add one below.
             </li>
           ) : (
-            value.map((item, index) => (
+            items.map((item, index) => (
               <li
                 key={`${item}-${index}`}
-                className="flex items-center gap-2 py-2 px-3 bg-white hover:bg-cream-50 transition-colors duration-100"
+                className="flex items-start gap-2 py-2 px-3 bg-white hover:bg-cream-50 transition-colors duration-100"
               >
                 {/* Bullet marker */}
-                <span className="text-palm-500 text-lg leading-none" aria-hidden="true">
+                <span className="text-palm-500 text-lg leading-none mt-0.5" aria-hidden="true">
                   •
                 </span>
 
-                {/* Item text */}
-                <span className="flex-1 text-sm text-warm-gray-800 min-w-0 break-words">
-                  {item}
-                </span>
+                {/* Item text or edit textarea */}
+                {editingIndex === index ? (
+                  <div className="flex-1 min-w-0">
+                    <textarea
+                      ref={editTextareaRef}
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onBlur={handleSaveEdit}
+                      onKeyDown={handleEditKeyDown}
+                      rows={3}
+                      className="
+                        w-full px-2 py-1.5 text-sm text-warm-gray-900
+                        bg-white border-2 border-palm-400 rounded-sm
+                        focus:outline-none resize-y min-h-[60px]
+                      "
+                    />
+                    <p className="text-xs text-warm-gray-400 mt-1">
+                      Press <kbd className="px-1 py-0.5 bg-cream-200 rounded text-xs">⌘Enter</kbd> to save or{' '}
+                      <kbd className="px-1 py-0.5 bg-cream-200 rounded text-xs">Esc</kbd> to cancel
+                    </p>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleStartEdit(index)}
+                    disabled={disabled}
+                    className={`
+                      flex-1 text-left text-sm text-warm-gray-800 min-w-0 break-words
+                      ${disabled ? 'cursor-default' : 'cursor-text hover:bg-cream-100 rounded px-1 -mx-1'}
+                    `}
+                  >
+                    {item}
+                  </button>
+                )}
 
                 {/* Reorder & delete buttons */}
-                {!disabled && (
+                {!disabled && editingIndex !== index && (
                   <div className="flex items-center gap-1 flex-shrink-0">
                     {/* Move up */}
                     <button
@@ -154,12 +240,12 @@ export function BulletListEditor({
                     <button
                       type="button"
                       onClick={() => handleMoveDown(index)}
-                      disabled={index === value.length - 1}
+                      disabled={index === items.length - 1}
                       className={`
                         p-1 rounded-sm transition-colors duration-150
                         focus:outline-none focus:ring-2 focus:ring-palm-400 focus:ring-offset-1
                         ${
-                          index === value.length - 1
+                          index === items.length - 1
                             ? 'text-warm-gray-300 cursor-not-allowed'
                             : 'text-warm-gray-400 hover:text-palm-600 hover:bg-palm-50'
                         }

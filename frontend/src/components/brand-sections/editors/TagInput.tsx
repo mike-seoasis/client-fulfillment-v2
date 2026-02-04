@@ -30,6 +30,9 @@ export function TagInput({
   variant = 'default',
   disabled = false,
 }: TagInputProps) {
+  // Defensive: ensure value is always an array
+  const tags = Array.isArray(value) ? value : [];
+
   const [inputValue, setInputValue] = useState('');
 
   const variantStyles = {
@@ -53,24 +56,24 @@ export function TagInput({
       if (e.key === 'Enter') {
         e.preventDefault();
         const trimmed = inputValue.trim();
-        if (trimmed && !value.includes(trimmed)) {
-          onChange([...value, trimmed]);
+        if (trimmed && !tags.includes(trimmed)) {
+          onChange([...tags, trimmed]);
           setInputValue('');
         }
       }
       // Allow removing last tag with backspace when input is empty
-      if (e.key === 'Backspace' && inputValue === '' && value.length > 0) {
-        onChange(value.slice(0, -1));
+      if (e.key === 'Backspace' && inputValue === '' && tags.length > 0) {
+        onChange(tags.slice(0, -1));
       }
     },
-    [inputValue, value, onChange]
+    [inputValue, tags, onChange]
   );
 
   const handleRemoveTag = useCallback(
     (indexToRemove: number) => {
-      onChange(value.filter((_, index) => index !== indexToRemove));
+      onChange(tags.filter((_, index) => index !== indexToRemove));
     },
-    [value, onChange]
+    [tags, onChange]
   );
 
   return (
@@ -90,7 +93,7 @@ export function TagInput({
         `}
       >
         {/* Existing tags */}
-        {value.map((tag, index) => (
+        {tags.map((tag, index) => (
           <span
             key={`${tag}-${index}`}
             className={`
@@ -135,7 +138,7 @@ export function TagInput({
           value={inputValue}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
-          placeholder={value.length === 0 ? placeholder : ''}
+          placeholder={tags.length === 0 ? placeholder : ''}
           disabled={disabled}
           className={`
             flex-1 min-w-[120px] px-1 py-1 text-sm text-warm-gray-900

@@ -256,22 +256,22 @@ Based on the research context and previous sections, rate the brand voice on the
 Output ONLY valid JSON in this exact format:
 {
   "formality": {
-    "score": 5,
+    "position": 5,
     "description": "string explaining how this manifests",
     "example": "string with sample sentence"
   },
   "humor": {
-    "score": 5,
+    "position": 5,
     "description": "string explaining when/how humor is appropriate",
     "example": "string with sample sentence"
   },
   "reverence": {
-    "score": 5,
+    "position": 5,
     "description": "string explaining how brand treats competitors/industry/customers",
     "example": "string with sample sentence"
   },
   "enthusiasm": {
-    "score": 5,
+    "position": 5,
     "description": "string explaining energy level in communications",
     "example": "string with sample sentence"
   },

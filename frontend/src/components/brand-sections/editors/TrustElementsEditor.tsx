@@ -35,6 +35,9 @@ export function TrustElementsEditor({
   onSave,
   onCancel,
 }: TrustElementsEditorProps) {
+  // Defensive helper to ensure array
+  const toArray = <T,>(val: T[] | undefined | null): T[] => (Array.isArray(val) ? val : []);
+
   // Hard numbers state
   const [customerCount, setCustomerCount] = useState(data?.hard_numbers?.customer_count ?? '');
   const [yearsInBusiness, setYearsInBusiness] = useState(data?.hard_numbers?.years_in_business ?? '');
@@ -43,9 +46,9 @@ export function TrustElementsEditor({
   const [reviewCount, setReviewCount] = useState(data?.hard_numbers?.review_count ?? '');
 
   // Credentials and endorsements state
-  const [credentials, setCredentials] = useState<string[]>(data?.credentials ?? []);
-  const [mediaPress, setMediaPress] = useState<string[]>(data?.media_press ?? []);
-  const [endorsements, setEndorsements] = useState<string[]>(data?.endorsements ?? []);
+  const [credentials, setCredentials] = useState<string[]>(toArray(data?.credentials));
+  const [mediaPress, setMediaPress] = useState<string[]>(toArray(data?.media_press));
+  const [endorsements, setEndorsements] = useState<string[]>(toArray(data?.endorsements));
 
   // Guarantees state
   const [returnPolicy, setReturnPolicy] = useState(data?.guarantees?.return_policy ?? '');
@@ -56,7 +59,7 @@ export function TrustElementsEditor({
 
   // Customer quotes state (convert to table format)
   const [customerQuotes, setCustomerQuotes] = useState<Record<string, string>[]>(
-    (data?.customer_quotes ?? []).map((q) => ({
+    toArray(data?.customer_quotes).map((q) => ({
       quote: q.quote,
       attribution: q.attribution,
     }))

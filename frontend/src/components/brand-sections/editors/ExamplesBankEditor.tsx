@@ -47,34 +47,37 @@ export function ExamplesBankEditor({
   onSave,
   onCancel,
 }: ExamplesBankEditorProps) {
+  // Defensive helper to ensure array
+  const toArray = <T,>(val: T[] | undefined | null): T[] => (Array.isArray(val) ? val : []);
+
   // Headlines state (array of strings, editing as bullet list)
-  const [headlines, setHeadlines] = useState<string[]>(data?.headlines ?? []);
+  const [headlines, setHeadlines] = useState<string[]>(toArray(data?.headlines));
 
   // Product descriptions state (convert to table format)
   const [productDescriptions, setProductDescriptions] = useState<Record<string, string>[]>(
-    (data?.product_descriptions ?? []).map((item) => ({
+    toArray(data?.product_descriptions).map((item) => ({
       product_name: item.product_name,
       description: item.description,
     }))
   );
 
   // Email subject lines state (array of strings)
-  const [emailSubjects, setEmailSubjects] = useState<string[]>(data?.email_subject_lines ?? []);
+  const [emailSubjects, setEmailSubjects] = useState<string[]>(toArray(data?.email_subject_lines));
 
   // Social media examples state (convert to table format)
   const [socialPosts, setSocialPosts] = useState<Record<string, string>[]>(
-    (data?.social_media_examples ?? []).map((item) => ({
+    toArray(data?.social_media_examples).map((item) => ({
       platform: item.platform ?? '',
       content: item.content ?? '',
     }))
   );
 
   // CTAs state (array of strings)
-  const [ctas, setCtas] = useState<string[]>(data?.ctas ?? []);
+  const [ctas, setCtas] = useState<string[]>(toArray(data?.ctas));
 
   // Off-brand examples state (convert to table format)
   const [offBrandExamples, setOffBrandExamples] = useState<Record<string, string>[]>(
-    (data?.off_brand_examples ?? []).map((item) => ({
+    toArray(data?.off_brand_examples).map((item) => ({
       example: item.example,
       reason: item.reason ?? '',
     }))

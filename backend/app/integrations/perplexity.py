@@ -239,7 +239,16 @@ Extract the language patterns they use:
 
 ## 7. TRUST ELEMENTS
 Extract verifiable proof and trust signals:
-- Hard numbers: customer count, years in business, products sold, review average, review count
+- Hard numbers: customer count, years in business, products sold
+- **IMPORTANT - Store/Product Ratings**: Actively search for the brand's average rating and review count from:
+  - Their own website (look for star ratings, review counts)
+  - Trustpilot rating and review count
+  - Google Reviews/Google Business rating
+  - Amazon seller/product ratings (if they sell on Amazon)
+  - Better Business Bureau rating
+  - Yelp rating (if applicable)
+  - Any other review platforms visible
+  Format as "X.X out of 5 stars" with review count like "2,500+ reviews"
 - Credentials: certifications, industry memberships, awards
 - Media/press: publications featured in, notable mentions
 - Endorsements: influencer/expert endorsements, partnership badges

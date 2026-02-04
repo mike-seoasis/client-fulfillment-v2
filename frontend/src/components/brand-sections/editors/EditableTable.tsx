@@ -55,48 +55,52 @@ export function EditableTable({
   addButtonText = 'Add row',
   minRows = 0,
 }: EditableTableProps) {
+  // Defensive: ensure value is always an array
+  const rows = Array.isArray(value) ? value : [];
+
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   const [editValue, setEditValue] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Focus input when entering edit mode
+  // Focus textarea when entering edit mode
   useEffect(() => {
-    if (editingCell && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
+    if (editingCell && textareaRef.current) {
+      textareaRef.current.focus();
+      textareaRef.current.select();
     }
   }, [editingCell]);
 
   const handleCellClick = useCallback(
     (rowIndex: number, columnKey: string) => {
       if (disabled) return;
-      const currentValue = value[rowIndex]?.[columnKey] || '';
+      const currentValue = rows[rowIndex]?.[columnKey] || '';
       setEditValue(currentValue);
       setEditingCell({ rowIndex, columnKey });
     },
-    [disabled, value]
+    [disabled, rows]
   );
 
   const handleSaveCell = useCallback(() => {
     if (!editingCell) return;
 
     const { rowIndex, columnKey } = editingCell;
-    const newRows = [...value];
+    const newRows = [...rows];
     newRows[rowIndex] = {
       ...newRows[rowIndex],
       [columnKey]: editValue.trim(),
     };
     onChange(newRows);
     setEditingCell(null);
-  }, [editingCell, editValue, value, onChange]);
+  }, [editingCell, editValue, rows, onChange]);
 
   const handleCancelEdit = useCallback(() => {
     setEditingCell(null);
   }, []);
 
   const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter') {
+    (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      // Cmd/Ctrl+Enter to save
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         handleSaveCell();
       }
@@ -114,14 +118,14 @@ export function EditableTable({
           if (nextColIndex < columns.length) {
             // Move to next column in same row
             handleCellClick(editingCell.rowIndex, columns[nextColIndex].key);
-          } else if (editingCell.rowIndex + 1 < value.length) {
+          } else if (editingCell.rowIndex + 1 < rows.length) {
             // Move to first column in next row
             handleCellClick(editingCell.rowIndex + 1, columns[0].key);
           }
         }
       }
     },
-    [handleSaveCell, handleCancelEdit, editingCell, columns, value.length, handleCellClick]
+    [handleSaveCell, handleCancelEdit, editingCell, columns, rows.length, handleCellClick]
   );
 
   const handleAddRow = useCallback(() => {
@@ -131,26 +135,26 @@ export function EditableTable({
     columns.forEach((col) => {
       newRow[col.key] = '';
     });
-    const newRows = [...value, newRow];
+    const newRows = [...rows, newRow];
     onChange(newRows);
     // Start editing first cell of new row
     setTimeout(() => {
       handleCellClick(newRows.length - 1, columns[0].key);
     }, 0);
-  }, [disabled, columns, value, onChange, handleCellClick]);
+  }, [disabled, columns, rows, onChange, handleCellClick]);
 
   const handleDeleteRow = useCallback(
     (rowIndex: number) => {
       if (disabled) return;
-      if (value.length <= minRows) return;
-      const newRows = value.filter((_, index) => index !== rowIndex);
+      if (rows.length <= minRows) return;
+      const newRows = rows.filter((_, index) => index !== rowIndex);
       onChange(newRows);
       // Clear editing if we deleted the editing row
       if (editingCell?.rowIndex === rowIndex) {
         setEditingCell(null);
       }
     },
-    [disabled, value, minRows, onChange, editingCell]
+    [disabled, rows, minRows, onChange, editingCell]
   );
 
   const isEditing = (rowIndex: number, columnKey: string) =>
@@ -181,7 +185,7 @@ export function EditableTable({
               </tr>
             </thead>
             <tbody>
-              {value.length === 0 ? (
+              {rows.length === 0 ? (
                 <tr>
                   <td
                     colSpan={columns.length + (disabled ? 0 : 1)}
@@ -191,7 +195,7 @@ export function EditableTable({
                   </td>
                 </tr>
               ) : (
-                value.map((row, rowIndex) => (
+                rows.map((row, rowIndex) => (
                   <tr
                     key={rowIndex}
                     className="border-b border-cream-200 last:border-b-0 hover:bg-cream-50 transition-colors duration-100"
@@ -199,16 +203,16 @@ export function EditableTable({
                     {columns.map((col) => (
                       <td key={col.key} className="py-0 px-0">
                         {isEditing(rowIndex, col.key) ? (
-                          <input
-                            ref={inputRef}
-                            type="text"
+                          <textarea
+                            ref={textareaRef}
                             value={editValue}
                             onChange={(e) => setEditValue(e.target.value)}
                             onBlur={handleSaveCell}
                             onKeyDown={handleKeyDown}
                             placeholder={col.placeholder}
+                            rows={3}
                             data-editable-cell="true"
-                            className="w-full py-2 px-3 text-sm text-warm-gray-900 bg-white border-2 border-palm-400 outline-none"
+                            className="w-full py-2 px-3 text-sm text-warm-gray-900 bg-white border-2 border-palm-400 outline-none resize-y min-h-[80px]"
                           />
                         ) : (
                           <button
@@ -232,12 +236,12 @@ export function EditableTable({
                         <button
                           type="button"
                           onClick={() => handleDeleteRow(rowIndex)}
-                          disabled={value.length <= minRows}
+                          disabled={rows.length <= minRows}
                           className={`
                             p-1.5 rounded-sm transition-colors duration-150
                             focus:outline-none focus:ring-2 focus:ring-palm-400 focus:ring-offset-1
                             ${
-                              value.length <= minRows
+                              rows.length <= minRows
                                 ? 'text-warm-gray-300 cursor-not-allowed'
                                 : 'text-warm-gray-400 hover:text-coral-600 hover:bg-coral-50'
                             }
