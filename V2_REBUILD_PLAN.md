@@ -8,10 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Phase** | 2 - Brand Configuration |
-| **Slice** | Complete |
+| **Phase** | 3 - URL Upload + Crawling |
+| **Slice** | Starting |
 | **Last Session** | 2026-02-04 |
-| **Next Action** | Phase 3: URL Upload + Crawling |
+| **Next Action** | Build URL upload interface and crawling pipeline |
 
 ### Session Log
 
@@ -23,6 +23,7 @@
 | 2026-02-03 | Phase 1 polish: Tropical oasis color palette (palm greens, sand, lagoon, coral), sharp corners (rounded-sm), improved card contrast (border-cream-500), design system documented in CLAUDE.md | Phase 2 |
 | 2026-02-03 | Phase 2 complete (ProjectFile model, S3 integration with LocalStack, text extraction utils, FileService, file upload API, brand config generation service with research/synthesis phases, brand config API endpoints, multi-step project creation wizard, FileUpload component, GenerationProgress component, SectionNav, 10 brand section display components, inline section editing, regenerate functionality, comprehensive unit/integration/component tests) | Phase 3 |
 | 2026-02-04 | Brand config improvements (fixed VoiceCharacteristics crash for we_are_not data format, fixed VoiceDimensions slider positioning, debugged regeneration endpoint, updated Perplexity research prompt for e-commerce focus, enhanced 9 section prompts for richer content, created 4 reusable editor components: TagInput/EditableTable/BulletListEditor/SliderInput, created 10 section-specific editors, added keyboard shortcuts Cmd+S/Escape, added validation and error display, comprehensive unit tests) | Phase 3 |
+| 2026-02-04 | Phase 2 polish: Fixed JSON control char parsing for AI prompts, fixed Voice Characteristics field name (characteristic→trait_name), removed Examples Bank section (will add real examples later), renamed button to "Brand Details" | Phase 3 |
 
 ---
 
