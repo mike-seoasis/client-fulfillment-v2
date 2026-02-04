@@ -79,24 +79,41 @@ class CrawledPageResponse(BaseModel):
     updated_at: datetime = Field(..., description="Record update timestamp")
 
 
+class PageSummary(BaseModel):
+    """Summary of a crawled page for status response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str = Field(..., description="Page UUID")
+    url: str = Field(..., description="Normalized URL")
+    status: str = Field(..., description="Crawl status")
+    title: str | None = Field(None, description="Page title")
+    word_count: int | None = Field(None, description="Word count of extracted content")
+    product_count: int | None = Field(None, description="Products found on page")
+    labels: list[str] = Field(default_factory=list, description="Assigned labels")
+
+
+class ProgressCounts(BaseModel):
+    """Progress counts for crawl status."""
+
+    total: int = Field(..., ge=0, description="Total number of pages")
+    completed: int = Field(..., ge=0, description="Pages successfully crawled")
+    failed: int = Field(..., ge=0, description="Pages that failed to crawl")
+    pending: int = Field(..., ge=0, description="Pages pending crawl")
+
+
 class CrawlStatusResponse(BaseModel):
     """Response schema for crawl status with progress and pages array."""
 
     project_id: str = Field(..., description="Project UUID")
-    total_pages: int = Field(..., ge=0, description="Total number of pages")
-    pending_count: int = Field(..., ge=0, description="Pages pending crawl")
-    crawling_count: int = Field(..., ge=0, description="Pages currently crawling")
-    completed_count: int = Field(..., ge=0, description="Pages successfully crawled")
-    failed_count: int = Field(..., ge=0, description="Pages that failed to crawl")
-    progress_percent: float = Field(
+    status: str = Field(
         ...,
-        ge=0.0,
-        le=100.0,
-        description="Overall crawl progress percentage",
+        description="Overall status: crawling, labeling, or complete",
     )
-    pages: list[CrawledPageResponse] = Field(
+    progress: ProgressCounts = Field(..., description="Progress counts by status")
+    pages: list[PageSummary] = Field(
         default_factory=list,
-        description="Array of crawled page records",
+        description="Array of page summaries",
     )
 
 

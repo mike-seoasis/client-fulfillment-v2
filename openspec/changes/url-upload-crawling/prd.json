@@ -239,8 +239,9 @@
         "Endpoint at /api/v1/projects/{project_id}/crawl-status"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Frontend will poll this every 2 seconds"
+      "passes": true,
+      "notes": "Frontend will poll this every 2 seconds",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S3-016",
@@ -732,6 +733,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-04T19:35:35.844Z"
+    "updatedAt": "2026-02-04T19:37:14.621Z"
   }
 }

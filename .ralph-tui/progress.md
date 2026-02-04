@@ -276,3 +276,24 @@ after each iteration and it's included in prompts for context.
   - Keep raw_url for reference, use normalized_url for deduplication
 ---
 
+## 2026-02-04 - S3-015
+- **What was implemented**: GET /projects/{id}/crawl-status endpoint for polling crawl progress
+- **Files changed**:
+  - `backend/app/api/v1/projects.py` (added get_crawl_status endpoint and _compute_overall_status helper)
+  - `backend/app/schemas/crawled_page.py` (added PageSummary, ProgressCounts schemas, refactored CrawlStatusResponse)
+  - `backend/app/schemas/__init__.py` (added PageSummary, ProgressCounts exports)
+- **Endpoint features**:
+  - Returns overall status: "crawling", "labeling", or "complete"
+  - Returns progress counts: total, completed, failed, pending
+  - Returns pages array with id, url, status, title, word_count, product_count, labels
+  - Designed for polling every 2 seconds by frontend
+- **Status logic**:
+  - "crawling" if any pages pending or crawling
+  - "labeling" if all pages done but no labels assigned yet
+  - "complete" if all pages done and have labels
+- **Learnings:**
+  - Use lightweight PageSummary schema for status polling instead of full CrawledPageResponse
+  - Separate ProgressCounts into nested object for cleaner API structure
+  - Status computation logic should be in a helper function for testability
+---
+

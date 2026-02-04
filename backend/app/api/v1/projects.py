@@ -14,7 +14,13 @@ from app.core.logging import get_logger
 from app.integrations.crawl4ai import Crawl4AIClient, get_crawl4ai
 from app.integrations.s3 import S3Client, get_s3
 from app.models.crawled_page import CrawledPage, CrawlStatus
-from app.schemas.crawled_page import UrlsUploadRequest, UrlUploadResponse
+from app.schemas.crawled_page import (
+    CrawlStatusResponse,
+    PageSummary,
+    ProgressCounts,
+    UrlsUploadRequest,
+    UrlUploadResponse,
+)
 from app.schemas.project import (
     ProjectCreate,
     ProjectListResponse,
@@ -315,3 +321,117 @@ async def _crawl_pages_background(
                 "error_type": type(e).__name__,
             },
         )
+
+
+def _compute_overall_status(
+    pending: int, crawling: int, completed: int, failed: int, has_labels: bool
+) -> str:
+    """Compute overall crawl status from page counts.
+
+    Args:
+        pending: Number of pending pages.
+        crawling: Number of crawling pages.
+        completed: Number of completed pages.
+        failed: Number of failed pages.
+        has_labels: Whether any completed pages have labels assigned.
+
+    Returns:
+        Overall status: "crawling", "labeling", or "complete"
+    """
+    # If any pages are still being crawled or pending, status is "crawling"
+    if crawling > 0 or pending > 0:
+        return "crawling"
+
+    # If all pages are done (completed or failed) but no labels yet, status is "labeling"
+    # (labeling happens after crawling completes)
+    if not has_labels and completed > 0:
+        return "labeling"
+
+    # All done with labels assigned
+    return "complete"
+
+
+@router.get("/{project_id}/crawl-status", response_model=CrawlStatusResponse)
+async def get_crawl_status(
+    project_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> CrawlStatusResponse:
+    """Get crawl status for a project.
+
+    Returns the overall crawl status, progress counts by status, and a summary
+    of each page including id, url, status, and extracted data summary.
+
+    This endpoint is designed to be polled frequently (every 2 seconds) by the
+    frontend to track crawl progress.
+
+    Args:
+        project_id: UUID of the project.
+        db: AsyncSession for database operations.
+
+    Returns:
+        CrawlStatusResponse with status, progress counts, and pages array.
+
+    Raises:
+        HTTPException: 404 if project not found.
+    """
+    # Verify project exists (raises 404 if not)
+    await ProjectService.get_project(db, project_id)
+
+    # Get all pages for this project
+    stmt = select(CrawledPage).where(CrawledPage.project_id == project_id)
+    result = await db.execute(stmt)
+    pages = result.scalars().all()
+
+    # Count pages by status
+    pending_count = 0
+    crawling_count = 0
+    completed_count = 0
+    failed_count = 0
+    has_labels = False
+
+    for page in pages:
+        if page.status == CrawlStatus.PENDING.value:
+            pending_count += 1
+        elif page.status == CrawlStatus.CRAWLING.value:
+            crawling_count += 1
+        elif page.status == CrawlStatus.COMPLETED.value:
+            completed_count += 1
+            if page.labels:
+                has_labels = True
+        elif page.status == CrawlStatus.FAILED.value:
+            failed_count += 1
+
+    # Compute overall status
+    overall_status = _compute_overall_status(
+        pending=pending_count,
+        crawling=crawling_count,
+        completed=completed_count,
+        failed=failed_count,
+        has_labels=has_labels,
+    )
+
+    # Build page summaries
+    page_summaries = [
+        PageSummary(
+            id=page.id,
+            url=page.normalized_url,
+            status=page.status,
+            title=page.title,
+            word_count=page.word_count,
+            product_count=page.product_count,
+            labels=page.labels or [],
+        )
+        for page in pages
+    ]
+
+    return CrawlStatusResponse(
+        project_id=project_id,
+        status=overall_status,
+        progress=ProgressCounts(
+            total=len(pages),
+            completed=completed_count,
+            failed=failed_count,
+            pending=pending_count,
+        ),
+        pages=page_summaries,
+    )
