@@ -21,7 +21,12 @@ interface DimensionScaleProps {
 function DimensionScale({ label, leftLabel, rightLabel, scale }: DimensionScaleProps) {
   if (!scale) return null;
 
-  const position = scale.position;
+  // Validate position: must be a number, default to 5 (middle) if invalid
+  const rawPosition = scale.position;
+  const position = typeof rawPosition === 'number' && !isNaN(rawPosition) && rawPosition >= 1 && rawPosition <= 10
+    ? rawPosition
+    : 5;
+
   // Convert 1-10 position to percentage (1 = 0%, 10 = 100%)
   const positionPercent = ((position - 1) / 9) * 100;
 

@@ -26,3 +26,13 @@ This prevents "objects are not valid as a React child" errors when backend data 
   - Use `JSON.stringify(item)` as ultimate fallback for unexpected object shapes
 ---
 
+## 2026-02-04 - BC-002
+- **What was implemented:** Added defensive validation for `scale.position` in VoiceDimensionsSection
+- **Files changed:** `frontend/src/components/brand-sections/VoiceDimensionsSection.tsx` (lines 24-28)
+- **Learnings:**
+  - API may return `position` as undefined, null, or out of range values
+  - Validate numeric fields with full checks: `typeof x === 'number' && !isNaN(x) && x >= min && x <= max`
+  - Default to middle value (5) for 1-10 scales when position is invalid - provides neutral fallback
+  - The position is displayed in UI (`{position}/10`) so validated value is shown consistently
+---
+
