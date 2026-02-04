@@ -129,12 +129,18 @@ export function VoiceCharacteristicsSection({ data }: VoiceCharacteristicsSectio
       {we_are_not && we_are_not.length > 0 && (
         <SectionCard title="We Are NOT:">
           <ul className="space-y-2">
-            {we_are_not.map((item, index) => (
-              <li key={index} className="flex items-start text-sm text-warm-gray-700">
-                <span className="text-coral-500 mr-2 flex-shrink-0">•</span>
-                <span>{item}</span>
-              </li>
-            ))}
+            {we_are_not.map((item, index) => {
+              // Handle both string items and object items defensively
+              const displayText = typeof item === 'string'
+                ? item
+                : (item as { trait_name?: string })?.trait_name || JSON.stringify(item);
+              return (
+                <li key={index} className="flex items-start text-sm text-warm-gray-700">
+                  <span className="text-coral-500 mr-2 flex-shrink-0">•</span>
+                  <span>{displayText}</span>
+                </li>
+              );
+            })}
           </ul>
         </SectionCard>
       )}

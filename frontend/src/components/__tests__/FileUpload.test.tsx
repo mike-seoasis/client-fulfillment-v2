@@ -390,10 +390,10 @@ describe('FileUpload', () => {
       expect(screen.getByText('Uploading... 50%')).toBeInTheDocument();
     });
 
-    it('shows "Waiting..." for pending files', () => {
+    it('shows "Ready" for pending files', () => {
       render(<FileUpload uploadedFiles={[uploadedFiles[2]]} />);
 
-      expect(screen.getByText('Waiting...')).toBeInTheDocument();
+      expect(screen.getByText('Ready')).toBeInTheDocument();
     });
 
     it('shows "Uploaded" status for complete files', () => {

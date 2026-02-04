@@ -318,8 +318,8 @@ function FileUpload({
                     </span>
                   </div>
 
-                  {/* Progress bar */}
-                  {(file.status === 'uploading' || file.status === 'pending') && (
+                  {/* Progress bar - only show during actual upload */}
+                  {file.status === 'uploading' && (
                     <div className="mt-1.5">
                       <div className="h-1.5 bg-cream-200 rounded-full overflow-hidden">
                         <div
@@ -328,11 +328,14 @@ function FileUpload({
                         />
                       </div>
                       <p className="text-xs text-warm-gray-500 mt-0.5">
-                        {file.status === 'pending'
-                          ? 'Waiting...'
-                          : `Uploading... ${file.progress}%`}
+                        Uploading... {file.progress}%
                       </p>
                     </div>
+                  )}
+
+                  {/* Ready status - file selected but not yet uploading */}
+                  {file.status === 'pending' && (
+                    <p className="text-xs text-palm-600 mt-0.5">Ready</p>
                   )}
 
                   {/* Complete status */}

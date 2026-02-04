@@ -81,11 +81,14 @@ export function useProjects(): UseQueryResult<ProjectListResponse> {
 /**
  * Fetch a single project by ID.
  */
-export function useProject(id: string): UseQueryResult<Project> {
+export function useProject(
+  id: string,
+  options?: { enabled?: boolean }
+): UseQueryResult<Project> {
   return useQuery({
     queryKey: projectKeys.detail(id),
     queryFn: () => apiClient.get<Project>(`/projects/${id}`),
-    enabled: !!id,
+    enabled: options?.enabled ?? !!id,
   });
 }
 

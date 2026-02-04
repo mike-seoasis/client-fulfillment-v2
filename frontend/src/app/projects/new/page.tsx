@@ -1,24 +1,35 @@
 'use client';
 
-import { useCallback, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ProjectForm, type ProjectFormData } from '@/components/ProjectForm';
 import { type UploadedFile } from '@/components/FileUpload';
 import { GenerationProgress } from '@/components/GenerationProgress';
-import { useCreateProject } from '@/hooks/use-projects';
+import { useCreateProject, useProject } from '@/hooks/use-projects';
 import { uploadFileToProject } from '@/hooks/useProjectFiles';
-import { useStartBrandConfigGeneration } from '@/hooks/useBrandConfigGeneration';
+import {
+  useStartBrandConfigGeneration,
+  useBrandConfigStatus,
+} from '@/hooks/useBrandConfigGeneration';
 import { Button } from '@/components/ui';
 
 type WizardStep = 1 | 2;
 
 export default function CreateProjectPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const createProject = useCreateProject();
   const [error, setError] = useState<string | null>(null);
-  const [currentStep, setCurrentStep] = useState<WizardStep>(1);
-  const [projectId, setProjectId] = useState<string | null>(null);
+
+  // Get project ID from URL if resuming
+  const urlProjectId = searchParams.get('project');
+  const [projectId, setProjectId] = useState<string | null>(urlProjectId);
+
+  // Determine initial step based on URL
+  const [currentStep, setCurrentStep] = useState<WizardStep>(
+    urlProjectId ? 2 : 1
+  );
 
   // File upload state
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -29,11 +40,54 @@ export default function CreateProjectPage() {
   const formId = useId();
   const [formData, setFormData] = useState<ProjectFormData | null>(null);
 
-  // Brand config generation mutation - use startGenerationAsync directly
+  // Brand config generation mutation
   const startGeneration = useStartBrandConfigGeneration(projectId ?? '');
+
+  // Check generation status if resuming with a project ID
+  const { data: statusData, isLoading: isCheckingStatus } = useBrandConfigStatus(
+    urlProjectId ?? '',
+    { enabled: !!urlProjectId }
+  );
+
+  // Fetch project details if resuming (for the project name)
+  const { data: projectData } = useProject(urlProjectId ?? '', {
+    enabled: !!urlProjectId,
+  });
 
   // Track if files are being uploaded
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
+
+  // Handle resume logic - if we have a URL project ID, check its status
+  useEffect(() => {
+    if (urlProjectId && statusData && !isCheckingStatus) {
+      if (statusData.status === 'complete') {
+        // Generation already complete, redirect to project
+        router.push(`/projects/${urlProjectId}`);
+      } else if (statusData.status === 'generating') {
+        // Still generating, stay on step 2
+        setCurrentStep(2);
+        setProjectId(urlProjectId);
+      } else if (statusData.status === 'failed') {
+        // Failed, show step 2 so user can see error and retry
+        setCurrentStep(2);
+        setProjectId(urlProjectId);
+      } else if (statusData.status === 'pending') {
+        // Never started, stay on step 2 to start
+        setCurrentStep(2);
+        setProjectId(urlProjectId);
+      }
+    }
+  }, [urlProjectId, statusData, isCheckingStatus, router]);
+
+  // Update URL when project ID changes
+  const updateUrlWithProject = useCallback(
+    (newProjectId: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('project', newProjectId);
+      router.replace(`/projects/new?${params.toString()}`, { scroll: false });
+    },
+    [router, searchParams]
+  );
 
   // Handle file selection - add to pending list
   const handleFilesSelected = useCallback((files: File[]) => {
@@ -128,6 +182,9 @@ export default function CreateProjectPage() {
       const project = await createProject.mutateAsync(data);
       setProjectId(project.id);
 
+      // Update URL with project ID (so refresh works)
+      updateUrlWithProject(project.id);
+
       // Upload any pending files
       if (pendingFiles.length > 0) {
         await uploadPendingFiles(project.id);
@@ -148,9 +205,11 @@ export default function CreateProjectPage() {
   }
 
   // Handle back button (Step 2 -> Step 1)
+  // Note: This clears the URL param and resets state - useful if user wants to start fresh
   function handleBack() {
+    // Clear URL params
+    router.replace('/projects/new', { scroll: false });
     setCurrentStep(1);
-    // Reset generation state if going back
     setProjectId(null);
   }
 
@@ -170,6 +229,42 @@ export default function CreateProjectPage() {
     createProject.isPending ||
     isUploadingFiles ||
     startGeneration.isPending;
+
+  // Show loading state while checking status on resume
+  if (urlProjectId && isCheckingStatus) {
+    return (
+      <div>
+        <Link
+          href="/"
+          className="inline-flex items-center text-warm-gray-600 hover:text-warm-gray-900 mb-6 text-sm"
+        >
+          <svg
+            className="w-4 h-4 mr-1"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+          Back to Dashboard
+        </Link>
+
+        <div className="max-w-xl mx-auto">
+          <div className="bg-white rounded-sm border border-cream-500 p-8 shadow-sm">
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin w-6 h-6 border-2 border-palm-500 border-t-transparent rounded-full" />
+              <span className="ml-3 text-warm-gray-600">
+                Checking generation status...
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -247,7 +342,7 @@ export default function CreateProjectPage() {
           {currentStep === 2 && projectId && (
             <GenerationProgress
               projectId={projectId}
-              projectName={formData?.name}
+              projectName={formData?.name ?? projectData?.name}
               onBack={handleBack}
               onGoToProject={handleGoToProject}
               onRetry={handleRetry}

@@ -29,7 +29,6 @@ router = APIRouter(prefix="/projects/{project_id}/brand-config", tags=["Brand Co
 
 async def run_generation(
     project_id: str,
-    db: AsyncSession,
     perplexity: PerplexityClient,
     crawl4ai: Crawl4AIClient,
     claude: ClaudeClient,
@@ -41,89 +40,101 @@ async def run_generation(
     2. Synthesis phase - sequential section generation
     3. Storage phase - save to BrandConfig
 
+    Note: Creates its own database session to avoid issues with the
+    request-scoped session being closed after the response is sent.
+
     Args:
         project_id: UUID of the project.
-        db: Database session.
         perplexity: Perplexity client for web research.
         crawl4ai: Crawl4AI client for website crawling.
         claude: Claude client for LLM generation.
     """
-    try:
-        logger.info(
-            "Starting brand config generation",
-            extra={"project_id": project_id},
-        )
+    from app.core.database import db_manager
 
-        # Research phase
-        research_context = await BrandConfigService._research_phase(
-            db=db,
-            project_id=project_id,
-            perplexity=perplexity,
-            crawl4ai=crawl4ai,
-        )
-
-        if not research_context.has_any_data():
-            await BrandConfigService.fail_generation(
-                db=db,
-                project_id=project_id,
-                error="No research data available - all sources failed",
-            )
-            await db.commit()
-            return
-
-        # Create status update callback
-        async def update_status(step_name: str, step_index: int) -> None:
-            await BrandConfigService.update_progress(
-                db=db,
-                project_id=project_id,
-                current_step=step_name,
-                steps_completed=step_index,
-            )
-            await db.commit()
-
-        # Synthesis phase
-        generated_sections = await BrandConfigService._synthesis_phase(
-            project_id=project_id,
-            research_context=research_context,
-            claude=claude,
-            update_status_callback=update_status,
-        )
-
-        # Get source file IDs for metadata
-        source_file_ids = await BrandConfigService.get_source_file_ids(db, project_id)
-
-        # Store brand config
-        await BrandConfigService.store_brand_config(
-            db=db,
-            project_id=project_id,
-            generated_sections=generated_sections,
-            source_file_ids=source_file_ids,
-        )
-
-        await db.commit()
-
-        logger.info(
-            "Brand config generation completed",
-            extra={"project_id": project_id},
-        )
-
-    except Exception as e:
-        logger.exception(
-            "Brand config generation failed",
-            extra={"project_id": project_id, "error": str(e)},
-        )
+    # Create a fresh database session for the background task
+    async with db_manager.session_factory() as db:
         try:
-            await BrandConfigService.fail_generation(
+            logger.info(
+                "Starting brand config generation - background task",
+                extra={
+                    "project_id": project_id,
+                    "claude_available": claude.available,
+                    "claude_model": claude.model,
+                    "claude_id": id(claude),
+                    "perplexity_available": perplexity.available,
+                },
+            )
+
+            # Research phase
+            research_context = await BrandConfigService._research_phase(
                 db=db,
                 project_id=project_id,
-                error=str(e),
+                perplexity=perplexity,
+                crawl4ai=crawl4ai,
             )
+
+            if not research_context.has_any_data():
+                await BrandConfigService.fail_generation(
+                    db=db,
+                    project_id=project_id,
+                    error="No research data available - all sources failed",
+                )
+                await db.commit()
+                return
+
+            # Create status update callback
+            async def update_status(step_name: str, step_index: int) -> None:
+                await BrandConfigService.update_progress(
+                    db=db,
+                    project_id=project_id,
+                    current_step=step_name,
+                    steps_completed=step_index,
+                )
+                await db.commit()
+
+            # Synthesis phase
+            generated_sections = await BrandConfigService._synthesis_phase(
+                project_id=project_id,
+                research_context=research_context,
+                claude=claude,
+                update_status_callback=update_status,
+            )
+
+            # Get source file IDs for metadata
+            source_file_ids = await BrandConfigService.get_source_file_ids(db, project_id)
+
+            # Store brand config
+            await BrandConfigService.store_brand_config(
+                db=db,
+                project_id=project_id,
+                generated_sections=generated_sections,
+                source_file_ids=source_file_ids,
+            )
+
             await db.commit()
-        except Exception:
-            logger.exception(
-                "Failed to update generation status after error",
+
+            logger.info(
+                "Brand config generation completed",
                 extra={"project_id": project_id},
             )
+
+        except Exception as e:
+            logger.exception(
+                "Brand config generation failed",
+                extra={"project_id": project_id, "error": str(e)},
+            )
+            try:
+                await BrandConfigService.fail_generation(
+                    db=db,
+                    project_id=project_id,
+                    error=str(e),
+                )
+                await db.commit()
+            except Exception:
+                logger.exception(
+                    "Failed to update generation status after error",
+                    extra={"project_id": project_id},
+                )
 
 
 @router.post(
@@ -158,6 +169,18 @@ async def start_generation(
         HTTPException: 404 if project not found.
         HTTPException: 409 if generation is already in progress.
     """
+    # Debug logging for client state at endpoint time
+    logger.info(
+        "start_generation endpoint - client states",
+        extra={
+            "project_id": project_id,
+            "claude_available": claude.available,
+            "claude_model": claude.model,
+            "claude_id": id(claude),
+            "perplexity_available": perplexity.available,
+        },
+    )
+
     # Verify project exists
     await ProjectService.get_project(db, project_id)
 
@@ -165,11 +188,10 @@ async def start_generation(
     generation_status = await BrandConfigService.start_generation(db, project_id)
     await db.commit()
 
-    # Queue background task
+    # Queue background task (creates its own db session)
     background_tasks.add_task(
         run_generation,
         project_id=project_id,
-        db=db,
         perplexity=perplexity,
         crawl4ai=crawl4ai,
         claude=claude,

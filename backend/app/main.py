@@ -37,6 +37,8 @@ from app.core.logging import get_logger, setup_logging
 from app.core.redis import redis_manager
 from app.core.scheduler import scheduler_manager
 from app.core.websocket import connection_manager
+from app.integrations.claude import init_claude
+from app.integrations.perplexity import init_perplexity
 
 # Set up logging before anything else
 setup_logging()
@@ -195,6 +197,19 @@ async def lifespan(app: FastAPI) -> Any:
         logger.info("Redis initialized")
     else:
         logger.info("Redis not available, caching disabled")
+
+    # Initialize external API clients
+    claude_client = await init_claude()
+    if claude_client.available:
+        logger.info("Claude client initialized", extra={"model": claude_client.model})
+    else:
+        logger.warning("Claude not configured (missing ANTHROPIC_API_KEY)")
+
+    perplexity_client = await init_perplexity()
+    if perplexity_client.available:
+        logger.info("Perplexity client initialized", extra={"model": perplexity_client.model})
+    else:
+        logger.warning("Perplexity not configured (missing PERPLEXITY_API_KEY)")
 
     # Start WebSocket heartbeat task
     await connection_manager.start_heartbeat()

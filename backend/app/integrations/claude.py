@@ -212,6 +212,18 @@ class ClaudeClient:
         self._client: httpx.AsyncClient | None = None
         self._available = bool(self._api_key)
 
+        # Debug logging for initialization
+        logger.info(
+            "ClaudeClient instantiated",
+            extra={
+                "instance_id": id(self),
+                "available": self._available,
+                "has_api_key": bool(self._api_key),
+                "model": self._model,
+                "settings_api_key_present": bool(settings.anthropic_api_key),
+            },
+        )
+
     @property
     def available(self) -> bool:
         """Check if Claude is configured and available."""

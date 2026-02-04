@@ -18,6 +18,7 @@ from typing import Any
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.integrations.claude import ClaudeClient, CompletionResult
 from app.integrations.crawl4ai import Crawl4AIClient, CrawlResult
@@ -586,6 +587,8 @@ class BrandConfigService:
             "generation": initial_status.to_dict(),
         }
         project.brand_wizard_state = new_wizard_state
+        # Flag the JSONB column as modified so SQLAlchemy detects the change
+        flag_modified(project, "brand_wizard_state")
 
         await db.flush()
         await db.refresh(project)
@@ -631,6 +634,8 @@ class BrandConfigService:
             "generation": generation_data,
         }
         project.brand_wizard_state = new_wizard_state
+        # Flag the JSONB column as modified so SQLAlchemy detects the change
+        flag_modified(project, "brand_wizard_state")
 
         await db.flush()
         await db.refresh(project)
@@ -670,9 +675,28 @@ class BrandConfigService:
             "generation": generation_data,
         }
         project.brand_wizard_state = new_wizard_state
+        # Flag the JSONB column as modified so SQLAlchemy detects the change
+        flag_modified(project, "brand_wizard_state")
+
+        logger.info(
+            "complete_generation: updating project status",
+            extra={
+                "project_id": project_id,
+                "new_status": generation_data["status"],
+                "is_modified": project in db.dirty,
+            },
+        )
 
         await db.flush()
         await db.refresh(project)
+
+        logger.info(
+            "complete_generation: status updated",
+            extra={
+                "project_id": project_id,
+                "updated_status": project.brand_wizard_state.get("generation", {}).get("status"),
+            },
+        )
 
         return GenerationStatus.from_dict(generation_data)
 
@@ -710,6 +734,8 @@ class BrandConfigService:
             "generation": generation_data,
         }
         project.brand_wizard_state = new_wizard_state
+        # Flag the JSONB column as modified so SQLAlchemy detects the change
+        flag_modified(project, "brand_wizard_state")
 
         await db.flush()
         await db.refresh(project)
@@ -904,6 +930,37 @@ class BrandConfigService:
             HTTPException: If Claude is not available or a section fails to generate.
         """
         import json
+
+        # Import here to avoid circular import
+        from app.integrations.claude import get_claude
+
+        # Debug logging for Claude client state
+        logger.info(
+            "Synthesis phase Claude client check",
+            extra={
+                "project_id": project_id,
+                "claude_available": claude.available,
+                "claude_model": claude.model,
+                "claude_id": id(claude),
+                "has_api_key": bool(claude._api_key),
+            },
+        )
+
+        # If passed client isn't available, try getting fresh from global
+        if not claude.available:
+            logger.warning(
+                "Passed Claude client not available, trying global instance",
+                extra={"project_id": project_id},
+            )
+            claude = await get_claude()
+            logger.info(
+                "Got fresh Claude client from global",
+                extra={
+                    "project_id": project_id,
+                    "fresh_claude_available": claude.available,
+                    "fresh_claude_id": id(claude),
+                },
+            )
 
         if not claude.available:
             raise HTTPException(
@@ -1197,7 +1254,15 @@ class BrandConfigService:
         await db.refresh(brand_config)
 
         # Mark generation as complete (even if there were some non-critical errors)
-        await BrandConfigService.complete_generation(db, project_id)
+        try:
+            logger.info("Calling complete_generation", extra={"project_id": project_id})
+            await BrandConfigService.complete_generation(db, project_id)
+            logger.info("complete_generation returned", extra={"project_id": project_id})
+        except Exception as e:
+            logger.exception(
+                "Error in complete_generation",
+                extra={"project_id": project_id, "error": str(e)},
+            )
 
         logger.info(
             "Brand config stored successfully",
@@ -1333,8 +1398,19 @@ class BrandConfigService:
             HTTPException: 404 if project not found or brand config not generated yet.
             HTTPException: 503 if Claude is not available.
         """
+        # Import here to avoid circular import
+        from app.integrations.claude import get_claude
+
         # Get existing brand config (validates project and config existence)
         brand_config = await BrandConfigService.get_brand_config(db, project_id)
+
+        # If passed client isn't available, try getting fresh from global
+        if not claude.available:
+            logger.warning(
+                "Passed Claude client not available in regenerate, trying global instance",
+                extra={"project_id": project_id},
+            )
+            claude = await get_claude()
 
         if not claude.available:
             raise HTTPException(
