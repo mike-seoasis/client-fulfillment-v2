@@ -966,3 +966,32 @@ after each iteration and it's included in prompts for context.
   - Show inline error banners for persistent errors (network down) but toasts for transient errors (single request failure)
 ---
 
+## 2026-02-04 - S3-047
+- **What was implemented**: Manual end-to-end testing of URL upload and crawling flow
+- **Testing performed**:
+  - ✅ URL upload via POST `/api/v1/projects/{id}/urls` - creates pages with pending status
+  - ✅ Crawl status endpoint `/api/v1/projects/{id}/crawl-status` - returns progress counts and page summaries
+  - ✅ Failed pages show correct error messages (`crawl_error` field populated)
+  - ✅ Retry endpoint `/api/v1/projects/{id}/pages/{page_id}/retry` - resets status to pending, clears error
+  - ✅ Label validation returns clear errors when no taxonomy exists
+  - ✅ Project detail shows `phase_status.onboarding` with crawl tracking
+  - ✅ All 81 backend crawling tests pass (API + services)
+  - ✅ All 157 frontend onboarding component tests pass
+- **Limitations of local testing**:
+  - Crawl4AI not configured locally - all crawls fail with "Crawl4AI not configured (missing API URL)"
+  - Cannot test actual content extraction or taxonomy generation without full infrastructure
+  - Real E2E testing with actual Shopify URLs requires deployed environment with Crawl4AI configured
+- **Tests verify acceptance criteria**:
+  - URL upload (paste/CSV) - unit tests cover parsing, validation, deduplication
+  - Crawling progress - API tests verify status tracking and polling response
+  - Failed pages/retry - API tests verify retry resets status and triggers re-crawl
+  - Taxonomy generation - service tests mock Claude and verify storage in phase_status
+  - Label editing - API tests verify validation against taxonomy, count limits, normalization
+  - Project detail status - API returns phase_status correctly
+- **Learnings:**
+  - Local dev without Crawl4AI can only verify API contract and UI behavior, not actual crawling
+  - Background tasks use `db_manager.session_factory()` for their own database sessions
+  - Server restart required after adding new routes to projects.py router
+  - Pre-existing test failures in brand-config tests are unrelated to Phase 3 work
+---
+
