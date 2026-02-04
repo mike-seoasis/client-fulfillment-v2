@@ -14,6 +14,7 @@ from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.integrations.crawl4ai import Crawl4AIClient, CrawlResult
 from app.models.crawled_page import CrawledPage, CrawlStatus
+from app.services.content_extraction import extract_content_from_html
 
 logger = get_logger(__name__)
 
@@ -125,20 +126,21 @@ class CrawlingService:
         # Update page based on result
         if crawl_result.success:
             page.status = CrawlStatus.COMPLETED.value
-            page.body_content = crawl_result.markdown
             page.crawl_error = None
             page.last_crawled_at = datetime.now(UTC)
 
-            # Extract metadata if available
-            if crawl_result.metadata:
-                if "title" in crawl_result.metadata:
-                    page.title = crawl_result.metadata["title"]
-                if "description" in crawl_result.metadata:
-                    page.meta_description = crawl_result.metadata["description"]
+            # Extract structured content from HTML using BeautifulSoup
+            extracted = extract_content_from_html(
+                html=crawl_result.html,
+                markdown=crawl_result.markdown,
+            )
 
-            # Calculate word count from markdown
-            if crawl_result.markdown:
-                page.word_count = len(crawl_result.markdown.split())
+            # Apply extracted content to page
+            page.title = extracted.title
+            page.meta_description = extracted.meta_description
+            page.headings = extracted.headings
+            page.body_content = extracted.body_content
+            page.word_count = extracted.word_count
 
             logger.info(
                 "Crawl completed",
@@ -146,6 +148,7 @@ class CrawlingService:
                     "page_id": page.id,
                     "url": page.normalized_url,
                     "word_count": page.word_count,
+                    "headings_count": sum(len(h) for h in extracted.headings.values()),
                     "duration_ms": crawl_result.duration_ms,
                 },
             )

@@ -93,3 +93,25 @@ after each iteration and it's included in prompts for context.
   - Update status to "crawling" before starting, then to "completed"/"failed" after
 ---
 
+## 2026-02-04 - S3-006
+- **What was implemented**: Content extraction from crawled HTML using BeautifulSoup
+- **Files changed**:
+  - `backend/pyproject.toml` (added beautifulsoup4 dependency, bs4 mypy override)
+  - `backend/app/services/content_extraction.py` (new file)
+  - `backend/app/services/crawling.py` (updated to use content extraction)
+  - `backend/app/services/__init__.py` (added exports)
+- **Features**:
+  - `extract_content_from_html(html, markdown)` - Extract title, meta_description, headings from HTML
+  - `truncate_body_content(content)` - Truncate body content to 50KB at word boundary
+  - `ExtractedContent` dataclass - Container for extracted content
+  - Extracts title from `<title>` tag
+  - Extracts meta_description from `<meta name="description">`
+  - Extracts headings as `{h1: [...], h2: [...], h3: [...]}`
+  - Body content truncated to 50KB with word boundary handling
+- **Learnings:**
+  - BeautifulSoup uses `soup.find("meta", attrs={"name": "description"})` to find meta tags by name
+  - For mypy, add `bs4` and `bs4.*` to ignore_missing_imports modules
+  - Use `html.parser` as the parser (built-in, no extra dependency needed)
+  - When truncating UTF-8 strings by bytes, use `decode("utf-8", errors="ignore")` to handle partial multi-byte chars
+---
+

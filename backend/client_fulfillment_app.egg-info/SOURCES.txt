@@ -60,6 +60,7 @@ app/schemas/content_score.py
 app/schemas/content_word_count.py
 app/schemas/content_writer.py
 app/schemas/crawl.py
+app/schemas/crawled_page.py
 app/schemas/document.py
 app/schemas/keyword_research.py
 app/schemas/label.py
@@ -75,6 +76,8 @@ app/schemas/review_platforms.py
 app/schemas/schedule.py
 app/services/__init__.py
 app/services/brand_config.py
+app/services/content_extraction.py
+app/services/crawling.py
 app/services/file.py
 app/services/project.py
 app/utils/__init__.py
