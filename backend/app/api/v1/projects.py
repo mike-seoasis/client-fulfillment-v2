@@ -463,6 +463,7 @@ async def get_crawl_status(
             status=page.status,
             title=page.title,
             word_count=page.word_count,
+            headings=page.headings,
             product_count=page.product_count,
             labels=page.labels or [],
             crawl_error=page.crawl_error,

@@ -23,6 +23,7 @@ interface PageSummary {
   status: 'pending' | 'crawling' | 'completed' | 'failed';
   title: string | null;
   word_count: number | null;
+  headings: { h1?: string[]; h2?: string[]; h3?: string[] } | null;
   product_count: number | null;
   labels: string[];
   crawl_error: string | null;
@@ -278,6 +279,9 @@ function PageListItem({ page }: { page: PageSummary }) {
     }
   })();
 
+  // Calculate heading counts
+  const h2Count = page.headings?.h2?.length ?? 0;
+
   return (
     <div className="py-3 border-b border-cream-200 last:border-b-0">
       <div className="flex items-start gap-3">
@@ -292,17 +296,20 @@ function PageListItem({ page }: { page: PageSummary }) {
             <PageStatusText status={page.status} />
           </div>
           {page.status === 'completed' && page.title && (
-            <div className="mt-1 text-sm text-warm-gray-600">
-              <span className="font-medium">Title:</span> &ldquo;{page.title}&rdquo;
+            <div className="mt-1 text-sm text-warm-gray-600 truncate">
+              {page.title}
             </div>
           )}
           {page.status === 'completed' && (
-            <div className="mt-1 text-xs text-warm-gray-500 flex gap-4">
+            <div className="mt-1 text-xs text-warm-gray-500 flex gap-3 flex-wrap">
               {page.word_count !== null && (
-                <span>Words: {page.word_count}</span>
+                <span>{page.word_count.toLocaleString()} words</span>
+              )}
+              {h2Count > 0 && (
+                <span>H2s: {h2Count}</span>
               )}
               {page.product_count !== null && (
-                <span>Products: {page.product_count}</span>
+                <span>{page.product_count} products</span>
               )}
             </div>
           )}

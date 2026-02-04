@@ -637,3 +637,21 @@ after each iteration and it's included in prompts for context.
   - Status-specific UI: use conditional rendering with `page.status === 'failed' && page.crawl_error`
 ---
 
+## 2026-02-04 - S3-032
+- **What was implemented**: Enhanced extracted data summary display in crawl progress page
+- **Files changed**:
+  - `backend/app/schemas/crawled_page.py` (added headings field to PageSummary schema)
+  - `backend/app/api/v1/projects.py` (added headings to PageSummary construction in get_crawl_status)
+  - `frontend/src/app/projects/[id]/onboarding/crawl/page.tsx` (added headings to interface, updated display format)
+- **Acceptance criteria verification**:
+  - ✅ Show page title for completed pages - title displayed below URL (truncated)
+  - ✅ Show word count (e.g., '245 words') - format updated from "Words: X" to "X words" with toLocaleString()
+  - ✅ Show heading counts (e.g., 'H2s: 3') - added headings field to schema/API, displays H2 count
+  - ✅ Show product count if available (e.g., '24 products') - format updated from "Products: X" to "X products"
+- **Learnings:**
+  - When displaying counts with labels, acceptance criteria format matters (e.g., "245 words" vs "Words: 245")
+  - Use `toLocaleString()` for number formatting to add thousand separators for large word counts
+  - The headings JSONB structure `{h1: [], h2: [], h3: []}` requires optional chaining with nullish coalescing (`?.length ?? 0`)
+  - Keep extracted data summary concise - H2 count is most useful (H1 usually just 1, H3 too granular)
+---
+

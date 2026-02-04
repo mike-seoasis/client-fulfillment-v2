@@ -89,6 +89,11 @@ class PageSummary(BaseModel):
     status: str = Field(..., description="Crawl status")
     title: str | None = Field(None, description="Page title")
     word_count: int | None = Field(None, description="Word count of extracted content")
+    headings: dict[str, Any] | None = Field(
+        None,
+        description="Headings structure with h1, h2, h3 arrays",
+        examples=[{"h1": ["Main Title"], "h2": ["Section 1"], "h3": ["Subsection"]}],
+    )
     product_count: int | None = Field(None, description="Products found on page")
     labels: list[str] = Field(default_factory=list, description="Assigned labels")
     crawl_error: str | None = Field(None, description="Error message if crawl failed")
