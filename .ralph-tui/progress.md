@@ -399,3 +399,24 @@ after each iteration and it's included in prompts for context.
   - Design system colors: `palm-500` for active/completed steps, `cream-300` for pending, `warm-gray-*` for text
 ---
 
+## 2026-02-04 - S3-022
+- **What was implemented**: Created UrlUploader component with textarea for pasting URLs
+- **Files changed**:
+  - `frontend/src/components/onboarding/UrlUploader.tsx` (new file)
+  - `frontend/src/app/projects/[id]/onboarding/upload/page.tsx` (updated to use UrlUploader)
+- **Features**:
+  - UrlUploader component with textarea accepting URLs one per line
+  - `parseUrls()` function that splits by newline, trims whitespace, filters empty lines
+  - `isValidUrl()` function that validates http/https URLs using URL constructor
+  - `ParsedUrl` interface with `url` and `isValid` fields
+  - Parses URLs on change and blur events
+  - Placeholder text with examples and helper text explaining format
+  - Upload page now shows URL count summary (valid/invalid counts)
+  - URL preview list with visual distinction for valid (white) vs invalid (coral/red) URLs
+  - "Start Crawl" button enabled only when valid URLs exist
+- **Learnings:**
+  - URL validation: Use `new URL(str)` constructor and check `protocol` for http/https - cleaner than regex
+  - Component patterns: Export both component and utility functions (`parseUrls`, `isValidUrl`) for reuse
+  - Textarea styling: Use `font-mono` for URL input to help users spot formatting issues
+---
+

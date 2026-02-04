@@ -2,8 +2,10 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useState } from 'react';
 import { useProject } from '@/hooks/use-projects';
 import { Button } from '@/components/ui';
+import { UrlUploader, type ParsedUrl } from '@/components/onboarding/UrlUploader';
 
 // Step indicator data
 const ONBOARDING_STEPS = [
@@ -144,8 +146,12 @@ function NotFoundState() {
 export default function UrlUploadPage() {
   const params = useParams();
   const projectId = params.id as string;
+  const [parsedUrls, setParsedUrls] = useState<ParsedUrl[]>([]);
 
   const { data: project, isLoading, error } = useProject(projectId);
+
+  const validUrls = parsedUrls.filter((u) => u.isValid);
+  const invalidUrls = parsedUrls.filter((u) => !u.isValid);
 
   // Loading state
   if (isLoading) {
@@ -197,17 +203,15 @@ export default function UrlUploadPage() {
       {/* Divider */}
       <hr className="border-cream-500 mb-6" />
 
-      {/* Page content - placeholder for UrlUploader component */}
+      {/* Page content */}
       <div className="bg-white rounded-sm border border-cream-500 p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-warm-gray-900 mb-4">
           Paste your collection page URLs (one per line)
         </h2>
 
-        {/* Textarea placeholder - will be replaced by UrlUploader component in S3-022 */}
-        <textarea
-          className="w-full h-48 p-4 border border-cream-500 rounded-sm text-warm-gray-900 placeholder:text-warm-gray-400 focus:outline-none focus:ring-2 focus:ring-palm-400 focus:border-transparent resize-none font-mono text-sm"
+        <UrlUploader
+          onChange={setParsedUrls}
           placeholder={`https://${project.site_url.replace(/^https?:\/\//, '')}/collections/example-collection\nhttps://${project.site_url.replace(/^https?:\/\//, '')}/collections/another-collection`}
-          disabled
         />
 
         <p className="text-sm text-warm-gray-500 mt-3 mb-6">
@@ -216,15 +220,41 @@ export default function UrlUploadPage() {
 
         <hr className="border-cream-300 my-6" />
 
-        {/* URL preview placeholder */}
-        <div className="text-warm-gray-500 text-sm mb-6">
-          URLs to process: <span className="font-medium text-warm-gray-700">0</span>
+        {/* URL count summary */}
+        <div className="text-warm-gray-500 text-sm mb-4">
+          URLs to process:{' '}
+          <span className="font-medium text-warm-gray-700">{validUrls.length}</span>
+          {invalidUrls.length > 0 && (
+            <span className="text-coral-500 ml-2">
+              ({invalidUrls.length} invalid)
+            </span>
+          )}
         </div>
 
-        {/* Empty state */}
-        <div className="text-center py-8 text-warm-gray-400 text-sm">
-          Enter URLs above to see them listed here
-        </div>
+        {/* URL preview list */}
+        {parsedUrls.length === 0 ? (
+          <div className="text-center py-8 text-warm-gray-400 text-sm">
+            Enter URLs above to see them listed here
+          </div>
+        ) : (
+          <div className="max-h-48 overflow-y-auto border border-cream-300 rounded-sm">
+            {parsedUrls.map((item, index) => (
+              <div
+                key={index}
+                className={`px-3 py-2 text-sm font-mono border-b border-cream-200 last:border-b-0 ${
+                  item.isValid
+                    ? 'text-warm-gray-700 bg-white'
+                    : 'text-coral-600 bg-coral-50'
+                }`}
+              >
+                {item.url}
+                {!item.isValid && (
+                  <span className="ml-2 text-xs text-coral-500">(invalid URL)</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
         <hr className="border-cream-300 my-6" />
 
@@ -233,7 +263,7 @@ export default function UrlUploadPage() {
           <Link href={`/projects/${projectId}`}>
             <Button variant="secondary">Cancel</Button>
           </Link>
-          <Button disabled>Start Crawl</Button>
+          <Button disabled={validUrls.length === 0}>Start Crawl</Button>
         </div>
       </div>
     </div>
