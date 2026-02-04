@@ -232,3 +232,23 @@ This prevents "objects are not valid as a React child" errors when backend data 
   - Existing CompetitorContextSection and VocabularySection use static tables - this component can replace them for editing mode
 ---
 
+## 2026-02-04 - BC-015
+- **What was implemented:** Created reusable BulletListEditor component for array of strings editing
+- **Files changed:**
+  - `frontend/src/components/brand-sections/editors/BulletListEditor.tsx` - New component with:
+    - Input field + button for adding new items (Enter key also works)
+    - Up/down arrow buttons for reordering items
+    - X button for removing items
+    - Accepts `value` (string[]) and `onChange` props
+    - Optional `label`, `placeholder`, `disabled`, and `addButtonText` props
+    - Styled with tropical oasis palette matching TagInput and EditableTable
+    - Bullet marker (•) for visual list indication
+    - Disabled states for move buttons at list boundaries
+  - `frontend/src/components/brand-sections/editors/index.ts` - Added BulletListEditor export
+- **Learnings:**
+  - Used up/down buttons instead of drag-and-drop for simpler implementation and better accessibility
+  - Followed same structure as TagInput and EditableTable for consistency (disabled state, label prop, focus rings, color palette)
+  - The BulletListEditor is designed for longer text items (like values, differentiators) while TagInput is better for short words/phrases
+  - Key/index combo for React keys (`${item}-${index}`) handles potential duplicates safely
+---
+
