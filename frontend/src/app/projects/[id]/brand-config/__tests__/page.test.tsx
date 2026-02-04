@@ -336,6 +336,56 @@ describe('BrandConfigPage', () => {
         expect.any(Object)
       );
     });
+
+    it('calls regenerate with target_audience when regenerating that section', async () => {
+      const mockMutate = vi.fn();
+      mockUseRegenerateBrandConfig.mockReturnValue(createMockMutation({ mutate: mockMutate }));
+
+      const user = userEvent.setup();
+      render(<BrandConfigPage />);
+
+      // Navigate to Target Audience section
+      await user.click(screen.getByRole('button', { name: 'Target Audience' }));
+      await waitFor(() => {
+        const sectionHeaders = screen.getAllByRole('heading', { level: 2 });
+        const contentHeader = sectionHeaders.find(h => h.textContent === 'Target Audience');
+        expect(contentHeader).toBeInTheDocument();
+      });
+
+      // Click Regenerate button for the section
+      const regenerateButtons = screen.getAllByRole('button', { name: /^Regenerate$/ });
+      await user.click(regenerateButtons[0]);
+
+      expect(mockMutate).toHaveBeenCalledWith(
+        { section: 'target_audience' },
+        expect.any(Object)
+      );
+    });
+
+    it('calls regenerate with examples_bank when regenerating that section', async () => {
+      const mockMutate = vi.fn();
+      mockUseRegenerateBrandConfig.mockReturnValue(createMockMutation({ mutate: mockMutate }));
+
+      const user = userEvent.setup();
+      render(<BrandConfigPage />);
+
+      // Navigate to Examples Bank section
+      await user.click(screen.getByRole('button', { name: 'Examples Bank' }));
+      await waitFor(() => {
+        const sectionHeaders = screen.getAllByRole('heading', { level: 2 });
+        const contentHeader = sectionHeaders.find(h => h.textContent === 'Examples Bank');
+        expect(contentHeader).toBeInTheDocument();
+      });
+
+      // Click Regenerate button for the section
+      const regenerateButtons = screen.getAllByRole('button', { name: /^Regenerate$/ });
+      await user.click(regenerateButtons[0]);
+
+      expect(mockMutate).toHaveBeenCalledWith(
+        { section: 'examples_bank' },
+        expect.any(Object)
+      );
+    });
   });
 
   describe('edit functionality', () => {

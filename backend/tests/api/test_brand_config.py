@@ -841,3 +841,159 @@ class TestRegenerateBrandConfig:
 
         assert response.status_code == 503
         assert "not configured" in response.json()["detail"]
+
+    @pytest.mark.parametrize(
+        "section_name",
+        [
+            "brand_foundation",
+            "target_audience",
+            "voice_dimensions",
+            "voice_characteristics",
+            "writing_style",
+            "vocabulary",
+            "trust_elements",
+            "examples_bank",
+            "competitor_context",
+            "ai_prompt_snippet",
+        ],
+    )
+    async def test_regenerate_each_section_individually(
+        self,
+        async_client_with_mocks: AsyncClient,
+        db_session,
+        sample_v2_schema: dict[str, Any],
+        section_name: str,
+    ) -> None:
+        """Test regenerating each section individually updates only that section.
+
+        This parametrized test verifies:
+        1. Each of the 10 sections can be regenerated
+        2. Content refreshes (section data is replaced with mock response)
+        3. Other sections remain unchanged
+        """
+        # Create project and brand config
+        project = Project(
+            id=str(uuid.uuid4()),
+            name="Test Project",
+            site_url="https://test.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+
+        # Mark original section data for comparison
+        original_schema = dict(sample_v2_schema)
+
+        brand_config = BrandConfig(
+            id=str(uuid.uuid4()),
+            project_id=project.id,
+            brand_name="Test Corp",
+            v2_schema=original_schema,
+        )
+        db_session.add(brand_config)
+        await db_session.commit()
+
+        # Regenerate the specific section
+        response = await async_client_with_mocks.post(
+            f"/api/v1/projects/{project.id}/brand-config/regenerate",
+            json={"section": section_name},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Verify: Content refreshes - the regenerated section has new data
+        assert data["v2_schema"][section_name] == {"test": "data"}
+
+        # Verify: Other sections remain unchanged
+        for other_section in original_schema:
+            if other_section != section_name and other_section in [
+                "brand_foundation",
+                "target_audience",
+                "voice_dimensions",
+                "voice_characteristics",
+                "writing_style",
+                "vocabulary",
+                "trust_elements",
+                "examples_bank",
+                "competitor_context",
+                "ai_prompt_snippet",
+            ]:
+                assert data["v2_schema"][other_section] == original_schema[other_section], (
+                    f"Section {other_section} should remain unchanged when regenerating {section_name}"
+                )
+
+    async def test_regenerate_target_audience_content_refreshes(
+        self,
+        async_client_with_mocks: AsyncClient,
+        db_session,
+        sample_v2_schema: dict[str, Any],
+    ) -> None:
+        """Test regenerating Target Audience - content refreshes (AC #1)."""
+        project = Project(
+            id=str(uuid.uuid4()),
+            name="Test Project",
+            site_url="https://test.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+
+        brand_config = BrandConfig(
+            id=str(uuid.uuid4()),
+            project_id=project.id,
+            brand_name="Test Corp",
+            v2_schema=sample_v2_schema,
+        )
+        db_session.add(brand_config)
+        await db_session.commit()
+
+        # Verify original has different content
+        assert sample_v2_schema["target_audience"]["primary_persona"]["name"] == "Tech Professional"
+
+        response = await async_client_with_mocks.post(
+            f"/api/v1/projects/{project.id}/brand-config/regenerate",
+            json={"section": "target_audience"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Content refreshed - now has mock data
+        assert data["v2_schema"]["target_audience"] == {"test": "data"}
+
+    async def test_regenerate_examples_bank_content_refreshes(
+        self,
+        async_client_with_mocks: AsyncClient,
+        db_session,
+        sample_v2_schema: dict[str, Any],
+    ) -> None:
+        """Test regenerating Examples Bank - content refreshes (AC #2)."""
+        project = Project(
+            id=str(uuid.uuid4()),
+            name="Test Project",
+            site_url="https://test.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+
+        brand_config = BrandConfig(
+            id=str(uuid.uuid4()),
+            project_id=project.id,
+            brand_name="Test Corp",
+            v2_schema=sample_v2_schema,
+        )
+        db_session.add(brand_config)
+        await db_session.commit()
+
+        # Verify original has different content
+        assert sample_v2_schema["examples_bank"]["headlines_that_work"] == ["Test headline"]
+
+        response = await async_client_with_mocks.post(
+            f"/api/v1/projects/{project.id}/brand-config/regenerate",
+            json={"section": "examples_bank"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Content refreshed - now has mock data
+        assert data["v2_schema"]["examples_bank"] == {"test": "data"}

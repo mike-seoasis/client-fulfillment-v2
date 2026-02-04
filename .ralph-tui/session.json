@@ -3,10 +3,10 @@
   "sessionId": "0d66a092-1147-4c2d-a140-1be3ee3a203f",
   "status": "running",
   "startedAt": "2026-02-04T15:32:53.974Z",
-  "updatedAt": "2026-02-04T16:29:17.549Z",
-  "currentIteration": 30,
+  "updatedAt": "2026-02-04T16:33:39.559Z",
+  "currentIteration": 33,
   "maxIterations": 10,
-  "tasksCompleted": 30,
+  "tasksCompleted": 31,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -197,8 +197,8 @@
       {
         "id": "BC-031",
         "title": "Test brand config generation with new prompts",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "BC-032",
@@ -532,10 +532,43 @@
       "durationMs": 242321,
       "startedAt": "2026-02-04T16:21:06.875Z",
       "endedAt": "2026-02-04T16:25:09.196Z"
+    },
+    {
+      "iteration": 31,
+      "status": "completed",
+      "taskId": "BC-031",
+      "taskTitle": "Test brand config generation with new prompts",
+      "taskCompleted": true,
+      "durationMs": 247254,
+      "startedAt": "2026-02-04T16:25:10.294Z",
+      "endedAt": "2026-02-04T16:29:17.548Z"
+    },
+    {
+      "iteration": 32,
+      "status": "failed",
+      "taskId": "BC-032",
+      "taskTitle": "Test VoiceCharacteristics with both data formats",
+      "taskCompleted": false,
+      "durationMs": 20576,
+      "startedAt": "2026-02-04T16:29:18.633Z",
+      "endedAt": "2026-02-04T16:29:39.209Z"
+    },
+    {
+      "iteration": 33,
+      "status": "failed",
+      "taskId": "BC-033",
+      "taskTitle": "Test VoiceDimensions slider with various values",
+      "taskCompleted": false,
+      "durationMs": 1639,
+      "startedAt": "2026-02-04T16:29:40.215Z",
+      "endedAt": "2026-02-04T16:29:41.854Z"
     }
   ],
   "skippedTaskIds": [],
   "cwd": "/Users/mike/Projects/client-onboarding-v2",
-  "activeTaskIds": [],
+  "activeTaskIds": [
+    "BC-032",
+    "BC-033"
+  ],
   "subagentPanelVisible": false
 }

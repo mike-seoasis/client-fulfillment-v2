@@ -522,8 +522,9 @@
         "Existing content is replaced, other sections unchanged"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Use UI regenerate button for each section"
+      "passes": true,
+      "notes": "Use UI regenerate button for each section",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "BC-098",
@@ -555,6 +556,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-04T16:29:17.548Z"
+    "updatedAt": "2026-02-04T16:33:39.558Z"
   }
 }

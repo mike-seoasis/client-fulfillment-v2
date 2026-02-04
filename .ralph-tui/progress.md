@@ -637,3 +637,24 @@ const hasValidationErrors = Object.keys(errors).length > 0;
   - AI Prompt Snippet generation improved significantly from old prompts (now generates successfully)
 ---
 
+## 2026-02-04 - BC-034
+- **What was tested:** Regeneration functionality for all 10 brand config sections
+- **Files changed:**
+  - `backend/tests/api/test_brand_config.py` - Added comprehensive parametrized test for all 10 sections, plus specific tests for Target Audience and Examples Bank
+  - `frontend/src/app/projects/[id]/brand-config/__tests__/page.test.tsx` - Added tests for regenerating Target Audience and Examples Bank sections via UI
+- **Test Results:**
+  - All 17 backend regeneration tests pass (10 parametrized + 7 others)
+  - All 7 frontend regeneration tests pass (including 2 new section-specific tests)
+  - Verified: Content refreshes for each section
+  - Verified: Other sections remain unchanged when regenerating a single section
+- **Learnings:**
+  - Regeneration flow is complete and functional:
+    1. Frontend calls `regenerateMutation.mutate({ section: 'section_name' })`
+    2. Backend `POST /regenerate` endpoint accepts `RegenerateRequest`
+    3. `BrandConfigService.regenerate_sections()` re-runs research + synthesis phases for specified sections
+    4. Updated `v2_schema` is returned and cached by React Query
+  - Parametrized tests (`@pytest.mark.parametrize`) are effective for testing all 10 sections without code duplication
+  - The MockClaudeClient returns `{"test": "data"}` for all sections, making it easy to verify content was replaced
+  - Pre-existing failing frontend tests for save/edit functionality are unrelated to regeneration (BC-034)
+---
+
