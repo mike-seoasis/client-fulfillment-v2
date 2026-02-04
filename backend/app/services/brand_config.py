@@ -542,40 +542,86 @@ REQUIREMENTS:
 - competitive_advantages: Provide at least 4 unique advantages
 - Be honest about competitive_weaknesses - this helps the brand address gaps
 - Positioning statements should be usable in copy without naming competitors.""",
-    "ai_prompt_snippet": """You are a brand strategist creating the AI Prompt Snippet for a brand guidelines document.
+    "ai_prompt_snippet": """You are a brand strategist creating a COMPREHENSIVE AI Prompt for brand content generation.
 
-This snippet will be prepended to AI writing requests to ensure consistent brand voice. It must be COMPLETE and STANDALONE - anyone using this snippet should be able to write on-brand content without needing to reference the full brand guidelines.
+This prompt will be used to generate ALL written content for this brand - product descriptions, emails, ads, social posts, website copy, and more. It must be THOROUGH and PRODUCTION-READY. A content writer using ONLY this prompt should be able to create perfectly on-brand content without any other reference materials.
 
-Based on ALL the brand sections provided, create a comprehensive prompt snippet that captures the FULL essence of the brand.
+Based on ALL the brand sections provided, create an exhaustive prompt that leaves nothing to interpretation.
 
 Output ONLY valid JSON in this exact format:
 {
-  "snippet": "string (the full prompt snippet, 150-200 words - MUST include: brand voice descriptors, target audience summary, key differentiators, tone guidance, and critical do's/don'ts)",
-  "voice_in_three_words": ["string", "string", "string"],
-  "we_sound_like": "string (1-sentence comparison to a recognizable brand/personality)",
-  "we_never_sound_like": "string (1-sentence anti-comparison)",
-  "primary_audience_summary": "string (2-3 sentences covering who they are, what they want, and how they buy)",
-  "key_differentiators": ["string", "string", "string", "string", "string"],
-  "never_use_words": ["—", "string", "string", "string", "string", "string", "string", "string", "string", "string"],
-  "always_include": ["string", "string", "string", "string", "string"]
+  "full_prompt": "string (400-600 words - the complete, production-ready prompt - see requirements below)",
+  "quick_reference": {
+    "voice_in_three_words": ["string", "string", "string"],
+    "we_sound_like": "string (comparison to a recognizable brand/personality for instant clarity)",
+    "we_never_sound_like": "string (anti-comparison)",
+    "elevator_pitch": "string (2-3 sentences: what the brand does, for whom, and why it matters)"
+  },
+  "audience_profile": {
+    "primary_persona": "string (name and 1-sentence description)",
+    "demographics": "string (age, income, location, lifestyle)",
+    "psychographics": "string (values, motivations, pain points, aspirations)",
+    "how_they_talk": "string (communication style, vocabulary level, references they'd understand)",
+    "what_they_care_about": ["string", "string", "string", "string", "string"]
+  },
+  "voice_guidelines": {
+    "personality_traits": ["string", "string", "string", "string", "string"],
+    "tone_spectrum": {
+      "formal_to_casual": "string (e.g., '70% casual, 30% professional')",
+      "serious_to_playful": "string",
+      "reserved_to_enthusiastic": "string"
+    },
+    "sentence_style": "string (length, structure, rhythm)",
+    "vocabulary_level": "string (e.g., 'accessible but not dumbed down, 8th grade reading level')"
+  },
+  "writing_rules": {
+    "always_do": ["string", "string", "string", "string", "string", "string", "string", "string"],
+    "never_do": ["string", "string", "string", "string", "string", "string", "string", "string"],
+    "banned_words": ["—", "string", "string", "string", "string", "string", "string", "string", "string", "string", "string", "string", "string", "string", "string"],
+    "preferred_alternatives": [
+      {"instead_of": "string", "use": "string"},
+      {"instead_of": "string", "use": "string"},
+      {"instead_of": "string", "use": "string"}
+    ]
+  },
+  "content_patterns": {
+    "headline_formula": "string (e.g., 'Benefit + Specificity + Emotion')",
+    "cta_style": "string (how CTAs should feel - urgent, inviting, confident, etc.)",
+    "proof_points_to_include": ["string", "string", "string", "string"],
+    "emotional_triggers": ["string", "string", "string"]
+  },
+  "brand_specifics": {
+    "key_messages": ["string", "string", "string"],
+    "unique_value_props": ["string", "string", "string", "string", "string"],
+    "competitive_angles": ["string", "string", "string"],
+    "trust_signals_to_mention": ["string", "string", "string", "string"]
+  }
 }
 
-REQUIREMENTS:
-- snippet: MUST be 150-200 words. This is the most important field. It should be a complete, ready-to-use prompt that includes:
-  - Brand voice description (personality, tone, how we communicate)
-  - Target audience summary (who we're writing for)
-  - Key differentiators (what makes this brand unique)
-  - Critical writing rules (must-dos and must-avoids)
-  - The snippet should read naturally, not like a bulleted list
-- voice_in_three_words: Exactly 3 distinctive voice descriptors (e.g., "confident", "warm", "expert")
-- we_sound_like: Compare to a well-known brand or personality for instant clarity
-- we_never_sound_like: Anti-comparison for what to avoid
-- primary_audience_summary: 2-3 sentences that give a complete picture of the target customer
-- key_differentiators: At least 5 unique selling points or brand differentiators
-- never_use_words: At least 10 banned words/phrases. MUST include "—" (em dash) as the first item. Include generic/AI-sounding words (utilize, leverage, synergy, etc.) and any brand-specific words to avoid.
-- always_include: At least 5 elements that should appear in brand communications (e.g., "social proof", "benefit-focused headlines", "conversational tone", etc.)
+REQUIREMENTS FOR full_prompt (THIS IS THE MOST IMPORTANT FIELD):
+The full_prompt must be 400-600 words and structured as a complete, ready-to-use system prompt. It should include:
 
-The snippet is the KEY DELIVERABLE - it should be immediately usable and comprehensive enough that someone can write on-brand content using only this snippet.""",
+1. BRAND IDENTITY (50-75 words): Who is this brand? What do they sell? What's their mission? What makes them different?
+
+2. TARGET AUDIENCE (50-75 words): Detailed description of who we're writing for - their demographics, psychographics, pain points, and aspirations. How do they talk? What do they care about?
+
+3. VOICE & TONE (75-100 words): Detailed personality description. Are we formal or casual? Playful or serious? Expert or approachable? Use specific comparisons (e.g., "like a knowledgeable friend, not a pushy salesperson"). Include tone spectrum guidance.
+
+4. WRITING STYLE (75-100 words): Sentence structure preferences, vocabulary level, rhythm and pacing. How long should sentences be? Do we use fragments? Contractions? Questions? What's our paragraph style?
+
+5. RULES & CONSTRAINTS (75-100 words): Specific do's and don'ts. Banned words and phrases (MUST include em dashes). Required elements. Formatting preferences. Things that are absolutely off-brand.
+
+6. PROOF & PERSUASION (50-75 words): What trust signals should be woven in? What emotional triggers work? What proof points matter most? How do we handle claims and benefits?
+
+Write the full_prompt as flowing prose organized under clear headers, not as bullet points. It should read like expert guidance from a brand strategist.
+
+For all other fields:
+- voice_in_three_words: Exactly 3 distinctive, memorable descriptors
+- banned_words: At least 15 words/phrases. MUST start with "—" (em dash). Include generic AI words (utilize, leverage, synergy, elevate, etc.)
+- always_do/never_do: At least 8 items each, specific and actionable
+- All arrays should have meaningful, specific content - no generic filler
+
+This prompt will be used thousands of times to generate content. Make it count.""",
 }
 
 

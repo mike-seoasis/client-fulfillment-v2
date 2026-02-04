@@ -220,9 +220,67 @@ export interface CompetitorContextData {
   rules?: string[];
 }
 
-// AI Prompt Snippet type
+// AI Prompt Snippet type - comprehensive version
 export interface AIPromptSnippetData {
-  snippet: string;
+  // Main prompt (400-600 words)
+  full_prompt: string;
+  // Legacy field for backwards compatibility
+  snippet?: string;
+
+  // Quick reference
+  quick_reference?: {
+    voice_in_three_words?: string[];
+    we_sound_like?: string;
+    we_never_sound_like?: string;
+    elevator_pitch?: string;
+  };
+
+  // Audience profile
+  audience_profile?: {
+    primary_persona?: string;
+    demographics?: string;
+    psychographics?: string;
+    how_they_talk?: string;
+    what_they_care_about?: string[];
+  };
+
+  // Voice guidelines
+  voice_guidelines?: {
+    personality_traits?: string[];
+    tone_spectrum?: {
+      formal_to_casual?: string;
+      serious_to_playful?: string;
+      reserved_to_enthusiastic?: string;
+    };
+    sentence_style?: string;
+    vocabulary_level?: string;
+  };
+
+  // Writing rules
+  writing_rules?: {
+    always_do?: string[];
+    never_do?: string[];
+    banned_words?: string[];
+    preferred_alternatives?: Array<{ instead_of: string; use: string }>;
+  };
+
+  // Content patterns
+  content_patterns?: {
+    headline_formula?: string;
+    cta_style?: string;
+    proof_points_to_include?: string[];
+    emotional_triggers?: string[];
+  };
+
+  // Brand specifics
+  brand_specifics?: {
+    key_messages?: string[];
+    unique_value_props?: string[];
+    competitive_angles?: string[];
+    trust_signals_to_mention?: string[];
+  };
+
+  // Legacy fields for backwards compatibility
   voice_in_three_words?: string[];
   we_sound_like?: string;
   we_never_sound_like?: string;
