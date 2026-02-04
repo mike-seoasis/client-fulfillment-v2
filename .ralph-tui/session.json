@@ -3,10 +3,10 @@
   "sessionId": "25c5f477-c4fc-4e41-904e-0b4db33aad95",
   "status": "running",
   "startedAt": "2026-02-04T19:06:42.165Z",
-  "updatedAt": "2026-02-04T20:51:51.574Z",
-  "currentIteration": 46,
+  "updatedAt": "2026-02-04T20:52:40.482Z",
+  "currentIteration": 47,
   "maxIterations": 10,
-  "tasksCompleted": 46,
+  "tasksCompleted": 47,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -293,8 +293,8 @@
       {
         "id": "S3-047",
         "title": "Manual end-to-end testing",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "S3-098",
@@ -770,6 +770,16 @@
       "durationMs": 205430,
       "startedAt": "2026-02-04T20:42:41.205Z",
       "endedAt": "2026-02-04T20:46:06.635Z"
+    },
+    {
+      "iteration": 47,
+      "status": "completed",
+      "taskId": "S3-047",
+      "taskTitle": "Manual end-to-end testing",
+      "taskCompleted": true,
+      "durationMs": 343818,
+      "startedAt": "2026-02-04T20:46:07.754Z",
+      "endedAt": "2026-02-04T20:51:51.572Z"
     }
   ],
   "skippedTaskIds": [],

@@ -8,10 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Phase** | 3 - URL Upload + Crawling |
+| **Phase** | 4 - Primary Keyword + Approval |
 | **Slice** | Starting |
 | **Last Session** | 2026-02-04 |
-| **Next Action** | Build URL upload interface and crawling pipeline |
+| **Next Action** | Build primary keyword generation and approval interface |
 
 ### Session Log
 
@@ -24,6 +24,7 @@
 | 2026-02-03 | Phase 2 complete (ProjectFile model, S3 integration with LocalStack, text extraction utils, FileService, file upload API, brand config generation service with research/synthesis phases, brand config API endpoints, multi-step project creation wizard, FileUpload component, GenerationProgress component, SectionNav, 10 brand section display components, inline section editing, regenerate functionality, comprehensive unit/integration/component tests) | Phase 3 |
 | 2026-02-04 | Brand config improvements (fixed VoiceCharacteristics crash for we_are_not data format, fixed VoiceDimensions slider positioning, debugged regeneration endpoint, updated Perplexity research prompt for e-commerce focus, enhanced 9 section prompts for richer content, created 4 reusable editor components: TagInput/EditableTable/BulletListEditor/SliderInput, created 10 section-specific editors, added keyboard shortcuts Cmd+S/Escape, added validation and error display, comprehensive unit tests) | Phase 3 |
 | 2026-02-04 | Phase 2 polish: Fixed JSON control char parsing for AI prompts, fixed Voice Characteristics field name (characteristic→trait_name), removed Examples Bank section (will add real examples later), renamed button to "Brand Details" | Phase 3 |
+| 2026-02-04 | Phase 3 complete (URL upload with paste/CSV, crawling pipeline with Crawl4AI, content extraction with BeautifulSoup, label taxonomy generation with Claude, label assignment service, crawl progress page with polling, retry failed pages, label editing dropdown, project detail onboarding status, comprehensive API and component tests - 47 stories total) | Phase 4 |
 
 ---
 
@@ -153,11 +154,11 @@
 - [x] View/edit brand config
 - [x] **Verify:** Can generate and view brand config
 
-### Phase 3: URL Upload + Crawling
-- [ ] Upload URLs interface
-- [ ] Crawling pipeline
-- [ ] View crawl results
-- [ ] **Verify:** Can upload URLs and see crawled data
+### Phase 3: URL Upload + Crawling ✅
+- [x] Upload URLs interface
+- [x] Crawling pipeline
+- [x] View crawl results
+- [x] **Verify:** Can upload URLs and see crawled data
 
 ### Phase 4: Primary Keyword + Approval (SHARED)
 - [ ] Generate primary keyword candidates
