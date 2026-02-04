@@ -129,8 +129,9 @@
         "Tests in backend/tests/services/test_crawling.py"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Mock Crawl4AIClient for unit tests"
+      "passes": true,
+      "notes": "Mock Crawl4AIClient for unit tests",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S3-009",
@@ -725,6 +726,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-04T19:17:37.389Z"
+    "updatedAt": "2026-02-04T19:22:05.138Z"
   }
 }

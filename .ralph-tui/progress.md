@@ -134,3 +134,23 @@ after each iteration and it's included in prompts for context.
   - Forms with action="/cart/add" can be used as last resort to count products (one form per product)
 ---
 
+## 2026-02-04 - S3-008
+- **What was implemented**: Unit tests for CrawlingService
+- **Files changed**:
+  - `backend/tests/services/test_crawling.py` (new file - 22 tests)
+- **Test coverage**:
+  - `TestCrawlConcurrency` - Tests for concurrency limit via semaphore, empty list handling, nonexistent pages
+  - `TestStatusTransitions` - Tests pending → crawling → completed/failed status lifecycle
+  - `TestFailedCrawl` - Tests error message setting, content fields not populated on failure, error clearing on success
+  - `TestContentExtraction` - Tests all fields extracted (title, meta_description, headings, body_content, word_count, product_count)
+  - `TestCrawlPendingPages` - Tests crawl_pending_pages convenience method with limit, skip completed/failed
+  - `TestExceptionHandling` - Tests asyncio.gather return_exceptions=True behavior
+  - `TestCrawlResultMapping` - Tests CrawlResult to CrawledPage field mapping
+- **Learnings:**
+  - SQLite in-memory database with aiosqlite cannot handle concurrent async transactions like PostgreSQL
+  - Tests that verify concurrent database writes fail with SQLite; use single-page tests or in-memory tracking for concurrency tests
+  - SQLAlchemy warning "Attribute history events accumulated" indicates concurrent transaction conflicts
+  - Mock the Crawl4AIClient, not the database layer - tests verify service behavior, not database behavior
+  - Use `test_page` fixture (single page) instead of `test_pages` (multiple) when not testing batch behavior
+---
+
