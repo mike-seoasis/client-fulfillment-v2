@@ -4,3 +4,4 @@ export { BulletListEditor, type BulletListEditorProps } from './BulletListEditor
 export { SliderInput, type SliderInputProps } from './SliderInput';
 export { BrandFoundationEditor, type BrandFoundationEditorProps } from './BrandFoundationEditor';
 export { TargetAudienceEditor, type TargetAudienceEditorProps } from './TargetAudienceEditor';
+export { VoiceDimensionsEditor, type VoiceDimensionsEditorProps } from './VoiceDimensionsEditor';

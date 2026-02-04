@@ -316,3 +316,23 @@ This prevents "objects are not valid as a React child" errors when backend data 
   - Keep at least one item in repeatable sections (canDelete={personas.length > 1}) to prevent users from accidentally removing all items
 ---
 
+## 2026-02-04 - BC-019
+- **What was implemented:** Created VoiceDimensionsEditor component for inline editing of Voice Dimensions section
+- **Files changed:**
+  - `frontend/src/components/brand-sections/editors/VoiceDimensionsEditor.tsx` - New component with:
+    - Four SliderInput components for: formality, humor, reverence, enthusiasm
+    - Each dimension section includes slider + description textarea + example textarea
+    - Dimension configs defined as constant array for clean mapping
+    - Voice summary textarea at the bottom
+    - Keyboard shortcuts: ⌘S to save, Esc to cancel
+    - isSaving state to disable form during save
+    - Defensive position validation (defaults to 5 if invalid)
+    - Clean data transformation on save (empty strings to undefined)
+  - `frontend/src/components/brand-sections/editors/index.ts` - Added VoiceDimensionsEditor export
+- **Learnings:**
+  - For editors with multiple similar sections (like voice dimensions), use a config array and map to avoid repetition
+  - The SliderInput component already handles position validation/clamping, but the editor also validates on initialization for safety
+  - Using a dimensionState record allows dynamic access to state by key, simplifying the render loop
+  - Avoid apostrophes and quotes in JSX text content (ESLint react/no-unescaped-entities) - use alternative phrasing or escape with entities
+---
+
