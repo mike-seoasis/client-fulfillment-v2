@@ -154,3 +154,25 @@ after each iteration and it's included in prompts for context.
   - Use `test_page` fixture (single page) instead of `test_pages` (multiple) when not testing batch behavior
 ---
 
+## 2026-02-04 - S3-009
+- **What was implemented**: LabelTaxonomyService for AI-powered label generation and assignment
+- **Files changed**:
+  - `backend/app/services/label_taxonomy.py` (new file)
+  - `backend/app/services/__init__.py` (added exports)
+- **Features**:
+  - `LabelTaxonomyService` class with two main methods:
+    - `generate_taxonomy(db, project_id)` - Analyzes all completed pages and generates taxonomy of 5-15 labels
+    - `assign_labels(db, project_id, taxonomy?)` - Assigns 1-3 labels from taxonomy to each page
+  - Dataclasses: `TaxonomyLabel`, `GeneratedTaxonomy`, `LabelAssignment`
+  - Stores taxonomy in `Project.phase_status["onboarding"]["taxonomy"]`
+  - Stores labels in `CrawledPage.labels` array
+  - Uses `flag_modified()` for SQLAlchemy JSONB mutation tracking
+  - JSON extraction helper for markdown code block responses
+- **Learnings:**
+  - When modifying JSONB fields in SQLAlchemy, must use `flag_modified(obj, "field_name")` to ensure changes are persisted
+  - Service pattern: inject ClaudeClient in constructor, inject AsyncSession in method calls
+  - Claude's `complete()` method accepts `system_prompt` and `user_prompt` with configurable `temperature` and `max_tokens`
+  - For taxonomy/classification tasks, use low temperature (0.0-0.1) for consistency
+  - Can load taxonomy from project phase_status if not provided to assign_labels()
+---
+

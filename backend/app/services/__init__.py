@@ -12,6 +12,12 @@ from app.services.content_extraction import (
 )
 from app.services.crawling import CrawlingService
 from app.services.file import FileService
+from app.services.label_taxonomy import (
+    GeneratedTaxonomy,
+    LabelAssignment,
+    LabelTaxonomyService,
+    TaxonomyLabel,
+)
 from app.services.project import ProjectService
 
 __all__ = [
@@ -20,8 +26,12 @@ __all__ = [
     "ExtractedContent",
     "extract_content_from_html",
     "FileService",
+    "GeneratedTaxonomy",
     "GenerationStatus",
+    "LabelAssignment",
+    "LabelTaxonomyService",
     "ProjectService",
     "ResearchContext",
+    "TaxonomyLabel",
     "truncate_body_content",
 ]

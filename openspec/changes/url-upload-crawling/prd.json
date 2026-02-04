@@ -145,8 +145,9 @@
         "Store labels in CrawledPage.labels array"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Use Claude integration at backend/app/integrations/claude.py"
+      "passes": true,
+      "notes": "Use Claude integration at backend/app/integrations/claude.py",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S3-010",
@@ -726,6 +727,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-04T19:22:05.138Z"
+    "updatedAt": "2026-02-04T19:24:32.954Z"
   }
 }
