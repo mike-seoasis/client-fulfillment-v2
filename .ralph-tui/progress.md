@@ -78,3 +78,18 @@ This prevents "objects are not valid as a React child" errors when backend data 
   - Prompt engineering principle: showing the expected array structure with a full object example (not empty `[]`) guides the LLM to produce complete output
 ---
 
+## 2026-02-04 - BC-006
+- **What was implemented:** Updated voice_characteristics prompt to output `we_are_not` as array of simple strings
+- **Files changed:** `backend/app/services/brand_config.py` (lines 304-332)
+- **Learnings:**
+  - The voice_characteristics prompt was returning `we_are_not` as objects `{characteristic, description}` but frontend types.ts expected `string[]`
+  - Key changes:
+    - Changed JSON schema example from array of objects to array of simple strings: `["corporate", "stuffy", "salesy", "pushy", "generic"]`
+    - Added explicit REQUIREMENTS section with:
+      - `we_are`: minimum 5 characteristics with full details
+      - `we_are_not`: explicitly stated "array of 5+ simple strings (NOT objects)"
+    - The example format in the JSON schema is crucial - LLMs mirror the structure they see
+  - This is the root cause fix for BC-001 (which added defensive rendering on frontend). Now both layers are aligned.
+  - Prompt engineering principle: when you need a specific data format, show an example in the exact format AND add explicit text stating "NOT objects" or similar to prevent the LLM from elaborating
+---
+

@@ -303,7 +303,7 @@ Output ONLY valid JSON in this exact format:
 Base scores on actual brand positioning and audience expectations.""",
     "voice_characteristics": """You are a brand strategist creating the Voice Characteristics section of a brand guidelines document.
 
-Based on the research context and voice dimensions, define 3-5 key voice characteristics with examples:
+Based on the research context and voice dimensions, define key voice characteristics with examples:
 
 For each characteristic, provide:
 - The characteristic name
@@ -311,7 +311,7 @@ For each characteristic, provide:
 - A "DO" example (on-brand writing)
 - A "DON'T" example (off-brand writing)
 
-Also define what the brand voice is NOT (3-5 anti-characteristics).
+Also define what the brand voice is NOT as a list of anti-characteristics.
 
 Output ONLY valid JSON in this exact format:
 {
@@ -323,15 +323,13 @@ Output ONLY valid JSON in this exact format:
       "dont_example": "string"
     }
   ],
-  "we_are_not": [
-    {
-      "characteristic": "string (e.g., 'Hype-driven')",
-      "description": "string"
-    }
-  ]
+  "we_are_not": ["corporate", "stuffy", "salesy", "pushy", "generic"]
 }
 
-Provide 3-5 characteristics for each section. Be specific with examples.""",
+REQUIREMENTS:
+- we_are: Provide at least 5 characteristics with full details (characteristic, description, do_example, dont_example)
+- we_are_not: Provide an array of 5+ simple strings (NOT objects). Each string is a single word or short phrase describing what the brand voice avoids.
+- Be specific with examples in we_are - show real on-brand vs off-brand writing""",
     "writing_style": """You are a brand strategist creating the Writing Style Rules section of a brand guidelines document.
 
 Based on the research context and voice established, define concrete writing style rules:
