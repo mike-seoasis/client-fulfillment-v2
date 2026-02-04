@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { useState, useMemo } from 'react';
 import { useProject } from '@/hooks/use-projects';
 import { Button } from '@/components/ui';
-import { UrlUploader, type ParsedUrl, isValidUrl } from '@/components/onboarding/UrlUploader';
+import { UrlUploader, type ParsedUrl, isValidUrl, normalizeUrl } from '@/components/onboarding/UrlUploader';
 import { CsvDropzone, type CsvParseResult } from '@/components/onboarding/CsvDropzone';
 
 // Step indicator data
@@ -156,18 +156,22 @@ export default function UrlUploadPage() {
 
   const { data: project, isLoading, error } = useProject(projectId);
 
-  // Combine URLs from textarea and CSV, deduplicating by URL
+  // Combine URLs from textarea and CSV, deduplicating by normalized URL
   const parsedUrls = useMemo(() => {
     const combined: ParsedUrl[] = [...textareaUrls];
-    const existingUrls = new Set(textareaUrls.map((u) => u.url.toLowerCase()));
+    const existingUrls = new Set(textareaUrls.map((u) => u.normalizedUrl));
 
     for (const url of csvResult.urls) {
-      if (!existingUrls.has(url.toLowerCase())) {
+      const valid = isValidUrl(url);
+      const normalized = valid ? normalizeUrl(url) : url.toLowerCase();
+
+      if (!existingUrls.has(normalized)) {
         combined.push({
           url,
-          isValid: isValidUrl(url),
+          normalizedUrl: normalized,
+          isValid: valid,
         });
-        existingUrls.add(url.toLowerCase());
+        existingUrls.add(normalized);
       }
     }
 

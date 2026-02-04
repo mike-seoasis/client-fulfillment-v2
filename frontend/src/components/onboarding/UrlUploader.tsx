@@ -4,6 +4,7 @@ import { useCallback, useState, type ChangeEvent } from 'react';
 
 export interface ParsedUrl {
   url: string;
+  normalizedUrl: string;
   isValid: boolean;
 }
 
@@ -29,25 +30,81 @@ function isValidUrl(str: string): boolean {
 }
 
 /**
+ * Normalize a URL:
+ * - Lowercase the domain (hostname)
+ * - Remove trailing slash except for root paths
+ * - Preserve original path case (paths can be case-sensitive)
+ */
+function normalizeUrl(urlStr: string): string {
+  try {
+    const url = new URL(urlStr);
+    // Reconstruct URL with lowercase hostname
+    let normalized = `${url.protocol}//${url.hostname.toLowerCase()}`;
+
+    // Add port if present and non-standard
+    if (url.port) {
+      normalized += `:${url.port}`;
+    }
+
+    // Add pathname (preserve original case)
+    let path = url.pathname;
+
+    // Remove trailing slash unless it's the root path
+    if (path.length > 1 && path.endsWith('/')) {
+      path = path.slice(0, -1);
+    }
+
+    normalized += path;
+
+    // Add search params and hash if present
+    normalized += url.search;
+    normalized += url.hash;
+
+    return normalized;
+  } catch {
+    // If URL parsing fails, return the original string trimmed
+    return urlStr.trim();
+  }
+}
+
+/**
  * Parse raw text input into an array of URLs
  * - Splits by newline
  * - Trims whitespace
  * - Filters out empty lines
  * - Validates URL format
+ * - Normalizes URLs (lowercase domain, consistent trailing slash)
+ * - Deduplicates by normalized URL
  */
 function parseUrls(rawText: string): ParsedUrl[] {
   if (!rawText.trim()) {
     return [];
   }
 
-  return rawText
+  const seen = new Set<string>();
+  const results: ParsedUrl[] = [];
+
+  const lines = rawText
     .split('\n')
     .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .map((line) => ({
-      url: line,
-      isValid: isValidUrl(line),
-    }));
+    .filter((line) => line.length > 0);
+
+  for (const line of lines) {
+    const valid = isValidUrl(line);
+    const normalized = valid ? normalizeUrl(line) : line.toLowerCase();
+
+    // Deduplicate by normalized URL
+    if (!seen.has(normalized)) {
+      seen.add(normalized);
+      results.push({
+        url: line,
+        normalizedUrl: normalized,
+        isValid: valid,
+      });
+    }
+  }
+
+  return results;
 }
 
 function UrlUploader({
@@ -111,4 +168,4 @@ function UrlUploader({
   );
 }
 
-export { UrlUploader, type UrlUploaderProps, parseUrls, isValidUrl };
+export { UrlUploader, type UrlUploaderProps, parseUrls, isValidUrl, normalizeUrl };

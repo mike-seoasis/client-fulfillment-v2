@@ -443,3 +443,29 @@ after each iteration and it's included in prompts for context.
   - Keyboard accessibility: Add `onKeyDown` handler for Enter/Space on div[role="button"]
 ---
 
+## 2026-02-04 - S3-024
+- **What was implemented**: URL parsing and validation with normalization and deduplication
+- **Files changed**:
+  - `frontend/src/components/onboarding/UrlUploader.tsx` (added normalizeUrl function, updated ParsedUrl interface, enhanced parseUrls)
+  - `frontend/src/app/projects/[id]/onboarding/upload/page.tsx` (updated to use normalizedUrl for deduplication)
+- **Features**:
+  - Added `normalizedUrl` field to `ParsedUrl` interface
+  - Created `normalizeUrl()` function that:
+    - Lowercases the hostname (domain)
+    - Removes trailing slashes except for root paths
+    - Preserves original path case (paths can be case-sensitive)
+    - Handles ports, search params, and hashes
+  - Updated `parseUrls()` to deduplicate by normalized URL
+  - Updated upload page to deduplicate CSV URLs using `normalizedUrl`
+- **Acceptance criteria verification**:
+  - ✅ Validate URL format (must have http/https protocol) - `isValidUrl()` already handled this
+  - ✅ Normalize URLs (lowercase domain, consistent trailing slash) - new `normalizeUrl()` function
+  - ✅ Deduplicate URLs - `parseUrls()` now deduplicates by normalized URL
+  - ✅ Filter empty lines - `parseUrls()` already did this
+  - ✅ Mark invalid URLs in preview - already handled in page component
+- **Learnings:**
+  - URL paths can be case-sensitive on some servers, so only lowercase the hostname, not the path
+  - The JavaScript `URL` class handles most edge cases (ports, search params, hash) automatically
+  - For invalid URLs, fall back to lowercased string for deduplication consistency
+---
+
