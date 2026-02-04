@@ -9,3 +9,4 @@ export { VoiceCharacteristicsEditor, type VoiceCharacteristicsEditorProps } from
 export { WritingStyleEditor, type WritingStyleEditorProps } from './WritingStyleEditor';
 export { VocabularyEditor, type VocabularyEditorProps } from './VocabularyEditor';
 export { TrustElementsEditor, type TrustElementsEditorProps } from './TrustElementsEditor';
+export { ExamplesBankEditor, type ExamplesBankEditorProps } from './ExamplesBankEditor';
