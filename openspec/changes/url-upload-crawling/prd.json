@@ -47,8 +47,9 @@
         "Type is int with validation"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Follow pattern of other settings like crawl4ai_timeout"
+      "passes": true,
+      "notes": "Follow pattern of other settings like crawl4ai_timeout",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S3-004",
@@ -720,6 +721,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-04T19:09:10.698Z"
+    "updatedAt": "2026-02-04T19:10:02.466Z"
   }
 }

@@ -110,6 +110,9 @@ class Settings(BaseSettings):
     crawl4ai_circuit_recovery_timeout: float = Field(
         default=60.0, description="Seconds before attempting recovery"
     )
+    crawl_concurrency: int = Field(
+        default=5, description="Maximum concurrent crawl requests"
+    )
 
     # Claude/Anthropic LLM
     anthropic_api_key: str | None = Field(

@@ -45,3 +45,15 @@ after each iteration and it's included in prompts for context.
   - Index must be dropped before column in downgrade
 ---
 
+## 2026-02-04 - S3-003
+- **What was implemented**: Added crawl_concurrency setting to config for parallel crawling tuning
+- **Files changed**: `backend/app/core/config.py`
+- **Setting details**:
+  - `crawl_concurrency: int` with default value of 5
+  - Reads from `CRAWL_CONCURRENCY` environment variable
+  - Placed in Crawl4AI settings section
+- **Learnings:**
+  - pydantic-settings automatically maps snake_case field names to SCREAMING_SNAKE_CASE env vars (case_sensitive=False)
+  - Field validation is handled by type annotation (int) - pydantic coerces string env vars automatically
+---
+
