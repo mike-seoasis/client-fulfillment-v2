@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useProject } from '@/hooks/use-projects';
 import { Button } from '@/components/ui';
 import { apiClient } from '@/lib/api';
@@ -88,6 +89,23 @@ function SpinnerIcon({ className }: { className?: string }) {
     >
       <circle cx="12" cy="12" r="10" opacity="0.25" />
       <path d="M12 2a10 10 0 0 1 10 10" className="animate-spin origin-center" />
+    </svg>
+  );
+}
+
+function RetryIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="23 4 23 10 17 10" />
+      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
     </svg>
   );
 }
@@ -268,7 +286,13 @@ function PageStatusText({ status }: { status: string }) {
   }
 }
 
-function PageListItem({ page }: { page: PageSummary }) {
+interface PageListItemProps {
+  page: PageSummary;
+  onRetry?: (pageId: string) => Promise<void>;
+  isRetrying?: boolean;
+}
+
+function PageListItem({ page, onRetry, isRetrying }: PageListItemProps) {
   // Extract path from URL for display
   const displayUrl = (() => {
     try {
@@ -293,7 +317,24 @@ function PageListItem({ page }: { page: PageSummary }) {
             <span className="text-warm-gray-900 font-mono text-sm truncate">
               {displayUrl}
             </span>
-            <PageStatusText status={page.status} />
+            <div className="flex items-center gap-2">
+              <PageStatusText status={page.status} />
+              {page.status === 'failed' && onRetry && (
+                <button
+                  onClick={() => onRetry(page.id)}
+                  disabled={isRetrying}
+                  className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-coral-700 bg-coral-50 hover:bg-coral-100 rounded-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="Retry crawl"
+                >
+                  {isRetrying ? (
+                    <SpinnerIcon className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <RetryIcon className="w-3 h-3" />
+                  )}
+                  {isRetrying ? 'Retrying...' : 'Retry'}
+                </button>
+              )}
+            </div>
           </div>
           {page.status === 'completed' && page.title && (
             <div className="mt-1 text-sm text-warm-gray-600 truncate">
@@ -327,6 +368,8 @@ function PageListItem({ page }: { page: PageSummary }) {
 export default function CrawlProgressPage() {
   const params = useParams();
   const projectId = params.id as string;
+  const queryClient = useQueryClient();
+  const [retryingPageId, setRetryingPageId] = useState<string | null>(null);
 
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
 
@@ -345,6 +388,21 @@ export default function CrawlProgressPage() {
   });
 
   const isLoading = isProjectLoading || isCrawlStatusLoading;
+
+  // Handle retry for a failed page
+  const handleRetryPage = async (pageId: string) => {
+    setRetryingPageId(pageId);
+    try {
+      await apiClient.post(`/projects/${projectId}/pages/${pageId}/retry`);
+      // Invalidate query to refresh the page list immediately
+      await queryClient.invalidateQueries({ queryKey: ['crawl-status', projectId] });
+    } catch (error) {
+      console.error('Failed to retry page crawl:', error);
+      // Error state is implicit - page will still show as failed
+    } finally {
+      setRetryingPageId(null);
+    }
+  };
 
   // Loading state
   if (isLoading) {
@@ -433,7 +491,12 @@ export default function CrawlProgressPage() {
         <div className="border border-cream-300 rounded-sm overflow-hidden">
           <div className="max-h-80 overflow-y-auto px-4">
             {pages.map((page) => (
-              <PageListItem key={page.id} page={page} />
+              <PageListItem
+                key={page.id}
+                page={page}
+                onRetry={handleRetryPage}
+                isRetrying={retryingPageId === page.id}
+              />
             ))}
             {pages.length === 0 && (
               <div className="py-8 text-center text-warm-gray-500">

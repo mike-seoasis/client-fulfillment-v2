@@ -670,3 +670,25 @@ after each iteration and it's included in prompts for context.
   - The three-state model (crawling → labeling → complete) provides good UX for showing different phases
 ---
 
+## 2026-02-04 - S3-034
+- **What was implemented**: Added retry button for failed pages in the crawl progress UI
+- **Files changed**: `frontend/src/app/projects/[id]/onboarding/crawl/page.tsx`
+- **Features**:
+  - Added `RetryIcon` component (refresh/rotate arrow icon)
+  - Extended `PageListItem` with `onRetry` callback and `isRetrying` state props
+  - Retry button appears inline with status for failed pages (coral styling to match error theme)
+  - Shows loading spinner during retry with "Retrying..." text
+  - `handleRetryPage` callback POSTs to `/api/v1/projects/{id}/pages/{page_id}/retry`
+  - Query invalidation refreshes page list immediately after retry
+  - Button disabled during retry to prevent double-clicks
+- **Acceptance criteria verification**:
+  - ✅ Retry button shown on failed pages - inline button with retry icon
+  - ✅ Clicking calls POST /api/v1/projects/{id}/pages/{page_id}/retry - apiClient.post()
+  - ✅ Page status changes to pending and re-crawls - backend resets status, query invalidation updates UI
+  - ✅ Button shows loading state during retry - SpinnerIcon + "Retrying..." + disabled state
+- **Learnings:**
+  - Track retry state per-page (not global) using `retryingPageId` state for correct loading indication when multiple failed pages exist
+  - Inline retry button design: place in flex row with status text for compact UI
+  - Use `queryClient.invalidateQueries()` after mutation to force refresh - the existing polling will pick up the new status
+---
+
