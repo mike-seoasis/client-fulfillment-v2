@@ -137,3 +137,21 @@ This prevents "objects are not valid as a React child" errors when backend data 
   - Adding format examples in the JSON schema (e.g., `"4.8 out of 5 stars"`) guides the LLM to produce consistent, human-readable output
 ---
 
+## 2026-02-04 - BC-010
+- **What was implemented:** Updated competitor_context prompt for more comprehensive e-commerce competitor analysis
+- **Files changed:**
+  - `backend/app/services/brand_config.py` (lines 473-545) - Expanded competitor_context prompt with:
+    - Changed minimum competitors from "3-5" to "AT LEAST 5"
+    - Added e-commerce focus: intro now specifies "e-commerce/DTC brand" and "ONLINE/E-COMMERCE competitors"
+    - Expanded direct_competitors schema with new fields: `category`, `pricing_tier`, `strengths[]`, `weaknesses[]`
+    - Added 5 fully-detailed competitor examples in JSON schema to guide LLM output
+    - Added "vs_amazon_sellers" positioning statement for e-commerce context
+    - Added REQUIREMENTS section explicitly mandating: 5+ e-commerce competitors, detailed positioning for each, specific strengths/weaknesses per competitor, no brick-and-mortar-only competitors
+    - Increased competitive_advantages from 3 to 4 minimum
+- **Learnings:**
+  - When expanding a JSON schema for more detailed output, showing multiple complete examples (not just one) reinforces the expected quantity and format
+  - E-commerce competitive analysis needs specific fields: pricing_tier, category (DTC vs Amazon native vs traditional retailer), and per-competitor strengths/weaknesses
+  - Adding field-level descriptions in the JSON schema (e.g., `"positioning": "string (how they position themselves...)"`) provides guidance without being overly prescriptive
+  - This is a prompt-only change - no frontend/type updates needed since the structure is additive and JSON parsing handles new fields gracefully
+---
+

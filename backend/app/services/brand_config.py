@@ -470,24 +470,65 @@ Output ONLY valid JSON in this exact format:
 
 Create 5-10 examples for each category. Make them specific to this brand.
 What NOT to write examples should show common mistakes to avoid.""",
-    "competitor_context": """You are a brand strategist creating the Competitor Context section of a brand guidelines document.
+    "competitor_context": """You are a brand strategist creating the Competitor Context section of a brand guidelines document for an e-commerce/DTC brand.
 
-Based on the research context, map the competitive landscape:
+Based on the research context, map the competitive landscape focusing on ONLINE/E-COMMERCE competitors:
 
 Output ONLY valid JSON in this exact format:
 {
   "direct_competitors": [
     {
-      "name": "string",
+      "name": "string (competitor brand name)",
+      "category": "string (e.g., 'DTC', 'Amazon native', 'Traditional retailer with e-commerce', 'Marketplace seller')",
+      "positioning": "string (how they position themselves in the market - their value prop, brand promise, target audience)",
+      "pricing_tier": "string (e.g., 'Premium', 'Mid-market', 'Budget', 'Value')",
+      "strengths": ["string (what they do well)", "string"],
+      "weaknesses": ["string (where they fall short)", "string"],
+      "our_difference": "string (specific ways we differentiate from this competitor - be concrete and actionable)"
+    },
+    {
+      "name": "Competitor 2",
+      "category": "string",
       "positioning": "string",
+      "pricing_tier": "string",
+      "strengths": ["string", "string"],
+      "weaknesses": ["string", "string"],
+      "our_difference": "string"
+    },
+    {
+      "name": "Competitor 3",
+      "category": "string",
+      "positioning": "string",
+      "pricing_tier": "string",
+      "strengths": ["string", "string"],
+      "weaknesses": ["string", "string"],
+      "our_difference": "string"
+    },
+    {
+      "name": "Competitor 4",
+      "category": "string",
+      "positioning": "string",
+      "pricing_tier": "string",
+      "strengths": ["string", "string"],
+      "weaknesses": ["string", "string"],
+      "our_difference": "string"
+    },
+    {
+      "name": "Competitor 5",
+      "category": "string",
+      "positioning": "string",
+      "pricing_tier": "string",
+      "strengths": ["string", "string"],
+      "weaknesses": ["string", "string"],
       "our_difference": "string"
     }
   ],
-  "competitive_advantages": ["string", "string", "string"],
+  "competitive_advantages": ["string", "string", "string", "string"],
   "competitive_weaknesses": ["string", "string"],
   "positioning_statements": {
     "vs_premium_brands": "string",
     "vs_budget_brands": "string",
+    "vs_amazon_sellers": "string",
     "general_differentiation": "string"
   },
   "competitor_reference_rules": [
@@ -495,8 +536,17 @@ Output ONLY valid JSON in this exact format:
   ]
 }
 
-Identify 3-5 direct competitors. Be honest about both advantages and weaknesses.
-Positioning statements should be usable in copy without naming competitors.""",
+REQUIREMENTS:
+- direct_competitors: Provide AT LEAST 5 e-commerce competitors (more is better for comprehensive analysis)
+- Focus on ONLINE competitors: DTC brands, Amazon sellers, e-commerce retailers, marketplace competitors
+- Do NOT include brick-and-mortar-only competitors unless they have significant e-commerce presence
+- For EACH competitor, provide:
+  - Detailed positioning (their value prop, who they target, how they present themselves)
+  - Specific strengths AND weaknesses (be honest and analytical)
+  - Concrete differentiation (how the brand can win against this specific competitor)
+- competitive_advantages: Provide at least 4 unique advantages
+- Be honest about competitive_weaknesses - this helps the brand address gaps
+- Positioning statements should be usable in copy without naming competitors.""",
     "ai_prompt_snippet": """You are a brand strategist creating the AI Prompt Snippet for a brand guidelines document.
 
 This snippet will be prepended to AI writing requests to ensure consistent brand voice.
