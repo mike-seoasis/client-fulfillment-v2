@@ -349,7 +349,7 @@ Output ONLY valid JSON in this exact format:
   },
   "punctuation": {
     "serial_comma": "string (Yes/No)",
-    "em_dashes": "string",
+    "em_dashes": "Never use em dashes (—). Use commas, parentheses, or separate sentences instead.",
     "exclamation_points": "string",
     "ellipses": "string"
   },
@@ -366,7 +366,9 @@ Output ONLY valid JSON in this exact format:
   }
 }
 
-Rules should align with the established voice and audience expectations.""",
+REQUIREMENTS:
+- The em_dashes rule is MANDATORY and must always be "Never use em dashes (—). Use commas, parentheses, or separate sentences instead." - this is a non-negotiable brand standard that applies regardless of brand voice or context
+- All other rules should align with the established voice and audience expectations.""",
     "vocabulary": """You are a brand strategist creating the Vocabulary Guide section of a brand guidelines document.
 
 Based on the research context and voice established, define the brand's vocabulary:

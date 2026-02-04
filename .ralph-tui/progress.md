@@ -93,3 +93,15 @@ This prevents "objects are not valid as a React child" errors when backend data 
   - Prompt engineering principle: when you need a specific data format, show an example in the exact format AND add explicit text stating "NOT objects" or similar to prevent the LLM from elaborating
 ---
 
+## 2026-02-04 - BC-007
+- **What was implemented:** Updated writing_style prompt to always prohibit em dashes
+- **Files changed:** `backend/app/services/brand_config.py` (lines 352, 369-371)
+- **Learnings:**
+  - For mandatory rules that must apply regardless of brand/context, embed the fixed value directly in the JSON schema example (not just "string")
+  - Key changes:
+    - Changed `em_dashes` field from open-ended `"string"` to fixed value `"Never use em dashes (—). Use commas, parentheses, or separate sentences instead."`
+    - Added REQUIREMENTS section explicitly stating the em_dashes rule is MANDATORY and non-negotiable
+    - Included "regardless of brand voice or context" phrasing to ensure LLM doesn't override based on research
+  - Prompt engineering principle: when a field must have a specific value regardless of input context, show the exact value in the example AND add explicit mandatory requirement text - double reinforcement prevents LLM "creativity"
+---
+
