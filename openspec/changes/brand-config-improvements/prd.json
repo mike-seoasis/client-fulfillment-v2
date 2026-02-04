@@ -119,8 +119,9 @@
         "Include em dash in default banned items"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "File: backend/app/services/brand_config.py, lines 303-328"
+      "passes": true,
+      "notes": "File: backend/app/services/brand_config.py, lines 303-328",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "BC-009",
@@ -531,6 +532,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-04T15:43:20.193Z"
+    "updatedAt": "2026-02-04T15:44:24.341Z"
   }
 }

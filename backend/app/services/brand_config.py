@@ -379,7 +379,7 @@ Output ONLY valid JSON in this exact format:
   "words_we_prefer": [
     {"instead_of": "string", "we_say": "string"}
   ],
-  "banned_words": ["string", "string", "string"],
+  "banned_words": ["—", "string", "string"],
   "industry_terms": [
     {"term": "string", "usage": "string"}
   ],
@@ -392,9 +392,12 @@ Output ONLY valid JSON in this exact format:
   }
 }
 
-Power words: 15-20 words that align with brand voice
-Banned words: 10-15 generic/AI-sounding/off-brand words to avoid
-Include industry-specific terminology used correctly.""",
+REQUIREMENTS:
+- power_words: Provide at least 20 words that align with brand voice and resonate with the target audience. These are high-impact words that should be used frequently in brand communications.
+- banned_words: Provide at least 15 words to avoid. This MUST include "—" (em dash) as the first item. Also include generic/AI-sounding/off-brand words (e.g., "utilize", "leverage", "synergy", "cutting-edge", "game-changer", "robust", "seamless", "delve").
+- words_we_prefer: Provide at least 5 word substitutions showing brand-specific language preferences.
+- industry_terms: Include industry-specific terminology used correctly with clear usage guidance.
+- brand_specific_terms: Include any proprietary terms, product names, or branded language.""",
     "trust_elements": """You are a brand strategist creating the Trust Elements section of a brand guidelines document.
 
 Based on the research context, compile proof and trust elements:

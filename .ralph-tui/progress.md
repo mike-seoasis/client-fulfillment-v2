@@ -105,3 +105,18 @@ This prevents "objects are not valid as a React child" errors when backend data 
   - Prompt engineering principle: when a field must have a specific value regardless of input context, show the exact value in the example AND add explicit mandatory requirement text - double reinforcement prevents LLM "creativity"
 ---
 
+## 2026-02-04 - BC-008
+- **What was implemented:** Updated vocabulary prompt for more comprehensive word lists
+- **Files changed:** `backend/app/services/brand_config.py` (lines 372-400)
+- **Learnings:**
+  - Key changes:
+    - Added em dash "—" as first item in `banned_words` JSON schema example to ensure it's always included
+    - Added REQUIREMENTS section with explicit minimums:
+      - `power_words`: "at least 20 words" (was 15-20)
+      - `banned_words`: "at least 15 words" (was 10-15), with "MUST include em dash as first item"
+    - Added minimum requirements for other fields: `words_we_prefer` (5+), `industry_terms`, `brand_specific_terms`
+    - Provided examples of common AI-sounding words to ban (utilize, leverage, synergy, etc.)
+  - Prompt engineering principle: showing the mandatory item first in the example array (like em dash) ensures it's always included even if LLM decides to shorten the list
+  - This reinforces the em dash rule from BC-007 (writing_style) - now banned in both stylistic rules AND vocabulary
+---
+
