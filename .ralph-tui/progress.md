@@ -434,3 +434,23 @@ This prevents "objects are not valid as a React child" errors when backend data 
   - EditableTable columns can be weighted with Tailwind width classes (w-1/3, w-2/3, etc.) for appropriate proportions
 ---
 
+## 2026-02-04 - BC-025
+- **What was implemented:** Created CompetitorContextEditor component for inline editing of Competitor Context section
+- **Files changed:**
+  - `frontend/src/components/brand-sections/editors/CompetitorContextEditor.tsx` - New component with:
+    - EditableTable for direct_competitors (name, positioning, our_difference columns)
+    - BulletListEditor for competitive_advantages
+    - BulletListEditor for competitive_weaknesses with coral styling for visual distinction
+    - EditableTable for positioning_statements (context, statement columns)
+    - BulletListEditor for rules
+    - Keyboard shortcuts: ⌘S to save, Esc to cancel
+    - isSaving state to disable form during save
+    - Data cleanup on save: filter empty rows, trim strings, convert empty arrays to undefined
+  - `frontend/src/components/brand-sections/editors/index.ts` - Added CompetitorContextEditor export
+- **Learnings:**
+  - For "negative" sections (weaknesses, what-not-to-do), use coral color scheme (bg-coral-50, border-coral-200, text-coral-800) for visual distinction from positive sections
+  - CompetitorEntry type uses `our_difference` field name (matching display component), converted from/to table Record format
+  - Positioning statements have optional `context` field - table format allows clear separation of context vs statement content
+  - Column widths for multi-column tables should be balanced to give more space to text-heavy columns (w-5/12 for our_difference, w-3/4 for statement)
+---
+

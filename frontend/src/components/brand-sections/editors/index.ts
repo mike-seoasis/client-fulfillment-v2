@@ -10,3 +10,4 @@ export { WritingStyleEditor, type WritingStyleEditorProps } from './WritingStyle
 export { VocabularyEditor, type VocabularyEditorProps } from './VocabularyEditor';
 export { TrustElementsEditor, type TrustElementsEditorProps } from './TrustElementsEditor';
 export { ExamplesBankEditor, type ExamplesBankEditorProps } from './ExamplesBankEditor';
+export { CompetitorContextEditor, type CompetitorContextEditorProps } from './CompetitorContextEditor';
