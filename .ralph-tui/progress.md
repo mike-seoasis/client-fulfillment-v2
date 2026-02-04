@@ -336,3 +336,23 @@ This prevents "objects are not valid as a React child" errors when backend data 
   - Avoid apostrophes and quotes in JSX text content (ESLint react/no-unescaped-entities) - use alternative phrasing or escape with entities
 ---
 
+## 2026-02-04 - BC-020
+- **What was implemented:** Created VoiceCharacteristicsEditor component for inline editing of Voice Characteristics section
+- **Files changed:**
+  - `frontend/src/components/brand-sections/editors/VoiceCharacteristicsEditor.tsx` - New component with:
+    - TraitCardEditor sub-component for editing individual traits (trait_name, description, do_example, dont_example)
+    - Add/remove traits functionality (minimum 1 trait to prevent empty state)
+    - BulletListEditor for `we_are_not` array (simple strings)
+    - Defensive handling of `we_are_not` data that may be strings or objects (matching BC-001 pattern)
+    - Custom icons (CheckIcon, XIcon, PlusIcon, TrashIcon) matching display component styling
+    - Keyboard shortcuts: ⌘S to save, Esc to cancel
+    - isSaving state to disable form during save
+    - Data cleanup on save (filter empty traits, trim strings, convert empty to undefined)
+  - `frontend/src/components/brand-sections/editors/index.ts` - Added VoiceCharacteristicsEditor export
+- **Learnings:**
+  - For editors with complex nested array items (like VoiceTraitExample), create a sub-component (TraitCardEditor) to encapsulate the editing UI for a single item
+  - Reuse display component styling (icons, colors, layout) in the editor to maintain visual consistency between view and edit modes
+  - When initializing state from data that may have mixed types (from BC-001 defensive pattern), apply the same defensive extraction in the editor
+  - The BulletListEditor component handles string arrays cleanly - no need to create custom list editing for simple cases
+---
+
