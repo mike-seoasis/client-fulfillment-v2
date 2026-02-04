@@ -19,6 +19,7 @@ from app.models.project import Project
 from app.schemas.crawled_page import (
     CrawledPageResponse,
     CrawlStatusResponse,
+    PageLabelsUpdate,
     PageSummary,
     ProgressCounts,
     TaxonomyLabel,
@@ -33,6 +34,7 @@ from app.schemas.project import (
     ProjectUpdate,
 )
 from app.services.crawling import CrawlingService
+from app.services.label_taxonomy import validate_page_labels
 from app.services.project import ProjectService
 
 logger = get_logger(__name__)
@@ -538,3 +540,77 @@ async def get_project_taxonomy(
         labels=labels,
         generated_at=generated_at,
     )
+
+
+@router.put(
+    "/{project_id}/pages/{page_id}/labels",
+    response_model=CrawledPageResponse,
+)
+async def update_page_labels(
+    project_id: str,
+    page_id: str,
+    data: PageLabelsUpdate,
+    db: AsyncSession = Depends(get_session),
+) -> CrawledPageResponse:
+    """Update labels for a crawled page.
+
+    Validates that all labels exist in the project's taxonomy and that
+    the label count is within the allowed range (2-5 labels).
+
+    Args:
+        project_id: UUID of the project.
+        page_id: UUID of the crawled page.
+        data: PageLabelsUpdate with labels array.
+        db: AsyncSession for database operations.
+
+    Returns:
+        Updated CrawledPageResponse with new labels.
+
+    Raises:
+        HTTPException: 404 if project or page not found.
+        HTTPException: 400 if labels fail validation.
+    """
+    # Verify project exists (raises 404 if not)
+    await ProjectService.get_project(db, project_id)
+
+    # Get the page
+    page = await db.get(CrawledPage, page_id)
+    if not page:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Page {page_id} not found",
+        )
+
+    # Verify page belongs to this project
+    if page.project_id != project_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Page {page_id} not found in project {project_id}",
+        )
+
+    # Validate labels against taxonomy
+    validation_result = await validate_page_labels(db, project_id, data.labels)
+
+    if not validation_result.valid:
+        # Format error messages for response
+        error_messages = validation_result.error_messages
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="; ".join(error_messages),
+        )
+
+    # Update the page labels
+    page.labels = validation_result.labels
+    await db.commit()
+    await db.refresh(page)
+
+    logger.info(
+        "Page labels updated",
+        extra={
+            "project_id": project_id,
+            "page_id": page_id,
+            "labels": validation_result.labels,
+        },
+    )
+
+    return CrawledPageResponse.model_validate(page)

@@ -328,3 +328,21 @@ after each iteration and it's included in prompts for context.
   - Fallback to `datetime.now()` for backwards compatibility with data missing timestamp
 ---
 
+## 2026-02-04 - S3-018
+- **What was implemented**: PUT /projects/{id}/pages/{page_id}/labels endpoint for updating page labels
+- **Files changed**:
+  - `backend/app/api/v1/projects.py` (added update_page_labels endpoint, imported PageLabelsUpdate, validate_page_labels)
+- **Endpoint features**:
+  - Accepts PageLabelsUpdate with labels array
+  - Validates all labels are in project taxonomy using validate_page_labels()
+  - Validates 2-5 labels provided (via validate_labels constants)
+  - Returns 404 if project not found, page not found, or page doesn't belong to project
+  - Returns 400 with clear error messages if validation fails (too few/too many labels, invalid labels)
+  - Updates CrawledPage.labels on success with normalized labels
+  - Returns full CrawledPageResponse after update
+- **Learnings:**
+  - Reuse validate_page_labels() from label_taxonomy.py - it loads taxonomy and validates in one call
+  - PageLabelsUpdate schema already normalizes labels (lowercase, stripped) via field_validator
+  - Check page belongs to project to prevent cross-project access
+---
+
