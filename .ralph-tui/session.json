@@ -3,10 +3,10 @@
   "sessionId": "0d66a092-1147-4c2d-a140-1be3ee3a203f",
   "status": "running",
   "startedAt": "2026-02-04T15:32:53.974Z",
-  "updatedAt": "2026-02-04T15:52:57.571Z",
-  "currentIteration": 12,
+  "updatedAt": "2026-02-04T15:54:32.548Z",
+  "currentIteration": 13,
   "maxIterations": 10,
-  "tasksCompleted": 12,
+  "tasksCompleted": 13,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -89,8 +89,8 @@
       {
         "id": "BC-013",
         "title": "Create TagInput component",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "BC-014",
@@ -352,6 +352,16 @@
       "durationMs": 118036,
       "startedAt": "2026-02-04T15:49:40.819Z",
       "endedAt": "2026-02-04T15:51:38.855Z"
+    },
+    {
+      "iteration": 13,
+      "status": "completed",
+      "taskId": "BC-013",
+      "taskTitle": "Create TagInput component",
+      "taskCompleted": true,
+      "durationMs": 77618,
+      "startedAt": "2026-02-04T15:51:39.950Z",
+      "endedAt": "2026-02-04T15:52:57.568Z"
     }
   ],
   "skippedTaskIds": [],

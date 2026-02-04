@@ -212,3 +212,23 @@ This prevents "objects are not valid as a React child" errors when backend data 
   - Use `key={${tag}-${index}}` to handle potential duplicate tags in the array safely
 ---
 
+## 2026-02-04 - BC-014
+- **What was implemented:** Created reusable EditableTable component for tabular data editing
+- **Files changed:**
+  - `frontend/src/components/brand-sections/editors/EditableTable.tsx` - New component with:
+    - Dynamic columns via `ColumnSchema[]` prop (key, header, placeholder, width, required)
+    - Inline cell editing: click to edit, Enter to save, Escape to cancel, Tab to move to next cell
+    - Add row button creates empty row and auto-focuses first cell
+    - Delete row button with trash icon, respects `minRows` constraint
+    - Empty state message when no rows
+    - Disabled state support
+    - Auto-focus input on edit with text selection
+  - `frontend/src/components/brand-sections/editors/index.ts` - Added EditableTable export
+- **Learnings:**
+  - For inline editing tables, use button elements for cell display to support click-to-edit interaction
+  - Use setTimeout(0) when auto-focusing a new row to allow React to render first
+  - Tab navigation through cells improves UX for data entry
+  - `minRows` constraint prevents accidental deletion of required rows (useful for competitors table)
+  - Existing CompetitorContextSection and VocabularySection use static tables - this component can replace them for editing mode
+---
+
