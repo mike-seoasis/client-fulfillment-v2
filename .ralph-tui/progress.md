@@ -619,3 +619,21 @@ after each iteration and it's included in prompts for context.
   - Export both named export and default export for flexibility in imports
 ---
 
+## 2026-02-04 - S3-031
+- **What was implemented**: Page list component with per-page status display including error messages for failed pages
+- **Files changed**:
+  - `backend/app/schemas/crawled_page.py` (added crawl_error to PageSummary schema)
+  - `backend/app/api/v1/projects.py` (added crawl_error to PageSummary construction in get_crawl_status)
+  - `frontend/src/app/projects/[id]/onboarding/crawl/page.tsx` (added crawl_error to PageSummary interface, display error in PageListItem)
+- **Acceptance criteria verification**:
+  - ✅ List shows all pages being crawled - PageListItem renders each page
+  - ✅ Pending: neutral icon, 'Pending' text - PageStatusIcon/PageStatusText handle pending state
+  - ✅ Crawling: spinner, 'Crawling...' text - SpinnerIcon with animate-spin, "Crawling..." text
+  - ✅ Completed: checkmark, shows extracted data - CheckIcon, title/word_count/product_count displayed
+  - ✅ Failed: error icon, shows error message - X icon, crawl_error displayed in coral text
+- **Learnings:**
+  - When adding fields to API response schemas, must update both the Pydantic schema AND the API endpoint where the schema is constructed
+  - PageSummary (lightweight) is separate from CrawledPageResponse (full) for polling efficiency
+  - Status-specific UI: use conditional rendering with `page.status === 'failed' && page.crawl_error`
+---
+

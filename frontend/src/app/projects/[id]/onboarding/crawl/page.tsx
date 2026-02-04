@@ -25,6 +25,7 @@ interface PageSummary {
   word_count: number | null;
   product_count: number | null;
   labels: string[];
+  crawl_error: string | null;
 }
 
 interface ProgressCounts {
@@ -303,6 +304,11 @@ function PageListItem({ page }: { page: PageSummary }) {
               {page.product_count !== null && (
                 <span>Products: {page.product_count}</span>
               )}
+            </div>
+          )}
+          {page.status === 'failed' && page.crawl_error && (
+            <div className="mt-1 text-sm text-coral-600">
+              {page.crawl_error}
             </div>
           )}
         </div>

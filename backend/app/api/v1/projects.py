@@ -465,6 +465,7 @@ async def get_crawl_status(
             word_count=page.word_count,
             product_count=page.product_count,
             labels=page.labels or [],
+            crawl_error=page.crawl_error,
         )
         for page in pages
     ]

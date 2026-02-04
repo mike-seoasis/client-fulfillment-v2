@@ -91,6 +91,7 @@ class PageSummary(BaseModel):
     word_count: int | None = Field(None, description="Word count of extracted content")
     product_count: int | None = Field(None, description="Products found on page")
     labels: list[str] = Field(default_factory=list, description="Assigned labels")
+    crawl_error: str | None = Field(None, description="Error message if crawl failed")
 
 
 class ProgressCounts(BaseModel):
