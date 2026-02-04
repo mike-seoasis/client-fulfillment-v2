@@ -154,77 +154,56 @@ Be specific and concrete based on the research. If information is not available,
 Based on the research context and brand foundation provided, create DETAILED TARGET AUDIENCE PERSONAS.
 
 REQUIREMENTS:
-- You MUST create a minimum of 2 fully detailed personas (primary + at least 1 secondary)
+- You MUST create a minimum of 2 fully detailed personas
 - Each persona MUST have ALL fields populated - no nulls or empty values
 - Be specific and concrete based on the research - avoid generic placeholder text
-
-For each persona, provide:
-
-DEMOGRAPHICS (all required):
-- Age range (specific, e.g., "32-45" not just "adults")
-- Location (geographic regions, urban/suburban/rural, specific markets if known)
-- Income level (specific range, e.g., "$75,000-$120,000 household income")
-- Profession (specific job titles or industries)
-- Education level
-
-PSYCHOGRAPHICS (all required):
-- Core values (minimum 3 specific values that drive decisions)
-- Pain points (specific frustrations and challenges they face)
-- Aspirations (what they're trying to achieve)
-
-BEHAVIORAL INSIGHTS (all required):
-- Buying behavior (how they research, evaluate, and purchase)
-- Decision factors (what matters most when choosing)
-- Discovery channels (where they find new brands/products)
-
-COMMUNICATION PREFERENCES (all required for each persona):
-- Preferred tone (formal/casual, technical/accessible, etc.)
-- Content formats they engage with (video, long-form, social, email, etc.)
-- Trust signals they need (reviews, certifications, testimonials, etc.)
-- Language style (jargon comfort level, emotional vs. rational appeals)
+- The first persona in the array is the PRIMARY persona
 
 Output ONLY valid JSON in this exact format:
 {
-  "primary_persona": {
-    "name": "string (descriptive name, e.g., 'The Conscious Curator')",
-    "percentage_of_customers": "string (e.g., '55%')",
-    "demographics": {
-      "age_range": "string (specific range)",
-      "gender": "string (or 'All genders' if not relevant)",
-      "location": "string (specific regions/characteristics)",
-      "income_level": "string (specific range)",
-      "profession": "string (specific roles/industries)",
-      "education": "string (specific level)"
-    },
-    "psychographics": {
-      "values": ["string", "string", "string"],
-      "aspirations": "string (detailed)",
-      "fears_pain_points": "string (specific challenges)",
-      "frustrations": "string (what frustrates them about current options)",
-      "identity": "string (how they see themselves)"
-    },
-    "behavioral_insights": {
-      "discovery_channels": ["string", "string", "string"],
-      "research_behavior": "string (how they evaluate options)",
-      "decision_factors": ["string", "string", "string"],
-      "buying_triggers": "string (what prompts purchase)",
-      "buying_behavior": "string (purchase patterns, frequency, basket size)",
-      "common_objections": ["string", "string"]
-    },
-    "communication_preferences": {
-      "preferred_tone": "string (specific tone description)",
-      "tone_they_respond_to": "string (what resonates)",
-      "language_they_use": "string (vocabulary, formality)",
-      "content_they_consume": ["string", "string", "string"],
-      "preferred_channels": ["string", "string"],
-      "trust_signals_needed": ["string", "string", "string"]
-    },
-    "summary_statement": "string (one paragraph describing them as a real person)"
+  "audience_overview": {
+    "primary_persona": "string (name of first/primary persona)",
+    "secondary_persona": "string (name of second persona)",
+    "tertiary_persona": "string or null (name of third persona if exists)"
   },
-  "secondary_personas": [
+  "personas": [
     {
-      "name": "string",
-      "percentage_of_customers": "string",
+      "name": "string (descriptive name, e.g., 'The Conscious Curator')",
+      "percentage": "string (e.g., '55%')",
+      "demographics": {
+        "age_range": "string (specific range, e.g., '32-45')",
+        "gender": "string (or 'All genders' if not relevant)",
+        "location": "string (specific regions/characteristics)",
+        "income_level": "string (specific range, e.g., '$75,000-$120,000')",
+        "profession": "string (specific roles/industries)",
+        "education": "string (specific level)"
+      },
+      "psychographics": {
+        "values": ["string", "string", "string"],
+        "aspirations": ["string (what they're trying to achieve)"],
+        "fears": ["string (specific challenges and pain points)"],
+        "frustrations": ["string (what frustrates them about current options)"],
+        "identity": "string (how they see themselves)"
+      },
+      "behavioral": {
+        "discovery_channels": ["string", "string", "string"],
+        "research_behavior": "string (how they evaluate options)",
+        "decision_factors": ["string", "string", "string"],
+        "buying_triggers": ["string (what prompts purchase)"],
+        "purchase_frequency": "string (how often they buy)"
+      },
+      "communication": {
+        "tone_preference": "string (formal/casual, technical/accessible)",
+        "language_style": "string (vocabulary, formality level)",
+        "content_consumed": ["string", "string", "string"],
+        "preferred_channels": ["string", "string"],
+        "trust_signals": ["string", "string", "string"]
+      },
+      "summary": "string (one paragraph describing them as a real person)"
+    },
+    {
+      "name": "string (second persona name)",
+      "percentage": "string",
       "demographics": {
         "age_range": "string",
         "gender": "string",
@@ -235,34 +214,33 @@ Output ONLY valid JSON in this exact format:
       },
       "psychographics": {
         "values": ["string", "string", "string"],
-        "aspirations": "string",
-        "fears_pain_points": "string",
-        "frustrations": "string",
+        "aspirations": ["string"],
+        "fears": ["string"],
+        "frustrations": ["string"],
         "identity": "string"
       },
-      "behavioral_insights": {
+      "behavioral": {
         "discovery_channels": ["string", "string", "string"],
         "research_behavior": "string",
         "decision_factors": ["string", "string", "string"],
-        "buying_triggers": "string",
-        "buying_behavior": "string",
-        "common_objections": ["string", "string"]
+        "buying_triggers": ["string"],
+        "purchase_frequency": "string"
       },
-      "communication_preferences": {
-        "preferred_tone": "string",
-        "tone_they_respond_to": "string",
-        "language_they_use": "string",
-        "content_they_consume": ["string", "string", "string"],
+      "communication": {
+        "tone_preference": "string",
+        "language_style": "string",
+        "content_consumed": ["string", "string", "string"],
         "preferred_channels": ["string", "string"],
-        "trust_signals_needed": ["string", "string", "string"]
+        "trust_signals": ["string", "string", "string"]
       },
-      "summary_statement": "string"
+      "summary": "string"
     }
   ]
 }
 
 IMPORTANT:
-- secondary_personas array MUST contain at least 1 fully detailed persona
+- personas array MUST contain at least 2 fully detailed personas
+- The first persona is the PRIMARY persona
 - ALL fields in the schema must be populated with specific, research-based content
 - Create personas that are distinct from each other (different motivations, behaviors, needs)
 - Percentages should add up to approximately 100%""",
