@@ -535,9 +535,56 @@ export default function ProjectDetailPage() {
             />
           </div>
 
-          {/* Progress display when pages exist */}
+          {/* Quick stats when pages exist */}
           {crawlStatus && crawlStatus.progress.total > 0 && (
             <div className="mb-4">
+              {/* Quick stats row */}
+              <div className="flex items-center gap-4 text-sm mb-3">
+                {/* Page count */}
+                <span className="text-warm-gray-600">
+                  <span className="font-medium text-warm-gray-900">{crawlStatus.progress.total}</span>{' '}
+                  {crawlStatus.progress.total === 1 ? 'page' : 'pages'}
+                </span>
+
+                {/* Failed count (warning style) */}
+                {crawlStatus.progress.failed > 0 && (
+                  <span className="text-coral-600">
+                    <span className="font-medium">{crawlStatus.progress.failed}</span>{' '}
+                    failed
+                  </span>
+                )}
+
+                {/* Label status */}
+                {(() => {
+                  const pagesWithLabels = crawlStatus.pages.filter(
+                    (p) => p.labels && p.labels.length > 0
+                  ).length;
+                  const allPagesLabeled = pagesWithLabels === crawlStatus.progress.total;
+
+                  if (crawlStatus.status === 'complete' && allPagesLabeled) {
+                    return (
+                      <span className="text-palm-600">
+                        Labels assigned
+                      </span>
+                    );
+                  } else if (crawlStatus.status === 'labeling') {
+                    return (
+                      <span className="text-warm-gray-500">
+                        Labels pending
+                      </span>
+                    );
+                  } else if (crawlStatus.status === 'complete' && !allPagesLabeled) {
+                    return (
+                      <span className="text-warm-gray-500">
+                        Labels pending
+                      </span>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
+
+              {/* Progress bar */}
               <div className="flex items-center justify-between text-sm text-warm-gray-600 mb-1.5">
                 <span>
                   {crawlStatus.status === 'complete'
@@ -560,11 +607,6 @@ export default function ProjectDetailPage() {
                   }}
                 />
               </div>
-              {crawlStatus.progress.failed > 0 && (
-                <p className="text-xs text-coral-600 mt-1">
-                  {crawlStatus.progress.failed} page{crawlStatus.progress.failed !== 1 ? 's' : ''} failed
-                </p>
-              )}
             </div>
           )}
 

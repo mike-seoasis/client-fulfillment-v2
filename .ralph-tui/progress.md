@@ -879,3 +879,22 @@ after each iteration and it's included in prompts for context.
   - CrawlStatusResponse has three states: 'crawling', 'labeling', 'complete' - use for UI text
 ---
 
+## 2026-02-04 - S3-043
+- **What was implemented**: Added onboarding quick stats display showing page count, failed count, and label status
+- **Files changed**: `frontend/src/app/projects/[id]/page.tsx`
+- **Features**:
+  - Quick stats row above progress bar showing key metrics at a glance
+  - Page count displayed as "X pages" with bold number
+  - Failed count shown in coral (warning style) only when failures exist
+  - Label status shows "Labels assigned" (green) when complete, "Labels pending" (gray) otherwise
+  - Calculates label status by checking if all pages have labels assigned
+- **Acceptance criteria verification**:
+  - ✅ Show page count - "X pages" with bold number in stats row
+  - ✅ Show failed count in warning style if any - Coral color (`text-coral-600`) for failed count
+  - ✅ Show label status ('Labels assigned' or 'Labels pending') - Green when complete, gray when pending
+- **Learnings:**
+  - Use IIFE pattern `{(() => { ... })()}` for inline conditional rendering with complex logic in JSX
+  - CrawlStatusResponse.pages array contains label data, can compute "all pages labeled" by filtering
+  - Design system colors: `text-palm-600` for success/positive, `text-coral-600` for warning, `text-warm-gray-500` for neutral
+---
+
