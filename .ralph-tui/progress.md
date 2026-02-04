@@ -190,3 +190,23 @@ after each iteration and it's included in prompts for context.
   - Prompt engineering for taxonomy: explaining the PURPOSE of labels (internal linking) helps AI generate more useful labels
 ---
 
+## 2026-02-04 - S3-011
+- **What was implemented**: Enhanced label assignment prompt for e-commerce context
+- **Files changed**:
+  - `backend/app/services/label_taxonomy.py` (updated ASSIGNMENT_SYSTEM_PROMPT)
+- **Changes made**:
+  - Updated ASSIGNMENT_SYSTEM_PROMPT to explain e-commerce context and internal linking purpose
+  - Changed label count requirement from "1-3" to "2-5" per acceptance criteria
+  - Added guidance to consider PURPOSE + TOPIC balance
+  - Added rule about considering what pages should link together
+  - Added recommendation to aim for 3-4 labels for most pages
+- **Verification**:
+  - Prompt receives taxonomy and single page data ✓ (_assign_labels_to_page method)
+  - Prompt assigns 2-5 labels from taxonomy only ✓ (updated prompt)
+  - Labels stored in CrawledPage.labels ✓ (line 369: page.labels = assignment.labels)
+  - All assigned labels validated against taxonomy ✓ (lines 455-466)
+- **Learnings:**
+  - Label assignment already had validation logic filtering out invalid labels
+  - Prompt engineering: providing context about WHY labels exist (internal linking) improves assignment quality
+---
+

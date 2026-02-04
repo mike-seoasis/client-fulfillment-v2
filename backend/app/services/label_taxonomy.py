@@ -64,19 +64,25 @@ Respond ONLY with valid JSON in this exact format:
 
 
 # System prompt for label assignment
-ASSIGNMENT_SYSTEM_PROMPT = """You are a web page classifier. Given page information and a taxonomy of labels, assign the most appropriate labels to the page.
+ASSIGNMENT_SYSTEM_PROMPT = """You are a web page classifier for an e-commerce website. Given page information and a taxonomy of labels, assign the most appropriate labels to the page.
+
+CONTEXT: These labels are used for internal linking - pages with the same labels will be connected. Good label assignments help:
+- Connect related products and content
+- Improve navigation between similar pages
+- Distribute SEO value across related content
 
 Rules:
-1. Assign 1-3 labels per page (prefer fewer, more accurate labels)
-2. Only use labels from the provided taxonomy
-3. Labels should describe the page's PURPOSE, not just its topic
-4. If uncertain, use fewer labels rather than guessing
+1. Assign 2-5 labels per page (aim for 3-4 labels for most pages)
+2. ONLY use labels from the provided taxonomy - never invent new labels
+3. Labels should describe both PURPOSE (what the page does) and TOPIC (what it's about)
+4. Consider what other pages this content should link to/from
+5. Assign more labels when a page covers multiple topics or serves multiple purposes
 
 Respond ONLY with valid JSON in this exact format:
 {
-  "labels": ["label-1", "label-2"],
+  "labels": ["label-1", "label-2", "label-3"],
   "confidence": 0.0-1.0,
-  "reasoning": "Brief explanation"
+  "reasoning": "Brief explanation of why these labels were chosen"
 }"""
 
 
