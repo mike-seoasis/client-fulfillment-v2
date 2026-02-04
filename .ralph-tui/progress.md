@@ -787,3 +787,21 @@ after each iteration and it's included in prompts for context.
   - Export validation constants (MIN_LABELS, MAX_LABELS) for reuse in tests and other components
 ---
 
+## 2026-02-04 - S3-039
+- **What was implemented**: Added toast feedback for label save success/error
+- **Files changed**: `frontend/src/app/projects/[id]/onboarding/crawl/page.tsx`
+- **Features**:
+  - Added toast state variables: `showToast`, `toastMessage`, `toastVariant`
+  - Updated `handleSaveLabels` to show "Labels saved" toast on success
+  - Added error toast showing validation or network errors on failure
+  - Imported and rendered `Toast` component from `@/components/ui`
+- **Acceptance criteria verification**:
+  - ✅ Changes saved via PUT /api/v1/projects/{id}/pages/{page_id}/labels - already implemented in S3-038
+  - ✅ Show validation error if <2 or >5 labels - LabelEditDropdown prevents save + error toast on API error
+  - ✅ Show success feedback on save - "Labels saved" toast shown
+  - ✅ Update UI with new labels - queryClient.invalidateQueries() refreshes page list
+- **Learnings:**
+  - Follow existing Toast pattern from brand-config page: state for show/message/variant, render conditionally
+  - Re-throwing error after showing toast allows the dropdown to also react (e.g., keeping form open)
+---
+

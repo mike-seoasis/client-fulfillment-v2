@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useProject } from '@/hooks/use-projects';
-import { Button } from '@/components/ui';
+import { Button, Toast } from '@/components/ui';
 import { apiClient } from '@/lib/api';
 import { LabelEditDropdown } from '@/components/onboarding/LabelEditDropdown';
 
@@ -527,6 +527,9 @@ export default function CrawlProgressPage() {
   const [retryingPageId, setRetryingPageId] = useState<string | null>(null);
   const [editingPageId, setEditingPageId] = useState<string | null>(null);
   const [savingLabels, setSavingLabels] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastVariant, setToastVariant] = useState<'success' | 'error'>('success');
 
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
 
@@ -594,9 +597,19 @@ export default function CrawlProgressPage() {
       // Refresh the page list to show updated labels
       await queryClient.invalidateQueries({ queryKey: ['crawl-status', projectId] });
       setEditingPageId(null);
+      // Show success toast
+      setToastMessage('Labels saved');
+      setToastVariant('success');
+      setShowToast(true);
     } catch (error) {
       console.error('Failed to save labels:', error);
-      // Let the error bubble up for the dropdown to handle
+      // Extract error message from API response if available
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save labels';
+      // Check for validation errors (e.g., <2 or >5 labels)
+      const isValidationError = errorMessage.includes('label') || errorMessage.includes('2') || errorMessage.includes('5');
+      setToastMessage(isValidationError ? errorMessage : 'Failed to save labels. Please try again.');
+      setToastVariant('error');
+      setShowToast(true);
       throw error;
     } finally {
       setSavingLabels(false);
@@ -736,6 +749,15 @@ export default function CrawlProgressPage() {
           )}
         </div>
       </div>
+
+      {/* Toast notifications */}
+      {showToast && (
+        <Toast
+          message={toastMessage}
+          variant={toastVariant}
+          onClose={() => setShowToast(false)}
+        />
+      )}
     </div>
   );
 }
