@@ -44,8 +44,9 @@
         "Regenerate works for Target Audience and Examples Bank sections"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Check frontend mutation in brand-config page and backend app/api/v1/brand_config.py regenerate endpoint"
+      "passes": true,
+      "notes": "Check frontend mutation in brand-config page and backend app/api/v1/brand_config.py regenerate endpoint",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "BC-004",
@@ -526,6 +527,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-04T15:34:42.526Z"
+    "updatedAt": "2026-02-04T15:38:43.015Z"
   }
 }

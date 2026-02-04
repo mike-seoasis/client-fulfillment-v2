@@ -12,7 +12,7 @@ import uuid
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -37,10 +37,15 @@ class MockClaudeClient:
     def __init__(self, available: bool = True) -> None:
         self._available = available
         self._response_json = '{"test": "data"}'
+        self._model = "claude-3-haiku-20240307"
 
     @property
     def available(self) -> bool:
         return self._available
+
+    @property
+    def model(self) -> str:
+        return self._model
 
     async def complete(
         self,
@@ -818,10 +823,21 @@ class TestRegenerateBrandConfig:
         db_session.add(brand_config)
         await db_session.commit()
 
-        response = await async_client_claude_unavailable.post(
-            f"/api/v1/projects/{project.id}/brand-config/regenerate",
-            json={"section": "brand_foundation"},
-        )
+        # Mock the get_claude function in the integrations module to return unavailable client
+        # This is needed because the service has a fallback that calls get_claude() directly
+        mock_claude_unavailable = MockClaudeClient(available=False)
+
+        async def mock_get_claude():
+            return mock_claude_unavailable
+
+        with patch(
+            "app.integrations.claude.get_claude",
+            side_effect=mock_get_claude,
+        ):
+            response = await async_client_claude_unavailable.post(
+                f"/api/v1/projects/{project.id}/brand-config/regenerate",
+                json={"section": "brand_foundation"},
+            )
 
         assert response.status_code == 503
         assert "not configured" in response.json()["detail"]

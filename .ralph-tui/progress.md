@@ -36,3 +36,13 @@ This prevents "objects are not valid as a React child" errors when backend data 
   - The position is displayed in UI (`{position}/10`) so validated value is shown consistently
 ---
 
+## 2026-02-04 - BC-003
+- **What was implemented:** Verified regeneration endpoint works correctly and fixed test suite
+- **Files changed:** `backend/tests/api/test_brand_config.py`
+- **Learnings:**
+  - Regeneration flow is complete: frontend sends `{ section: 'section_name' }`, backend parses via `RegenerateRequest.get_sections_to_regenerate()`, service regenerates the specific section
+  - MockClaudeClient needs `model` property to match real ClaudeClient interface
+  - When mocking functions imported inside other functions (like `from app.integrations.claude import get_claude` inside a method), patch the source module (`app.integrations.claude.get_claude`) not the consumer module
+  - The regenerate_sections fallback tries `get_claude()` directly if passed client is unavailable - this bypasses FastAPI dependency injection, requiring unittest.mock.patch for tests
+---
+
