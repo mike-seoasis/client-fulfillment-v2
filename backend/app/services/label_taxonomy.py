@@ -10,6 +10,7 @@ Labels are stored in CrawledPage.labels array.
 
 import json
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,24 +24,31 @@ logger = get_logger(__name__)
 
 
 # System prompt for taxonomy generation
-TAXONOMY_SYSTEM_PROMPT = """You are a web page taxonomy expert. Your task is to analyze a collection of web pages from a single website and generate a taxonomy of labels that can be used to categorize the content.
+TAXONOMY_SYSTEM_PROMPT = """You are an e-commerce SEO and content taxonomy expert. Your task is to analyze a collection of web pages from an e-commerce website and generate a taxonomy of labels that will be used for internal linking optimization.
+
+CONTEXT: These labels will help identify pages that should link to each other. Pages with the same label share thematic relevance and should be connected via internal links. Good internal linking improves:
+- User navigation between related products and content
+- SEO by distributing page authority across related pages
+- Content discoverability for both users and search engines
 
 Generate a taxonomy that:
-1. Captures the main content types and purposes of pages on this site
-2. Is specific enough to be useful but general enough to apply across pages
-3. Uses consistent, lowercase, hyphenated label names (e.g., "product-listing", "blog-post")
-4. Includes 5-15 labels that cover the variety of content
-5. Focuses on PURPOSE (what the page does) not just TOPIC (what it's about)
+1. Captures the main content types, product categories, and purposes of pages
+2. Is specific enough to group related pages but general enough to apply across multiple pages
+3. Uses consistent, lowercase, hyphenated label names (e.g., "trail-running", "outdoor-gear")
+4. Includes 10-30 labels that cover the variety of content (aim for the range that best fits the site)
+5. Balances PURPOSE (what the page does) with TOPIC (what it's about) for linking relevance
+6. Considers product categories, collections, blog topics, and content themes
 
 Examples of good labels:
 - product-listing (shows multiple products)
 - product-detail (shows single product info)
+- trail-running (trail running products or content)
+- outdoor-gear (outdoor equipment category)
 - blog-post (article or blog content)
-- about-us (company information)
-- contact-page (contact form or info)
-- faq-page (frequently asked questions)
-- legal-policy (terms, privacy, etc.)
-- navigation-hub (landing/category page)
+- buying-guide (helps users choose products)
+- brand-story (company/brand information)
+- customer-support (help, FAQ, policies)
+- seasonal-collection (holiday or seasonal content)
 
 Respond ONLY with valid JSON in this exact format:
 {
@@ -220,7 +228,7 @@ Generate a taxonomy that captures the main content types and purposes of these p
                 if "onboarding" not in project.phase_status:
                     project.phase_status["onboarding"] = {}
 
-                # Store taxonomy as serializable dict
+                # Store taxonomy as serializable dict with timestamp
                 project.phase_status["onboarding"]["taxonomy"] = {
                     "labels": [
                         {
@@ -231,6 +239,7 @@ Generate a taxonomy that captures the main content types and purposes of these p
                         for label in taxonomy.labels
                     ],
                     "reasoning": taxonomy.reasoning,
+                    "generated_at": datetime.now(UTC).isoformat(),
                 }
 
                 # Mark phase_status as modified for SQLAlchemy

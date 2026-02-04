@@ -176,3 +176,17 @@ after each iteration and it's included in prompts for context.
   - Can load taxonomy from project phase_status if not provided to assign_labels()
 ---
 
+## 2026-02-04 - S3-010
+- **What was implemented**: Enhanced taxonomy generation prompt for e-commerce context and internal linking
+- **Files changed**:
+  - `backend/app/services/label_taxonomy.py` (updated TAXONOMY_SYSTEM_PROMPT, added generated_at timestamp)
+- **Changes made**:
+  - Updated TAXONOMY_SYSTEM_PROMPT to explain e-commerce context and internal linking purpose
+  - Changed label count requirement from "5-15" to "10-30" per acceptance criteria
+  - Added `generated_at` timestamp (ISO format) when storing taxonomy in phase_status
+  - Added examples relevant to e-commerce: trail-running, outdoor-gear, buying-guide, seasonal-collection
+- **Learnings:**
+  - Use `datetime.UTC` alias instead of `timezone.utc` (ruff UP017)
+  - Prompt engineering for taxonomy: explaining the PURPOSE of labels (internal linking) helps AI generate more useful labels
+---
+
