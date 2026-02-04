@@ -517,3 +517,30 @@ after each iteration and it's included in prompts for context.
   - Design system color for warnings: `coral-50` background, `coral-200` border, `coral-500` icon, `coral-700` text
 ---
 
+## 2026-02-04 - S3-027
+- **What was implemented**: Start Crawl button action with API submission and navigation
+- **Files changed**:
+  - `frontend/src/app/projects/[id]/onboarding/upload/page.tsx` (added submission logic, loading state, error handling)
+- **Features**:
+  - Added `useRouter` for navigation after successful submission
+  - Added `isSubmitting` state for loading indication
+  - Added `submitError` state for error display
+  - `handleStartCrawl` callback that:
+    - POSTs valid URLs to `/api/v1/projects/{id}/urls`
+    - Navigates to `/projects/{id}/onboarding/crawl` on success
+    - Shows error message on failure
+  - Button shows "Starting..." text during submission
+  - Cancel button disabled during submission
+  - Error banner displayed above action buttons
+- **Acceptance criteria verification**:
+  - ✅ Start Crawl button enabled when valid URLs exist
+  - ✅ Button disabled when no valid URLs
+  - ✅ Clicking POSTs to /api/v1/projects/{id}/urls
+  - ✅ On success, navigates to crawl progress page
+  - ✅ Shows loading state during submission
+- **Learnings:**
+  - Use `apiClient.post<ResponseType>()` from `@/lib/api` for typed API calls
+  - Don't reset `isSubmitting` to false on success - navigation happens immediately after
+  - Error handling: catch and display, only reset loading state on error (not success, since we navigate away)
+---
+

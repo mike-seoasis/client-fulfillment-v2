@@ -1,13 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useState, useMemo, useCallback } from 'react';
 import { useProject } from '@/hooks/use-projects';
 import { Button } from '@/components/ui';
 import { UrlUploader, type ParsedUrl, isValidUrl, normalizeUrl, getDomain } from '@/components/onboarding/UrlUploader';
 import { CsvDropzone, type CsvParseResult } from '@/components/onboarding/CsvDropzone';
 import { UrlPreviewList } from '@/components/onboarding/UrlPreviewList';
+import { apiClient } from '@/lib/api';
 
 // Step indicator data
 const ONBOARDING_STEPS = [
@@ -163,8 +164,17 @@ function NotFoundState() {
   );
 }
 
+// Response type for URL upload endpoint
+interface UrlUploadResponse {
+  task_id: string;
+  pages_created: number;
+  pages_skipped: number;
+  total_urls: number;
+}
+
 export default function UrlUploadPage() {
   const params = useParams();
+  const router = useRouter();
   const projectId = params.id as string;
   const [textareaUrls, setTextareaUrls] = useState<ParsedUrl[]>([]);
   const [csvResult, setCsvResult] = useState<CsvParseResult>({
@@ -174,6 +184,9 @@ export default function UrlUploadPage() {
   });
   // Track manually removed URLs by their normalized URL
   const [removedUrls, setRemovedUrls] = useState<Set<string>>(new Set());
+  // Loading state for form submission
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const { data: project, isLoading, error } = useProject(projectId);
 
@@ -218,7 +231,32 @@ export default function UrlUploadPage() {
     });
   }, []);
 
-  const validUrlCount = parsedUrls.filter((u) => u.isValid).length;
+  const validUrls = parsedUrls.filter((u) => u.isValid);
+  const validUrlCount = validUrls.length;
+
+  // Handle Start Crawl button click
+  const handleStartCrawl = useCallback(async () => {
+    if (validUrls.length === 0) return;
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      // POST to /api/v1/projects/{id}/urls with the valid URLs
+      await apiClient.post<UrlUploadResponse>(
+        `/projects/${projectId}/urls`,
+        { urls: validUrls.map((u) => u.url) }
+      );
+
+      // Navigate to crawl progress page on success
+      router.push(`/projects/${projectId}/onboarding/crawl`);
+    } catch (err) {
+      // Show error message
+      const message = err instanceof Error ? err.message : 'Failed to start crawl';
+      setSubmitError(message);
+      setIsSubmitting(false);
+    }
+  }, [validUrls, projectId, router]);
 
   // Check if any valid URLs are from a different domain than the project's site_url
   const hasDifferentDomainUrls = useMemo(() => {
@@ -328,12 +366,24 @@ export default function UrlUploadPage() {
 
         <hr className="border-cream-300 my-6" />
 
+        {/* Error message */}
+        {submitError && (
+          <div className="mb-4 p-3 bg-coral-50 border border-coral-200 rounded-sm">
+            <p className="text-sm text-coral-700">{submitError}</p>
+          </div>
+        )}
+
         {/* Actions */}
         <div className="flex justify-end gap-3">
           <Link href={`/projects/${projectId}`}>
-            <Button variant="secondary">Cancel</Button>
+            <Button variant="secondary" disabled={isSubmitting}>Cancel</Button>
           </Link>
-          <Button disabled={validUrlCount === 0}>Start Crawl</Button>
+          <Button
+            disabled={validUrlCount === 0 || isSubmitting}
+            onClick={handleStartCrawl}
+          >
+            {isSubmitting ? 'Starting...' : 'Start Crawl'}
+          </Button>
         </div>
       </div>
     </div>
