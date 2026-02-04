@@ -4,11 +4,11 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useState, useMemo, useCallback } from 'react';
 import { useProject } from '@/hooks/use-projects';
-import { Button } from '@/components/ui';
+import { Button, Toast } from '@/components/ui';
 import { UrlUploader, type ParsedUrl, isValidUrl, normalizeUrl, getDomain } from '@/components/onboarding/UrlUploader';
 import { CsvDropzone, type CsvParseResult } from '@/components/onboarding/CsvDropzone';
 import { UrlPreviewList } from '@/components/onboarding/UrlPreviewList';
-import { apiClient } from '@/lib/api';
+import { apiClient, ApiError } from '@/lib/api';
 
 // Step indicator data
 const ONBOARDING_STEPS = [
@@ -187,6 +187,10 @@ export default function UrlUploadPage() {
   // Loading state for form submission
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Toast notification state
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastVariant, setToastVariant] = useState<'success' | 'error'>('success');
 
   const { data: project, isLoading, error } = useProject(projectId);
 
@@ -234,6 +238,39 @@ export default function UrlUploadPage() {
   const validUrls = parsedUrls.filter((u) => u.isValid);
   const validUrlCount = validUrls.length;
 
+  // Helper to get user-friendly error message
+  const getErrorMessage = useCallback((err: unknown): string => {
+    // Network error (no internet, server unreachable)
+    if (err instanceof TypeError && err.message === 'Failed to fetch') {
+      return 'Unable to connect to the server. Please check your internet connection and try again.';
+    }
+
+    // API error with message from backend
+    if (err instanceof ApiError) {
+      // Specific HTTP status handling
+      if (err.status === 400) {
+        return err.message || 'Invalid request. Please check your URLs and try again.';
+      }
+      if (err.status === 404) {
+        return 'Project not found. It may have been deleted.';
+      }
+      if (err.status === 429) {
+        return 'Too many requests. Please wait a moment and try again.';
+      }
+      if (err.status >= 500) {
+        return 'Server error. Please try again later.';
+      }
+      return err.message || 'An error occurred. Please try again.';
+    }
+
+    // Generic error
+    if (err instanceof Error) {
+      return err.message;
+    }
+
+    return 'An unexpected error occurred. Please try again.';
+  }, []);
+
   // Handle Start Crawl button click
   const handleStartCrawl = useCallback(async () => {
     if (validUrls.length === 0) return;
@@ -251,12 +288,15 @@ export default function UrlUploadPage() {
       // Navigate to crawl progress page on success
       router.push(`/projects/${projectId}/onboarding/crawl`);
     } catch (err) {
-      // Show error message
-      const message = err instanceof Error ? err.message : 'Failed to start crawl';
+      // Show user-friendly error message
+      const message = getErrorMessage(err);
       setSubmitError(message);
+      setToastMessage(message);
+      setToastVariant('error');
+      setShowToast(true);
       setIsSubmitting(false);
     }
-  }, [validUrls, projectId, router]);
+  }, [validUrls, projectId, router, getErrorMessage]);
 
   // Check if any valid URLs are from a different domain than the project's site_url
   const hasDifferentDomainUrls = useMemo(() => {
@@ -386,6 +426,15 @@ export default function UrlUploadPage() {
           </Button>
         </div>
       </div>
+
+      {/* Toast notifications */}
+      {showToast && (
+        <Toast
+          message={toastMessage}
+          variant={toastVariant}
+          onClose={() => setShowToast(false)}
+        />
+      )}
     </div>
   );
 }

@@ -941,3 +941,28 @@ after each iteration and it's included in prompts for context.
   - Progress tracking should increment (not replace) to support incremental crawling with retries
 ---
 
+## 2026-02-04 - S3-046
+- **What was implemented**: Added comprehensive error handling throughout the URL upload and crawl progress pages
+- **Files changed**:
+  - `frontend/src/app/projects/[id]/onboarding/upload/page.tsx` (added Toast, ApiError import, error message helper, toast state)
+  - `frontend/src/app/projects/[id]/onboarding/crawl/page.tsx` (added ApiError import, getErrorMessage helper, network error banner, improved retry/save error handling)
+- **Features added**:
+  - User-friendly error messages for API errors (400, 404, 429, 500+)
+  - Network error detection ("Failed to fetch" → friendly message)
+  - Toast notifications on upload page for errors
+  - Toast notifications on crawl page for retry success/error
+  - Network error banner when crawl status polling fails
+  - Improved label save error messages
+  - Loading state already existed (isSubmitting, retryingPageId, savingLabels) - verified working
+- **Acceptance criteria verification**:
+  - ✅ API errors show user-friendly messages - getErrorMessage helper provides friendly text for all HTTP status codes
+  - ✅ Network errors handled gracefully - "Failed to fetch" detected and shown with connectivity message
+  - ✅ Loading states prevent double-submissions - Already existed: isSubmitting disables button, retryingPageId tracks retry state
+  - ✅ Toast notifications for success/error feedback - Added to upload page, enhanced on crawl page
+- **Learnings:**
+  - Network errors in fetch show as `TypeError` with message "Failed to fetch" - check for this specific pattern
+  - ApiError class from api.ts provides structured access to status codes and messages
+  - For polling queries, use `retry: 3` with `retryDelay` to handle transient network issues gracefully
+  - Show inline error banners for persistent errors (network down) but toasts for transient errors (single request failure)
+---
+

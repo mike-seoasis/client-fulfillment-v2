@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useProject } from '@/hooks/use-projects';
 import { Button, Toast } from '@/components/ui';
-import { apiClient } from '@/lib/api';
+import { apiClient, ApiError } from '@/lib/api';
 import { LabelEditDropdown } from '@/components/onboarding/LabelEditDropdown';
 
 // Step indicator data - shared across onboarding pages
@@ -520,6 +520,40 @@ function TaxonomyStatus({ status, taxonomy, isLoading }: TaxonomyStatusProps) {
   return null;
 }
 
+/**
+ * Get user-friendly error message from an error object.
+ */
+function getErrorMessage(err: unknown): string {
+  // Network error (no internet, server unreachable)
+  if (err instanceof TypeError && err.message === 'Failed to fetch') {
+    return 'Unable to connect to the server. Please check your internet connection and try again.';
+  }
+
+  // API error with message from backend
+  if (err instanceof ApiError) {
+    if (err.status === 400) {
+      return err.message || 'Invalid request. Please try again.';
+    }
+    if (err.status === 404) {
+      return 'Page not found. It may have been deleted.';
+    }
+    if (err.status === 429) {
+      return 'Too many requests. Please wait a moment and try again.';
+    }
+    if (err.status >= 500) {
+      return 'Server error. Please try again later.';
+    }
+    return err.message || 'An error occurred. Please try again.';
+  }
+
+  // Generic error
+  if (err instanceof Error) {
+    return err.message;
+  }
+
+  return 'An unexpected error occurred. Please try again.';
+}
+
 export default function CrawlProgressPage() {
   const params = useParams();
   const projectId = params.id as string;
@@ -534,7 +568,7 @@ export default function CrawlProgressPage() {
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
 
   // Poll crawl status every 2 seconds while crawling
-  const { data: crawlStatus, isLoading: isCrawlStatusLoading } = useQuery({
+  const { data: crawlStatus, isLoading: isCrawlStatusLoading, error: crawlStatusError } = useQuery({
     queryKey: ['crawl-status', projectId],
     queryFn: () => apiClient.get<CrawlStatusResponse>(`/projects/${projectId}/crawl-status`),
     enabled: !!projectId,
@@ -545,6 +579,9 @@ export default function CrawlProgressPage() {
       }
       return 2000; // Poll every 2 seconds while crawling/labeling
     },
+    // Don't fail immediately on network errors during polling
+    retry: 3,
+    retryDelay: 1000,
   });
 
   // Fetch taxonomy when status is 'labeling' or 'complete'
@@ -571,9 +608,16 @@ export default function CrawlProgressPage() {
       await apiClient.post(`/projects/${projectId}/pages/${pageId}/retry`);
       // Invalidate query to refresh the page list immediately
       await queryClient.invalidateQueries({ queryKey: ['crawl-status', projectId] });
+      // Show success toast
+      setToastMessage('Retry started');
+      setToastVariant('success');
+      setShowToast(true);
     } catch (error) {
-      console.error('Failed to retry page crawl:', error);
-      // Error state is implicit - page will still show as failed
+      // Show user-friendly error toast
+      const message = getErrorMessage(error);
+      setToastMessage(message);
+      setToastVariant('error');
+      setShowToast(true);
     } finally {
       setRetryingPageId(null);
     }
@@ -602,12 +646,9 @@ export default function CrawlProgressPage() {
       setToastVariant('success');
       setShowToast(true);
     } catch (error) {
-      console.error('Failed to save labels:', error);
-      // Extract error message from API response if available
-      const errorMessage = error instanceof Error ? error.message : 'Failed to save labels';
-      // Check for validation errors (e.g., <2 or >5 labels)
-      const isValidationError = errorMessage.includes('label') || errorMessage.includes('2') || errorMessage.includes('5');
-      setToastMessage(isValidationError ? errorMessage : 'Failed to save labels. Please try again.');
+      // Get user-friendly error message
+      const message = getErrorMessage(error);
+      setToastMessage(message);
       setToastVariant('error');
       setShowToast(true);
       throw error;
@@ -654,6 +695,9 @@ export default function CrawlProgressPage() {
   const isComplete = overallStatus === 'complete';
   const inProgressCount = progress.total - progress.completed - progress.failed - progress.pending;
 
+  // Check if there's a network error during polling
+  const hasNetworkError = crawlStatusError && !crawlStatus;
+
   return (
     <div>
       {/* Breadcrumb navigation */}
@@ -671,6 +715,28 @@ export default function CrawlProgressPage() {
 
       {/* Divider */}
       <hr className="border-cream-500 mb-6" />
+
+      {/* Network error banner */}
+      {hasNetworkError && (
+        <div className="mb-6 p-3 bg-coral-50 border border-coral-200 rounded-sm flex items-start gap-2">
+          <svg
+            className="w-5 h-5 text-coral-500 flex-shrink-0 mt-0.5"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+          <p className="text-sm text-coral-700">
+            Unable to load crawl status. Please check your internet connection.
+          </p>
+        </div>
+      )}
 
       {/* Page content */}
       <div className="bg-white rounded-sm border border-cream-500 p-6 shadow-sm">
