@@ -358,7 +358,7 @@ export default function ProjectDetailPage() {
           {/* Brand config action button */}
           {project.has_brand_config ? (
             <Link href={`/projects/${projectId}/brand-config`}>
-              <Button variant="secondary">Edit Brand</Button>
+              <Button variant="secondary">Brand Details</Button>
             </Link>
           ) : generation.isGenerating ? (
             <Button variant="secondary" disabled>
