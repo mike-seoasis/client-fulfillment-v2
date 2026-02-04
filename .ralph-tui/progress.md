@@ -375,3 +375,22 @@ This prevents "objects are not valid as a React child" errors when backend data 
   - Section grouping in editor should match the display component for consistency
 ---
 
+## 2026-02-04 - BC-022
+- **What was implemented:** Created VocabularyEditor component for inline editing of Vocabulary section
+- **Files changed:**
+  - `frontend/src/components/brand-sections/editors/VocabularyEditor.tsx` - New component with:
+    - TagInput for power_words (variant="success") and banned_words (variant="danger")
+    - EditableTable for word_substitutions (instead_of -> we_say columns)
+    - EditableTable for industry_terms (term -> usage columns)
+    - BulletListEditor for signature_phrases
+    - Keyboard shortcuts: ⌘S to save, Esc to cancel
+    - isSaving state to disable form during save
+    - Data cleanup on save: filter empty rows, trim strings, convert empty arrays to undefined
+  - `frontend/src/components/brand-sections/editors/index.ts` - Added VocabularyEditor export
+- **Learnings:**
+  - EditableTable uses `Record<string, string>[]` format - need to convert typed arrays (WordSubstitution[], IndustryTerm[]) to/from this format
+  - When initializing table state, map the typed objects to plain records; when saving, filter and map back to typed objects
+  - TagInput variants (success/danger) match the display component styling (green for power words, red for banned)
+  - Section descriptions help users understand the purpose of each field
+---
+

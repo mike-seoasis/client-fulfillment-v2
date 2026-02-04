@@ -7,3 +7,4 @@ export { TargetAudienceEditor, type TargetAudienceEditorProps } from './TargetAu
 export { VoiceDimensionsEditor, type VoiceDimensionsEditorProps } from './VoiceDimensionsEditor';
 export { VoiceCharacteristicsEditor, type VoiceCharacteristicsEditorProps } from './VoiceCharacteristicsEditor';
 export { WritingStyleEditor, type WritingStyleEditorProps } from './WritingStyleEditor';
+export { VocabularyEditor, type VocabularyEditorProps } from './VocabularyEditor';

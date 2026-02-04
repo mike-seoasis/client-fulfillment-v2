@@ -3,10 +3,10 @@
   "sessionId": "0d66a092-1147-4c2d-a140-1be3ee3a203f",
   "status": "running",
   "startedAt": "2026-02-04T15:32:53.974Z",
-  "updatedAt": "2026-02-04T16:06:01.819Z",
-  "currentIteration": 20,
+  "updatedAt": "2026-02-04T16:07:29.216Z",
+  "currentIteration": 21,
   "maxIterations": 10,
-  "tasksCompleted": 20,
+  "tasksCompleted": 21,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -137,8 +137,8 @@
       {
         "id": "BC-021",
         "title": "Create WritingStyleEditor",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "BC-022",
@@ -432,6 +432,16 @@
       "durationMs": 97206,
       "startedAt": "2026-02-04T16:02:56.442Z",
       "endedAt": "2026-02-04T16:04:33.648Z"
+    },
+    {
+      "iteration": 21,
+      "status": "completed",
+      "taskId": "BC-021",
+      "taskTitle": "Create WritingStyleEditor",
+      "taskCompleted": true,
+      "durationMs": 87076,
+      "startedAt": "2026-02-04T16:04:34.740Z",
+      "endedAt": "2026-02-04T16:06:01.816Z"
     }
   ],
   "skippedTaskIds": [],
