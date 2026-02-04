@@ -362,3 +362,21 @@ after each iteration and it's included in prompts for context.
   - Follow established page validation pattern (check project exists, page exists, page belongs to project)
 ---
 
+## 2026-02-04 - S3-020
+- **What was implemented**: API integration tests for all Phase 3 crawling endpoints (30 tests)
+- **Files changed**: `backend/tests/api/test_crawling.py` (new file)
+- **Test coverage**:
+  - `TestUrlUpload` (5 tests): URL upload creates pages, skips duplicates, normalizes URLs, validates URL format, project not found
+  - `TestCrawlStatus` (6 tests): Returns progress counts, status states (crawling/labeling/complete), page summaries, project not found
+  - `TestPagesEndpoint` (4 tests): Returns all pages, filters by status, returns empty list, project not found
+  - `TestTaxonomyEndpoint` (3 tests): Returns labels, taxonomy not yet generated, project not found
+  - `TestLabelUpdate` (7 tests): Validates and saves, rejects invalid labels, too few/many labels, normalizes labels, page not found, page wrong project
+  - `TestRetryEndpoint` (5 tests): Resets failed page, can retry any status, page not found, project not found, page wrong project
+- **Learnings:**
+  - Use `flag_modified(project, "phase_status")` when setting JSONB fields in test fixtures
+  - Create mock clients for external services (MockCrawl4AIClient) and wire them via `app.dependency_overrides`
+  - Follow existing test patterns: create project via API, then manipulate DB directly for test setup
+  - `response.json()` returns `Any` type; mypy warns about `no-any-return` - this is expected
+  - SQLite warnings about "Attribute history events accumulated" are benign during async testing
+---
+

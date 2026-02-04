@@ -320,8 +320,9 @@
         "Tests in backend/tests/api/test_crawling.py"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Use test database and mock external services"
+      "passes": true,
+      "notes": "Use test database and mock external services",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S3-021",
@@ -737,6 +738,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-04T19:42:07.012Z"
+    "updatedAt": "2026-02-04T19:45:33.893Z"
   }
 }
