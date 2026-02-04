@@ -56,7 +56,9 @@ class CrawlingService:
         pages = {page.id: page for page in result.scalars().all()}
 
         if not pages:
-            logger.warning("No pages found for provided IDs", extra={"page_ids": page_ids})
+            logger.warning(
+                "No pages found for provided IDs", extra={"page_ids": page_ids}
+            )
             return {}
 
         # Create semaphore for concurrency control
@@ -141,6 +143,7 @@ class CrawlingService:
             page.headings = extracted.headings
             page.body_content = extracted.body_content
             page.word_count = extracted.word_count
+            page.product_count = extracted.product_count
 
             logger.info(
                 "Crawl completed",
@@ -149,6 +152,7 @@ class CrawlingService:
                     "url": page.normalized_url,
                     "word_count": page.word_count,
                     "headings_count": sum(len(h) for h in extracted.headings.values()),
+                    "product_count": page.product_count,
                     "duration_ms": crawl_result.duration_ms,
                 },
             )

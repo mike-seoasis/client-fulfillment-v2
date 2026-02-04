@@ -115,3 +115,22 @@ after each iteration and it's included in prompts for context.
   - When truncating UTF-8 strings by bytes, use `decode("utf-8", errors="ignore")` to handle partial multi-byte chars
 ---
 
+## 2026-02-04 - S3-007
+- **What was implemented**: Product count extraction for Shopify collection pages
+- **Files changed**:
+  - `backend/app/services/content_extraction.py` (added product count extraction)
+  - `backend/app/services/crawling.py` (added product_count to extracted fields)
+- **Features**:
+  - `extract_shopify_product_count(soup, html)` - Main extraction function with two strategies
+  - `_extract_product_count_from_json(html)` - Parse Shopify JSON data for product count
+  - `_count_product_card_elements(soup)` - Fall back to counting product card elements
+  - JSON patterns: ShopifyAnalytics.meta, "products_count", "productsCount", window.__INITIAL_STATE__
+  - Element patterns: product-card, product-item, card--product, data-product-id, /cart/add forms
+  - Returns None gracefully for non-collection pages
+- **Learnings:**
+  - BeautifulSoup's `find_all` with kwargs needs explicit typing; use separate calls for class_ and attrs
+  - Common Shopify JSON patterns: `ShopifyAnalytics.meta = {...}`, `"products_count": N`, `window.__INITIAL_STATE__`
+  - Shopify product cards use various class names depending on theme: product-card, product-item, ProductCard, etc.
+  - Forms with action="/cart/add" can be used as last resort to count products (one form per product)
+---
+
