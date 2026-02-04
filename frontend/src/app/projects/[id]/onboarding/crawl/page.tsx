@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useProject } from '@/hooks/use-projects';
 import { Button } from '@/components/ui';
 import { apiClient } from '@/lib/api';
+import { LabelEditDropdown } from '@/components/onboarding/LabelEditDropdown';
 
 // Step indicator data - shared across onboarding pages
 const ONBOARDING_STEPS = [
@@ -336,9 +337,24 @@ interface PageListItemProps {
   onRetry?: (pageId: string) => Promise<void>;
   isRetrying?: boolean;
   onEditLabels?: (pageId: string) => void;
+  isEditingLabels?: boolean;
+  taxonomyLabels?: TaxonomyLabel[];
+  onCloseEditLabels?: () => void;
+  onSaveLabels?: (labels: string[]) => Promise<void>;
+  isSavingLabels?: boolean;
 }
 
-function PageListItem({ page, onRetry, isRetrying, onEditLabels }: PageListItemProps) {
+function PageListItem({
+  page,
+  onRetry,
+  isRetrying,
+  onEditLabels,
+  isEditingLabels,
+  taxonomyLabels,
+  onCloseEditLabels,
+  onSaveLabels,
+  isSavingLabels,
+}: PageListItemProps) {
   // Extract path from URL for display
   const displayUrl = (() => {
     try {
@@ -405,26 +421,39 @@ function PageListItem({ page, onRetry, isRetrying, onEditLabels }: PageListItemP
           )}
           {/* Label tags display */}
           {page.status === 'completed' && hasLabels && (
-            <div className="mt-2 flex items-center gap-2 flex-wrap">
-              <div className="flex flex-wrap gap-1.5">
-                {page.labels.map((label) => (
-                  <span
-                    key={label}
-                    className="inline-flex items-center px-2 py-0.5 text-xs bg-palm-100 text-palm-700 rounded-sm"
+            <div className="mt-2 relative">
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex flex-wrap gap-1.5">
+                  {page.labels.map((label) => (
+                    <span
+                      key={label}
+                      className="inline-flex items-center px-2 py-0.5 text-xs bg-palm-100 text-palm-700 rounded-sm"
+                    >
+                      {label}
+                    </span>
+                  ))}
+                </div>
+                {onEditLabels && (
+                  <button
+                    onClick={() => onEditLabels(page.id)}
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs text-warm-gray-500 hover:text-palm-600 hover:bg-palm-50 rounded-sm transition-colors"
+                    title="Edit labels"
                   >
-                    {label}
-                  </span>
-                ))}
+                    <PencilIcon className="w-3 h-3" />
+                    Edit
+                  </button>
+                )}
               </div>
-              {onEditLabels && (
-                <button
-                  onClick={() => onEditLabels(page.id)}
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs text-warm-gray-500 hover:text-palm-600 hover:bg-palm-50 rounded-sm transition-colors"
-                  title="Edit labels"
-                >
-                  <PencilIcon className="w-3 h-3" />
-                  Edit
-                </button>
+              {/* Label edit dropdown */}
+              {isEditingLabels && taxonomyLabels && onCloseEditLabels && onSaveLabels && (
+                <LabelEditDropdown
+                  taxonomyLabels={taxonomyLabels}
+                  selectedLabels={page.labels}
+                  onLabelsChange={() => {}} // Local state managed inside dropdown
+                  onClose={onCloseEditLabels}
+                  onSave={onSaveLabels}
+                  isSaving={isSavingLabels}
+                />
               )}
             </div>
           )}
@@ -496,9 +525,8 @@ export default function CrawlProgressPage() {
   const projectId = params.id as string;
   const queryClient = useQueryClient();
   const [retryingPageId, setRetryingPageId] = useState<string | null>(null);
-  // editingPageId will be used by S3-038 label edit dropdown - uncomment when implementing
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [editingPageId, setEditingPageId] = useState<string | null>(null);
+  const [savingLabels, setSavingLabels] = useState(false);
 
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
 
@@ -551,7 +579,28 @@ export default function CrawlProgressPage() {
   // Handle edit labels button click
   const handleEditLabels = (pageId: string) => {
     setEditingPageId(pageId);
-    // Note: S3-038 will implement the label edit dropdown that uses this state
+  };
+
+  // Handle closing the label edit dropdown
+  const handleCloseEditLabels = () => {
+    setEditingPageId(null);
+  };
+
+  // Handle saving labels for a page
+  const handleSaveLabels = async (pageId: string, labels: string[]) => {
+    setSavingLabels(true);
+    try {
+      await apiClient.put(`/projects/${projectId}/pages/${pageId}/labels`, { labels });
+      // Refresh the page list to show updated labels
+      await queryClient.invalidateQueries({ queryKey: ['crawl-status', projectId] });
+      setEditingPageId(null);
+    } catch (error) {
+      console.error('Failed to save labels:', error);
+      // Let the error bubble up for the dropdown to handle
+      throw error;
+    } finally {
+      setSavingLabels(false);
+    }
   };
 
   // Loading state
@@ -647,6 +696,11 @@ export default function CrawlProgressPage() {
                 onRetry={handleRetryPage}
                 isRetrying={retryingPageId === page.id}
                 onEditLabels={handleEditLabels}
+                isEditingLabels={editingPageId === page.id}
+                taxonomyLabels={taxonomy?.labels}
+                onCloseEditLabels={handleCloseEditLabels}
+                onSaveLabels={(labels) => handleSaveLabels(page.id, labels)}
+                isSavingLabels={savingLabels}
               />
             ))}
             {pages.length === 0 && (

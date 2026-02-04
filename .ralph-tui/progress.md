@@ -759,3 +759,31 @@ after each iteration and it's included in prompts for context.
   - Edit button styling: subtle warm-gray-500 text that highlights to palm-600 on hover
 ---
 
+## 2026-02-04 - S3-038
+- **What was implemented**: Created LabelEditDropdown component for editing page labels with multi-select checkboxes
+- **Files changed**:
+  - `frontend/src/components/onboarding/LabelEditDropdown.tsx` (new file)
+  - `frontend/src/app/projects/[id]/onboarding/crawl/page.tsx` (integrated dropdown)
+  - `frontend/src/lib/api.ts` (added `put` method to apiClient)
+- **Features**:
+  - `LabelEditDropdown` component with checkboxes for all taxonomy labels
+  - Shows label name and description for each option
+  - Selected labels are highlighted with palm-50 background and checked icon
+  - Selection count indicator showing "X of 2-5 labels selected"
+  - Validation for 2-5 labels (MIN_LABELS, MAX_LABELS constants exported)
+  - `validateLabelCount()` helper function for reuse
+  - Dropdown closes on outside click or Escape key
+  - Save button disabled when validation fails or no changes made
+  - Loading state during save operation
+- **Acceptance criteria verification**:
+  - ✅ Multi-select dropdown shows all taxonomy labels - taxonomyLabels prop renders list
+  - ✅ Checkboxes for selecting/deselecting labels - CheckboxIcon component with checked state
+  - ✅ Shows current selections checked - localSelection state initialized from selectedLabels
+  - ✅ Validates 2-5 labels selected - validateLabelCount function checks MIN_LABELS/MAX_LABELS
+- **Learnings:**
+  - apiClient didn't have a `put` method - had to add it (backend uses PUT for label updates)
+  - Use `useRef` + `useEffect` for outside click detection on dropdown components
+  - Local selection state (Set<string>) in dropdown allows preview of changes before saving
+  - Export validation constants (MIN_LABELS, MAX_LABELS) for reuse in tests and other components
+---
+
