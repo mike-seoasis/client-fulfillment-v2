@@ -8,3 +8,4 @@ export { VoiceDimensionsEditor, type VoiceDimensionsEditorProps } from './VoiceD
 export { VoiceCharacteristicsEditor, type VoiceCharacteristicsEditorProps } from './VoiceCharacteristicsEditor';
 export { WritingStyleEditor, type WritingStyleEditorProps } from './WritingStyleEditor';
 export { VocabularyEditor, type VocabularyEditorProps } from './VocabularyEditor';
+export { TrustElementsEditor, type TrustElementsEditorProps } from './TrustElementsEditor';
