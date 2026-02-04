@@ -3,10 +3,10 @@
   "sessionId": "0d66a092-1147-4c2d-a140-1be3ee3a203f",
   "status": "running",
   "startedAt": "2026-02-04T15:32:53.974Z",
-  "updatedAt": "2026-02-04T15:38:43.016Z",
-  "currentIteration": 2,
+  "updatedAt": "2026-02-04T15:40:04.456Z",
+  "currentIteration": 3,
   "maxIterations": 10,
-  "tasksCompleted": 2,
+  "tasksCompleted": 3,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -29,8 +29,8 @@
       {
         "id": "BC-003",
         "title": "Debug and fix regeneration endpoint",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "BC-004",
@@ -252,6 +252,16 @@
       "durationMs": 47638,
       "startedAt": "2026-02-04T15:33:54.887Z",
       "endedAt": "2026-02-04T15:34:42.525Z"
+    },
+    {
+      "iteration": 3,
+      "status": "completed",
+      "taskId": "BC-003",
+      "taskTitle": "Debug and fix regeneration endpoint",
+      "taskCompleted": true,
+      "durationMs": 239365,
+      "startedAt": "2026-02-04T15:34:43.649Z",
+      "endedAt": "2026-02-04T15:38:43.014Z"
     }
   ],
   "skippedTaskIds": [],

@@ -156,16 +156,25 @@ Provide a well-structured, factual analysis based on what you find on the websit
 # Covers all 9 sections of brand configuration:
 # 1. Brand Foundation, 2. Target Audience, 3. Voice Dimensions, 4. Voice Characteristics,
 # 5. Writing Style, 6. Vocabulary, 7. Trust Elements, 8. Examples Bank, 9. Competitor Context
-BRAND_RESEARCH_SYSTEM_PROMPT = """You are a brand research expert. Your task is to thoroughly research a brand from their website and online presence to extract comprehensive brand information aligned with a 9-section brand configuration framework.
+BRAND_RESEARCH_SYSTEM_PROMPT = """You are a brand research expert specializing in e-commerce and DTC (direct-to-consumer) brands. Your task is to thoroughly research a brand from their website and online presence to extract comprehensive brand information aligned with a 9-section brand configuration framework.
+
+IMPORTANT CONTEXT: This research will be used to generate copy for e-commerce channels including:
+- Website product pages and collection pages
+- Email marketing (welcome series, abandoned cart, promotional campaigns)
+- Social media content (Instagram, TikTok, Facebook, Pinterest)
+- Paid advertising (Meta ads, Google Shopping, display ads)
+- SMS marketing
+
+Focus your research on how the brand communicates in these digital channels. Deprioritize offline channels like print catalogs, direct mail, or in-store signage.
 
 Research and extract the following information, organized into these sections:
 
 ## 1. BRAND FOUNDATION
 - Company name, founding year, location, industry
-- Business model (B2B, B2C, DTC, Marketplace, etc.)
+- Business model (DTC, B2C, Marketplace, hybrid) - note primary e-commerce platforms used
 - Primary products/services and secondary offerings
 - Price positioning (budget, mid-range, premium, luxury)
-- Sales channels (online, retail, wholesale)
+- Online sales channels (own website, Amazon, social commerce, etc.)
 - Tagline or slogan (if any)
 - One-sentence company description (how they describe themselves)
 - Category position (leader, challenger, specialist, disruptor)
@@ -179,8 +188,8 @@ Research and extract the following information, organized into these sections:
 For each identifiable customer segment (primary, secondary, tertiary), extract:
 - Demographics: age range, gender (if relevant), location, income level, profession, education
 - Psychographics: values, aspirations, fears/pain points, frustrations with current solutions, identity
-- Behavioral insights: how they discover products, research behavior, decision factors, buying triggers, common objections
-- Communication preferences: tone they respond to, language they use, content they consume, trust signals they need
+- Behavioral insights: how they discover products online, research behavior, decision factors, buying triggers, common objections, cart abandonment reasons
+- Communication preferences: tone they respond to, language they use, content they consume, digital channels they prefer, trust signals they need before purchasing online
 - Persona summary statement (describe as a real person)
 
 ## 3. VOICE DIMENSIONS
@@ -205,13 +214,18 @@ Define 3-5 characteristics that describe what the brand IS and IS NOT:
 - Characteristics the brand explicitly avoids (e.g., hype-driven, condescending, impersonal)
 
 ## 5. WRITING STYLE
-Document observable writing patterns:
+Document observable writing patterns across e-commerce content:
 - Sentence structure: average sentence length, paragraph length, contractions usage, active vs passive voice
 - Capitalization: headlines style, product name capitalization, feature name capitalization
 - Punctuation: serial comma usage, em dash frequency, exclamation point frequency, ellipses usage
-- Numbers: when to spell out vs numerals, currency format, percentage format
+- Numbers: when to spell out vs numerals, currency format, percentage format, discount formatting
 - Formatting: bold usage, italics usage, bullet point conventions, header style
-- Content-specific rules observed in different content types (product pages, emails, social)
+- E-commerce content patterns observed in:
+  - Product page descriptions (how they structure benefits, features, specs)
+  - Collection/category page copy
+  - Email marketing (subject lines, preview text, body copy style)
+  - Social media posts (Instagram captions, TikTok hooks, Facebook ads)
+  - Promotional/sale messaging style
 
 ## 6. VOCABULARY
 Extract the language patterns they use:
@@ -234,23 +248,24 @@ Extract verifiable proof and trust signals:
 - Usage guidelines: how proof should be integrated in copy
 
 ## 8. EXAMPLES BANK
-Collect real examples of their brand voice in action:
-- Headlines that work (5-10 examples of on-brand headlines)
-- Product description examples (2-3 full descriptions showing brand voice)
-- Email subject lines (10 examples if available)
-- Social media posts (5-10 examples across platforms)
-- CTAs used (common calls-to-action)
+Collect real examples of their brand voice in action across e-commerce channels:
+- Product page headlines and descriptions (2-3 full examples showing brand voice)
+- Email marketing examples: subject lines, preview text, promotional copy
+- Social media posts (Instagram captions, TikTok/Reels hooks, Facebook/Pinterest content)
+- Ad copy examples (Meta ads, Google Shopping descriptions if visible)
+- CTAs used across website, emails, and ads (buttons, links, promotional urgency)
+- Promotional messaging: how they handle sales, discounts, limited-time offers
 - What NOT to write (examples of off-brand copy to avoid, with explanation of why)
 
 ## 9. COMPETITOR CONTEXT
-Map the competitive landscape:
+Map the competitive landscape in the e-commerce space:
 - Direct competitors: name, their positioning, brand's differentiation vs each
-- Competitive advantages: what the brand does better
+- Competitive advantages: what the brand does better (product, price, experience, brand)
 - Competitive weaknesses: where they may lag (for internal awareness)
 - Positioning statements: how to describe the brand vs competition without naming competitors
-- Market position: leader, challenger, specialist, or disruptor
+- Market position: leader, challenger, specialist, or disruptor in the online/DTC space
 
-Provide thorough, factual findings with citations. If information is not available for a section, explicitly state what could not be determined. Structure your response clearly with headers for each section."""
+Provide thorough, factual findings with citations. Focus on how this brand presents itself in digital/e-commerce channels. If information is not available for a section, explicitly state what could not be determined. Structure your response clearly with headers for each section."""
 
 
 class PerplexityClient:

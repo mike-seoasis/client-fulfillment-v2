@@ -46,3 +46,19 @@ This prevents "objects are not valid as a React child" errors when backend data 
   - The regenerate_sections fallback tries `get_claude()` directly if passed client is unavailable - this bypasses FastAPI dependency injection, requiring unittest.mock.patch for tests
 ---
 
+## 2026-02-04 - BC-004
+- **What was implemented:** Updated BRAND_RESEARCH_SYSTEM_PROMPT in perplexity.py for e-commerce/DTC focus
+- **Files changed:** `backend/app/integrations/perplexity.py` (lines 159-268)
+- **Learnings:**
+  - The Perplexity prompt is a large multi-line string constant that drives research quality
+  - Key changes for e-commerce focus:
+    - Added intro context explaining the research is for e-commerce channels (website, email, social, ads, SMS)
+    - Explicitly deprioritized offline channels (print catalogs, direct mail, in-store signage)
+    - Updated "Sales channels" to "Online sales channels" with e-commerce examples
+    - Added cart abandonment and digital channel preferences to Target Audience behavioral insights
+    - Expanded Writing Style section with specific e-commerce content patterns (product pages, collection pages, email marketing, social media, promotional messaging)
+    - Updated Examples Bank to focus on e-commerce content types (product pages, email marketing, social media, ad copy, promotional messaging)
+    - Added e-commerce context to Competitor Context section
+  - This is a prompt-only change with no code logic changes, so no tests needed
+---
+
