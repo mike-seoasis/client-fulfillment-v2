@@ -232,3 +232,22 @@ after each iteration and it's included in prompts for context.
   - Export both sync functions (`validate_labels`) and async functions (`validate_page_labels`) for flexibility
 ---
 
+## 2026-02-04 - S3-013
+- **What was implemented**: Unit tests for LabelTaxonomyService (29 tests)
+- **Files changed**:
+  - `backend/tests/services/test_label_taxonomy.py` (new file)
+- **Test coverage**:
+  - `TestTaxonomyGenerationStorage` - Tests taxonomy generation stores in phase_status, handles no pages/API failures
+  - `TestLabelAssignmentValidation` - Tests assignment uses taxonomy, stores in page, handles missing taxonomy
+  - `TestInvalidLabelRejection` - Tests invalid labels are filtered out, validation rejects unknown labels
+  - `TestLabelCountValidation` - Tests count validation (2-5), too few/too many errors, custom limits
+  - `TestLabelNormalization` - Tests lowercase, whitespace stripping, deduplication, empty string handling
+  - `TestValidationHelpers` - Tests get_project_taxonomy_labels, validate_page_labels helpers
+  - `TestAssignmentAPIFailure` - Tests API error handling, JSON parse error handling
+  - `TestTaxonomyDataclass` / `TestValidationResultErrorMessages` - Tests dataclass behavior
+- **Learnings:**
+  - Mock Claude client needs careful request type detection - use user_prompt content (e.g., "Generate a taxonomy" vs "Assign labels") not system_prompt
+  - Same session-scoped db_session pattern as test_crawling.py works well
+  - Projects with existing taxonomy need separate fixture (test_project_with_taxonomy) to test assignment path
+---
+
