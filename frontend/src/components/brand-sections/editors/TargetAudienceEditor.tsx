@@ -17,6 +17,10 @@ interface TargetAudienceEditorProps {
   onCancel: () => void;
 }
 
+interface ValidationErrors {
+  personas?: string;
+}
+
 /**
  * Creates a new empty persona with default structure.
  */
@@ -400,13 +404,32 @@ export function TargetAudienceEditor({
   const [secondaryPersona, setSecondaryPersona] = useState(data?.audience_overview?.secondary_persona ?? '');
   const [tertiaryPersona, setTertiaryPersona] = useState(data?.audience_overview?.tertiary_persona ?? '');
 
+  const [errors, setErrors] = useState<ValidationErrors>({});
+
+  const validate = useCallback((): boolean => {
+    const newErrors: ValidationErrors = {};
+
+    // Check if at least one persona has a name
+    const hasPersonaWithName = personas.some((p) => p.name.trim() !== '');
+    if (!hasPersonaWithName) {
+      newErrors.personas = 'At least one persona with a name is required';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }, [personas]);
+
   const handlePersonaChange = useCallback((index: number, updatedPersona: PersonaData) => {
+    // Clear persona error when user types a name
+    if (updatedPersona.name.trim() && errors.personas) {
+      setErrors((prev) => ({ ...prev, personas: undefined }));
+    }
     setPersonas((prev) => {
       const newPersonas = [...prev];
       newPersonas[index] = updatedPersona;
       return newPersonas;
     });
-  }, []);
+  }, [errors.personas]);
 
   const handleAddPersona = useCallback(() => {
     setPersonas((prev) => [...prev, createEmptyPersona()]);
@@ -417,6 +440,10 @@ export function TargetAudienceEditor({
   }, []);
 
   const handleSave = useCallback(() => {
+    if (!validate()) {
+      return;
+    }
+
     // Clean up personas - remove empty ones and trim values
     const cleanedPersonas = personas
       .filter((p) => p.name.trim() !== '') // Only keep personas with names
@@ -465,7 +492,10 @@ export function TargetAudienceEditor({
     };
 
     onSave(updatedData);
-  }, [personas, primaryPersona, secondaryPersona, tertiaryPersona, onSave]);
+  }, [validate, personas, primaryPersona, secondaryPersona, tertiaryPersona, onSave]);
+
+  // Compute whether form has validation errors (for disabling save button)
+  const hasValidationErrors = Object.keys(errors).length > 0;
 
   // Use document-level keyboard shortcuts for consistent behavior
   useEditorKeyboardShortcuts({
@@ -520,9 +550,14 @@ export function TargetAudienceEditor({
       {/* Persona Cards */}
       <section>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-warm-gray-800 uppercase tracking-wide">
-            Customer Personas
-          </h3>
+          <div>
+            <h3 className="text-sm font-semibold text-warm-gray-800 uppercase tracking-wide">
+              Customer Personas *
+            </h3>
+            {errors.personas && (
+              <p className="mt-1 text-sm text-coral-600">{errors.personas}</p>
+            )}
+          </div>
           <Button
             variant="secondary"
             onClick={handleAddPersona}
@@ -557,7 +592,7 @@ export function TargetAudienceEditor({
         <Button variant="secondary" onClick={onCancel} disabled={isSaving}>
           Cancel
         </Button>
-        <Button onClick={handleSave} disabled={isSaving}>
+        <Button onClick={handleSave} disabled={isSaving || hasValidationErrors}>
           {isSaving ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>

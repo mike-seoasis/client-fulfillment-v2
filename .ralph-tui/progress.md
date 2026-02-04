@@ -44,6 +44,38 @@ export function useEditorKeyboardShortcuts({ onSave, onCancel, disabled = false 
 ```
 This ensures shortcuts work regardless of focus and allows nested components to handle Escape first.
 
+### Editor Validation Pattern
+For section editors that need form validation with inline error display:
+```tsx
+interface ValidationErrors {
+  field_name?: string;
+}
+
+const [errors, setErrors] = useState<ValidationErrors>({});
+
+const validate = useCallback((): boolean => {
+  const newErrors: ValidationErrors = {};
+  if (!requiredField.trim()) {
+    newErrors.field_name = 'Field is required';
+  }
+  setErrors(newErrors);
+  return Object.keys(newErrors).length === 0;
+}, [requiredField]);
+
+const handleSave = useCallback(() => {
+  if (!validate()) return;
+  // ... save logic
+}, [validate, ...otherDeps]);
+
+const hasValidationErrors = Object.keys(errors).length > 0;
+
+// In JSX:
+// - Use error prop on Input/Textarea for inline errors
+// - For section-level errors: <p className="text-sm text-coral-600">{errors.field}</p>
+// - Disable save: disabled={isSaving || hasValidationErrors}
+// - Clear errors in onChange when user fixes the issue
+```
+
 ---
 
 ## 2026-02-04 - BC-001
@@ -556,5 +588,21 @@ This ensures shortcuts work regardless of focus and allows nested components to 
   - Custom hooks that attach event listeners should always clean up in the useEffect return function to prevent memory leaks
   - The `disabled` option on keyboard shortcuts prevents accidental saves during async operations (when isSaving is true)
   - Cmd/Ctrl+S must call `e.preventDefault()` to prevent the browser's native save dialog from appearing
+---
+
+## 2026-02-04 - BC-030
+- **What was implemented:** Added validation and error display to critical section editors
+- **Files changed:**
+  - `frontend/src/components/brand-sections/editors/TargetAudienceEditor.tsx` - Added ValidationErrors interface, validate() function checking for at least one persona with a name, error state, inline error display under "Customer Personas" heading, disabled save button when validation fails
+  - `frontend/src/components/brand-sections/editors/VoiceCharacteristicsEditor.tsx` - Added ValidationErrors interface, validate() function checking for at least one voice trait with a name, error state, inline error display under "We Are:" heading, disabled save button when validation fails
+  - `frontend/src/components/brand-sections/editors/AIPromptEditor.tsx` - Added ValidationErrors interface, validate() function checking snippet is not empty, error state, Textarea error prop for inline display, disabled save button when validation fails
+- **Learnings:**
+  - Focus validation on critical fields only - BrandFoundation (company_name, tagline, mission_statement), TargetAudience (at least one persona with name), VoiceCharacteristics (at least one trait with name), AIPrompt (snippet required)
+  - Use the existing `error` prop on Input/Textarea components for inline error display - provides consistent styling with coral color scheme
+  - For section-level errors (like "at least one persona"), display the error message directly under the section heading using `text-coral-600` styling
+  - Clear validation errors immediately when user fixes the issue (in onChange handlers) for responsive feedback
+  - When callbacks reference state used in conditions (like `errors.personas`), include it in the dependency array to satisfy react-hooks/exhaustive-deps
+  - Disable save button with `disabled={isSaving || hasValidationErrors}` pattern - prevents save attempts while saving or when form is invalid
+  - The validate() function returns a boolean and sets errors state - call it in handleSave() and return early if false
 ---
 

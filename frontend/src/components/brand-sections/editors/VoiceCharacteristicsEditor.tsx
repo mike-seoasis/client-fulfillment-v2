@@ -17,6 +17,10 @@ interface VoiceCharacteristicsEditorProps {
   onCancel: () => void;
 }
 
+interface ValidationErrors {
+  we_are?: string;
+}
+
 interface TraitCardEditorProps {
   trait: VoiceTraitExample;
   index: number;
@@ -214,13 +218,32 @@ export function VoiceCharacteristicsEditor({
     ) ?? []
   );
 
+  const [errors, setErrors] = useState<ValidationErrors>({});
+
+  const validate = useCallback((): boolean => {
+    const newErrors: ValidationErrors = {};
+
+    // Check if at least one voice trait has a name
+    const hasTraitWithName = weAre.some((t) => t.trait_name.trim() !== '');
+    if (!hasTraitWithName) {
+      newErrors.we_are = 'At least one voice trait with a name is required';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }, [weAre]);
+
   const handleTraitChange = useCallback((index: number, updatedTrait: VoiceTraitExample) => {
+    // Clear error when user types a trait name
+    if (updatedTrait.trait_name.trim() && errors.we_are) {
+      setErrors((prev) => ({ ...prev, we_are: undefined }));
+    }
     setWeAre((prev) => {
       const next = [...prev];
       next[index] = updatedTrait;
       return next;
     });
-  }, []);
+  }, [errors.we_are]);
 
   const handleRemoveTrait = useCallback((index: number) => {
     setWeAre((prev) => prev.filter((_, i) => i !== index));
@@ -239,6 +262,10 @@ export function VoiceCharacteristicsEditor({
   }, []);
 
   const handleSave = useCallback(() => {
+    if (!validate()) {
+      return;
+    }
+
     // Clean up data before saving
     const cleanedWeAre = weAre
       .filter((t) => t.trait_name.trim()) // Remove traits without names
@@ -257,7 +284,10 @@ export function VoiceCharacteristicsEditor({
     };
 
     onSave(updatedData);
-  }, [weAre, weAreNot, onSave]);
+  }, [validate, weAre, weAreNot, onSave]);
+
+  // Compute whether form has validation errors (for disabling save button)
+  const hasValidationErrors = Object.keys(errors).length > 0;
 
   // Use document-level keyboard shortcuts for consistent behavior
   useEditorKeyboardShortcuts({
@@ -283,9 +313,14 @@ export function VoiceCharacteristicsEditor({
       {/* We Are Section */}
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-warm-gray-800 uppercase tracking-wide">
-            We Are:
-          </h3>
+          <div>
+            <h3 className="text-sm font-semibold text-warm-gray-800 uppercase tracking-wide">
+              We Are: *
+            </h3>
+            {errors.we_are && (
+              <p className="mt-1 text-sm text-coral-600">{errors.we_are}</p>
+            )}
+          </div>
           <Button
             variant="secondary"
             size="sm"
@@ -340,7 +375,7 @@ export function VoiceCharacteristicsEditor({
         <Button variant="secondary" onClick={onCancel} disabled={isSaving}>
           Cancel
         </Button>
-        <Button onClick={handleSave} disabled={isSaving}>
+        <Button onClick={handleSave} disabled={isSaving || hasValidationErrors}>
           {isSaving ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>

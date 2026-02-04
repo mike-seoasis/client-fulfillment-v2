@@ -17,6 +17,10 @@ interface AIPromptEditorProps {
   onCancel: () => void;
 }
 
+interface ValidationErrors {
+  snippet?: string;
+}
+
 /**
  * Editor component for AI Prompt Snippet section.
  * Provides a large textarea for the main snippet and additional metadata fields.
@@ -38,7 +42,24 @@ export function AIPromptEditor({
   // Additional metadata
   const [neverUseWords, setNeverUseWords] = useState<string[]>(data?.never_use_words ?? []);
 
+  const [errors, setErrors] = useState<ValidationErrors>({});
+
+  const validate = useCallback((): boolean => {
+    const newErrors: ValidationErrors = {};
+
+    if (!snippet.trim()) {
+      newErrors.snippet = 'AI prompt snippet is required';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }, [snippet]);
+
   const handleSave = useCallback(() => {
+    if (!validate()) {
+      return;
+    }
+
     // Build the save data, converting empty strings/arrays to undefined
     const cleanString = (s: string): string | undefined => s.trim() || undefined;
     const cleanArray = (arr: string[]): string[] | undefined => arr.length > 0 ? arr : undefined;
@@ -53,6 +74,7 @@ export function AIPromptEditor({
 
     onSave(updatedData);
   }, [
+    validate,
     snippet,
     voiceInThreeWords,
     weSoundLike,
@@ -60,6 +82,9 @@ export function AIPromptEditor({
     neverUseWords,
     onSave,
   ]);
+
+  // Compute whether form has validation errors (for disabling save button)
+  const hasValidationErrors = Object.keys(errors).length > 0;
 
   // Use document-level keyboard shortcuts for consistent behavior
   useEditorKeyboardShortcuts({
@@ -84,12 +109,18 @@ export function AIPromptEditor({
       {/* Main Prompt Snippet */}
       <section className="bg-cream-50 border border-cream-300 rounded-sm p-4">
         <h3 className="text-sm font-semibold text-warm-gray-800 mb-4 uppercase tracking-wide">
-          AI Prompt Snippet
+          AI Prompt Snippet *
         </h3>
         <Textarea
           label="The complete prompt snippet"
           value={snippet}
-          onChange={(e) => setSnippet(e.target.value)}
+          onChange={(e) => {
+            setSnippet(e.target.value);
+            if (e.target.value.trim() && errors.snippet) {
+              setErrors((prev) => ({ ...prev, snippet: undefined }));
+            }
+          }}
+          error={errors.snippet}
           placeholder="Write as [Brand Name]. Our voice is [description]... We always [guidelines]... Never [restrictions]..."
           disabled={isSaving}
           className="min-h-[200px] font-mono text-sm"
@@ -152,7 +183,7 @@ export function AIPromptEditor({
         <Button variant="secondary" onClick={onCancel} disabled={isSaving}>
           Cancel
         </Button>
-        <Button onClick={handleSave} disabled={isSaving}>
+        <Button onClick={handleSave} disabled={isSaving || hasValidationErrors}>
           {isSaving ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>
