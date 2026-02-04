@@ -49,11 +49,12 @@ export function ExamplesBankSection({ data }: ExamplesBankSectionProps) {
     return <EmptySection message="Examples bank data not available" />;
   }
 
-  const { headlines, product_description_example, email_subject_lines, social_media_examples, ctas, off_brand_examples } = data;
+  const { headlines, product_description_example, product_descriptions, email_subject_lines, social_media_examples, ctas, off_brand_examples } = data;
 
   const hasContent =
     (headlines && headlines.length > 0) ||
     product_description_example ||
+    (product_descriptions && product_descriptions.length > 0) ||
     (email_subject_lines && email_subject_lines.length > 0) ||
     (social_media_examples && social_media_examples.length > 0) ||
     (ctas && ctas.length > 0) ||
@@ -79,8 +80,26 @@ export function ExamplesBankSection({ data }: ExamplesBankSectionProps) {
         </SectionCard>
       )}
 
-      {/* Product Description Example */}
-      {product_description_example && (
+      {/* Product Descriptions (array) */}
+      {product_descriptions && product_descriptions.length > 0 && (
+        <SectionCard title="Product Description Examples">
+          <div className="space-y-4">
+            {product_descriptions.map((item, index) => (
+              <div key={index} className="bg-white border border-cream-200 rounded-sm p-4">
+                <h4 className="text-sm font-semibold text-warm-gray-800 mb-2">
+                  {item.product_name}
+                </h4>
+                <p className="text-sm text-warm-gray-700 whitespace-pre-line">
+                  {item.description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      )}
+
+      {/* Legacy: Product Description Example (single) - for backward compatibility */}
+      {!product_descriptions?.length && product_description_example && (
         <SectionCard title="Product Description Example">
           <div className="bg-white border border-cream-200 rounded-sm p-4">
             <p className="text-sm text-warm-gray-700 whitespace-pre-line">

@@ -180,9 +180,16 @@ export interface TrustElementsData {
 }
 
 // Examples Bank types
+export interface ProductDescriptionItem {
+  product_name: string;
+  description: string;
+}
+
 export interface ExamplesBankData {
   headlines?: string[];
+  /** @deprecated Use product_descriptions instead */
   product_description_example?: string;
+  product_descriptions?: ProductDescriptionItem[];
   email_subject_lines?: string[];
   social_media_examples?: Array<{
     platform?: string;

@@ -155,3 +155,22 @@ This prevents "objects are not valid as a React child" errors when backend data 
   - This is a prompt-only change - no frontend/type updates needed since the structure is additive and JSON parsing handles new fields gracefully
 ---
 
+## 2026-02-04 - BC-011
+- **What was implemented:** Updated examples_bank prompt for more comprehensive content generation
+- **Files changed:**
+  - `backend/app/services/brand_config.py` (lines 448-489) - Expanded examples_bank prompt with:
+    - Changed `headlines_that_work` minimum from 5-10 to AT LEAST 10, with 10 placeholders in JSON schema
+    - Changed `product_description_example` (single object) to `product_descriptions` (array of 3+ objects with product_name and description)
+    - Changed `email_subject_lines` from 5 to AT LEAST 10, with 10 placeholders in JSON schema
+    - Changed `ctas_that_work` from 5 to AT LEAST 10, with 10 placeholders in JSON schema
+    - Added explicit REQUIREMENTS section with minimum counts and variety guidance for each field
+    - Added guidance for `what_not_to_write` (3-5 examples)
+  - `frontend/src/components/brand-sections/types.ts` (lines 182-191) - Added `ProductDescriptionItem` interface and `product_descriptions` array field to `ExamplesBankData`, kept legacy `product_description_example` for backward compatibility
+  - `frontend/src/components/brand-sections/ExamplesBankSection.tsx` (lines 52-100) - Updated to render array of product descriptions with product_name headers, added backward compatibility for legacy single product_description_example
+- **Learnings:**
+  - When changing a field from a single object to an array, keep the old field for backward compatibility with existing data
+  - Use conditional rendering: show new array format if available, fall back to legacy format if not (`!product_descriptions?.length && product_description_example`)
+  - For LLM prompts, showing the exact number of placeholders you want (10 "string" items) reinforces the expected quantity
+  - Field naming matters: `product_descriptions` (plural) makes the array nature clear vs `product_description_example` (singular)
+---
+

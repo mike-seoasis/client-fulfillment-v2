@@ -451,25 +451,42 @@ Based on the research context and all previous sections, create example copy tha
 
 Output ONLY valid JSON in this exact format:
 {
-  "headlines_that_work": ["string", "string", "string", "string", "string"],
-  "product_description_example": {
-    "product_name": "string",
-    "description": "string (100-200 words in brand voice)"
-  },
-  "email_subject_lines": ["string", "string", "string", "string", "string"],
+  "headlines_that_work": ["string", "string", "string", "string", "string", "string", "string", "string", "string", "string"],
+  "product_descriptions": [
+    {
+      "product_name": "string",
+      "description": "string (100-200 words in brand voice)"
+    },
+    {
+      "product_name": "string",
+      "description": "string (100-200 words in brand voice)"
+    },
+    {
+      "product_name": "string",
+      "description": "string (100-200 words in brand voice)"
+    }
+  ],
+  "email_subject_lines": ["string", "string", "string", "string", "string", "string", "string", "string", "string", "string"],
   "social_media_posts": {
     "instagram_product": "string",
     "instagram_social_proof": "string",
     "facebook_value": "string"
   },
-  "ctas_that_work": ["string", "string", "string", "string", "string"],
+  "ctas_that_work": ["string", "string", "string", "string", "string", "string", "string", "string", "string", "string"],
   "what_not_to_write": [
     {"example": "string", "reason": "string"}
   ]
 }
 
-Create 5-10 examples for each category. Make them specific to this brand.
-What NOT to write examples should show common mistakes to avoid.""",
+REQUIREMENTS:
+- headlines_that_work: Provide AT LEAST 10 headlines that demonstrate brand voice. Include variety: product-focused, benefit-driven, emotional, promotional, and seasonal headlines.
+- product_descriptions: Provide AT LEAST 3 complete product descriptions. Each should be 100-200 words, showcase brand voice, and cover different product types or use cases.
+- email_subject_lines: Provide AT LEAST 10 email subject lines. Include variety: promotional, welcome, cart abandonment, product launch, seasonal, and loyalty-focused subjects.
+- ctas_that_work: Provide AT LEAST 10 CTAs that align with brand voice. Include variety: purchase CTAs, email signup, learn more, social engagement, and urgency-driven CTAs.
+- social_media_posts: Provide examples for each platform showing brand voice in action.
+- what_not_to_write: Provide 3-5 examples of common mistakes with clear explanations of why they don't work for this brand.
+
+Make all examples specific to this brand's products, voice, and target audience.""",
     "competitor_context": """You are a brand strategist creating the Competitor Context section of a brand guidelines document for an e-commerce/DTC brand.
 
 Based on the research context, map the competitive landscape focusing on ONLINE/E-COMMERCE competitors:
