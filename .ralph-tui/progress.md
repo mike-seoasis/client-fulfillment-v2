@@ -825,3 +825,31 @@ after each iteration and it's included in prompts for context.
   - Reuse shared components like ONBOARDING_STEPS, icon components, LoadingSkeleton, NotFoundState
 ---
 
+## 2026-02-04 - S3-041
+- **What was implemented**: Component tests for LabelEditDropdown (45 tests)
+- **Files changed**: `frontend/src/components/onboarding/__tests__/LabelEditDropdown.test.tsx` (new file)
+- **Test coverage**:
+  - `validateLabelCount` unit tests (7 tests): Returns null for valid counts (2-5), error messages for invalid counts (0, 1, 6, 10)
+  - `Label constants` tests (2 tests): MIN_LABELS=2, MAX_LABELS=5
+  - `LabelEditDropdown rendering` (5 tests): Header, close button, Cancel/Save buttons, dialog role
+  - `Taxonomy options display` (5 tests): All labels rendered, descriptions shown, checkbox states, empty labels handling
+  - `Selection count indicator` (3 tests): Count display, validation errors, count updates
+  - `Checkbox interaction` (2 tests): Toggle selection, deselect on re-click
+  - `Validation prevents <2 labels` (3 tests): Disabled save at 0/1 labels, error message on deselect
+  - `Validation prevents >5 labels` (2 tests): Error message and disabled save when exceeding max
+  - `Save functionality` (7 tests): Save enabled with valid selection, disabled without changes, calls onSave/onLabelsChange, "Saving..." state, buttons disabled during save
+  - `Close functionality` (5 tests): Close button, cancel button, Escape key, outside click, inside click doesn't close
+  - `Label display in page context` (3 tests): Checkboxes state, background highlighting, text styling
+  - `Label editing workflow` integration tests (3 tests): Complete workflow, cancel workflow, validation blocks save
+- **Acceptance criteria verification**:
+  - ✅ Test labels display correctly - taxonomy options display tests verify all labels render with descriptions and correct checked state
+  - ✅ Test dropdown shows taxonomy options - checkbox interaction tests verify selection toggling works
+  - ✅ Test validation prevents <2 or >5 labels - validation tests verify disabled save and error messages
+  - ✅ Test save calls API with correct data - save functionality tests verify onSave called with correct labels array
+- **Learnings:**
+  - Use `screen.getByText('label-name').closest('button')` to find clickable option buttons in the dropdown
+  - Access checkbox checked state via `getAttribute('aria-checked')` since these are styled buttons with role="checkbox"
+  - Integration workflow tests are valuable for verifying complete user journeys through the component
+  - Test for both the presence and absence of elements (e.g., disabled states, error messages appearing/disappearing)
+---
+
