@@ -714,3 +714,27 @@ after each iteration and it's included in prompts for context.
   - Test style/class assertions use `toHaveClass()` and `toHaveStyle()` matchers
 ---
 
+## 2026-02-04 - S3-036
+- **What was implemented**: Added taxonomy status display to crawl progress page
+- **Files changed**: `frontend/src/app/projects/[id]/onboarding/crawl/page.tsx`
+- **Features**:
+  - Added `TaxonomyResponse` and `TaxonomyLabel` TypeScript interfaces
+  - Added `TagIcon` SVG component for visual indicator
+  - Created `TaxonomyStatus` component that:
+    - Shows "Generating label taxonomy..." with spinner during `labeling` status
+    - Shows generated taxonomy labels as tags when status is `complete`
+    - Shows label count (e.g., "15 labels generated")
+  - Added useQuery hook to fetch taxonomy from `/projects/{id}/taxonomy` endpoint
+  - Query enabled only when status is `labeling` or `complete`
+  - Retry logic for 404 errors during labeling phase (taxonomy may not be ready yet)
+- **Acceptance criteria verification**:
+  - ✅ Show 'Generating label taxonomy...' with spinner after crawl completes - SpinnerIcon + text during `labeling` status
+  - ✅ Show generated taxonomy labels when complete - Labels displayed as palm-colored tags
+  - ✅ Show label count (e.g., '15 labels generated') - Count shown in header
+- **Learnings:**
+  - TanStack Query's `enabled` option can use dependent query data (`crawlStatus?.status`) for conditional fetching
+  - Use retry with custom logic to handle 404s during transitional states (labeling phase before taxonomy is generated)
+  - Conditional rendering based on status enums keeps component logic clean (`if (status === 'crawling') return null`)
+  - Title attribute on label tags provides tooltip with description for user context
+---
+

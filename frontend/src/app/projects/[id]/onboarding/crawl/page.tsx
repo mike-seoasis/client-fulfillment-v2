@@ -44,6 +44,18 @@ interface CrawlStatusResponse {
   pages: PageSummary[];
 }
 
+// Types matching backend TaxonomyResponse
+interface TaxonomyLabel {
+  name: string;
+  description: string;
+  examples: string[];
+}
+
+interface TaxonomyResponse {
+  labels: TaxonomyLabel[];
+  generated_at: string;
+}
+
 function BackArrowIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -106,6 +118,23 @@ function RetryIcon({ className }: { className?: string }) {
     >
       <polyline points="23 4 23 10 17 10" />
       <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+    </svg>
+  );
+}
+
+function TagIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+      <line x1="7" y1="7" x2="7.01" y2="7" />
     </svg>
   );
 }
@@ -365,6 +394,58 @@ function PageListItem({ page, onRetry, isRetrying }: PageListItemProps) {
   );
 }
 
+interface TaxonomyStatusProps {
+  status: 'crawling' | 'labeling' | 'complete';
+  taxonomy: TaxonomyResponse | null;
+  isLoading: boolean;
+}
+
+function TaxonomyStatus({ status, taxonomy, isLoading }: TaxonomyStatusProps) {
+  // Only show taxonomy section when crawling is done
+  if (status === 'crawling') {
+    return null;
+  }
+
+  // Show spinner when generating taxonomy
+  if (status === 'labeling' || isLoading) {
+    return (
+      <div className="mt-6 p-4 bg-sand-50 rounded-sm border border-sand-200">
+        <div className="flex items-center gap-3">
+          <SpinnerIcon className="w-5 h-5 text-palm-500 animate-spin" />
+          <span className="text-warm-gray-700">Generating label taxonomy...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Show taxonomy labels when complete
+  if (status === 'complete' && taxonomy) {
+    return (
+      <div className="mt-6 p-4 bg-palm-50 rounded-sm border border-palm-200">
+        <div className="flex items-center gap-2 mb-3">
+          <TagIcon className="w-5 h-5 text-palm-600" />
+          <span className="font-medium text-warm-gray-900">
+            {taxonomy.labels.length} labels generated
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {taxonomy.labels.map((label) => (
+            <span
+              key={label.name}
+              className="inline-flex items-center px-2.5 py-1 text-sm bg-palm-100 text-palm-700 rounded-sm"
+              title={label.description}
+            >
+              {label.name}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 export default function CrawlProgressPage() {
   const params = useParams();
   const projectId = params.id as string;
@@ -385,6 +466,21 @@ export default function CrawlProgressPage() {
       }
       return 2000; // Poll every 2 seconds while crawling/labeling
     },
+  });
+
+  // Fetch taxonomy when status is 'labeling' or 'complete'
+  const { data: taxonomy, isLoading: isTaxonomyLoading } = useQuery({
+    queryKey: ['taxonomy', projectId],
+    queryFn: () => apiClient.get<TaxonomyResponse>(`/projects/${projectId}/taxonomy`),
+    enabled: !!projectId && (crawlStatus?.status === 'labeling' || crawlStatus?.status === 'complete'),
+    // Retry to handle timing where taxonomy isn't ready yet during labeling
+    retry: (failureCount, error) => {
+      // Stop retrying after 3 attempts or if not a 404
+      if (failureCount >= 3) return false;
+      // Keep retrying 404s during labeling phase (taxonomy not generated yet)
+      return (error as Error)?.message?.includes('404') ?? false;
+    },
+    retryDelay: 2000,
   });
 
   const isLoading = isProjectLoading || isCrawlStatusLoading;
@@ -505,6 +601,13 @@ export default function CrawlProgressPage() {
             )}
           </div>
         </div>
+
+        {/* Taxonomy status */}
+        <TaxonomyStatus
+          status={overallStatus}
+          taxonomy={taxonomy ?? null}
+          isLoading={isTaxonomyLoading}
+        />
 
         <hr className="border-cream-300 my-6" />
 
