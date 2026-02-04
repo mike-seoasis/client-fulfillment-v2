@@ -297,3 +297,17 @@ after each iteration and it's included in prompts for context.
   - Status computation logic should be in a helper function for testability
 ---
 
+## 2026-02-04 - S3-016
+- **What was implemented**: GET /projects/{id}/pages endpoint to list all crawled pages
+- **Files changed**: `backend/app/api/v1/projects.py` (added list_project_pages endpoint, added CrawledPageResponse import)
+- **Endpoint features**:
+  - Returns list of CrawledPageResponse objects with all fields (labels, content, status, etc.)
+  - Supports optional `status` query parameter to filter by crawl status
+  - Verifies project exists (404 if not found)
+  - Uses Pydantic model_validate() for ORM→schema conversion
+- **Learnings:**
+  - CrawledPageResponse schema already existed with all needed fields, just needed to import it
+  - Use `model_validate()` to convert SQLAlchemy model instances to Pydantic response schemas
+  - Optional query parameters are typed as `str | None = None` in FastAPI
+---
+

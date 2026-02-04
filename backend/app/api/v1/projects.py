@@ -15,6 +15,7 @@ from app.integrations.crawl4ai import Crawl4AIClient, get_crawl4ai
 from app.integrations.s3 import S3Client, get_s3
 from app.models.crawled_page import CrawledPage, CrawlStatus
 from app.schemas.crawled_page import (
+    CrawledPageResponse,
     CrawlStatusResponse,
     PageSummary,
     ProgressCounts,
@@ -349,6 +350,44 @@ def _compute_overall_status(
 
     # All done with labels assigned
     return "complete"
+
+
+@router.get("/{project_id}/pages", response_model=list[CrawledPageResponse])
+async def list_project_pages(
+    project_id: str,
+    status: str | None = None,
+    db: AsyncSession = Depends(get_session),
+) -> list[CrawledPageResponse]:
+    """List all crawled pages for a project.
+
+    Returns all pages with their full details including labels, content,
+    and crawl status. Optionally filter by crawl status.
+
+    Args:
+        project_id: UUID of the project.
+        status: Optional status filter (pending, crawling, completed, failed).
+        db: AsyncSession for database operations.
+
+    Returns:
+        List of CrawledPageResponse objects.
+
+    Raises:
+        HTTPException: 404 if project not found.
+    """
+    # Verify project exists (raises 404 if not)
+    await ProjectService.get_project(db, project_id)
+
+    # Build query
+    stmt = select(CrawledPage).where(CrawledPage.project_id == project_id)
+
+    # Apply optional status filter
+    if status is not None:
+        stmt = stmt.where(CrawledPage.status == status)
+
+    result = await db.execute(stmt)
+    pages = result.scalars().all()
+
+    return [CrawledPageResponse.model_validate(page) for page in pages]
 
 
 @router.get("/{project_id}/crawl-status", response_model=CrawlStatusResponse)
