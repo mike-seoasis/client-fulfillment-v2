@@ -570,3 +570,30 @@ after each iteration and it's included in prompts for context.
   - For drag-drop testing, `fireEvent.dragOver/dragLeave/drop` work well with jsdom
 ---
 
+## 2026-02-04 - S3-029
+- **What was implemented**: Created crawl progress page route for viewing crawl status
+- **Files changed**: `frontend/src/app/projects/[id]/onboarding/crawl/page.tsx` (new file)
+- **Features**:
+  - Page route at `/projects/[id]/onboarding/crawl`
+  - Loads crawl status from `GET /projects/{id}/crawl-status` API
+  - Polls every 2 seconds while status is `crawling` or `labeling`, stops when `complete`
+  - Step indicator showing Crawl as current step (step 2 of 5)
+  - Breadcrumb navigation: `{project.name} › Onboarding`
+  - Progress bar showing completed pages vs total
+  - Page list with status icons (check for completed, spinner for crawling, X for failed, circle for pending)
+  - Page details shown for completed pages: title, word count, product count
+  - Loading skeleton state while data loads
+  - 404 error state if project not found
+  - Continue button enabled only when crawl is complete, navigates to keywords step
+- **Acceptance criteria verification**:
+  - ✅ Create /projects/[id]/onboarding/crawl/page.tsx
+  - ✅ Page loads crawl status and shows progress
+  - ✅ Breadcrumb navigation
+  - ✅ Step indicator showing Crawl as current step
+- **Learnings:**
+  - TanStack Query's `refetchInterval` can be a function that receives query data, returning `false` to stop polling or milliseconds to continue
+  - Reuse ONBOARDING_STEPS pattern from upload page for consistent step indicator
+  - Use `max-h-80 overflow-y-auto` for scrollable page lists within a card
+  - Display URL path only (not full URL) for cleaner list using `new URL().pathname`
+---
+
