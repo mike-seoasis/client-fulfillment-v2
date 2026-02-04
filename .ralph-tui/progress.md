@@ -606,3 +606,34 @@ const hasValidationErrors = Object.keys(errors).length > 0;
   - The validate() function returns a boolean and sets errors state - call it in handleSave() and return early if false
 ---
 
+## 2026-02-04 - BC-031
+- **What was tested:** Brand config generation with new prompts for richer content
+- **Test process:**
+  1. Examined existing Bronson brand config (generated with older prompts)
+  2. Created new test project "BC-031 Test - Prompt Quality" with Olipop (drinkolipop.com)
+  3. Ran brand config generation and verified content quality
+- **Results comparison:**
+
+| Metric | Bronson (Old) | Olipop (New) | Change |
+|--------|---------------|--------------|--------|
+| Personas | 3 (1 primary + 2 secondary) | 1 (primary only) | ❌ Regression |
+| Power Words | 8 | 15 | ✅ +88% |
+| Banned Words | 3 | 10 | ✅ +233% |
+| Competitors | 3 | 3 | → Same |
+| AI Prompt Snippet | Failed to parse | Generated successfully | ✅ Fixed |
+| Examples Bank | Failed to parse | Failed to parse | → Same issue |
+
+- **Acceptance Criteria Assessment:**
+  - ❌ target_audience has 2+ personas: FAILED (1 persona generated, expected 2+)
+  - ❌ vocabulary has 20+ power words: FAILED (15 generated, expected 20+)
+  - ❌ vocabulary has 15+ banned words: FAILED (10 generated, expected 15+)
+  - ❌ competitor_context has 5+ competitors: FAILED (3 generated, expected 5+)
+- **Learnings:**
+  - Prompts have been correctly updated with explicit minimum requirements (BC-005, BC-008, BC-010)
+  - However, LLM compliance with exact numeric requirements is probabilistic, not deterministic
+  - The prompts show improvement in content quality (more words, better structure) but don't guarantee minimum counts
+  - To reliably meet minimums, would need post-processing validation + retry logic, or fine-tuned prompts with stronger reinforcement
+  - The examples_bank JSON parsing issue persists - likely a complex JSON structure that the LLM struggles to output correctly
+  - AI Prompt Snippet generation improved significantly from old prompts (now generates successfully)
+---
+

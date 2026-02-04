@@ -3,10 +3,10 @@
   "sessionId": "0d66a092-1147-4c2d-a140-1be3ee3a203f",
   "status": "running",
   "startedAt": "2026-02-04T15:32:53.974Z",
-  "updatedAt": "2026-02-04T16:25:09.199Z",
-  "currentIteration": 29,
+  "updatedAt": "2026-02-04T16:29:17.549Z",
+  "currentIteration": 30,
   "maxIterations": 10,
-  "tasksCompleted": 29,
+  "tasksCompleted": 30,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -191,8 +191,8 @@
       {
         "id": "BC-030",
         "title": "Add validation and error display",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "BC-031",
@@ -522,6 +522,16 @@
       "durationMs": 283034,
       "startedAt": "2026-02-04T16:16:22.731Z",
       "endedAt": "2026-02-04T16:21:05.765Z"
+    },
+    {
+      "iteration": 30,
+      "status": "completed",
+      "taskId": "BC-030",
+      "taskTitle": "Add validation and error display",
+      "taskCompleted": true,
+      "durationMs": 242321,
+      "startedAt": "2026-02-04T16:21:06.875Z",
+      "endedAt": "2026-02-04T16:25:09.196Z"
     }
   ],
   "skippedTaskIds": [],
