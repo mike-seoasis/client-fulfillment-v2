@@ -655,3 +655,18 @@ after each iteration and it's included in prompts for context.
   - Keep extracted data summary concise - H2 count is most useful (H1 usually just 1, H3 too granular)
 ---
 
+## 2026-02-04 - S3-033
+- **What was implemented**: Verified polling implementation (already completed in S3-029)
+- **Files changed**: None - implementation was already complete
+- **Location of implementation**: `frontend/src/app/projects/[id]/onboarding/crawl/page.tsx` lines 334-345
+- **Acceptance criteria verification**:
+  - ✅ Poll /api/v1/projects/{id}/crawl-status every 2 seconds - `refetchInterval: 2000`
+  - ✅ Update UI with new status data - useQuery updates `crawlStatus` which renders throughout component
+  - ✅ Stop polling when all pages are completed or failed - `refetchInterval` function returns `false` when `status === 'complete'`
+  - ✅ Use React Query or similar for polling - TanStack Query's `useQuery` with `refetchInterval`
+- **Learnings:**
+  - TanStack Query's `refetchInterval` can be a function that receives query state: `(data) => { return data.state.data?.status === 'complete' ? false : 2000 }`
+  - Backend's `_compute_overall_status` returns 'complete' when all pages are either completed or failed AND labeling is done
+  - The three-state model (crawling → labeling → complete) provides good UX for showing different phases
+---
+
