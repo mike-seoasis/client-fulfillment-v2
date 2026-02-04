@@ -346,3 +346,19 @@ after each iteration and it's included in prompts for context.
   - Check page belongs to project to prevent cross-project access
 ---
 
+## 2026-02-04 - S3-019
+- **What was implemented**: POST /projects/{id}/pages/{page_id}/retry endpoint for retrying failed crawls
+- **Files changed**:
+  - `backend/app/api/v1/projects.py` (added retry_page_crawl endpoint)
+- **Endpoint features**:
+  - Resets page status to 'pending'
+  - Clears crawl_error field
+  - Starts background task using existing _crawl_pages_background helper (reusing S3-014 pattern)
+  - Returns HTTP 202 Accepted with updated page (status='pending')
+  - Returns 404 if project not found, page not found, or page doesn't belong to project
+- **Learnings:**
+  - Reuse existing _crawl_pages_background helper - just pass single-item list of page_ids
+  - Use HTTP 202 Accepted for async operations that spawn background tasks
+  - Follow established page validation pattern (check project exists, page exists, page belongs to project)
+---
+

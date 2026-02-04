@@ -542,6 +542,81 @@ async def get_project_taxonomy(
     )
 
 
+@router.post(
+    "/{project_id}/pages/{page_id}/retry",
+    response_model=CrawledPageResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def retry_page_crawl(
+    project_id: str,
+    page_id: str,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_session),
+    crawl4ai: Crawl4AIClient = Depends(get_crawl4ai),
+) -> CrawledPageResponse:
+    """Retry crawling a failed page.
+
+    Resets the page status to 'pending', clears any crawl error, and starts
+    a background task to crawl the page.
+
+    Args:
+        project_id: UUID of the project.
+        page_id: UUID of the crawled page.
+        background_tasks: FastAPI background tasks.
+        db: AsyncSession for database operations.
+        crawl4ai: Crawl4AI client for crawling.
+
+    Returns:
+        Updated CrawledPageResponse with status reset to 'pending'.
+
+    Raises:
+        HTTPException: 404 if project or page not found.
+    """
+    # Verify project exists (raises 404 if not)
+    await ProjectService.get_project(db, project_id)
+
+    # Get the page
+    page = await db.get(CrawledPage, page_id)
+    if not page:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Page {page_id} not found",
+        )
+
+    # Verify page belongs to this project
+    if page.project_id != project_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Page {page_id} not found in project {project_id}",
+        )
+
+    # Reset page status to pending and clear error
+    page.status = CrawlStatus.PENDING.value
+    page.crawl_error = None
+    await db.commit()
+    await db.refresh(page)
+
+    logger.info(
+        "Page retry initiated",
+        extra={
+            "project_id": project_id,
+            "page_id": page_id,
+            "url": page.normalized_url,
+        },
+    )
+
+    # Start background crawl task for this single page
+    background_tasks.add_task(
+        _crawl_pages_background,
+        project_id=project_id,
+        page_ids=[page_id],
+        task_id=str(uuid4()),
+        crawl4ai_client=crawl4ai,
+    )
+
+    return CrawledPageResponse.model_validate(page)
+
+
 @router.put(
     "/{project_id}/pages/{page_id}/labels",
     response_model=CrawledPageResponse,
