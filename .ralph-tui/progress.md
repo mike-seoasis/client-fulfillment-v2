@@ -469,3 +469,30 @@ after each iteration and it's included in prompts for context.
   - For invalid URLs, fall back to lowercased string for deduplication consistency
 ---
 
+## 2026-02-04 - S3-025
+- **What was implemented**: URL preview list component with remove button functionality
+- **Files changed**:
+  - `frontend/src/components/onboarding/UrlPreviewList.tsx` (new file)
+  - `frontend/src/app/projects/[id]/onboarding/upload/page.tsx` (integrated UrlPreviewList)
+- **Features**:
+  - Created `UrlPreviewList` component with:
+    - Shows all parsed URLs in a scrollable list (max-h-64)
+    - Valid/invalid status indicator with check/X icons
+    - "X URLs to process" count summary with invalid count
+    - Remove button (trash icon) on each URL row, appears on hover
+    - Empty state when no URLs
+  - Added `removedUrls` state (Set<string>) to track manually removed URLs
+  - Updated `parsedUrls` memo to filter out removed URLs
+  - `handleRemoveUrl` callback adds normalized URL to removed set
+- **Acceptance criteria verification**:
+  - ✅ Shows all parsed URLs in a list - UrlPreviewList renders all items
+  - ✅ Each URL shows validation status - Check icon (palm) for valid, X icon (coral) for invalid
+  - ✅ Remove button on each URL - Trash icon button, reveals on hover, removes from list
+  - ✅ Shows total count 'X URLs to process' - Count summary at top of list
+  - ✅ Empty state when no URLs - "Enter URLs above..." message when empty
+- **Learnings:**
+  - Use `Set.prototype.add()` method instead of spread operator (`[...prev, item]`) to avoid TypeScript downlevelIteration issues
+  - `group-hover:opacity-100` pattern works well for revealing action buttons on hover
+  - Use `key={item.normalizedUrl}` instead of array index for stable list rendering when items can be removed
+---
+

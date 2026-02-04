@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useProject } from '@/hooks/use-projects';
 import { Button } from '@/components/ui';
 import { UrlUploader, type ParsedUrl, isValidUrl, normalizeUrl } from '@/components/onboarding/UrlUploader';
 import { CsvDropzone, type CsvParseResult } from '@/components/onboarding/CsvDropzone';
+import { UrlPreviewList } from '@/components/onboarding/UrlPreviewList';
 
 // Step indicator data
 const ONBOARDING_STEPS = [
@@ -153,19 +154,31 @@ export default function UrlUploadPage() {
     error: null,
     filename: null,
   });
+  // Track manually removed URLs by their normalized URL
+  const [removedUrls, setRemovedUrls] = useState<Set<string>>(new Set());
 
   const { data: project, isLoading, error } = useProject(projectId);
 
   // Combine URLs from textarea and CSV, deduplicating by normalized URL
+  // and filtering out manually removed URLs
   const parsedUrls = useMemo(() => {
-    const combined: ParsedUrl[] = [...textareaUrls];
-    const existingUrls = new Set(textareaUrls.map((u) => u.normalizedUrl));
+    const combined: ParsedUrl[] = [];
+    const existingUrls = new Set<string>();
 
+    // Add textarea URLs (filtering out removed ones)
+    for (const item of textareaUrls) {
+      if (!removedUrls.has(item.normalizedUrl) && !existingUrls.has(item.normalizedUrl)) {
+        combined.push(item);
+        existingUrls.add(item.normalizedUrl);
+      }
+    }
+
+    // Add CSV URLs (filtering out removed ones and duplicates)
     for (const url of csvResult.urls) {
       const valid = isValidUrl(url);
       const normalized = valid ? normalizeUrl(url) : url.toLowerCase();
 
-      if (!existingUrls.has(normalized)) {
+      if (!removedUrls.has(normalized) && !existingUrls.has(normalized)) {
         combined.push({
           url,
           normalizedUrl: normalized,
@@ -176,10 +189,18 @@ export default function UrlUploadPage() {
     }
 
     return combined;
-  }, [textareaUrls, csvResult.urls]);
+  }, [textareaUrls, csvResult.urls, removedUrls]);
 
-  const validUrls = parsedUrls.filter((u) => u.isValid);
-  const invalidUrls = parsedUrls.filter((u) => !u.isValid);
+  // Handle removing a URL from the preview list
+  const handleRemoveUrl = useCallback((normalizedUrl: string) => {
+    setRemovedUrls((prev) => {
+      const next = new Set(prev);
+      next.add(normalizedUrl);
+      return next;
+    });
+  }, []);
+
+  const validUrlCount = parsedUrls.filter((u) => u.isValid).length;
 
   // Loading state
   if (isLoading) {
@@ -260,41 +281,8 @@ export default function UrlUploadPage() {
 
         <hr className="border-cream-300 my-6" />
 
-        {/* URL count summary */}
-        <div className="text-warm-gray-500 text-sm mb-4">
-          URLs to process:{' '}
-          <span className="font-medium text-warm-gray-700">{validUrls.length}</span>
-          {invalidUrls.length > 0 && (
-            <span className="text-coral-500 ml-2">
-              ({invalidUrls.length} invalid)
-            </span>
-          )}
-        </div>
-
-        {/* URL preview list */}
-        {parsedUrls.length === 0 ? (
-          <div className="text-center py-8 text-warm-gray-400 text-sm">
-            Enter URLs above to see them listed here
-          </div>
-        ) : (
-          <div className="max-h-48 overflow-y-auto border border-cream-300 rounded-sm">
-            {parsedUrls.map((item, index) => (
-              <div
-                key={index}
-                className={`px-3 py-2 text-sm font-mono border-b border-cream-200 last:border-b-0 ${
-                  item.isValid
-                    ? 'text-warm-gray-700 bg-white'
-                    : 'text-coral-600 bg-coral-50'
-                }`}
-              >
-                {item.url}
-                {!item.isValid && (
-                  <span className="ml-2 text-xs text-coral-500">(invalid URL)</span>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+        {/* URL preview list with remove functionality */}
+        <UrlPreviewList urls={parsedUrls} onRemove={handleRemoveUrl} />
 
         <hr className="border-cream-300 my-6" />
 
@@ -303,7 +291,7 @@ export default function UrlUploadPage() {
           <Link href={`/projects/${projectId}`}>
             <Button variant="secondary">Cancel</Button>
           </Link>
-          <Button disabled={validUrls.length === 0}>Start Crawl</Button>
+          <Button disabled={validUrlCount === 0}>Start Crawl</Button>
         </div>
       </div>
     </div>
