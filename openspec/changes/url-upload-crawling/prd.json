@@ -684,8 +684,9 @@
         "Update status to 'labels_complete' when done"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Chain background tasks or use a single task that handles both"
+      "passes": true,
+      "notes": "Chain background tasks or use a single task that handles both",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S3-045",
@@ -761,6 +762,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-04T20:38:22.248Z"
+    "updatedAt": "2026-02-04T20:40:04.933Z"
   }
 }

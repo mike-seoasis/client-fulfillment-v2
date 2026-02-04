@@ -284,13 +284,22 @@ async def _crawl_pages_background(
     This function runs outside the request context, so it creates
     its own database session.
 
+    After crawling completes, if all pages for the project are done
+    (completed or failed), this task automatically triggers:
+    1. Taxonomy generation
+    2. Label assignment to all pages
+
     Args:
         project_id: Project ID for logging.
         page_ids: List of CrawledPage IDs to crawl.
         task_id: Task ID for tracking/logging.
         crawl4ai_client: Crawl4AI client instance.
     """
+    from sqlalchemy.orm.attributes import flag_modified
+
     from app.core.database import db_manager
+    from app.integrations.claude import get_claude
+    from app.services.label_taxonomy import LabelTaxonomyService
 
     logger.info(
         "Starting background crawl task",
@@ -318,6 +327,98 @@ async def _crawl_pages_background(
                     "failed": len(page_ids) - success_count,
                 },
             )
+
+            # Check if all pages for this project are done (no pending or crawling)
+            stmt = select(CrawledPage).where(CrawledPage.project_id == project_id)
+            result = await db.execute(stmt)
+            all_pages = list(result.scalars().all())
+
+            pending_or_crawling = sum(
+                1 for p in all_pages
+                if p.status in (CrawlStatus.PENDING.value, CrawlStatus.CRAWLING.value)
+            )
+
+            if pending_or_crawling > 0:
+                logger.info(
+                    "Not all pages complete, skipping taxonomy generation",
+                    extra={
+                        "project_id": project_id,
+                        "task_id": task_id,
+                        "pending_or_crawling": pending_or_crawling,
+                    },
+                )
+                return
+
+            # All pages are done - trigger taxonomy generation and label assignment
+            logger.info(
+                "All pages complete, starting taxonomy generation",
+                extra={
+                    "project_id": project_id,
+                    "task_id": task_id,
+                },
+            )
+
+            # Update project phase_status to 'labeling'
+            project = await db.get(Project, project_id)
+            if project:
+                if "onboarding" not in project.phase_status:
+                    project.phase_status["onboarding"] = {}
+                project.phase_status["onboarding"]["status"] = "labeling"
+                flag_modified(project, "phase_status")
+                await db.commit()
+
+            # Get Claude client and create taxonomy service
+            claude_client = await get_claude()
+            taxonomy_service = LabelTaxonomyService(claude_client)
+
+            # Generate taxonomy
+            taxonomy = await taxonomy_service.generate_taxonomy(db, project_id)
+            await db.commit()
+
+            if not taxonomy:
+                logger.error(
+                    "Taxonomy generation failed",
+                    extra={
+                        "project_id": project_id,
+                        "task_id": task_id,
+                    },
+                )
+                return
+
+            logger.info(
+                "Taxonomy generated, starting label assignment",
+                extra={
+                    "project_id": project_id,
+                    "task_id": task_id,
+                    "label_count": len(taxonomy.labels),
+                },
+            )
+
+            # Assign labels to all pages
+            assignments = await taxonomy_service.assign_labels(
+                db, project_id, taxonomy
+            )
+            await db.commit()
+
+            # Update project phase_status to 'labels_complete'
+            project = await db.get(Project, project_id)
+            if project:
+                project.phase_status["onboarding"]["status"] = "labels_complete"
+                flag_modified(project, "phase_status")
+                await db.commit()
+
+            successful_assignments = sum(1 for a in assignments if a.success)
+            logger.info(
+                "Label assignment completed",
+                extra={
+                    "project_id": project_id,
+                    "task_id": task_id,
+                    "total_assignments": len(assignments),
+                    "successful": successful_assignments,
+                    "failed": len(assignments) - successful_assignments,
+                },
+            )
+
     except Exception as e:
         logger.error(
             "Background crawl task failed",

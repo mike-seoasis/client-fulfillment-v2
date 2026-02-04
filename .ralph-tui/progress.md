@@ -898,3 +898,25 @@ after each iteration and it's included in prompts for context.
   - Design system colors: `text-palm-600` for success/positive, `text-coral-600` for warning, `text-warm-gray-500` for neutral
 ---
 
+## 2026-02-04 - S3-044
+- **What was implemented**: Wired background task to automatically trigger taxonomy generation and label assignment after crawling completes
+- **Files changed**: `backend/app/api/v1/projects.py` (enhanced `_crawl_pages_background` function)
+- **Features added**:
+  - After crawling completes, checks if all project pages are done (no pending or crawling)
+  - Updates `phase_status.onboarding.status` to `'labeling'` before taxonomy generation
+  - Generates taxonomy using `LabelTaxonomyService.generate_taxonomy()`
+  - Assigns labels to all pages using `LabelTaxonomyService.assign_labels()`
+  - Updates `phase_status.onboarding.status` to `'labels_complete'` when done
+  - Comprehensive logging throughout the workflow
+- **Acceptance criteria verification**:
+  - ✅ After all pages complete/failed, trigger taxonomy generation - checks `pending_or_crawling == 0`
+  - ✅ Update project phase_status.onboarding.status to 'labeling' - done before `generate_taxonomy()`
+  - ✅ After taxonomy generated, run label assignment - calls `assign_labels()` after taxonomy
+  - ✅ Update status to 'labels_complete' when done - done after `assign_labels()` completes
+- **Learnings:**
+  - Use `get_claude()` from `app.integrations.claude` to get the global Claude client in background tasks
+  - Must use `flag_modified(project, "phase_status")` for SQLAlchemy JSONB mutation tracking
+  - Background task pattern: check all pages status, update phase_status, generate taxonomy, assign labels in sequence
+  - Early return if not all pages done - supports incremental crawling with retries
+---
+
