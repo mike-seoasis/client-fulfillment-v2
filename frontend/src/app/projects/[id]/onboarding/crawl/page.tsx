@@ -139,6 +139,22 @@ function TagIcon({ className }: { className?: string }) {
   );
 }
 
+function PencilIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+    </svg>
+  );
+}
+
 function StepIndicator({ currentStep }: { currentStep: string }) {
   const currentIndex = ONBOARDING_STEPS.findIndex((s) => s.key === currentStep);
 
@@ -319,9 +335,10 @@ interface PageListItemProps {
   page: PageSummary;
   onRetry?: (pageId: string) => Promise<void>;
   isRetrying?: boolean;
+  onEditLabels?: (pageId: string) => void;
 }
 
-function PageListItem({ page, onRetry, isRetrying }: PageListItemProps) {
+function PageListItem({ page, onRetry, isRetrying, onEditLabels }: PageListItemProps) {
   // Extract path from URL for display
   const displayUrl = (() => {
     try {
@@ -334,6 +351,9 @@ function PageListItem({ page, onRetry, isRetrying }: PageListItemProps) {
 
   // Calculate heading counts
   const h2Count = page.headings?.h2?.length ?? 0;
+
+  // Check if page has labels
+  const hasLabels = page.labels && page.labels.length > 0;
 
   return (
     <div className="py-3 border-b border-cream-200 last:border-b-0">
@@ -380,6 +400,31 @@ function PageListItem({ page, onRetry, isRetrying }: PageListItemProps) {
               )}
               {page.product_count !== null && (
                 <span>{page.product_count} products</span>
+              )}
+            </div>
+          )}
+          {/* Label tags display */}
+          {page.status === 'completed' && hasLabels && (
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
+              <div className="flex flex-wrap gap-1.5">
+                {page.labels.map((label) => (
+                  <span
+                    key={label}
+                    className="inline-flex items-center px-2 py-0.5 text-xs bg-palm-100 text-palm-700 rounded-sm"
+                  >
+                    {label}
+                  </span>
+                ))}
+              </div>
+              {onEditLabels && (
+                <button
+                  onClick={() => onEditLabels(page.id)}
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs text-warm-gray-500 hover:text-palm-600 hover:bg-palm-50 rounded-sm transition-colors"
+                  title="Edit labels"
+                >
+                  <PencilIcon className="w-3 h-3" />
+                  Edit
+                </button>
               )}
             </div>
           )}
@@ -451,6 +496,9 @@ export default function CrawlProgressPage() {
   const projectId = params.id as string;
   const queryClient = useQueryClient();
   const [retryingPageId, setRetryingPageId] = useState<string | null>(null);
+  // editingPageId will be used by S3-038 label edit dropdown - uncomment when implementing
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [editingPageId, setEditingPageId] = useState<string | null>(null);
 
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
 
@@ -498,6 +546,12 @@ export default function CrawlProgressPage() {
     } finally {
       setRetryingPageId(null);
     }
+  };
+
+  // Handle edit labels button click
+  const handleEditLabels = (pageId: string) => {
+    setEditingPageId(pageId);
+    // Note: S3-038 will implement the label edit dropdown that uses this state
   };
 
   // Loading state
@@ -592,6 +646,7 @@ export default function CrawlProgressPage() {
                 page={page}
                 onRetry={handleRetryPage}
                 isRetrying={retryingPageId === page.id}
+                onEditLabels={handleEditLabels}
               />
             ))}
             {pages.length === 0 && (

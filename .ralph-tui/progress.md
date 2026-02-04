@@ -738,3 +738,24 @@ after each iteration and it's included in prompts for context.
   - Title attribute on label tags provides tooltip with description for user context
 ---
 
+## 2026-02-04 - S3-037
+- **What was implemented**: Added label tag display and edit button to crawl progress page
+- **Files changed**: `frontend/src/app/projects/[id]/onboarding/crawl/page.tsx`
+- **Features**:
+  - Added `PencilIcon` SVG component for edit button
+  - Extended `PageListItemProps` with `onEditLabels` callback
+  - Updated `PageListItem` component to:
+    - Display labels as styled tags/chips (palm-100 bg, palm-700 text)
+    - Show edit button next to labels (appears on hover-like interaction)
+  - Added `editingPageId` state and `handleEditLabels` handler in main component
+  - Wired up `onEditLabels` callback to all page items
+- **Acceptance criteria verification**:
+  - ✅ Labels shown as tags/chips on each page row - palm-colored tags rendered in flex wrap
+  - ✅ Tags styled with tropical oasis colors - palm-100 background, palm-700 text, rounded-sm
+  - ✅ Edit button to modify labels - PencilIcon button with "Edit" text, triggers state change
+- **Learnings:**
+  - Use `eslint-disable-next-line` for state that will be used by future stories (editingPageId for S3-038)
+  - Label display should only appear when page has labels (`hasLabels` check)
+  - Edit button styling: subtle warm-gray-500 text that highlights to palm-600 on hover
+---
+
