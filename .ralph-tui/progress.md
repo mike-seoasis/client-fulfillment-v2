@@ -380,3 +380,22 @@ after each iteration and it's included in prompts for context.
   - SQLite warnings about "Attribute history events accumulated" are benign during async testing
 ---
 
+## 2026-02-04 - S3-021
+- **What was implemented**: Created URL upload page route for onboarding
+- **Files changed**: `frontend/src/app/projects/[id]/onboarding/upload/page.tsx` (new file)
+- **Features**:
+  - Page route at `/projects/[id]/onboarding/upload`
+  - Loads project data using `useProject` hook
+  - Breadcrumb navigation back to project (`{project.name} › Onboarding`)
+  - Step indicator component showing Upload as current step (Step 1 of 5)
+  - Loading skeleton while project data loads
+  - 404 error state if project not found
+  - Placeholder UI for URL textarea (ready for S3-022 UrlUploader component)
+  - Cancel and Start Crawl buttons (disabled for now)
+- **Learnings:**
+  - Next.js App Router: nested routes like `/projects/[id]/onboarding/upload/page.tsx` work automatically
+  - Step indicator pattern: use `ONBOARDING_STEPS` const array for maintainable step definitions
+  - Breadcrumb pattern from wireframes: `{project.name} › Onboarding` with back arrow on project name
+  - Design system colors: `palm-500` for active/completed steps, `cream-300` for pending, `warm-gray-*` for text
+---
+
