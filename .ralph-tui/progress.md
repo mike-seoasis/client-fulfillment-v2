@@ -311,3 +311,20 @@ after each iteration and it's included in prompts for context.
   - Optional query parameters are typed as `str | None = None` in FastAPI
 ---
 
+## 2026-02-04 - S3-017
+- **What was implemented**: GET /projects/{id}/taxonomy endpoint to retrieve label taxonomy
+- **Files changed**:
+  - `backend/app/api/v1/projects.py` (added get_project_taxonomy endpoint, imported Project model, TaxonomyLabel, TaxonomyResponse)
+  - `backend/app/schemas/crawled_page.py` (added TaxonomyLabel and TaxonomyResponse schemas)
+  - `backend/app/schemas/__init__.py` (added exports for TaxonomyLabel, TaxonomyResponse)
+- **Endpoint features**:
+  - Returns labels array from phase_status.onboarding.taxonomy
+  - Returns generated_at timestamp
+  - Returns 404 if project not found or taxonomy not yet generated
+  - Endpoint at /api/v1/projects/{project_id}/taxonomy
+- **Learnings:**
+  - Use `datetime.fromisoformat()` to parse ISO timestamps stored in JSONB
+  - Taxonomy data structure: `{labels: [{name, description, examples}], reasoning, generated_at}`
+  - Fallback to `datetime.now()` for backwards compatibility with data missing timestamp
+---
+

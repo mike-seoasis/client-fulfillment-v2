@@ -189,3 +189,22 @@ class UrlUploadResponse(BaseModel):
         ..., ge=0, description="Number of duplicate URLs skipped"
     )
     total_urls: int = Field(..., ge=0, description="Total URLs in request")
+
+
+class TaxonomyLabel(BaseModel):
+    """A label in the taxonomy with its definition."""
+
+    name: str = Field(..., description="Label name (lowercase, hyphenated)")
+    description: str = Field(..., description="When to use this label")
+    examples: list[str] = Field(
+        default_factory=list, description="URL patterns or page types for this label"
+    )
+
+
+class TaxonomyResponse(BaseModel):
+    """Response schema for project taxonomy endpoint."""
+
+    labels: list[TaxonomyLabel] = Field(
+        ..., description="Array of taxonomy labels with definitions"
+    )
+    generated_at: datetime = Field(..., description="When the taxonomy was generated")

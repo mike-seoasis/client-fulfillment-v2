@@ -78,6 +78,8 @@ from app.schemas.crawled_page import (
     PageLabelsUpdate,
     PageSummary,
     ProgressCounts,
+    TaxonomyLabel,
+    TaxonomyResponse,
     UrlsUploadRequest,
     UrlUploadResponse,
 )
@@ -244,6 +246,8 @@ __all__ = [
     "CrawlStatusResponse",
     "PageSummary",
     "ProgressCounts",
+    "TaxonomyLabel",
+    "TaxonomyResponse",
     "UrlsUploadRequest",
     "UrlUploadResponse",
     "PageLabelsUpdate",
