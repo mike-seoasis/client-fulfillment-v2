@@ -206,8 +206,14 @@ export function VoiceCharacteristicsEditor({
   onCancel,
 }: VoiceCharacteristicsEditorProps) {
   // Initialize form state from data
+  // Handle both 'trait_name' (new) and 'characteristic' (legacy) field names
   const [weAre, setWeAre] = useState<VoiceTraitExample[]>(
-    data?.we_are?.map((t) => ({ ...t })) ?? []
+    data?.we_are?.map((t) => ({
+      trait_name: t.trait_name || (t as unknown as { characteristic?: string }).characteristic || '',
+      description: t.description,
+      do_example: t.do_example,
+      dont_example: t.dont_example,
+    })) ?? []
   );
   const [weAreNot, setWeAreNot] = useState<string[]>(
     // Handle both string and object formats defensively

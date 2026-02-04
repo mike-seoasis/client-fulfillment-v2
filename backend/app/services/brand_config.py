@@ -143,7 +143,7 @@ class GenerationStatus:
         )
 
 
-# Generation steps for brand config (9 sections + ai_prompt_snippet summary)
+# Generation steps for brand config (8 sections + ai_prompt_snippet summary)
 GENERATION_STEPS = [
     "brand_foundation",
     "target_audience",
@@ -152,7 +152,6 @@ GENERATION_STEPS = [
     "writing_style",
     "vocabulary",
     "trust_elements",
-    "examples_bank",
     "competitor_context",
     "ai_prompt_snippet",
 ]
@@ -348,7 +347,7 @@ Output ONLY valid JSON in this exact format:
 {
   "we_are": [
     {
-      "characteristic": "string (e.g., 'Knowledgeable')",
+      "trait_name": "string (e.g., 'Knowledgeable')",
       "description": "string",
       "do_example": "string",
       "dont_example": "string"
@@ -358,7 +357,7 @@ Output ONLY valid JSON in this exact format:
 }
 
 REQUIREMENTS:
-- we_are: Provide at least 5 characteristics with full details (characteristic, description, do_example, dont_example)
+- we_are: Provide at least 5 characteristics with full details (trait_name, description, do_example, dont_example)
 - we_are_not: Provide an array of 5+ simple strings (NOT objects). Each string is a single word or short phrase describing what the brand voice avoids.
 - Be specific with examples in we_are - show real on-brand vs off-brand writing""",
     "writing_style": """You are a brand strategist creating the Writing Style Rules section of a brand guidelines document.
@@ -476,48 +475,6 @@ REQUIREMENTS:
 - review_count: When a rating is found, also capture the total number of reviews to add credibility (e.g., "2,500+ reviews"). Rating without count is less impactful.
 - Both fields are optional (use null if not found), but should be actively sought in research as they are high-value trust signals.
 - Extract real data from research when available. For missing data, leave as null or empty array.""",
-    "examples_bank": """You are a brand strategist creating the Examples Bank section of a brand guidelines document.
-
-Based on the research context and all previous sections, create example copy that demonstrates the brand voice:
-
-Output ONLY valid JSON in this exact format:
-{
-  "headlines_that_work": ["string", "string", "string", "string", "string", "string", "string", "string", "string", "string"],
-  "product_descriptions": [
-    {
-      "product_name": "string",
-      "description": "string (100-200 words in brand voice)"
-    },
-    {
-      "product_name": "string",
-      "description": "string (100-200 words in brand voice)"
-    },
-    {
-      "product_name": "string",
-      "description": "string (100-200 words in brand voice)"
-    }
-  ],
-  "email_subject_lines": ["string", "string", "string", "string", "string", "string", "string", "string", "string", "string"],
-  "social_media_posts": {
-    "instagram_product": "string",
-    "instagram_social_proof": "string",
-    "facebook_value": "string"
-  },
-  "ctas_that_work": ["string", "string", "string", "string", "string", "string", "string", "string", "string", "string"],
-  "what_not_to_write": [
-    {"example": "string", "reason": "string"}
-  ]
-}
-
-REQUIREMENTS:
-- headlines_that_work: Provide AT LEAST 10 headlines that demonstrate brand voice. Include variety: product-focused, benefit-driven, emotional, promotional, and seasonal headlines.
-- product_descriptions: Provide AT LEAST 3 complete product descriptions. Each should be 100-200 words, showcase brand voice, and cover different product types or use cases.
-- email_subject_lines: Provide AT LEAST 10 email subject lines. Include variety: promotional, welcome, cart abandonment, product launch, seasonal, and loyalty-focused subjects.
-- ctas_that_work: Provide AT LEAST 10 CTAs that align with brand voice. Include variety: purchase CTAs, email signup, learn more, social engagement, and urgency-driven CTAs.
-- social_media_posts: Provide examples for each platform showing brand voice in action.
-- what_not_to_write: Provide 3-5 examples of common mistakes with clear explanations of why they don't work for this brand.
-
-Make all examples specific to this brand's products, voice, and target audience.""",
     "competitor_context": """You are a brand strategist creating the Competitor Context section of a brand guidelines document for an e-commerce/DTC brand.
 
 Based on the research context, map the competitive landscape focusing on ONLINE/E-COMMERCE competitors:

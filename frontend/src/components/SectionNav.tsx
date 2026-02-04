@@ -14,7 +14,6 @@ export const BRAND_SECTIONS = [
   { key: 'writing_style', label: 'Writing Style' },
   { key: 'vocabulary', label: 'Vocabulary' },
   { key: 'trust_elements', label: 'Trust Elements' },
-  { key: 'examples_bank', label: 'Examples Bank' },
   { key: 'competitor_context', label: 'Competitor Context' },
   { key: 'ai_prompt_snippet', label: 'AI Prompt' },
 ] as const;

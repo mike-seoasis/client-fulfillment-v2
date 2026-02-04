@@ -49,6 +49,9 @@ interface TraitCardProps {
  * Card displaying a single voice trait with do/don't examples.
  */
 function TraitCard({ trait, index }: TraitCardProps) {
+  // Handle both 'trait_name' (new) and 'characteristic' (legacy) field names
+  const traitName = trait.trait_name || (trait as unknown as { characteristic?: string }).characteristic || 'Unnamed';
+
   return (
     <div className="bg-cream-50 border border-cream-300 rounded-sm overflow-hidden mb-4">
       {/* Header */}
@@ -56,7 +59,7 @@ function TraitCard({ trait, index }: TraitCardProps) {
         <div className="flex items-center gap-2">
           <span className="text-palm-600 font-semibold text-sm">{index + 1}.</span>
           <h4 className="font-semibold text-palm-800 uppercase tracking-wide text-sm">
-            {trait.trait_name}
+            {traitName}
           </h4>
         </div>
         {trait.description && (

@@ -34,7 +34,6 @@ export const GENERATION_STEP_LABELS: Record<string, string> = {
   writing_style: 'Setting writing style rules...',
   vocabulary: 'Building vocabulary guide...',
   trust_elements: 'Compiling trust elements...',
-  examples_bank: 'Creating examples bank...',
   competitor_context: 'Analyzing competitor context...',
   ai_prompt_snippet: 'Generating AI prompt snippet...',
 };

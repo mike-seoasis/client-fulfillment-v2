@@ -16,7 +16,6 @@ import {
   WritingStyleSection,
   VocabularySection,
   TrustElementsSection,
-  ExamplesBankSection,
   CompetitorContextSection,
   AIPromptSection,
 } from '@/components/brand-sections';
@@ -166,8 +165,6 @@ function SectionContent({ sectionKey, v2Schema, isEditing, isSaving, onSave, onC
       return <VocabularySection data={sectionData as Parameters<typeof VocabularySection>[0]['data']} />;
     case 'trust_elements':
       return <TrustElementsSection data={sectionData as Parameters<typeof TrustElementsSection>[0]['data']} />;
-    case 'examples_bank':
-      return <ExamplesBankSection data={sectionData as Parameters<typeof ExamplesBankSection>[0]['data']} />;
     case 'competitor_context':
       return <CompetitorContextSection data={sectionData as Parameters<typeof CompetitorContextSection>[0]['data']} />;
     case 'ai_prompt_snippet':

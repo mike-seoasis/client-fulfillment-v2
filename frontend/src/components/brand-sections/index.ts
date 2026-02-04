@@ -6,7 +6,6 @@ export { VoiceCharacteristicsSection } from './VoiceCharacteristicsSection';
 export { WritingStyleSection } from './WritingStyleSection';
 export { VocabularySection } from './VocabularySection';
 export { TrustElementsSection } from './TrustElementsSection';
-export { ExamplesBankSection } from './ExamplesBankSection';
 export { CompetitorContextSection } from './CompetitorContextSection';
 export { AIPromptSection } from './AIPromptSection';
 

@@ -7,7 +7,6 @@ import { VoiceCharacteristicsEditor } from './VoiceCharacteristicsEditor';
 import { WritingStyleEditor } from './WritingStyleEditor';
 import { VocabularyEditor } from './VocabularyEditor';
 import { TrustElementsEditor } from './TrustElementsEditor';
-import { ExamplesBankEditor } from './ExamplesBankEditor';
 import { CompetitorContextEditor } from './CompetitorContextEditor';
 import { AIPromptEditor } from './AIPromptEditor';
 import type {
@@ -18,7 +17,6 @@ import type {
   WritingStyleData,
   VocabularyData,
   TrustElementsData,
-  ExamplesBankData,
   CompetitorContextData,
   AIPromptSnippetData,
 } from '../types';
@@ -34,7 +32,6 @@ export type SectionKey =
   | 'writing_style'
   | 'vocabulary'
   | 'trust_elements'
-  | 'examples_bank'
   | 'competitor_context'
   | 'ai_prompt_snippet';
 
@@ -49,7 +46,6 @@ export type SectionData =
   | WritingStyleData
   | VocabularyData
   | TrustElementsData
-  | ExamplesBankData
   | CompetitorContextData
   | AIPromptSnippetData;
 
@@ -142,16 +138,6 @@ export function SectionEditorSwitch({
       return (
         <TrustElementsEditor
           data={data as TrustElementsData | undefined}
-          isSaving={isSaving}
-          onSave={onSave}
-          onCancel={onCancel}
-        />
-      );
-
-    case 'examples_bank':
-      return (
-        <ExamplesBankEditor
-          data={data as ExamplesBankData | undefined}
           isSaving={isSaving}
           onSave={onSave}
           onCancel={onCancel}
