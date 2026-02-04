@@ -74,3 +74,22 @@ after each iteration and it's included in prompts for context.
   - Can import enum from model file (`from app.models.crawled_page import CrawlStatus`) for reuse in schema defaults
 ---
 
+## 2026-02-04 - S3-005
+- **What was implemented**: Created CrawlingService for parallel page crawling with concurrency control
+- **Files changed**:
+  - `backend/app/services/crawling.py` (new file)
+  - `backend/app/services/__init__.py` (added export)
+- **Features**:
+  - `crawl_urls(db, page_ids)` - Crawl multiple pages in parallel
+  - `crawl_pending_pages(db, project_id, limit)` - Convenience method to crawl pending pages for a project
+  - Uses `asyncio.Semaphore` with `settings.crawl_concurrency` for rate limiting
+  - Uses `asyncio.gather` with `return_exceptions=True` for parallel execution
+  - Updates page status lifecycle: pending → crawling → completed/failed
+  - Extracts markdown content, metadata (title, description), and calculates word count
+  - Stores crawl errors in `crawl_error` field on failure
+- **Learnings:**
+  - When using `asyncio.gather(return_exceptions=True)`, must check for `BaseException` (not `Exception`) because the return type is `list[T | BaseException]`
+  - Service pattern: inject Crawl4AIClient in constructor, inject AsyncSession in method calls
+  - Update status to "crawling" before starting, then to "completed"/"failed" after
+---
+
