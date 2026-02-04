@@ -193,3 +193,22 @@ This prevents "objects are not valid as a React child" errors when backend data 
   - Adding metadata fields to TypeScript types (even if not displayed yet) enables future UI enhancements without backend changes
 ---
 
+## 2026-02-04 - BC-013
+- **What was implemented:** Created reusable TagInput component for editable word lists
+- **Files changed:**
+  - `frontend/src/components/brand-sections/editors/TagInput.tsx` - New component with:
+    - Input field for adding tags via Enter key
+    - Tags with X button for removal
+    - Backspace to remove last tag when input is empty
+    - Variant support (default, success, danger) matching TagList styling
+    - Disabled state support
+    - Optional label prop
+    - Focus ring styling matching Input component
+  - `frontend/src/components/brand-sections/editors/index.ts` - Export barrel file
+- **Learnings:**
+  - Tag styling should match existing TagList component for visual consistency
+  - Use `focus-within` on the container to show focus state when input is focused
+  - Prevent duplicate tags by checking `value.includes(trimmed)` before adding
+  - Use `key={${tag}-${index}}` to handle potential duplicate tags in the array safely
+---
+
