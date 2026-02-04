@@ -920,3 +920,24 @@ after each iteration and it's included in prompts for context.
   - Early return if not all pages done - supports incremental crawling with retries
 ---
 
+## 2026-02-04 - S3-045
+- **What was implemented**: Full workflow status tracking with phase_status updates throughout the onboarding process
+- **Files changed**: `backend/app/api/v1/projects.py` (updated `upload_urls` and `_crawl_pages_background`)
+- **Features added**:
+  - In `upload_urls`: Set status to 'crawling' and initialize crawl progress tracking when pages are created
+  - Initialize `phase_status.onboarding.crawl` object with total, completed, failed counts and started_at timestamp
+  - In `_crawl_pages_background`: Update crawl progress counts after each crawl batch completes
+  - Progress tracking handles incremental crawling (retries add to existing counts)
+  - Moved `flag_modified` import to module level to avoid duplicate imports
+- **Acceptance criteria verification**:
+  - ✅ Set status to 'crawling' when crawl starts - done in `upload_urls` when pages_created > 0
+  - ✅ Track crawl progress in phase_status.onboarding.crawl - object with total/completed/failed/started_at
+  - ✅ Set status to 'labeling' when taxonomy starts - already implemented in S3-044
+  - ✅ Set status to 'labels_complete' when done - already implemented in S3-044
+  - ✅ Store taxonomy in phase_status.onboarding.taxonomy - already implemented in S3-009/S3-010
+- **Learnings:**
+  - Use module-level import for `flag_modified` when used in multiple functions to avoid duplicate imports
+  - Initialize crawl progress tracking at URL upload time for accurate total counts
+  - Progress tracking should increment (not replace) to support incremental crawling with retries
+---
+

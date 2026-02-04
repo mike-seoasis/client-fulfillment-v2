@@ -9,6 +9,7 @@ from uuid import uuid4
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.database import get_session
 from app.core.logging import get_logger
@@ -241,6 +242,23 @@ async def upload_urls(
     # Commit all new pages
     await db.commit()
 
+    # If we created new pages, update project phase_status to 'crawling'
+    if pages_created > 0:
+        project = await db.get(Project, project_id)
+        if project:
+            if "onboarding" not in project.phase_status:
+                project.phase_status["onboarding"] = {}
+            project.phase_status["onboarding"]["status"] = "crawling"
+            # Initialize crawl progress tracking
+            project.phase_status["onboarding"]["crawl"] = {
+                "total": pages_created,
+                "completed": 0,
+                "failed": 0,
+                "started_at": datetime.now().isoformat(),
+            }
+            flag_modified(project, "phase_status")
+            await db.commit()
+
     # Generate task ID for tracking
     task_id = str(uuid4())
 
@@ -295,8 +313,6 @@ async def _crawl_pages_background(
         task_id: Task ID for tracking/logging.
         crawl4ai_client: Crawl4AI client instance.
     """
-    from sqlalchemy.orm.attributes import flag_modified
-
     from app.core.database import db_manager
     from app.integrations.claude import get_claude
     from app.services.label_taxonomy import LabelTaxonomyService
@@ -317,6 +333,8 @@ async def _crawl_pages_background(
             await db.commit()
 
             success_count = sum(1 for r in results.values() if r.success)
+            failed_count = len(page_ids) - success_count
+
             logger.info(
                 "Background crawl task completed",
                 extra={
@@ -324,9 +342,27 @@ async def _crawl_pages_background(
                     "task_id": task_id,
                     "total_pages": len(page_ids),
                     "successful": success_count,
-                    "failed": len(page_ids) - success_count,
+                    "failed": failed_count,
                 },
             )
+
+            # Update crawl progress in phase_status
+            project = await db.get(Project, project_id)
+            if project:
+                if "onboarding" not in project.phase_status:
+                    project.phase_status["onboarding"] = {}
+                if "crawl" not in project.phase_status["onboarding"]:
+                    project.phase_status["onboarding"]["crawl"] = {
+                        "total": len(page_ids),
+                        "completed": 0,
+                        "failed": 0,
+                    }
+                # Increment progress (handles incremental crawling)
+                crawl_progress = project.phase_status["onboarding"]["crawl"]
+                crawl_progress["completed"] = crawl_progress.get("completed", 0) + success_count
+                crawl_progress["failed"] = crawl_progress.get("failed", 0) + failed_count
+                flag_modified(project, "phase_status")
+                await db.commit()
 
             # Check if all pages for this project are done (no pending or crawling)
             stmt = select(CrawledPage).where(CrawledPage.project_id == project_id)
