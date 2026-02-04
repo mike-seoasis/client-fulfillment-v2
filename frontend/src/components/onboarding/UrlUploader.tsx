@@ -18,6 +18,19 @@ interface UrlUploaderProps {
 }
 
 /**
+ * Extract the domain (hostname) from a URL string
+ * Returns lowercase hostname, or null if URL is invalid
+ */
+function getDomain(urlStr: string): string | null {
+  try {
+    const url = new URL(urlStr);
+    return url.hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Validate that a string is a valid URL with http/https protocol
  */
 function isValidUrl(str: string): boolean {
@@ -168,4 +181,4 @@ function UrlUploader({
   );
 }
 
-export { UrlUploader, type UrlUploaderProps, parseUrls, isValidUrl, normalizeUrl };
+export { UrlUploader, type UrlUploaderProps, parseUrls, isValidUrl, normalizeUrl, getDomain };

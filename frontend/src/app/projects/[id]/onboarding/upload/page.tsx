@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { useState, useMemo, useCallback } from 'react';
 import { useProject } from '@/hooks/use-projects';
 import { Button } from '@/components/ui';
-import { UrlUploader, type ParsedUrl, isValidUrl, normalizeUrl } from '@/components/onboarding/UrlUploader';
+import { UrlUploader, type ParsedUrl, isValidUrl, normalizeUrl, getDomain } from '@/components/onboarding/UrlUploader';
 import { CsvDropzone, type CsvParseResult } from '@/components/onboarding/CsvDropzone';
 import { UrlPreviewList } from '@/components/onboarding/UrlPreviewList';
 
@@ -30,6 +30,24 @@ function BackArrowIcon({ className }: { className?: string }) {
       strokeLinejoin="round"
     >
       <path d="M19 12H5M12 19l-7-7 7-7" />
+    </svg>
+  );
+}
+
+function WarningIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
     </svg>
   );
 }
@@ -202,6 +220,20 @@ export default function UrlUploadPage() {
 
   const validUrlCount = parsedUrls.filter((u) => u.isValid).length;
 
+  // Check if any valid URLs are from a different domain than the project's site_url
+  const hasDifferentDomainUrls = useMemo(() => {
+    if (!project) return false;
+
+    const projectDomain = getDomain(project.site_url);
+    if (!projectDomain) return false;
+
+    return parsedUrls.some((item) => {
+      if (!item.isValid) return false;
+      const urlDomain = getDomain(item.url);
+      return urlDomain && urlDomain !== projectDomain;
+    });
+  }, [parsedUrls, project]);
+
   // Loading state
   if (isLoading) {
     return (
@@ -280,6 +312,16 @@ export default function UrlUploadPage() {
         </div>
 
         <hr className="border-cream-300 my-6" />
+
+        {/* Domain warning banner */}
+        {hasDifferentDomainUrls && (
+          <div className="mb-4 p-3 bg-coral-50 border border-coral-200 rounded-sm flex items-start gap-2">
+            <WarningIcon className="w-5 h-5 text-coral-500 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-coral-700">
+              Some URLs are from a different domain
+            </p>
+          </div>
+        )}
 
         {/* URL preview list with remove functionality */}
         <UrlPreviewList urls={parsedUrls} onRemove={handleRemoveUrl} />

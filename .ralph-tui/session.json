@@ -3,10 +3,10 @@
   "sessionId": "25c5f477-c4fc-4e41-904e-0b4db33aad95",
   "status": "running",
   "startedAt": "2026-02-04T19:06:42.165Z",
-  "updatedAt": "2026-02-04T19:57:10.826Z",
-  "currentIteration": 24,
+  "updatedAt": "2026-02-04T19:59:12.252Z",
+  "currentIteration": 25,
   "maxIterations": 10,
-  "tasksCompleted": 24,
+  "tasksCompleted": 25,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -161,8 +161,8 @@
       {
         "id": "S3-025",
         "title": "Build URL preview list",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "S3-026",
@@ -550,6 +550,16 @@
       "durationMs": 145920,
       "startedAt": "2026-02-04T19:52:25.488Z",
       "endedAt": "2026-02-04T19:54:51.408Z"
+    },
+    {
+      "iteration": 25,
+      "status": "completed",
+      "taskId": "S3-025",
+      "taskTitle": "Build URL preview list",
+      "taskCompleted": true,
+      "durationMs": 138323,
+      "startedAt": "2026-02-04T19:54:52.502Z",
+      "endedAt": "2026-02-04T19:57:10.825Z"
     }
   ],
   "skippedTaskIds": [],

@@ -496,3 +496,24 @@ after each iteration and it's included in prompts for context.
   - Use `key={item.normalizedUrl}` instead of array index for stable list rendering when items can be removed
 ---
 
+## 2026-02-04 - S3-026
+- **What was implemented**: Domain warning banner for URLs from different domains
+- **Files changed**:
+  - `frontend/src/components/onboarding/UrlUploader.tsx` (added getDomain utility function and export)
+  - `frontend/src/app/projects/[id]/onboarding/upload/page.tsx` (added warning banner and domain comparison logic)
+- **Features**:
+  - `getDomain(urlStr)` - Extract lowercase hostname from URL string
+  - `hasDifferentDomainUrls` useMemo - Compares parsed URLs against project's site_url domain
+  - Warning banner with coral styling and warning icon
+  - Warning does not block submission (only requires valid URLs)
+- **Acceptance criteria verification**:
+  - ✅ Compare URLs against project site_url domain - getDomain extracts hostname for comparison
+  - ✅ Show warning banner if any URLs have different domain - Conditional banner rendering
+  - ✅ Warning does not block submission - Start Crawl only disabled when no valid URLs
+  - ✅ Warning text: 'Some URLs are from a different domain' - Exact text used
+- **Learnings:**
+  - URL hostname is already lowercase from `new URL()`, but explicit `.toLowerCase()` ensures consistency
+  - Use `useMemo` for derived state that depends on multiple sources (parsedUrls, project)
+  - Design system color for warnings: `coral-50` background, `coral-200` border, `coral-500` icon, `coral-700` text
+---
+
