@@ -1029,3 +1029,29 @@ after each iteration and it's included in prompts for context.
   - KeywordCandidate in alternative_keywords array needs all fields (keyword, volume, cpc, competition, relevance_score, composite_score)
 ---
 
+## 2026-02-05 - S4-044
+- **What was implemented:** Component tests for AlternativeKeywordDropdown covering all acceptance criteria
+- **Files changed:**
+  - `frontend/src/components/__tests__/AlternativeKeywordDropdown.test.tsx` (new file, 30 tests)
+- **Test coverage:**
+  - Dropdown visibility tests (3 tests): isOpen, closed, null anchorRect
+  - Primary keyword display tests (4 tests): keyword, volume, checkmark icon, null volume
+  - Alternatives listing tests (7 tests): keywords listed, volumes, scores, limit to 4, empty state, interactive options
+  - Selection behavior tests (6 tests): mutation calls, onClose after success, primary click ignored, loading spinner, disable during mutation, error handling
+  - Close behavior tests (2 tests): Escape key, click outside
+  - Accessibility tests (5 tests): role="listbox", aria-label, role="option" on items, aria-selected states
+  - Edge cases (4 tests): null volume, null score, case-insensitive primary matching, long keywords
+- **Acceptance criteria verified:**
+  - [x] Test dropdown opens on click (verified via isOpen prop)
+  - [x] Test alternatives are listed
+  - [x] Test selecting alternative calls mutation
+  - [x] Test dropdown closes after selection
+- **Learnings:**
+  - Mock mutation hooks by returning object with `mutateAsync` function and `isPending` state
+  - For dropdown positioning tests, mock `DOMRect` with `toJSON` method
+  - Use `setTimeout(() => {...}, 0)` in component requires `waitFor` in tests for click-outside handlers
+  - Component uses `role="option"` on both primary (div) and alternatives (button) elements
+  - For testing disabled state during mutation, set `isPending` on mock before render
+  - Console.error output from rejected promises is expected in error-handling tests (stderr output)
+---
+
