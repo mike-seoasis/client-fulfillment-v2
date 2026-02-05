@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useProject } from '@/hooks/use-projects';
@@ -377,6 +377,9 @@ export default function KeywordsPage() {
 
   const isLoading = isProjectLoading || keywordGen.isLoading;
 
+  // Track if we've auto-started to avoid double-firing
+  const hasAutoStarted = useRef(false);
+
   // Calculate counts
   const totalPages = pages.length;
   const pagesWithKeywords = pages.filter(p => p.keywords?.primary_keyword).length;
@@ -386,6 +389,21 @@ export default function KeywordsPage() {
   // Determine if we should show the generating state or the list
   const showGeneratingState = keywordGen.status === 'generating';
   const showPendingState = keywordGen.status === 'pending' && pagesWithKeywords === 0;
+
+  // Auto-start generation when page loads and no keywords exist yet
+  useEffect(() => {
+    if (
+      !isLoading &&
+      !hasAutoStarted.current &&
+      keywordGen.status === 'pending' &&
+      pagesWithKeywords === 0 &&
+      totalPages > 0 &&
+      !keywordGen.isStarting
+    ) {
+      hasAutoStarted.current = true;
+      keywordGen.startGeneration();
+    }
+  }, [isLoading, keywordGen.status, pagesWithKeywords, totalPages, keywordGen.isStarting]);
 
   // Handle approve all
   const handleApproveAll = async () => {
@@ -464,13 +482,55 @@ export default function KeywordsPage() {
 
       {/* Page content */}
       <div className="bg-white rounded-sm border border-cream-500 p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-warm-gray-900 mb-4">
-          {showGeneratingState
-            ? 'Generating Keywords...'
-            : showPendingState
-            ? 'Generate Keywords'
-            : `${pagesWithKeywords} Keywords Generated`}
-        </h2>
+        {/* Header with title and fallback generate button */}
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-warm-gray-900">
+            {showGeneratingState
+              ? 'Generating Keywords...'
+              : showPendingState
+              ? 'Starting Keyword Generation...'
+              : `${pagesWithKeywords} Keywords Generated`}
+          </h2>
+
+          {/* Fallback generate/regenerate button - shown when not actively generating */}
+          {!showGeneratingState && pagesWithKeywords === 0 && totalPages > 0 && (
+            <Button
+              variant="secondary"
+              onClick={() => keywordGen.startGeneration()}
+              disabled={keywordGen.isStarting}
+            >
+              {keywordGen.isStarting ? (
+                <>
+                  <SpinnerIcon className="w-4 h-4 mr-1.5 animate-spin" />
+                  Starting...
+                </>
+              ) : (
+                'Generate Keywords'
+              )}
+            </Button>
+          )}
+
+          {/* Regenerate button - shown when keywords exist but user might want to regenerate */}
+          {!showGeneratingState && pagesWithKeywords > 0 && keywordGen.status !== 'generating' && (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                hasAutoStarted.current = false;
+                keywordGen.startGeneration();
+              }}
+              disabled={keywordGen.isStarting}
+            >
+              {keywordGen.isStarting ? (
+                <>
+                  <SpinnerIcon className="w-4 h-4 mr-1.5 animate-spin" />
+                  Starting...
+                </>
+              ) : (
+                'Regenerate All'
+              )}
+            </Button>
+          )}
+        </div>
 
         {/* Progress/status indicator */}
         <GenerationProgressIndicator
@@ -487,18 +547,13 @@ export default function KeywordsPage() {
           </div>
         )}
 
-        {/* Pending state - show generate button */}
+        {/* Pending/starting state - show loading message */}
         {showPendingState && (
           <div className="text-center py-8">
-            <p className="text-warm-gray-600 mb-4">
-              Ready to generate primary keywords for {totalPages} pages.
+            <SpinnerIcon className="w-8 h-8 text-lagoon-500 animate-spin mx-auto mb-3" />
+            <p className="text-warm-gray-600">
+              Preparing to generate keywords for {totalPages} pages...
             </p>
-            <Button
-              onClick={() => keywordGen.startGeneration()}
-              disabled={keywordGen.isStarting}
-            >
-              {keywordGen.isStarting ? 'Starting...' : 'Generate Keywords'}
-            </Button>
           </div>
         )}
 
