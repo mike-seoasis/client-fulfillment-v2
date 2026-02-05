@@ -25,6 +25,7 @@
 | 2026-02-04 | Brand config improvements (fixed VoiceCharacteristics crash for we_are_not data format, fixed VoiceDimensions slider positioning, debugged regeneration endpoint, updated Perplexity research prompt for e-commerce focus, enhanced 9 section prompts for richer content, created 4 reusable editor components: TagInput/EditableTable/BulletListEditor/SliderInput, created 10 section-specific editors, added keyboard shortcuts Cmd+S/Escape, added validation and error display, comprehensive unit tests) | Phase 3 |
 | 2026-02-04 | Phase 2 polish: Fixed JSON control char parsing for AI prompts, fixed Voice Characteristics field name (characteristic→trait_name), removed Examples Bank section (will add real examples later), renamed button to "Brand Details" | Phase 3 |
 | 2026-02-04 | Phase 3 complete (URL upload with paste/CSV, crawling pipeline with Crawl4AI, content extraction with BeautifulSoup, label taxonomy generation with Claude, label assignment service, crawl progress page with polling, retry failed pages, label editing dropdown, project detail onboarding status, comprehensive API and component tests - 47 stories total) | Phase 4 |
+| 2026-02-04 | Phase 3 polish: Fixed AsyncSession concurrency bug, improved product count extraction (exclude carousels), added crawl progress spinner UI, improved label prompts (cannabis-storage now works), added regenerate labels button, added recrawl-all endpoint. Deferred label improvements to Phase 3b. | Phase 4 |
 
 ---
 
@@ -159,6 +160,15 @@
 - [x] Crawling pipeline
 - [x] View crawl results
 - [x] **Verify:** Can upload URLs and see crawled data
+
+### Phase 3b: Label Taxonomy Improvements (DEFERRED)
+> **Note:** Deferred until after Phase 4. Labeling may work better with keyword data available.
+
+- [ ] Improve taxonomy generation algorithm (labels still too generic)
+- [ ] Fix "Edit Labels" button on crawl page (currently broken)
+- [ ] Consider re-running labels after primary keywords are set
+- [ ] Test with diverse site types (not just e-commerce)
+- [ ] **Verify:** Labels are specific, accurate, and editable
 
 ### Phase 4: Primary Keyword + Approval (SHARED)
 - [ ] Generate primary keyword candidates
