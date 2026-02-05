@@ -585,3 +585,29 @@ after each iteration and it's included in prompts for context.
   - Most endpoint tests were already written in test_projects.py during S4-018 through S4-023
 ---
 
+## 2026-02-05 - S4-026
+- **What was implemented:** Frontend API client functions for all primary keyword endpoints
+- **Files changed:**
+  - `frontend/src/lib/api.ts` - Added 7 API functions and 7 TypeScript interfaces
+- **Functions added:**
+  - `generatePrimaryKeywords(projectId)` - POST to start keyword generation, returns task_id
+  - `getPrimaryKeywordsStatus(projectId)` - GET generation progress for polling
+  - `getPagesWithKeywords(projectId)` - GET all pages with keyword data for approval UI
+  - `updatePrimaryKeyword(projectId, pageId, keyword)` - PUT to change primary keyword
+  - `approveKeyword(projectId, pageId)` - POST to approve single keyword
+  - `approveAllKeywords(projectId)` - POST to bulk approve all keywords
+  - `togglePriority(projectId, pageId, value?)` - PUT to toggle/set priority flag
+- **Types added:**
+  - `KeywordCandidate` - keyword with volume metrics and AI scoring
+  - `PageKeywordsData` - full keyword data for a page
+  - `PageWithKeywords` - page summary with embedded keyword data
+  - `PrimaryKeywordGenerationStatus` - generation progress status
+  - `GeneratePrimaryKeywordsResponse` - response from generate endpoint
+  - `BulkApproveResponse` - response from bulk approve
+- **Learnings:**
+  - TypeScript types can be defined inline in api.ts rather than separate type files
+  - Use union type for status enum: `"pending" | "generating" | "completed" | "failed"`
+  - Optional query params can be appended via string concatenation for simple cases
+  - All API functions use the existing `apiClient` convenience methods
+---
+
