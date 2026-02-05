@@ -455,3 +455,235 @@ Example: ["keyword one", "keyword two", "keyword three"]"""
                 }
             )
             return {}
+
+    async def filter_to_specific(
+        self,
+        keywords_with_volume: dict[str, KeywordVolumeData],
+        url: str,
+        title: str | None,
+        h1: str | None,
+        content_excerpt: str | None,
+        category: str | None,
+    ) -> list[dict[str, Any]]:
+        """Filter keywords to only those specific to this page's exact topic.
+
+        Uses Claude to analyze keywords and filter out generic category terms,
+        keeping only keywords that specifically match the page's content.
+
+        Args:
+            keywords_with_volume: Dict mapping keyword -> KeywordVolumeData.
+            url: Page URL for context.
+            title: Page title from HTML.
+            h1: Main H1 heading from page.
+            content_excerpt: First ~500 chars of body content.
+            category: Page category (product, collection, blog, etc.).
+
+        Returns:
+            List of dicts with 'keyword', 'volume', 'cpc', 'competition',
+            and 'relevance_score' (0.0-1.0). On API failure, returns all
+            keywords with default relevance score of 0.5.
+        """
+        if not keywords_with_volume:
+            logger.debug("No keywords to filter")
+            return []
+
+        # Filter out zero-volume keywords for the prompt
+        keywords_with_positive_volume = {
+            kw: data
+            for kw, data in keywords_with_volume.items()
+            if data.search_volume is not None and data.search_volume > 0
+        }
+
+        if not keywords_with_positive_volume:
+            logger.warning(
+                "No keywords with positive volume, using all keywords",
+                extra={"url": url[:100], "total_keywords": len(keywords_with_volume)},
+            )
+            keywords_with_positive_volume = keywords_with_volume
+
+        # Sort by volume for the prompt (descending)
+        sorted_keywords = sorted(
+            keywords_with_positive_volume.items(),
+            key=lambda x: -(x[1].search_volume or 0),
+        )
+
+        # Format keywords for the prompt (limit to top 50 to avoid huge prompts)
+        keywords_formatted = []
+        for kw, data in sorted_keywords[:50]:
+            vol_str = f"{data.search_volume:,}" if data.search_volume else "no data"
+            keywords_formatted.append(f'  - "{kw}": {vol_str} searches/month')
+
+        keywords_text = "\n".join(keywords_formatted)
+
+        # Build the specificity filtering prompt
+        prompt = f"""Filter this keyword list to only the MOST SPECIFIC keywords for this {category or 'web'} page.
+
+Page content:
+- URL: {url}
+- Title: {title or 'N/A'}
+- H1: {h1 or 'N/A'}
+- Category: {category or 'other'}
+- Body text sample: {(content_excerpt or '')[:400]}
+
+All keywords with search volume:
+{keywords_text}
+
+Task: Return keywords that are SPECIFICALLY about THIS page's exact topic, with a relevance score.
+
+SPECIFICITY CRITERIA (in order of importance):
+1. Must reference the SPECIFIC subject of the page (team name, product name, exact collection)
+2. Can include variations of the specific subject (different word orders, with/without modifiers)
+3. Can include closely related terms (synonyms, related categories)
+4. EXCLUDE generic category terms that apply to many pages
+5. EXCLUDE broad terms that don't indicate THIS specific page
+
+Examples:
+✓ GOOD for "Toronto Blue Jays flags" collection page:
+  - "toronto blue jays flags" (exact match) - relevance: 1.0
+  - "blue jays flags" (specific team) - relevance: 0.95
+  - "toronto blue jays banner" (specific team, synonym) - relevance: 0.9
+  - "blue jays house flag" (specific team + product variation) - relevance: 0.85
+
+✗ BAD for "Toronto Blue Jays flags" collection page:
+  - "baseball flags" (too generic, applies to all teams)
+  - "mlb flags" (too generic, applies to all teams)
+  - "sports flags" (too generic, applies to all sports)
+
+IMPORTANT: Return ONLY a JSON array of objects with "keyword" and "relevance_score" (0.0-1.0).
+No explanations, no markdown.
+Example: [{{"keyword": "keyword one", "relevance_score": 0.95}}, {{"keyword": "keyword two", "relevance_score": 0.8}}]"""
+
+        try:
+            # Call Claude API
+            result = await self._claude.complete(
+                user_prompt=prompt,
+                max_tokens=1000,
+                temperature=0.0,  # Deterministic for filtering
+            )
+
+            # Update stats
+            self._stats.claude_calls += 1
+            if result.input_tokens:
+                self._stats.total_input_tokens += result.input_tokens
+            if result.output_tokens:
+                self._stats.total_output_tokens += result.output_tokens
+
+            if not result.success or not result.text:
+                raise ValueError(result.error or "Empty response from Claude")
+
+            # Parse JSON response
+            response_text = result.text.strip()
+
+            # Handle markdown code blocks
+            if "```json" in response_text:
+                response_text = response_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in response_text:
+                response_text = response_text.split("```")[1].split("```")[0].strip()
+
+            specific_keywords = json.loads(response_text)
+
+            # Validate response is a list
+            if not isinstance(specific_keywords, list):
+                raise ValueError("LLM response is not a list")
+
+            # Build result list with volume data
+            filtered_results: list[dict[str, Any]] = []
+            for item in specific_keywords:
+                if isinstance(item, dict) and "keyword" in item:
+                    kw = item["keyword"].strip().lower()
+                    relevance = item.get("relevance_score", 0.8)
+
+                    # Validate relevance score is in range
+                    if not isinstance(relevance, (int, float)):
+                        relevance = 0.8
+                    relevance = max(0.0, min(1.0, float(relevance)))
+
+                    # Get volume data if available
+                    volume_data = keywords_with_volume.get(kw)
+                    if volume_data:
+                        filtered_results.append(
+                            {
+                                "keyword": kw,
+                                "volume": volume_data.search_volume,
+                                "cpc": volume_data.cpc,
+                                "competition": volume_data.competition,
+                                "relevance_score": relevance,
+                            }
+                        )
+                elif isinstance(item, str):
+                    # Handle simple string format (backwards compatibility)
+                    kw = item.strip().lower()
+                    volume_data = keywords_with_volume.get(kw)
+                    if volume_data:
+                        filtered_results.append(
+                            {
+                                "keyword": kw,
+                                "volume": volume_data.search_volume,
+                                "cpc": volume_data.cpc,
+                                "competition": volume_data.competition,
+                                "relevance_score": 0.8,  # Default if not provided
+                            }
+                        )
+
+            if len(filtered_results) < 2:
+                raise ValueError(
+                    f"LLM filtered too aggressively: only {len(filtered_results)} keywords"
+                )
+
+            logger.info(
+                "Filtered to specific keywords",
+                extra={
+                    "url": url[:100],
+                    "original_count": len(keywords_with_volume),
+                    "filtered_count": len(filtered_results),
+                    "category": category,
+                },
+            )
+
+            return filtered_results
+
+        except Exception as e:
+            # Log error
+            logger.warning(
+                "Keyword specificity filtering failed, returning all keywords",
+                extra={
+                    "url": url[:100],
+                    "error": str(e),
+                    "keyword_count": len(keywords_with_volume),
+                },
+            )
+
+            # Record error in stats
+            self._stats.errors.append(
+                {
+                    "url": url,
+                    "error": str(e),
+                    "phase": "filter_to_specific",
+                }
+            )
+
+            # Fallback: return all keywords with default relevance score
+            fallback_results: list[dict[str, Any]] = []
+            for kw, data in keywords_with_volume.items():
+                fallback_results.append(
+                    {
+                        "keyword": kw,
+                        "volume": data.search_volume,
+                        "cpc": data.cpc,
+                        "competition": data.competition,
+                        "relevance_score": 0.5,  # Default relevance on failure
+                    }
+                )
+
+            # Sort by volume descending
+            fallback_results.sort(key=lambda x: -(x.get("volume") or 0))
+
+            logger.info(
+                "Using fallback: all keywords with default relevance",
+                extra={
+                    "url": url[:100],
+                    "keyword_count": len(fallback_results),
+                },
+            )
+
+            return fallback_results

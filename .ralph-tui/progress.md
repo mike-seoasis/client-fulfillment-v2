@@ -158,3 +158,23 @@ after each iteration and it's included in prompts for context.
   - Log both individual API costs and cumulative totals in stats for tracking
 ---
 
+## 2026-02-05 - S4-009
+- **What was implemented:** Implemented `filter_to_specific` async method to filter generic keywords to page-specific ones
+- **Files changed:**
+  - `backend/app/services/primary_keyword.py` - Added `filter_to_specific` method
+- **Method features:**
+  - Takes keywords with volume data (dict[str, KeywordVolumeData]) and page context (url, title, h1, content_excerpt, category)
+  - Builds prompt with specificity criteria and examples from the old keyword_research.py reference
+  - Calls Claude API with temperature=0.0 for deterministic filtering
+  - Returns list of dicts with keyword, volume, cpc, competition, and relevance_score (0.0-1.0)
+  - Handles API failures by returning all keywords with default relevance score of 0.5
+  - Validates relevance scores are in range, handles both dict and string LLM response formats
+  - Updates stats: claude_calls, total_input_tokens, total_output_tokens, errors
+- **Learnings:**
+  - Use temperature=0.0 for filtering tasks (deterministic) vs 0.3 for generation (variety)
+  - Request LLM to return relevance_score with each keyword for downstream ranking
+  - Handle both `[{"keyword": "...", "relevance_score": 0.9}]` and `["keyword1", "keyword2"]` formats from LLM for robustness
+  - Limit prompt to top 50 keywords to avoid token limits
+  - Graceful fallback on failure is essential - return all keywords with default 0.5 relevance rather than empty list
+---
+
