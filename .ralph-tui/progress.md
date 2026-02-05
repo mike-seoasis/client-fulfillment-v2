@@ -789,3 +789,30 @@ after each iteration and it's included in prompts for context.
   - Extract URL path for display while keeping full URL available in tooltip
 ---
 
+## 2026-02-05 - S4-034
+- **What was implemented:** Created AlternativeKeywordDropdown component and integrated it into KeywordPageRow
+- **Files changed:**
+  - `frontend/src/components/onboarding/AlternativeKeywordDropdown.tsx` (new file)
+  - `frontend/src/components/onboarding/KeywordPageRow.tsx` (updated to use dropdown)
+- **Component features:**
+  - Dropdown opens when clicking primary keyword button (via built-in state or external `onKeywordClick` callback)
+  - Shows current primary keyword at top with checkmark (selected state) and volume
+  - Lists up to 4 alternative keywords below with keyword, volume, and composite score
+  - Each alternative shows loading spinner when being selected
+  - Selecting alternative calls `useUpdatePrimaryKeyword` mutation, then closes dropdown
+  - Closes on click outside or Escape key press
+  - Smart positioning: shows above button if not enough space below
+  - Uses `fixed` positioning with `getBoundingClientRect()` for accurate anchor placement
+  - Accessible: uses `role="listbox"` and `aria-selected` attributes
+- **Integration with KeywordPageRow:**
+  - Added state for `isDropdownOpen` and `keywordButtonRect`
+  - Added `ref` on keyword button for position calculation
+  - Dropdown renders when `onKeywordClick` prop is not provided (built-in behavior)
+  - If `onKeywordClick` is provided, uses that callback instead (external control)
+- **Learnings:**
+  - Use `setTimeout(..., 0)` before adding click-outside listener to prevent immediate close from the opening click
+  - Smart dropdown positioning: check `viewportHeight - anchorRect.bottom` vs estimated dropdown height
+  - Disable all alternatives when one is being updated (`isPending` state)
+  - Show loading spinner only on the specific keyword being updated via local `selectedKeyword` state
+---
+

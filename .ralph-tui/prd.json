@@ -556,8 +556,9 @@
         "Closes on selection or click outside"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Use Headless UI Listbox or similar for accessibility."
+      "passes": true,
+      "notes": "Use Headless UI Listbox or similar for accessibility.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S4-035",
@@ -834,6 +835,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-05T15:19:58.967Z"
+    "updatedAt": "2026-02-05T15:22:26.417Z"
   }
 }

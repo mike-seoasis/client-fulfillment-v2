@@ -3,13 +3,14 @@
 import { useState, useRef, useEffect } from 'react';
 import type { PageWithKeywords } from '@/lib/api';
 import { useApproveKeyword, useTogglePriority } from '@/hooks/useKeywordMutations';
+import { AlternativeKeywordDropdown } from './AlternativeKeywordDropdown';
 
 interface KeywordPageRowProps {
   /** Page with keyword data */
   page: PageWithKeywords;
   /** Project ID for API calls */
   projectId: string;
-  /** Callback when keyword is clicked (for opening edit dropdown) */
+  /** Callback when keyword is clicked (for opening edit dropdown) - optional, if not provided uses built-in dropdown */
   onKeywordClick?: (pageId: string) => void;
 }
 
@@ -216,6 +217,11 @@ export function KeywordPageRow({ page, projectId, onKeywordClick }: KeywordPageR
   const approveKeyword = useApproveKeyword();
   const togglePriority = useTogglePriority();
 
+  // State for built-in dropdown
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [keywordButtonRect, setKeywordButtonRect] = useState<DOMRect | null>(null);
+  const keywordButtonRef = useRef<HTMLButtonElement>(null);
+
   const hasKeyword = !!page.keywords?.primary_keyword;
   const isApproved = page.keywords?.is_approved ?? false;
   const isPriority = page.keywords?.is_priority ?? false;
@@ -248,9 +254,24 @@ export function KeywordPageRow({ page, projectId, onKeywordClick }: KeywordPageR
   };
 
   const handleKeywordClick = () => {
-    if (hasKeyword && onKeywordClick) {
+    if (!hasKeyword) return;
+
+    // If a custom handler is provided, use that
+    if (onKeywordClick) {
       onKeywordClick(page.id);
+      return;
     }
+
+    // Otherwise, use built-in dropdown
+    if (keywordButtonRef.current) {
+      setKeywordButtonRect(keywordButtonRef.current.getBoundingClientRect());
+      setIsDropdownOpen(true);
+    }
+  };
+
+  const handleDropdownClose = () => {
+    setIsDropdownOpen(false);
+    setKeywordButtonRect(null);
   };
 
   return (
@@ -303,13 +324,30 @@ export function KeywordPageRow({ page, projectId, onKeywordClick }: KeywordPageR
             <div className="flex items-center gap-3 flex-wrap">
               {/* Primary keyword (clickable to edit) */}
               <button
+                ref={keywordButtonRef}
                 onClick={handleKeywordClick}
                 className="inline-flex items-center gap-1 px-2.5 py-1 text-sm bg-lagoon-100 text-lagoon-700 rounded-sm font-medium hover:bg-lagoon-200 transition-colors"
                 title="Click to select alternative keyword"
+                aria-haspopup="listbox"
+                aria-expanded={isDropdownOpen}
               >
                 {page.keywords?.primary_keyword}
                 <ChevronDownIcon className="w-3 h-3" />
               </button>
+
+              {/* Alternative keyword dropdown */}
+              {page.keywords && !onKeywordClick && (
+                <AlternativeKeywordDropdown
+                  primaryKeyword={page.keywords.primary_keyword}
+                  alternatives={page.keywords.alternative_keywords || []}
+                  primaryVolume={page.keywords.search_volume}
+                  projectId={projectId}
+                  pageId={page.id}
+                  isOpen={isDropdownOpen}
+                  onClose={handleDropdownClose}
+                  anchorRect={keywordButtonRect}
+                />
+              )}
 
               {/* Search volume badge */}
               {page.keywords?.search_volume !== null && page.keywords?.search_volume !== undefined && (
