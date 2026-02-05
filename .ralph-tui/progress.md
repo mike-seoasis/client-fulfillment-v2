@@ -178,3 +178,24 @@ after each iteration and it's included in prompts for context.
   - Graceful fallback on failure is essential - return all keywords with default 0.5 relevance rather than empty list
 ---
 
+## 2026-02-05 - S4-010
+- **What was implemented:** Implemented `calculate_score` method to calculate composite keyword scores
+- **Files changed:**
+  - `backend/app/services/primary_keyword.py` - Added `calculate_score` method and `import math`
+- **Method features:**
+  - Takes volume (int/float/None), competition (float/None), and relevance (float) as inputs
+  - Calculates volume_score: `min(50, max(0, log10(volume) * 10))` - logarithmic scale capped at 50
+  - Calculates competition_score: `(1 - competition) * 100` - lower competition = higher score
+  - Calculates relevance_score: `relevance * 100`
+  - Returns composite: `(volume_score * 0.50) + (relevance_score * 0.35) + (competition_score * 0.15)`
+  - Returns dict with all individual scores and composite score, rounded to 2 decimal places
+- **Edge case handling:**
+  - Zero/null/negative volume: volume_score = 0
+  - Null competition: defaults to 50 (mid-range)
+  - High volume (>100,000): capped at 50 by the min() function
+- **Learnings:**
+  - Use `math.log10()` for logarithmic volume scoring - makes the scale more meaningful (1000 searches = 30, 10000 = 40, 100000 = 50)
+  - Return dict with all component scores for transparency and debugging
+  - Round scores to 2 decimal places for cleaner output
+---
+

@@ -12,6 +12,7 @@ The service maintains state for:
 """
 
 import json
+import math
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -687,3 +688,55 @@ Example: [{{"keyword": "keyword one", "relevance_score": 0.95}}, {{"keyword": "k
             )
 
             return fallback_results
+
+    def calculate_score(
+        self,
+        volume: int | float | None,
+        competition: float | None,
+        relevance: float,
+    ) -> dict[str, float]:
+        """Calculate composite score for a keyword based on volume, competition, and relevance.
+
+        The composite score weights three factors:
+        - Volume score (50%): Logarithmic scale of search volume, capped at 50
+        - Relevance score (35%): How well the keyword matches the page content
+        - Competition score (15%): Inverse of competition (lower competition = higher score)
+
+        Args:
+            volume: Monthly search volume (can be 0, None, or positive int/float).
+            competition: Competition level from 0.0 (low) to 1.0 (high), or None.
+            relevance: Relevance score from 0.0 to 1.0.
+
+        Returns:
+            Dict with 'volume_score', 'competition_score', 'relevance_score',
+            and 'composite_score' keys.
+        """
+        # Calculate volume score: log10(volume) * 10, clamped to [0, 50]
+        # Handle zero/null volume gracefully
+        if volume is None or volume <= 0:
+            volume_score = 0.0
+        else:
+            volume_score = min(50.0, max(0.0, math.log10(volume) * 10))
+
+        # Calculate competition score: (1 - competition) * 100
+        # Lower competition = higher score
+        # Handle None competition as mid-range (0.5)
+        competition_score = 50.0 if competition is None else (1.0 - competition) * 100
+
+        # Calculate relevance score: relevance * 100
+        relevance_score = relevance * 100
+
+        # Calculate composite score with weights:
+        # 50% volume, 35% relevance, 15% competition
+        composite_score = (
+            (volume_score * 0.50)
+            + (relevance_score * 0.35)
+            + (competition_score * 0.15)
+        )
+
+        return {
+            "volume_score": round(volume_score, 2),
+            "competition_score": round(competition_score, 2),
+            "relevance_score": round(relevance_score, 2),
+            "composite_score": round(composite_score, 2),
+        }
