@@ -468,7 +468,7 @@ export default function KeywordsPage() {
             </div>
 
             {/* Pages list */}
-            <div className="border border-cream-300 rounded-sm overflow-hidden">
+            <div className="border border-cream-500 rounded-sm overflow-hidden">
               <div className="max-h-80 overflow-y-auto">
                 {isPagesLoading ? (
                   <div className="py-8 text-center text-warm-gray-500">
@@ -492,7 +492,7 @@ export default function KeywordsPage() {
           </>
         )}
 
-        <hr className="border-cream-300 my-6" />
+        <hr className="border-cream-500 my-6" />
 
         {/* Actions */}
         <div className="flex justify-end gap-3">

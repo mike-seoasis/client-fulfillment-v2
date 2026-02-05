@@ -338,7 +338,7 @@ export function KeywordPageRow({ page, projectId, onKeywordClick }: KeywordPageR
   };
 
   return (
-    <div className="py-3 px-4 border-b border-cream-200 last:border-b-0 hover:bg-sand-50 transition-colors">
+    <div className="py-3 px-4 border-b border-cream-500 last:border-b-0 hover:bg-sand-50 transition-colors">
       <div className="flex items-start gap-3">
         {/* Priority toggle */}
         <div className="flex-shrink-0 mt-0.5">

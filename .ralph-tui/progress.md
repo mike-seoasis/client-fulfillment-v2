@@ -982,3 +982,23 @@ after each iteration and it's included in prompts for context.
   - Use inline-flex for badge to center icon and text
 ---
 
+## 2026-02-05 - S4-042
+- **What was implemented:** Applied tropical oasis theme styling consistently across keyword components
+- **Files changed:**
+  - `frontend/src/app/projects/[id]/onboarding/keywords/page.tsx` - Updated borders to use `border-cream-500`
+  - `frontend/src/components/onboarding/KeywordPageRow.tsx` - Updated row border to use `border-cream-500`
+  - `frontend/src/components/onboarding/AlternativeKeywordDropdown.tsx` - Updated dropdown and divider borders to use `border-cream-500`
+- **Styling verified:**
+  - Primary buttons: ✅ Using `bg-palm-500` (via Button.tsx)
+  - Card backgrounds: ✅ Main cards use `bg-white`, hover states use `bg-sand-50`
+  - Borders: ✅ Updated all borders from `border-cream-200`/`border-cream-300` to `border-cream-500`
+  - Corners: ✅ All corners use `rounded-sm` (except `rounded-full` for circles/progress bars)
+  - Focus rings: ✅ Using `ring-palm-400` (via Button.tsx and input fields)
+  - Approved states: ✅ Using `bg-palm-100 text-palm-700` for approved badges
+- **Learnings:**
+  - Design system uses `bg-white` for main card containers, `bg-sand-50` for hover states
+  - Border consistency: use `border-cream-500` for visible borders, not lighter variants
+  - `rounded-full` is valid for circular elements (step indicators, progress bars)
+  - Pre-existing type errors in test files don't block styling changes
+---
+

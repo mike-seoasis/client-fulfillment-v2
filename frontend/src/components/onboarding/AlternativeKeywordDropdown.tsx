@@ -163,14 +163,14 @@ export function AlternativeKeywordDropdown({
   return (
     <div
       ref={dropdownRef}
-      className="fixed z-50 bg-white border border-cream-300 rounded-sm shadow-lg min-w-[280px] max-w-[400px]"
+      className="fixed z-50 bg-white border border-cream-500 rounded-sm shadow-lg min-w-[280px] max-w-[400px]"
       style={positionStyle}
       role="listbox"
       aria-label="Select keyword"
     >
       {/* Current primary keyword (selected) */}
       <div
-        className="flex items-center justify-between px-3 py-2.5 bg-palm-50 border-b border-cream-200 cursor-default"
+        className="flex items-center justify-between px-3 py-2.5 bg-palm-50 border-b border-cream-500 cursor-default"
         role="option"
         aria-selected="true"
       >
