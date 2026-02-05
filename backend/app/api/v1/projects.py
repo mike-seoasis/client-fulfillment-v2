@@ -1572,6 +1572,97 @@ async def approve_all_keywords(
 
 
 @router.put(
+    "/{project_id}/pages/{page_id}/priority",
+    response_model=PageKeywordsData,
+)
+async def toggle_priority(
+    project_id: str,
+    page_id: str,
+    db: AsyncSession = Depends(get_session),
+    value: bool | None = None,
+) -> PageKeywordsData:
+    """Toggle or set the priority flag for a page's keywords.
+
+    By default, toggles the is_priority value (true->false, false->true).
+    If a value is provided in the query parameter, sets is_priority to that value.
+
+    Priority pages will receive more internal links in Phase 5.
+
+    Args:
+        project_id: UUID of the project.
+        page_id: UUID of the crawled page.
+        db: AsyncSession for database operations.
+        value: Optional explicit value to set (true/false). If not provided, toggles.
+
+    Returns:
+        Updated PageKeywordsData with the new is_priority value.
+
+    Raises:
+        HTTPException: 404 if project, page, or page keywords not found.
+    """
+    # Verify project exists (raises 404 if not)
+    await ProjectService.get_project(db, project_id)
+
+    # Get the page with keywords relationship
+    stmt = (
+        select(CrawledPage)
+        .options(joinedload(CrawledPage.keywords))
+        .where(
+            CrawledPage.id == page_id,
+            CrawledPage.project_id == project_id,
+        )
+    )
+    result = await db.execute(stmt)
+    page = result.scalar_one_or_none()
+
+    if not page:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Page {page_id} not found in project {project_id}",
+        )
+
+    if not page.keywords:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Keywords not yet generated for page {page_id}",
+        )
+
+    page_keywords: PageKeywords = page.keywords
+
+    # Toggle or set the priority value
+    if value is not None:
+        page_keywords.is_priority = value
+    else:
+        page_keywords.is_priority = not page_keywords.is_priority
+
+    await db.commit()
+    await db.refresh(page_keywords)
+
+    logger.info(
+        "Priority toggled",
+        extra={
+            "project_id": project_id,
+            "page_id": page_id,
+            "is_priority": page_keywords.is_priority,
+        },
+    )
+
+    return PageKeywordsData(
+        id=page_keywords.id,
+        primary_keyword=page_keywords.primary_keyword,
+        secondary_keywords=page_keywords.secondary_keywords or [],
+        alternative_keywords=page_keywords.alternative_keywords or [],
+        is_approved=page_keywords.is_approved,
+        is_priority=page_keywords.is_priority,
+        composite_score=page_keywords.composite_score,
+        relevance_score=page_keywords.relevance_score,
+        ai_reasoning=page_keywords.ai_reasoning,
+        search_volume=page_keywords.search_volume,
+        difficulty_score=page_keywords.difficulty_score,
+    )
+
+
+@router.put(
     "/{project_id}/pages/{page_id}/labels",
     response_model=CrawledPageResponse,
 )

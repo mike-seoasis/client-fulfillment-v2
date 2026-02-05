@@ -501,3 +501,30 @@ after each iteration and it's included in prompts for context.
   - Filter by page status=completed to match single-page approve behavior
 ---
 
+## 2026-02-05 - S4-023
+- **What was implemented:** PUT `/api/v1/projects/{project_id}/pages/{page_id}/priority` endpoint
+- **Files changed:**
+  - `backend/app/api/v1/projects.py` - Added toggle_priority endpoint
+  - `backend/tests/api/test_projects.py` - Added TestTogglePriority class with 8 tests
+- **Endpoint features:**
+  - Toggles is_priority value (true->false, false->true) by default
+  - Accepts optional `value` query parameter to set explicit value
+  - Returns updated PageKeywordsData with all fields
+  - Validates project exists (404 if not)
+  - Validates page exists in project (404 if not)
+  - Validates keywords generated for page (404 if not)
+- **Test coverage:**
+  - test_toggle_priority_project_not_found - 404 for non-existent project
+  - test_toggle_priority_page_not_found - 404 for non-existent page
+  - test_toggle_priority_no_keywords_generated - 404 when keywords not generated
+  - test_toggle_priority_false_to_true - Toggles false to true
+  - test_toggle_priority_true_to_false - Toggles true to false
+  - test_toggle_priority_explicit_value_true - Sets explicit true value
+  - test_toggle_priority_explicit_value_false - Sets explicit false value
+  - test_toggle_priority_returns_full_data - Full response data validation
+- **Learnings:**
+  - Boolean toggle pattern: use `not current_value` for toggle behavior
+  - Optional query parameters with `| None` type allow explicit value setting
+  - Follow existing patterns from S4-020/S4-021 for page+keywords endpoint structure
+---
+

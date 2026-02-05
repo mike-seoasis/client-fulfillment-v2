@@ -1980,3 +1980,307 @@ class TestApproveAllKeywords:
         data = response.json()
         # Only the completed page's keyword should be approved
         assert data["approved_count"] == 1
+
+
+class TestTogglePriority:
+    """Tests for PUT /api/v1/projects/{project_id}/pages/{page_id}/priority endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_toggle_priority_project_not_found(
+        self, async_client: AsyncClient
+    ) -> None:
+        """PUT priority returns 404 for non-existent project."""
+        fake_project_id = str(uuid.uuid4())
+        fake_page_id = str(uuid.uuid4())
+        response = await async_client.put(
+            f"/api/v1/projects/{fake_project_id}/pages/{fake_page_id}/priority",
+        )
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_toggle_priority_page_not_found(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """PUT priority returns 404 for non-existent page."""
+        from app.models.project import Project
+
+        project = Project(
+            name="Page Not Found Priority Test",
+            site_url="https://page-not-found-priority.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        fake_page_id = str(uuid.uuid4())
+        response = await async_client.put(
+            f"/api/v1/projects/{project.id}/pages/{fake_page_id}/priority",
+        )
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_toggle_priority_no_keywords_generated(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """PUT priority returns 404 when keywords not yet generated."""
+        from app.models.crawled_page import CrawledPage
+        from app.models.project import Project
+
+        project = Project(
+            name="No Keywords Priority Test",
+            site_url="https://no-keywords-priority.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        page = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://no-keywords-priority.example.com/products",
+            status="completed",
+            title="Products Page",
+        )
+        db_session.add(page)
+        await db_session.commit()
+        await db_session.refresh(page)
+
+        response = await async_client.put(
+            f"/api/v1/projects/{project.id}/pages/{page.id}/priority",
+        )
+        assert response.status_code == 404
+        assert "Keywords not yet generated" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_toggle_priority_false_to_true(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """PUT priority toggles is_priority from false to true."""
+        from app.models.crawled_page import CrawledPage
+        from app.models.page_keywords import PageKeywords
+        from app.models.project import Project
+
+        project = Project(
+            name="Toggle Priority False to True Test",
+            site_url="https://toggle-priority-f2t.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        page = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://toggle-priority-f2t.example.com/products",
+            status="completed",
+            title="Products Page",
+        )
+        db_session.add(page)
+        await db_session.commit()
+        await db_session.refresh(page)
+
+        keywords = PageKeywords(
+            crawled_page_id=page.id,
+            primary_keyword="coffee containers",
+            is_priority=False,
+        )
+        db_session.add(keywords)
+        await db_session.commit()
+
+        response = await async_client.put(
+            f"/api/v1/projects/{project.id}/pages/{page.id}/priority",
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["is_priority"] is True
+
+    @pytest.mark.asyncio
+    async def test_toggle_priority_true_to_false(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """PUT priority toggles is_priority from true to false."""
+        from app.models.crawled_page import CrawledPage
+        from app.models.page_keywords import PageKeywords
+        from app.models.project import Project
+
+        project = Project(
+            name="Toggle Priority True to False Test",
+            site_url="https://toggle-priority-t2f.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        page = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://toggle-priority-t2f.example.com/products",
+            status="completed",
+            title="Products Page",
+        )
+        db_session.add(page)
+        await db_session.commit()
+        await db_session.refresh(page)
+
+        keywords = PageKeywords(
+            crawled_page_id=page.id,
+            primary_keyword="coffee containers",
+            is_priority=True,
+        )
+        db_session.add(keywords)
+        await db_session.commit()
+
+        response = await async_client.put(
+            f"/api/v1/projects/{project.id}/pages/{page.id}/priority",
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["is_priority"] is False
+
+    @pytest.mark.asyncio
+    async def test_toggle_priority_explicit_value_true(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """PUT priority with explicit value=true sets is_priority to true."""
+        from app.models.crawled_page import CrawledPage
+        from app.models.page_keywords import PageKeywords
+        from app.models.project import Project
+
+        project = Project(
+            name="Explicit Priority True Test",
+            site_url="https://explicit-priority-true.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        page = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://explicit-priority-true.example.com/products",
+            status="completed",
+            title="Products Page",
+        )
+        db_session.add(page)
+        await db_session.commit()
+        await db_session.refresh(page)
+
+        keywords = PageKeywords(
+            crawled_page_id=page.id,
+            primary_keyword="coffee containers",
+            is_priority=False,
+        )
+        db_session.add(keywords)
+        await db_session.commit()
+
+        # Set explicit value=true
+        response = await async_client.put(
+            f"/api/v1/projects/{project.id}/pages/{page.id}/priority?value=true",
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["is_priority"] is True
+
+    @pytest.mark.asyncio
+    async def test_toggle_priority_explicit_value_false(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """PUT priority with explicit value=false sets is_priority to false."""
+        from app.models.crawled_page import CrawledPage
+        from app.models.page_keywords import PageKeywords
+        from app.models.project import Project
+
+        project = Project(
+            name="Explicit Priority False Test",
+            site_url="https://explicit-priority-false.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        page = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://explicit-priority-false.example.com/products",
+            status="completed",
+            title="Products Page",
+        )
+        db_session.add(page)
+        await db_session.commit()
+        await db_session.refresh(page)
+
+        keywords = PageKeywords(
+            crawled_page_id=page.id,
+            primary_keyword="coffee containers",
+            is_priority=True,
+        )
+        db_session.add(keywords)
+        await db_session.commit()
+
+        # Set explicit value=false
+        response = await async_client.put(
+            f"/api/v1/projects/{project.id}/pages/{page.id}/priority?value=false",
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["is_priority"] is False
+
+    @pytest.mark.asyncio
+    async def test_toggle_priority_returns_full_data(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """PUT priority returns full PageKeywordsData with all fields."""
+        from app.models.crawled_page import CrawledPage
+        from app.models.page_keywords import PageKeywords
+        from app.models.project import Project
+
+        project = Project(
+            name="Full Data Priority Test",
+            site_url="https://full-data-priority.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        page = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://full-data-priority.example.com/products",
+            status="completed",
+            title="Products Page",
+        )
+        db_session.add(page)
+        await db_session.commit()
+        await db_session.refresh(page)
+
+        keywords = PageKeywords(
+            crawled_page_id=page.id,
+            primary_keyword="coffee storage",
+            secondary_keywords=["secondary one", "secondary two"],
+            alternative_keywords=[{"keyword": "alt one", "volume": 1000}],
+            is_approved=True,
+            is_priority=False,
+            composite_score=75.5,
+            relevance_score=82.0,
+            ai_reasoning="Good keyword match",
+            search_volume=5000,
+            difficulty_score=35,
+        )
+        db_session.add(keywords)
+        await db_session.commit()
+        await db_session.refresh(keywords)
+
+        response = await async_client.put(
+            f"/api/v1/projects/{project.id}/pages/{page.id}/priority",
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        # Verify is_priority was toggled
+        assert data["is_priority"] is True
+
+        # Verify all other fields are preserved
+        assert data["id"] == keywords.id
+        assert data["primary_keyword"] == "coffee storage"
+        assert data["secondary_keywords"] == ["secondary one", "secondary two"]
+        assert len(data["alternative_keywords"]) == 1
+        assert data["is_approved"] is True
+        assert data["composite_score"] == 75.5
+        assert data["relevance_score"] == 82.0
+        assert data["ai_reasoning"] == "Good keyword match"
+        assert data["search_volume"] == 5000
+        assert data["difficulty_score"] == 35
