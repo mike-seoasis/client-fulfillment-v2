@@ -46,8 +46,8 @@ const createMockPage = (overrides: Partial<PageWithKeywords> = {}): PageWithKeyw
     is_approved: false,
     is_priority: false,
     alternative_keywords: [
-      { keyword: 'best running shoes', volume: 8000, cpc: null, competition: null, relevance_score: null, composite_score: 45.2 },
-      { keyword: 'trail running shoes', volume: 5000, cpc: null, competition: null, relevance_score: null, composite_score: 42.1 },
+      { keyword: 'best running shoes', volume: 8000, composite_score: 45.2 },
+      { keyword: 'trail running shoes', volume: 5000, composite_score: 42.1 },
     ],
     composite_score: 52.3,
     relevance_score: 0.85,
@@ -123,6 +123,7 @@ describe('KeywordPageRow', () => {
       });
       render(<KeywordPageRow page={page} projectId={mockProjectId} />);
 
+      // Volume badge shows dash when there's no volume data
       expect(screen.getByText(/— vol/)).toBeInTheDocument();
     });
 

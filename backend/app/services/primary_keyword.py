@@ -726,7 +726,13 @@ Example: [{{"keyword": "keyword one", "relevance_score": 0.95}}, {{"keyword": "k
         # Calculate competition score: (1 - competition) * 100
         # Lower competition = higher score
         # Handle None competition as mid-range (0.5)
-        competition_score = 50.0 if competition is None else (1.0 - competition) * 100
+        # Note: DataForSEO returns competition_index as 0-100, normalize if needed
+        if competition is None:
+            competition_score = 50.0
+        else:
+            # Normalize competition to 0-1 range if it's in 0-100 range
+            norm_competition = competition / 100.0 if competition > 1.0 else competition
+            competition_score = (1.0 - norm_competition) * 100
 
         # Calculate relevance score: relevance * 100
         relevance_score = relevance * 100
@@ -1005,9 +1011,15 @@ Example: [{{"keyword": "keyword one", "relevance_score": 0.95}}, {{"keyword": "k
             primary_relevance = primary.get("relevance_score")
             primary_volume = primary.get("volume")
 
-            # Extract alternative keyword strings
+            # Extract alternative keyword data (full objects with volume, score, etc.)
             alternative_keywords = [
-                alt.get("keyword", "") for alt in alternatives if alt.get("keyword")
+                {
+                    "keyword": alt.get("keyword", ""),
+                    "volume": alt.get("volume"),
+                    "composite_score": alt.get("composite_score"),
+                }
+                for alt in alternatives
+                if alt.get("keyword")
             ]
 
             logger.info(

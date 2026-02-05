@@ -72,8 +72,8 @@ const createMockPage = (
     is_approved: isApproved,
     is_priority: false,
     alternative_keywords: [
-      { keyword: 'alt keyword 1', volume: 500, cpc: 1.5, competition: 0.3, relevance_score: 0.8, composite_score: 45.0 },
-      { keyword: 'alt keyword 2', volume: 300, cpc: 1.0, competition: 0.5, relevance_score: 0.7, composite_score: 40.0 },
+      { keyword: 'alt keyword 1', volume: 800, composite_score: 45.0 },
+      { keyword: 'alt keyword 2', volume: 600, composite_score: 40.0 },
     ],
     composite_score: options?.score ?? 50.0,
     relevance_score: 0.8,
@@ -285,7 +285,11 @@ describe('Keywords Page - Integration Tests', () => {
       expect(screen.getByText(/Ready to generate keywords/)).toBeInTheDocument();
     });
 
-    it('shows "Generate Keywords" button when status is pending and no keywords exist', () => {
+    it('shows "Generate Keywords" button when status is pending and pages exist without keywords', () => {
+      const pagesWithoutKeywords = [
+        createMockPageWithoutKeywords('page-1'),
+        createMockPageWithoutKeywords('page-2'),
+      ];
       mockUseProject.mockReturnValue(defaultMockProject());
       mockKeywordGeneration.mockReturnValue(defaultMockKeywordGen({
         status: 'pending',
@@ -293,7 +297,7 @@ describe('Keywords Page - Integration Tests', () => {
         completed: 0,
         total: 0,
       }));
-      mockPagesWithKeywords.mockReturnValue(defaultMockPages([]));
+      mockPagesWithKeywords.mockReturnValue(defaultMockPages(pagesWithoutKeywords));
 
       render(<KeywordsPage />);
 
@@ -305,6 +309,10 @@ describe('Keywords Page - Integration Tests', () => {
     it('calls startGeneration when Generate Keywords button is clicked', async () => {
       const user = userEvent.setup();
       const mockStartGeneration = vi.fn();
+      const pagesWithoutKeywords = [
+        createMockPageWithoutKeywords('page-1'),
+        createMockPageWithoutKeywords('page-2'),
+      ];
 
       mockUseProject.mockReturnValue(defaultMockProject());
       mockKeywordGeneration.mockReturnValue(defaultMockKeywordGen({
@@ -314,23 +322,28 @@ describe('Keywords Page - Integration Tests', () => {
         total: 0,
         startGeneration: mockStartGeneration,
       }));
-      mockPagesWithKeywords.mockReturnValue(defaultMockPages([]));
+      mockPagesWithKeywords.mockReturnValue(defaultMockPages(pagesWithoutKeywords));
 
       render(<KeywordsPage />);
 
       await user.click(screen.getByRole('button', { name: /Generate Keywords/i }));
 
-      expect(mockStartGeneration).toHaveBeenCalledTimes(1);
+      // Called twice: once by auto-start on mount, once by button click
+      expect(mockStartGeneration).toHaveBeenCalledTimes(2);
     });
 
     it('shows "Starting..." when generation is starting', () => {
+      const pagesWithoutKeywords = [
+        createMockPageWithoutKeywords('page-1'),
+        createMockPageWithoutKeywords('page-2'),
+      ];
       mockUseProject.mockReturnValue(defaultMockProject());
       mockKeywordGeneration.mockReturnValue(defaultMockKeywordGen({
         status: 'pending',
         isComplete: false,
         isStarting: true,
       }));
-      mockPagesWithKeywords.mockReturnValue(defaultMockPages([]));
+      mockPagesWithKeywords.mockReturnValue(defaultMockPages(pagesWithoutKeywords));
 
       render(<KeywordsPage />);
 

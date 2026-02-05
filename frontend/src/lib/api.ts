@@ -101,12 +101,20 @@ export interface KeywordCandidate {
   composite_score: number | null;
 }
 
+/** Alternative keyword option with volume and score. */
+export interface AlternativeKeyword {
+  keyword: string;
+  volume: number | null;
+  composite_score: number | null;
+}
+
 /** Keyword data for a page. */
 export interface PageKeywordsData {
   id: string;
   primary_keyword: string;
   secondary_keywords: string[];
-  alternative_keywords: KeywordCandidate[];
+  /** Alternative keywords - supports both old string[] and new AlternativeKeyword[] formats */
+  alternative_keywords: (string | AlternativeKeyword)[];
   is_approved: boolean;
   is_priority: boolean;
   composite_score: number | null;

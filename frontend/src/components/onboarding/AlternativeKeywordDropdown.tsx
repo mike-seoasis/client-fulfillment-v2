@@ -1,16 +1,18 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import type { KeywordCandidate } from '@/lib/api';
+import type { AlternativeKeyword } from '@/lib/api';
 import { useUpdatePrimaryKeyword } from '@/hooks/useKeywordMutations';
 
 interface AlternativeKeywordDropdownProps {
   /** Current primary keyword */
   primaryKeyword: string;
-  /** List of alternative keywords (up to 4) */
-  alternatives: KeywordCandidate[];
+  /** List of alternative keywords with metrics (up to 4). Accepts both old string[] and new AlternativeKeyword[] formats for backwards compatibility. */
+  alternatives: (string | AlternativeKeyword)[];
   /** Current primary keyword's search volume (null if custom) */
   primaryVolume: number | null;
+  /** Current primary keyword's composite score (null if custom) */
+  primaryScore: number | null;
   /** Project ID for API calls */
   projectId: string;
   /** Page ID for API calls */
@@ -68,6 +70,19 @@ function formatNumber(num: number | null | undefined): string {
 }
 
 /**
+ * Normalize alternatives to handle both old (string[]) and new (AlternativeKeyword[]) formats.
+ * This provides backwards compatibility with existing database records.
+ */
+function normalizeAlternatives(alternatives: (string | AlternativeKeyword)[]): AlternativeKeyword[] {
+  return alternatives.map((alt) => {
+    if (typeof alt === 'string') {
+      return { keyword: alt, volume: null, composite_score: null };
+    }
+    return alt;
+  });
+}
+
+/**
  * AlternativeKeywordDropdown displays the current primary keyword and
  * alternatives in a dropdown. Selecting an alternative updates the primary
  * keyword via API.
@@ -76,6 +91,7 @@ export function AlternativeKeywordDropdown({
   primaryKeyword,
   alternatives,
   primaryVolume,
+  primaryScore,
   projectId,
   pageId,
   isOpen,
@@ -163,13 +179,15 @@ export function AlternativeKeywordDropdown({
         left: anchorRect.left,
       };
 
-  // Limit alternatives to 4 as per spec
-  const displayAlternatives = alternatives.slice(0, 4);
+  // Normalize and limit alternatives to 4 as per spec
+  // This handles both old (string[]) and new (AlternativeKeyword[]) formats
+  const normalizedAlternatives = normalizeAlternatives(alternatives);
+  const displayAlternatives = normalizedAlternatives.slice(0, 4);
 
   return (
     <div
       ref={dropdownRef}
-      className="fixed z-50 bg-white border border-cream-500 rounded-sm shadow-lg min-w-[280px] max-w-[400px]"
+      className="fixed z-50 bg-white border border-cream-500 rounded-sm shadow-lg min-w-[320px] max-w-[450px]"
       style={positionStyle}
       role="listbox"
       aria-label="Select keyword"
@@ -188,11 +206,18 @@ export function AlternativeKeywordDropdown({
             </span>
           </div>
         </div>
-        {primaryVolume !== null && (
-          <span className="text-xs text-palm-600 ml-3 flex-shrink-0">
-            {formatNumber(primaryVolume)} vol
-          </span>
-        )}
+        <div className="flex items-center gap-2 ml-3 flex-shrink-0">
+          {primaryVolume !== null && (
+            <span className="text-xs text-palm-600">
+              {formatNumber(primaryVolume)} vol
+            </span>
+          )}
+          {primaryScore !== null && (
+            <span className="text-xs text-palm-700 bg-palm-100 px-1.5 py-0.5 rounded-sm font-medium">
+              {primaryScore.toFixed(1)}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Alternatives list */}
@@ -220,7 +245,7 @@ export function AlternativeKeywordDropdown({
                     {isLoading ? (
                       <SpinnerIcon className="w-4 h-4 text-lagoon-500 animate-spin flex-shrink-0" />
                     ) : (
-                      <div className="w-4 h-4 flex-shrink-0" /> // Spacer for alignment
+                      <div className="w-4 h-4 flex-shrink-0" />
                     )}
                     <span className="text-sm text-warm-gray-700 truncate">
                       {alt.keyword}
@@ -234,7 +259,7 @@ export function AlternativeKeywordDropdown({
                     </span>
                   )}
                   {alt.composite_score !== null && (
-                    <span className="text-xs text-palm-600 bg-palm-50 px-1.5 py-0.5 rounded-sm">
+                    <span className="text-xs text-lagoon-600 bg-lagoon-50 px-1.5 py-0.5 rounded-sm font-medium">
                       {alt.composite_score.toFixed(1)}
                     </span>
                   )}

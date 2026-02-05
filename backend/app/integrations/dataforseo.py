@@ -202,6 +202,17 @@ class DataForSEOClient:
         """
         settings = get_settings()
 
+        # Debug logging for settings
+        logger.info(
+            "DataForSEO settings check",
+            extra={
+                "settings_login": settings.dataforseo_api_login,
+                "settings_password_set": bool(settings.dataforseo_api_password),
+                "api_login_param": api_login,
+                "api_password_param": bool(api_password),
+            }
+        )
+
         self._api_login = api_login or settings.dataforseo_api_login
         self._api_password = api_password or settings.dataforseo_api_password
         self._timeout = timeout or settings.dataforseo_timeout
@@ -605,8 +616,10 @@ class DataForSEOClient:
                     kw = item.get("keyword", "")
                     search_volume = item.get("search_volume")
                     cpc_data = item.get("cpc")
-                    competition = item.get("competition")
-                    competition_level = item.get("competition_level")
+                    # DataForSEO returns competition as string ("HIGH"/"MEDIUM"/"LOW")
+                    # and competition_index as numeric (0-100)
+                    competition_index = item.get("competition_index")
+                    competition_level = item.get("competition")  # String like "HIGH"
                     monthly_searches = item.get("monthly_searches")
 
                     keyword_results.append(
@@ -614,8 +627,8 @@ class DataForSEOClient:
                             keyword=kw,
                             search_volume=search_volume,
                             cpc=float(cpc_data) if cpc_data is not None else None,
-                            competition=float(competition)
-                            if competition is not None
+                            competition=float(competition_index)
+                            if competition_index is not None
                             else None,
                             competition_level=competition_level,
                             monthly_searches=monthly_searches,
@@ -968,8 +981,10 @@ class DataForSEOClient:
                     kw = item.get("keyword", "")
                     search_volume = item.get("search_volume")
                     cpc_data = item.get("cpc")
-                    competition = item.get("competition")
-                    competition_level = item.get("competition_level")
+                    # DataForSEO returns competition as string ("HIGH"/"MEDIUM"/"LOW")
+                    # and competition_index as numeric (0-100)
+                    competition_index = item.get("competition_index")
+                    competition_level = item.get("competition")  # String like "HIGH"
                     monthly_searches = item.get("monthly_searches")
 
                     keyword_results.append(
@@ -977,8 +992,8 @@ class DataForSEOClient:
                             keyword=kw,
                             search_volume=search_volume,
                             cpc=float(cpc_data) if cpc_data is not None else None,
-                            competition=float(competition)
-                            if competition is not None
+                            competition=float(competition_index)
+                            if competition_index is not None
                             else None,
                             competition_level=competition_level,
                             monthly_searches=monthly_searches,

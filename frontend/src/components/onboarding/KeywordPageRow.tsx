@@ -437,6 +437,7 @@ export function KeywordPageRow({ page, projectId, onKeywordClick, onShowToast }:
                   primaryKeyword={page.keywords.primary_keyword}
                   alternatives={page.keywords.alternative_keywords || []}
                   primaryVolume={page.keywords.search_volume}
+                  primaryScore={page.keywords.composite_score}
                   projectId={projectId}
                   pageId={page.id}
                   isOpen={isDropdownOpen}
@@ -446,7 +447,7 @@ export function KeywordPageRow({ page, projectId, onKeywordClick, onShowToast }:
                 />
               )}
 
-              {/* Search volume badge - show dash for custom keywords without volume */}
+              {/* Search volume badge */}
               <span className="inline-flex items-center px-2 py-0.5 text-xs bg-cream-100 text-warm-gray-600 rounded-sm">
                 {formatNumber(page.keywords?.search_volume)} vol
               </span>

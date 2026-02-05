@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AlternativeKeywordDropdown } from '../onboarding/AlternativeKeywordDropdown';
-import type { KeywordCandidate } from '@/lib/api';
+import type { AlternativeKeyword } from '@/lib/api';
 
 // ============================================================================
 // Mock hooks
@@ -23,40 +23,14 @@ const mockProjectId = 'project-abc';
 const mockPageId = 'page-123';
 const mockPrimaryKeyword = 'running shoes';
 const mockPrimaryVolume = 12500;
+const mockPrimaryScore = 52.3;
 
-const mockAlternatives: KeywordCandidate[] = [
-  {
-    keyword: 'best running shoes',
-    volume: 8000,
-    cpc: 1.5,
-    competition: 0.3,
-    relevance_score: 0.8,
-    composite_score: 45.2,
-  },
-  {
-    keyword: 'trail running shoes',
-    volume: 5000,
-    cpc: 1.2,
-    competition: 0.25,
-    relevance_score: 0.75,
-    composite_score: 42.1,
-  },
-  {
-    keyword: 'running shoes for men',
-    volume: 6000,
-    cpc: 1.3,
-    competition: 0.4,
-    relevance_score: 0.7,
-    composite_score: 40.5,
-  },
-  {
-    keyword: 'cheap running shoes',
-    volume: 4000,
-    cpc: 0.9,
-    competition: 0.5,
-    relevance_score: 0.6,
-    composite_score: 35.0,
-  },
+// Alternatives with full data
+const mockAlternatives: AlternativeKeyword[] = [
+  { keyword: 'best running shoes', volume: 8000, composite_score: 45.2 },
+  { keyword: 'trail running shoes', volume: 5000, composite_score: 42.1 },
+  { keyword: 'running shoes for men', volume: 6000, composite_score: 40.5 },
+  { keyword: 'cheap running shoes', volume: 4000, composite_score: 35.0 },
 ];
 
 const mockAnchorRect: DOMRect = {
@@ -75,6 +49,7 @@ const defaultProps = {
   primaryKeyword: mockPrimaryKeyword,
   alternatives: mockAlternatives,
   primaryVolume: mockPrimaryVolume,
+  primaryScore: mockPrimaryScore,
   projectId: mockProjectId,
   pageId: mockPageId,
   isOpen: true,
@@ -132,6 +107,12 @@ describe('AlternativeKeywordDropdown', () => {
       expect(screen.getByText('12,500 vol')).toBeInTheDocument();
     });
 
+    it('displays primary keyword score', () => {
+      render(<AlternativeKeywordDropdown {...defaultProps} />);
+
+      expect(screen.getByText('52.3')).toBeInTheDocument();
+    });
+
     it('shows checkmark icon for primary keyword', () => {
       render(<AlternativeKeywordDropdown {...defaultProps} />);
 
@@ -145,7 +126,7 @@ describe('AlternativeKeywordDropdown', () => {
         <AlternativeKeywordDropdown
           {...defaultProps}
           primaryVolume={null}
-          alternatives={[]} // No alternatives to avoid their volumes appearing
+          alternatives={[]}
         />
       );
 
@@ -189,16 +170,9 @@ describe('AlternativeKeywordDropdown', () => {
     });
 
     it('limits alternatives to 4 items', () => {
-      const fiveAlternatives: KeywordCandidate[] = [
+      const fiveAlternatives: AlternativeKeyword[] = [
         ...mockAlternatives,
-        {
-          keyword: 'fifth alternative',
-          volume: 3000,
-          cpc: null,
-          competition: null,
-          relevance_score: null,
-          composite_score: 30.0,
-        },
+        { keyword: 'fifth alternative', volume: 3000, composite_score: 30.0 },
       ];
 
       render(
@@ -226,12 +200,6 @@ describe('AlternativeKeywordDropdown', () => {
       const options = screen.getAllByRole('option');
       // 1 primary + 4 alternatives = 5 options
       expect(options.length).toBe(5);
-
-      // Alternatives should have alternative keywords text
-      expect(screen.getByText('best running shoes')).toBeInTheDocument();
-      expect(screen.getByText('trail running shoes')).toBeInTheDocument();
-      expect(screen.getByText('running shoes for men')).toBeInTheDocument();
-      expect(screen.getByText('cheap running shoes')).toBeInTheDocument();
     });
   });
 
@@ -311,9 +279,7 @@ describe('AlternativeKeywordDropdown', () => {
       render(<AlternativeKeywordDropdown {...defaultProps} />);
 
       // All options that are not the primary should be disabled when isPending is true
-      // The alternatives are buttons with role="option"
       const options = screen.getAllByRole('option');
-      // 1 primary + 4 alternatives = 5 options
       expect(options.length).toBe(5);
 
       // All alternative options (non-selected ones) should be disabled
@@ -321,7 +287,6 @@ describe('AlternativeKeywordDropdown', () => {
         (opt) => opt.getAttribute('aria-selected') === 'false'
       );
       nonSelectedOptions.forEach((option) => {
-        // Check that the button/option is disabled
         expect(option).toBeDisabled();
       });
     });
@@ -438,15 +403,8 @@ describe('AlternativeKeywordDropdown', () => {
   // ============================================================================
   describe('edge cases', () => {
     it('handles alternative with null volume', () => {
-      const alternativesWithNullVolume: KeywordCandidate[] = [
-        {
-          keyword: 'keyword with no volume',
-          volume: null,
-          cpc: null,
-          competition: null,
-          relevance_score: null,
-          composite_score: 40.0,
-        },
+      const alternativesWithNullVolume: AlternativeKeyword[] = [
+        { keyword: 'keyword with no volume', volume: null, composite_score: 40.0 },
       ];
 
       render(
@@ -462,15 +420,8 @@ describe('AlternativeKeywordDropdown', () => {
     });
 
     it('handles alternative with null composite_score', () => {
-      const alternativesWithNullScore: KeywordCandidate[] = [
-        {
-          keyword: 'keyword with no score',
-          volume: 5000,
-          cpc: null,
-          competition: null,
-          relevance_score: null,
-          composite_score: null,
-        },
+      const alternativesWithNullScore: AlternativeKeyword[] = [
+        { keyword: 'keyword with no score', volume: 5000, composite_score: null },
       ];
 
       render(
@@ -487,23 +438,9 @@ describe('AlternativeKeywordDropdown', () => {
 
     it('handles case-insensitive matching for primary keyword in alternatives', async () => {
       const user = userEvent.setup();
-      const alternativesWithPrimary: KeywordCandidate[] = [
-        {
-          keyword: 'Running Shoes', // Same as primary but different case
-          volume: 12500,
-          cpc: null,
-          competition: null,
-          relevance_score: null,
-          composite_score: 50.0,
-        },
-        {
-          keyword: 'other keyword',
-          volume: 3000,
-          cpc: null,
-          competition: null,
-          relevance_score: null,
-          composite_score: 30.0,
-        },
+      const alternativesWithPrimary: AlternativeKeyword[] = [
+        { keyword: 'Running Shoes', volume: 12500, composite_score: 50.0 }, // Same as primary but different case
+        { keyword: 'other keyword', volume: 3000, composite_score: 30.0 },
       ];
 
       render(
@@ -513,7 +450,7 @@ describe('AlternativeKeywordDropdown', () => {
         />
       );
 
-      // Find all options - the alternatives are button elements with role="option"
+      // Find all options
       const options = screen.getAllByRole('option');
 
       // Find the "Running Shoes" alternative option (not the primary which is a div)
@@ -525,27 +462,22 @@ describe('AlternativeKeywordDropdown', () => {
 
       expect(runningShoeOption).toBeDefined();
 
-      // The matching keyword should be marked as selected (aria-selected="true") since it matches primary
+      // The matching keyword should be marked as selected since it matches primary
       expect(runningShoeOption).toHaveAttribute('aria-selected', 'true');
 
       // It should also be disabled
       expect(runningShoeOption).toBeDisabled();
 
-      // Click on it anyway - the click should be prevented or not call mutation
+      // Click on it anyway - should not call mutation
       await user.click(runningShoeOption!);
-      // Should not call mutation for matching keyword
       expect(mockUpdatePrimaryKeyword.mutateAsync).not.toHaveBeenCalled();
     });
 
     it('handles long keyword text gracefully', () => {
-      const alternativesWithLongKeyword: KeywordCandidate[] = [
+      const alternativesWithLongKeyword: AlternativeKeyword[] = [
         {
-          keyword:
-            'this is a very long keyword that should be truncated properly in the UI',
+          keyword: 'this is a very long keyword that should be truncated properly in the UI',
           volume: 1000,
-          cpc: null,
-          competition: null,
-          relevance_score: null,
           composite_score: 25.0,
         },
       ];

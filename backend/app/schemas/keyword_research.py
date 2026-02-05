@@ -618,6 +618,19 @@ class PrimaryKeywordGenerationStatus(BaseModel):
     )
 
 
+class AlternativeKeyword(BaseModel):
+    """An alternative keyword option with volume and score.
+
+    Used in the keyword dropdown to show alternatives with their metrics.
+    """
+
+    keyword: str = Field(..., description="The keyword phrase")
+    volume: int | None = Field(None, description="Monthly search volume")
+    composite_score: float | None = Field(
+        None, description="Overall composite score (0.0 to 100.0)"
+    )
+
+
 class PageKeywordsData(BaseModel):
     """Keyword data for a page, matching the PageKeywords model fields.
 
@@ -631,8 +644,8 @@ class PageKeywordsData(BaseModel):
     secondary_keywords: list[str] = Field(
         default_factory=list, description="Supporting/related keywords"
     )
-    alternative_keywords: list[str] = Field(
-        default_factory=list, description="Alternative keyword strings"
+    alternative_keywords: list[AlternativeKeyword] = Field(
+        default_factory=list, description="Alternative keyword options with metrics"
     )
     is_approved: bool = Field(False, description="Whether keywords are approved")
     is_priority: bool = Field(False, description="Whether page is marked as priority")

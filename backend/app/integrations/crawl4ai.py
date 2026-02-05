@@ -116,6 +116,37 @@ class CrawlOptions:
         return result
 
 
+def _extract_markdown(markdown_data: str | dict | None) -> str | None:
+    """Extract markdown string from potentially nested response format.
+
+    Crawl4AI API may return markdown as:
+    - A string (old format)
+    - A dict with 'raw_markdown', 'fit_markdown', etc. (new format)
+    - None
+
+    This function normalizes all formats to a string or None.
+    """
+    if markdown_data is None:
+        return None
+
+    if isinstance(markdown_data, str):
+        return markdown_data
+
+    if isinstance(markdown_data, dict):
+        # Try common keys in the new response format
+        for key in ("raw_markdown", "fit_markdown", "markdown_with_citations", "content"):
+            if key in markdown_data and isinstance(markdown_data[key], str):
+                return markdown_data[key]
+        # If it's a dict but we can't find a string, log and return None
+        logger.warning(
+            "Unexpected markdown format in Crawl4AI response",
+            extra={"markdown_keys": list(markdown_data.keys())},
+        )
+        return None
+
+    return None
+
+
 class Crawl4AIError(Exception):
     """Base exception for Crawl4AI errors."""
 
@@ -598,7 +629,7 @@ class Crawl4AIClient:
                 success=result_data.get("success", True),
                 url=url,
                 html=result_data.get("html"),
-                markdown=result_data.get("markdown"),
+                markdown=_extract_markdown(result_data.get("markdown")),
                 cleaned_html=result_data.get("cleaned_html"),
                 links=result_data.get("links", []),
                 images=result_data.get("images", []),
@@ -676,7 +707,7 @@ class Crawl4AIClient:
                         success=result_data.get("success", True),
                         url=result_url,
                         html=result_data.get("html"),
-                        markdown=result_data.get("markdown"),
+                        markdown=_extract_markdown(result_data.get("markdown")),
                         cleaned_html=result_data.get("cleaned_html"),
                         links=result_data.get("links", []),
                         images=result_data.get("images", []),
