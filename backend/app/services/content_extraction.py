@@ -30,26 +30,100 @@ class ExtractedContent:
     body_content: str | None = None
     word_count: int = 0
     product_count: int | None = None
+    product_names: list[str] = field(default_factory=list)  # For label generation
+
+
+# Elements to remove when extracting main content (boilerplate)
+BOILERPLATE_SELECTORS = [
+    "script", "style", "noscript", "iframe",
+    "header", "nav", "footer",
+    "[role='navigation']", "[role='banner']", "[role='contentinfo']",
+    ".header", ".nav", ".navigation", ".footer", ".site-header", ".site-footer",
+    ".cart-drawer", ".cart-notification", ".announcement-bar",
+    ".cookie-banner", ".popup", ".modal",
+    "#shopify-section-header", "#shopify-section-footer",
+    "#shopify-section-announcement-bar",
+]
+
+
+def _extract_main_content(
+    html: str | None,
+    cleaned_html: str | None,
+    markdown: str | None,
+) -> str | None:
+    """Extract main content text, stripping navigation/footer boilerplate.
+
+    Args:
+        html: Raw HTML content.
+        cleaned_html: Pre-cleaned HTML from crawler.
+        markdown: Markdown content from crawler.
+
+    Returns:
+        Main content text with boilerplate removed, or None if no content.
+    """
+    # Prefer markdown if available (usually already cleaned)
+    if markdown and isinstance(markdown, str):
+        return markdown.strip()
+
+    # Use cleaned_html if available
+    source_html = cleaned_html if cleaned_html and isinstance(cleaned_html, str) else html
+    if not source_html or not isinstance(source_html, str):
+        return None
+
+    soup = BeautifulSoup(source_html, "html.parser")
+
+    # Remove boilerplate elements
+    for selector in BOILERPLATE_SELECTORS:
+        try:
+            for element in soup.select(selector):
+                element.decompose()
+        except Exception:
+            # Some selectors might fail, continue with others
+            pass
+
+    # Try to find main content container
+    main_content = (
+        soup.find("main")
+        or soup.find(id="MainContent")
+        or soup.find(id="main-content")
+        or soup.find(class_="main-content")
+        or soup.find(role="main")
+    )
+
+    if main_content:
+        text = main_content.get_text(separator=" ", strip=True)
+    else:
+        # Fall back to body content
+        text = soup.get_text(separator=" ", strip=True)
+
+    # Clean up excessive whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    return text if text else None
 
 
 def extract_content_from_html(
-    html: str | None, markdown: str | None = None
+    html: str | None,
+    markdown: str | None = None,
+    cleaned_html: str | None = None,
 ) -> ExtractedContent:
     """Extract structured content from HTML using BeautifulSoup.
 
     Args:
         html: Raw HTML content from crawler.
-        markdown: Markdown content from crawler (used for body_content).
+        markdown: Markdown content from crawler (used for body_content if available).
+        cleaned_html: Cleaned HTML from crawler (used as fallback for body_content).
 
     Returns:
         ExtractedContent with title, meta_description, headings, body_content, word_count, product_count.
     """
     result = ExtractedContent()
 
-    # Set body content from markdown (with truncation)
-    if markdown:
-        result.body_content = truncate_body_content(markdown)
-        result.word_count = len(markdown.split())
+    # Extract main content text, stripping boilerplate
+    main_content = _extract_main_content(html, cleaned_html, markdown)
+    if main_content:
+        result.body_content = truncate_body_content(main_content)
+        result.word_count = len(main_content.split())
 
     if not html:
         return result
@@ -73,161 +147,232 @@ def extract_content_from_html(
             h.get_text(strip=True) for h in headings if h.get_text(strip=True)
         ]
 
-    # Extract product count for Shopify collection pages
-    result.product_count = extract_shopify_product_count(soup, html)
+    # Extract product count and names for Shopify collection pages
+    product_count, product_names = extract_shopify_products(soup, html)
+    result.product_count = product_count
+    result.product_names = product_names
 
     return result
 
 
-def extract_shopify_product_count(soup: BeautifulSoup, html: str) -> int | None:
-    """Extract product count from Shopify collection pages.
+def extract_shopify_products(soup: BeautifulSoup, html: str) -> tuple[int | None, list[str]]:
+    """Extract product count and names from Shopify collection pages.
 
-    Attempts to find product count in this order:
-    1. Parse Shopify collection JSON data (window.ShopifyAnalytics or meta.page.resourceId)
-    2. Count product card elements with common Shopify class names
+    Prioritizes counting visible product cards on the page (more accurate than
+    store-wide JSON counts). Also extracts product names for label generation.
 
     Args:
         soup: BeautifulSoup parsed HTML.
         html: Raw HTML string for regex-based JSON extraction.
 
     Returns:
-        Product count as integer, or None if not detectable (non-collection page).
+        Tuple of (product_count, product_names list).
     """
-    # Strategy 1: Look for Shopify collection JSON in script tags
-    # Try to find collection product count in various Shopify JSON structures
-    product_count = _extract_product_count_from_json(html)
-    if product_count is not None:
-        return product_count
+    # Strategy 1: Count and extract from visible product cards (most accurate)
+    count, names = _extract_from_product_cards(soup)
+    if count is not None and count > 0:
+        return count, names
 
-    # Strategy 2: Fall back to counting product card elements
-    product_count = _count_product_card_elements(soup)
-    if product_count is not None:
-        return product_count
+    # Strategy 2: Try to extract from Shopify JSON (for product names)
+    json_names = _extract_product_names_from_json(html)
+    if json_names:
+        return len(json_names), json_names
 
-    # Return None for non-collection pages
-    return None
+    return None, []
 
 
-def _extract_product_count_from_json(html: str) -> int | None:
-    """Extract product count from Shopify JSON embedded in the page.
+def _extract_from_product_cards(soup: BeautifulSoup) -> tuple[int | None, list[str]]:
+    """Extract product count and names from the main collection grid only.
 
-    Looks for common Shopify patterns:
-    - ShopifyAnalytics.meta.page.resourceId (collection page indicator)
-    - collection.products_count in page data
-    - products array length in collection JSON
-
-    Args:
-        html: Raw HTML string.
-
-    Returns:
-        Product count or None if not found.
-    """
-    # Pattern 1: Look for ShopifyAnalytics.meta with products_count
-    # Format: ShopifyAnalytics.meta = {"page":{"pageType":"collection",...}}
-    shopify_analytics_pattern = r"ShopifyAnalytics\.meta\s*=\s*(\{[^;]+\})"
-    match = re.search(shopify_analytics_pattern, html)
-    if match:
-        try:
-            data = json.loads(match.group(1))
-            # Check if this is a collection page with products_count
-            page_data = data.get("page", {})
-            if (
-                page_data.get("pageType") == "collection"
-                and "products_count" in page_data
-            ):
-                return int(page_data["products_count"])
-        except (json.JSONDecodeError, ValueError, KeyError, TypeError):
-            pass
-
-    # Pattern 2: Look for collection JSON data with products_count
-    # Format: "products_count":123 or "productsCount":123
-    products_count_pattern = r'"products_count"\s*:\s*(\d+)'
-    match = re.search(products_count_pattern, html)
-    if match:
-        try:
-            return int(match.group(1))
-        except ValueError:
-            pass
-
-    # Pattern 3: Alternative camelCase format
-    products_count_camel_pattern = r'"productsCount"\s*:\s*(\d+)'
-    match = re.search(products_count_camel_pattern, html)
-    if match:
-        try:
-            return int(match.group(1))
-        except ValueError:
-            pass
-
-    # Pattern 4: Look for collection data in window.__INITIAL_STATE__ or similar
-    # Some themes embed products array in a JSON block
-    initial_state_pattern = r"window\.__INITIAL_STATE__\s*=\s*(\{.+?\});"
-    match = re.search(initial_state_pattern, html, re.DOTALL)
-    if match:
-        try:
-            data = json.loads(match.group(1))
-            # Look for products array in various locations
-            products = data.get("collection", {}).get("products", []) or data.get(
-                "products", []
-            )
-            if products:
-                return len(products)
-        except (json.JSONDecodeError, ValueError, KeyError, TypeError):
-            pass
-
-    return None
-
-
-def _count_product_card_elements(soup: BeautifulSoup) -> int | None:
-    """Count product card elements using common Shopify class names.
-
-    Looks for elements with common Shopify product card class patterns:
-    - product-card, product-item, product-grid-item
-    - card--product, grid__item--product
-    - ProductItem, ProductCard
+    Excludes products in carousels, related products sections, and footer areas
+    to get an accurate count of the primary collection products.
 
     Args:
         soup: BeautifulSoup parsed HTML.
 
     Returns:
-        Product count if cards found, None otherwise.
+        Tuple of (count, list of product names).
     """
-    # Common Shopify product card class patterns (case-insensitive regex)
-    product_class_patterns = [
+    product_names: list[str] = []
+
+    # First, try to find the main product grid container
+    # This excludes carousels, related products, and footer sections
+    main_grid_selectors = [
+        "#product-grid",
+        ".collection-product-list",
+        ".product-grid",
+        ".collection__products",
+        "[data-collection-products]",
+        "main .product-list",
+        "#MainContent .product-grid",
+    ]
+
+    main_grid = None
+    for selector in main_grid_selectors:
+        try:
+            main_grid = soup.select_one(selector)
+            if main_grid:
+                break
+        except Exception:
+            continue
+
+    # Use main grid if found, otherwise fall back to full page but exclude known non-collection areas
+    search_area = main_grid if main_grid else soup
+
+    # If no main grid found, create a copy and remove non-collection sections
+    if not main_grid:
+        from copy import copy
+        search_area = copy(soup)
+        # Remove sections that typically contain non-collection products
+        non_collection_selectors = [
+            ".product-recommendations",
+            ".related-products",
+            ".recently-viewed",
+            ".upsell",
+            ".cross-sell",
+            "[data-recommendations]",
+            ".swiper",  # Carousels
+            ".carousel",
+            ".slider",
+            "footer",
+            ".footer",
+        ]
+        for selector in non_collection_selectors:
+            try:
+                for elem in search_area.select(selector):
+                    elem.decompose()
+            except Exception:
+                continue
+
+    # Common Shopify product card class patterns
+    product_card_patterns = [
         re.compile(r"product-card", re.I),
         re.compile(r"product-item", re.I),
         re.compile(r"product-grid-item", re.I),
         re.compile(r"card--product", re.I),
-        re.compile(r"grid__item.*product", re.I),
         re.compile(r"ProductItem", re.I),
         re.compile(r"ProductCard", re.I),
         re.compile(r"collection-product", re.I),
     ]
 
-    for pattern in product_class_patterns:
-        products = soup.find_all(class_=pattern)
-        if products:
-            return len(products)
+    product_cards = []
+    for pattern in product_card_patterns:
+        cards = search_area.find_all(class_=pattern)
+        if cards:
+            product_cards = cards
+            break
 
-    # Try data attribute selectors
-    products = soup.find_all(attrs={"data-product-card": True})
-    if products:
-        return len(products)
+    # Try data attribute selectors if class patterns didn't work
+    if not product_cards:
+        product_cards = search_area.find_all(attrs={"data-product-card": True})
+    if not product_cards:
+        product_cards = search_area.find_all(attrs={"data-product-id": True})
+    if not product_cards:
+        product_cards = search_area.find_all("article", {"data-product": True})
 
-    products = soup.find_all(attrs={"data-product-id": True})
-    if products:
-        return len(products)
+    if not product_cards:
+        return None, []
 
-    # Also try article elements with product type (common in some themes)
-    article_products = soup.find_all("article", {"data-product": True})
-    if article_products:
-        return len(article_products)
+    # Extract unique product names from cards
+    for card in product_cards:
+        name = _extract_product_name_from_card(card)
+        if name and name not in product_names:
+            product_names.append(name)
 
-    # Try finding elements with product-form inside (each product usually has one)
-    product_forms = soup.find_all("form", {"action": re.compile(r"/cart/add")})
-    if product_forms:
-        return len(product_forms)
+    # Return unique product count (based on names) rather than total cards
+    # This handles cases where the same product appears multiple times
+    unique_count = len(product_names) if product_names else len(product_cards)
+
+    return unique_count, product_names
+
+
+def _extract_product_name_from_card(card: BeautifulSoup) -> str | None:
+    """Extract product name from a product card element.
+
+    Args:
+        card: BeautifulSoup element representing a product card.
+
+    Returns:
+        Product name or None if not found.
+    """
+    # Common patterns for product title elements
+    title_selectors = [
+        ".product-card__title",
+        ".product-item__title",
+        ".product-title",
+        ".card__title",
+        ".ProductItem__Title",
+        "[data-product-title]",
+        "h3", "h4",  # Fallback to heading tags
+    ]
+
+    for selector in title_selectors:
+        try:
+            title_elem = card.select_one(selector)
+            if title_elem:
+                text = title_elem.get_text(strip=True)
+                if text and len(text) > 2:  # Filter out empty or very short
+                    return text
+        except Exception:
+            continue
+
+    # Last resort: look for any link with product in the href
+    product_link = card.find("a", href=re.compile(r"/products/"))
+    if product_link:
+        text = product_link.get_text(strip=True)
+        if text and len(text) > 2:
+            return text
 
     return None
+
+
+def _extract_product_names_from_json(html: str) -> list[str]:
+    """Extract product names from Shopify JSON embedded in the page.
+
+    Args:
+        html: Raw HTML string.
+
+    Returns:
+        List of product names found in JSON data.
+    """
+    product_names: list[str] = []
+
+    # Look for product JSON-LD data
+    jsonld_pattern = r'<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>'
+    for match in re.finditer(jsonld_pattern, html, re.DOTALL | re.IGNORECASE):
+        try:
+            data = json.loads(match.group(1))
+            # Handle ItemList (collection pages)
+            if data.get("@type") == "ItemList":
+                for item in data.get("itemListElement", []):
+                    name = item.get("item", {}).get("name") or item.get("name")
+                    if name and name not in product_names:
+                        product_names.append(name)
+            # Handle single Product
+            elif data.get("@type") == "Product":
+                name = data.get("name")
+                if name and name not in product_names:
+                    product_names.append(name)
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+    # Look for product titles in common Shopify patterns
+    # Pattern: "title":"Product Name" in product JSON
+    title_pattern = r'"title"\s*:\s*"([^"]{3,100})"'
+    for match in re.finditer(title_pattern, html):
+        name = match.group(1)
+        # Filter out common non-product titles
+        if name and name not in product_names:
+            lower_name = name.lower()
+            if not any(skip in lower_name for skip in [
+                "shipping", "cart", "checkout", "policy", "subscribe",
+                "newsletter", "cookie", "privacy", "terms"
+            ]):
+                product_names.append(name)
+        if len(product_names) >= 50:  # Limit to prevent huge lists
+            break
+
+    return product_names[:30]  # Return max 30 product names
 
 
 def truncate_body_content(content: str) -> str:

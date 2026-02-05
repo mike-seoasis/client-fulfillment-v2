@@ -271,15 +271,59 @@ function NotFoundState() {
   );
 }
 
-function ProgressBar({ completed, total }: { completed: number; total: number }) {
+function CrawlProgressIndicator({
+  status,
+  completed,
+  total,
+  crawling,
+}: {
+  status: 'crawling' | 'labeling' | 'complete';
+  completed: number;
+  total: number;
+  crawling: number;
+}) {
   const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
   return (
     <div className="mb-6">
-      <div className="flex justify-between text-sm text-warm-gray-600 mb-2">
-        <span>Progress</span>
-        <span>{completed} of {total}</span>
+      {/* Status indicator with spinner */}
+      <div className="flex items-center gap-2 mb-3">
+        {status === 'crawling' ? (
+          <>
+            <SpinnerIcon className="w-5 h-5 text-lagoon-500 animate-spin" />
+            <span className="text-warm-gray-700">
+              Crawling pages...{' '}
+              <span className="font-medium text-lagoon-600">
+                {completed}/{total} complete
+              </span>
+              {crawling > 0 && (
+                <span className="text-warm-gray-500"> ({crawling} in progress)</span>
+              )}
+            </span>
+          </>
+        ) : status === 'labeling' ? (
+          <>
+            <SpinnerIcon className="w-5 h-5 text-palm-500 animate-spin" />
+            <span className="text-warm-gray-700">
+              Assigning labels...{' '}
+              <span className="font-medium text-palm-600">
+                {completed}/{total} pages crawled
+              </span>
+            </span>
+          </>
+        ) : (
+          <>
+            <CheckIcon className="w-5 h-5 text-palm-500" />
+            <span className="text-warm-gray-700">
+              <span className="font-medium text-palm-600">
+                {completed}/{total} pages crawled
+              </span>
+            </span>
+          </>
+        )}
       </div>
+
+      {/* Progress bar */}
       <div className="h-2 bg-cream-200 rounded-full overflow-hidden">
         <div
           className="h-full bg-palm-500 rounded-full transition-all duration-500"
@@ -472,21 +516,25 @@ interface TaxonomyStatusProps {
   status: 'crawling' | 'labeling' | 'complete';
   taxonomy: TaxonomyResponse | null;
   isLoading: boolean;
+  onRegenerateLabels?: () => Promise<void>;
+  isRegenerating?: boolean;
 }
 
-function TaxonomyStatus({ status, taxonomy, isLoading }: TaxonomyStatusProps) {
+function TaxonomyStatus({ status, taxonomy, isLoading, onRegenerateLabels, isRegenerating }: TaxonomyStatusProps) {
   // Only show taxonomy section when crawling is done
   if (status === 'crawling') {
     return null;
   }
 
   // Show spinner when generating taxonomy
-  if (status === 'labeling' || isLoading) {
+  if (status === 'labeling' || isLoading || isRegenerating) {
     return (
       <div className="mt-6 p-4 bg-sand-50 rounded-sm border border-sand-200">
         <div className="flex items-center gap-3">
           <SpinnerIcon className="w-5 h-5 text-palm-500 animate-spin" />
-          <span className="text-warm-gray-700">Generating label taxonomy...</span>
+          <span className="text-warm-gray-700">
+            {isRegenerating ? 'Regenerating labels...' : 'Generating label taxonomy...'}
+          </span>
         </div>
       </div>
     );
@@ -496,11 +544,24 @@ function TaxonomyStatus({ status, taxonomy, isLoading }: TaxonomyStatusProps) {
   if (status === 'complete' && taxonomy) {
     return (
       <div className="mt-6 p-4 bg-palm-50 rounded-sm border border-palm-200">
-        <div className="flex items-center gap-2 mb-3">
-          <TagIcon className="w-5 h-5 text-palm-600" />
-          <span className="font-medium text-warm-gray-900">
-            {taxonomy.labels.length} labels generated
-          </span>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <TagIcon className="w-5 h-5 text-palm-600" />
+            <span className="font-medium text-warm-gray-900">
+              {taxonomy.labels.length} labels generated
+            </span>
+          </div>
+          {onRegenerateLabels && (
+            <button
+              onClick={onRegenerateLabels}
+              disabled={isRegenerating}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-palm-700 bg-palm-100 hover:bg-palm-200 rounded-sm transition-colors disabled:opacity-50"
+              title="Regenerate taxonomy and reassign labels"
+            >
+              <RetryIcon className="w-3.5 h-3.5" />
+              Regenerate Labels
+            </button>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {taxonomy.labels.map((label) => (
@@ -561,6 +622,7 @@ export default function CrawlProgressPage() {
   const [retryingPageId, setRetryingPageId] = useState<string | null>(null);
   const [editingPageId, setEditingPageId] = useState<string | null>(null);
   const [savingLabels, setSavingLabels] = useState(false);
+  const [regeneratingLabels, setRegeneratingLabels] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastVariant, setToastVariant] = useState<'success' | 'error'>('success');
@@ -657,6 +719,28 @@ export default function CrawlProgressPage() {
     }
   };
 
+  // Handle regenerating taxonomy and labels
+  const handleRegenerateLabels = async () => {
+    setRegeneratingLabels(true);
+    try {
+      await apiClient.post(`/projects/${projectId}/taxonomy/regenerate`);
+      // Show success toast
+      setToastMessage('Regenerating labels...');
+      setToastVariant('success');
+      setShowToast(true);
+      // Invalidate queries to start polling for new status
+      await queryClient.invalidateQueries({ queryKey: ['crawl-status', projectId] });
+      await queryClient.invalidateQueries({ queryKey: ['taxonomy', projectId] });
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setToastMessage(message);
+      setToastVariant('error');
+      setShowToast(true);
+    } finally {
+      setRegeneratingLabels(false);
+    }
+  };
+
   // Loading state
   if (isLoading) {
     return (
@@ -746,22 +830,31 @@ export default function CrawlProgressPage() {
             : `Crawling ${progress.total} pages...`}
         </h2>
 
-        {/* Progress bar */}
-        <ProgressBar completed={progress.completed} total={progress.total} />
+        {/* Progress indicator with spinner */}
+        <CrawlProgressIndicator
+          status={overallStatus}
+          completed={progress.completed}
+          total={progress.total}
+          crawling={inProgressCount}
+        />
 
-        {/* Status summary */}
-        {(progress.failed > 0 || inProgressCount > 0) && (
-          <div className="flex gap-4 text-sm mb-4">
-            {inProgressCount > 0 && (
-              <span className="text-lagoon-600">
-                {inProgressCount} crawling
-              </span>
-            )}
-            {progress.failed > 0 && (
-              <span className="text-coral-600">
-                {progress.failed} failed
-              </span>
-            )}
+        {/* Failed pages warning */}
+        {progress.failed > 0 && (
+          <div className="flex items-center gap-2 text-sm mb-4 p-2 bg-coral-50 rounded-sm border border-coral-200">
+            <svg
+              className="w-4 h-4 text-coral-500"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span className="text-coral-700">
+              {progress.failed} {progress.failed === 1 ? 'page' : 'pages'} failed to crawl
+            </span>
           </div>
         )}
 
@@ -795,6 +888,8 @@ export default function CrawlProgressPage() {
           status={overallStatus}
           taxonomy={taxonomy ?? null}
           isLoading={isTaxonomyLoading}
+          onRegenerateLabels={handleRegenerateLabels}
+          isRegenerating={regeneratingLabels}
         />
 
         <hr className="border-cream-300 my-6" />

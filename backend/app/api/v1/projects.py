@@ -682,6 +682,100 @@ async def get_project_taxonomy(
 
 
 @router.post(
+    "/{project_id}/taxonomy/regenerate",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def regenerate_taxonomy(
+    project_id: str,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, str]:
+    """Regenerate the label taxonomy and reassign labels to all pages.
+
+    This will:
+    1. Generate a new taxonomy based on all completed pages
+    2. Reassign labels to all pages using the new taxonomy
+    3. Update the project phase_status
+
+    Args:
+        project_id: UUID of the project.
+        background_tasks: FastAPI background tasks.
+        db: AsyncSession for database operations.
+
+    Returns:
+        Dict with status message.
+
+    Raises:
+        HTTPException: 404 if project not found.
+    """
+    # Verify project exists
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Project {project_id} not found",
+        )
+
+    # Set status to indicate labeling is in progress
+    if "onboarding" not in project.phase_status:
+        project.phase_status["onboarding"] = {}
+    project.phase_status["onboarding"]["status"] = "labeling"
+
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(project, "phase_status")
+    await db.commit()
+
+    # Run taxonomy regeneration in background
+    async def regenerate_labels_task() -> None:
+        from app.core.database import db_manager
+        from app.integrations.claude import ClaudeClient
+        from app.services.label_taxonomy import LabelTaxonomyService
+
+        async with db_manager.session_factory() as task_db:
+            try:
+                claude_client = ClaudeClient()
+                taxonomy_service = LabelTaxonomyService(claude_client)
+
+                # Generate new taxonomy
+                taxonomy = await taxonomy_service.generate_taxonomy(task_db, project_id)
+                if not taxonomy:
+                    logger.error(
+                        "Failed to regenerate taxonomy",
+                        extra={"project_id": project_id},
+                    )
+                    return
+
+                # Assign labels to all pages
+                await taxonomy_service.assign_labels(task_db, project_id, taxonomy)
+
+                # Update phase_status
+                task_project = await task_db.get(Project, project_id)
+                if task_project:
+                    task_project.phase_status["onboarding"]["status"] = "labels_complete"
+                    flag_modified(task_project, "phase_status")
+
+                await task_db.commit()
+
+                logger.info(
+                    "Taxonomy regeneration complete",
+                    extra={
+                        "project_id": project_id,
+                        "label_count": len(taxonomy.labels),
+                    },
+                )
+
+            except Exception as e:
+                logger.error(
+                    "Error during taxonomy regeneration",
+                    extra={"project_id": project_id, "error": str(e)},
+                )
+
+    background_tasks.add_task(regenerate_labels_task)
+
+    return {"status": "Taxonomy regeneration started"}
+
+
+@router.post(
     "/{project_id}/pages/{page_id}/retry",
     response_model=CrawledPageResponse,
     status_code=status.HTTP_202_ACCEPTED,
@@ -754,6 +848,147 @@ async def retry_page_crawl(
     )
 
     return CrawledPageResponse.model_validate(page)
+
+
+@router.post(
+    "/{project_id}/pages/retry-pending",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def retry_pending_pages(
+    project_id: str,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_session),
+    crawl4ai: Crawl4AIClient = Depends(get_crawl4ai),
+) -> dict[str, int]:
+    """Retry crawling all pending pages for a project.
+
+    Finds all pages with 'pending' status and starts a background task
+    to crawl them.
+
+    Args:
+        project_id: UUID of the project.
+        background_tasks: FastAPI background tasks.
+        db: AsyncSession for database operations.
+        crawl4ai: Crawl4AI client for crawling.
+
+    Returns:
+        Dict with count of pages being retried.
+
+    Raises:
+        HTTPException: 404 if project not found.
+    """
+    # Verify project exists (raises 404 if not)
+    await ProjectService.get_project(db, project_id)
+
+    # Find all pending pages
+    stmt = (
+        select(CrawledPage.id)
+        .where(CrawledPage.project_id == project_id)
+        .where(CrawledPage.status == CrawlStatus.PENDING.value)
+    )
+    result = await db.execute(stmt)
+    page_ids = list(result.scalars().all())
+
+    if not page_ids:
+        return {"pages_queued": 0}
+
+    logger.info(
+        "Retry pending pages initiated",
+        extra={
+            "project_id": project_id,
+            "page_count": len(page_ids),
+        },
+    )
+
+    # Start background crawl task for all pending pages
+    background_tasks.add_task(
+        _crawl_pages_background,
+        project_id=project_id,
+        page_ids=page_ids,
+        task_id=str(uuid4()),
+        crawl4ai_client=crawl4ai,
+    )
+
+    return {"pages_queued": len(page_ids)}
+
+
+@router.post(
+    "/{project_id}/pages/recrawl-all",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def recrawl_all_pages(
+    project_id: str,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_session),
+    crawl4ai: Crawl4AIClient = Depends(get_crawl4ai),
+) -> dict[str, int]:
+    """Re-crawl all pages for a project.
+
+    Resets all pages to 'pending' status and starts a background task
+    to crawl them. Useful for refreshing data after extraction improvements.
+
+    Args:
+        project_id: UUID of the project.
+        background_tasks: FastAPI background tasks.
+        db: AsyncSession for database operations.
+        crawl4ai: Crawl4AI client for crawling.
+
+    Returns:
+        Dict with count of pages being re-crawled.
+
+    Raises:
+        HTTPException: 404 if project not found.
+    """
+    # Verify project exists
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Project {project_id} not found",
+        )
+
+    # Reset all pages to pending
+    stmt = select(CrawledPage).where(CrawledPage.project_id == project_id)
+    result = await db.execute(stmt)
+    pages = list(result.scalars().all())
+
+    if not pages:
+        return {"pages_queued": 0}
+
+    page_ids = []
+    for page in pages:
+        page.status = CrawlStatus.PENDING.value
+        page.crawl_error = None
+        page_ids.append(page.id)
+
+    # Update project phase status
+    if "onboarding" not in project.phase_status:
+        project.phase_status["onboarding"] = {}
+    project.phase_status["onboarding"]["status"] = "crawling"
+
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(project, "phase_status")
+
+    await db.commit()
+
+    logger.info(
+        "Recrawl all pages initiated",
+        extra={
+            "project_id": project_id,
+            "page_count": len(page_ids),
+        },
+    )
+
+    # Start background crawl task
+    background_tasks.add_task(
+        _crawl_pages_background,
+        project_id=project_id,
+        page_ids=page_ids,
+        task_id=str(uuid4()),
+        crawl4ai_client=crawl4ai,
+    )
+
+    return {"pages_queued": len(page_ids)}
 
 
 @router.put(

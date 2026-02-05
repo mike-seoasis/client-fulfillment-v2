@@ -221,65 +221,75 @@ async def validate_page_labels(
 
 
 # System prompt for taxonomy generation
-TAXONOMY_SYSTEM_PROMPT = """You are an e-commerce SEO and content taxonomy expert. Your task is to analyze a collection of web pages from an e-commerce website and generate a taxonomy of labels that will be used for internal linking optimization.
+TAXONOMY_SYSTEM_PROMPT = """You are an e-commerce product categorization expert. Your task is to analyze collection pages from an e-commerce website and generate a taxonomy of PRODUCT CATEGORY labels.
 
-CONTEXT: These labels will help identify pages that should link to each other. Pages with the same label share thematic relevance and should be connected via internal links. Good internal linking improves:
-- User navigation between related products and content
-- SEO by distributing page authority across related pages
-- Content discoverability for both users and search engines
+CRITICAL: Every page MUST have at least one accurate label. If a page sells a unique product category that no other page has, CREATE A LABEL FOR IT. It is BETTER to have a unique label than to mislabel or use generic fallbacks.
+
+IMPORTANT: Focus on WHAT PRODUCTS are sold, not page structure. Labels like "product-listing" or "collection-page" are USELESS because they apply to every page.
+
+GOOD labels describe product categories:
+- "travel-mugs" - travel coffee mugs and tumblers
+- "french-presses" - french press coffee makers
+- "coffee-storage" - airtight coffee containers
+- "cannabis-storage" - cannabis/herb storage containers (even if only one page sells these!)
+- "pour-over" - pour-over coffee equipment
+- "cold-brew" - cold brew coffee makers
+- "gift-sets" - bundled gift products
+
+BANNED labels (NEVER generate these - they are too generic):
+- "product-listing" - applies to all collection pages
+- "accessories" - BANNED, too vague. Instead use specific types like "coffee-accessories", "camping-accessories"
+- "shop" - meaningless
+- "collection" - applies to everything
+- "all-products" - meaningless, use specific product categories instead
+- "products" - meaningless
+- "gear" - too vague, be specific about what type of gear
 
 Generate a taxonomy that:
-1. Captures the main content types, product categories, and purposes of pages
-2. Is specific enough to group related pages but general enough to apply across multiple pages
-3. Uses consistent, lowercase, hyphenated label names (e.g., "trail-running", "outdoor-gear")
-4. Includes 10-30 labels that cover the variety of content (aim for the range that best fits the site)
-5. Balances PURPOSE (what the page does) with TOPIC (what it's about) for linking relevance
-6. Considers product categories, collections, blog topics, and content themes
+1. Describes SPECIFIC product categories based on the products sold
+2. Uses the URL path and title to infer product types (e.g., "/collections/bru-trek" with title "BruTrek® Coffee Gear" → "travel-coffee-gear")
+3. INCLUDES labels for unique product categories even if only one page uses them (e.g., cannabis storage)
+4. Uses lowercase, hyphenated names
+5. Creates as many labels as needed to accurately describe ALL pages (typically 5-20)
 
-Examples of good labels:
-- product-listing (shows multiple products)
-- product-detail (shows single product info)
-- trail-running (trail running products or content)
-- outdoor-gear (outdoor equipment category)
-- blog-post (article or blog content)
-- buying-guide (helps users choose products)
-- brand-story (company/brand information)
-- customer-support (help, FAQ, policies)
-- seasonal-collection (holiday or seasonal content)
-
-Respond ONLY with valid JSON in this exact format:
+Respond ONLY with valid JSON:
 {
   "labels": [
     {
       "name": "label-name",
-      "description": "When to use this label",
-      "examples": ["url patterns or page types that would have this label"]
+      "description": "What products this covers",
+      "examples": ["example products or collections"]
     }
   ],
-  "reasoning": "Brief explanation of the taxonomy design"
+  "reasoning": "Brief explanation"
 }"""
 
 
 # System prompt for label assignment
-ASSIGNMENT_SYSTEM_PROMPT = """You are a web page classifier for an e-commerce website. Given page information and a taxonomy of labels, assign the most appropriate labels to the page.
+ASSIGNMENT_SYSTEM_PROMPT = """You are a product categorization expert. Given a collection page and a taxonomy of product category labels, assign the labels that describe WHAT PRODUCTS are on this page.
 
-CONTEXT: These labels are used for internal linking - pages with the same labels will be connected. Good label assignments help:
-- Connect related products and content
-- Improve navigation between similar pages
-- Distribute SEO value across related content
+CRITICAL: Look at the URL path and page title to identify what product categories are sold. Examples:
+- URL contains "cannascape" or title mentions "Weed Storage" → MUST use cannabis-related label
+- URL contains "bru-trek" or title mentions "Travel Presses" → use travel coffee gear labels
+- URL contains "airscape" or title mentions "Coffee Canister" → use storage labels
+
+IMPORTANT: Only assign labels that describe the actual product categories. Look at:
+- The URL path (e.g., "/collections/cannascape" = cannabis storage products)
+- The page title (e.g., "Cannascape® Weed Storage" = cannabis storage)
+- The H1/H2 headings for product category hints
 
 Rules:
-1. Assign 2-5 labels per page (aim for 3-4 labels for most pages)
-2. ONLY use labels from the provided taxonomy - never invent new labels
-3. Labels should describe both PURPOSE (what the page does) and TOPIC (what it's about)
-4. Consider what other pages this content should link to/from
-5. Assign more labels when a page covers multiple topics or serves multiple purposes
+1. Assign 2-4 labels that describe the product categories on the page
+2. ONLY use labels from the provided taxonomy
+3. Be SPECIFIC - match labels to what's actually sold on the page
+4. If a page sells cannabis/weed products, you MUST use a cannabis-related label
+5. NEVER use generic fallbacks if a specific label exists in the taxonomy
 
-Respond ONLY with valid JSON in this exact format:
+Respond ONLY with valid JSON:
 {
-  "labels": ["label-1", "label-2", "label-3"],
+  "labels": ["label-1", "label-2"],
   "confidence": 0.0-1.0,
-  "reasoning": "Brief explanation of why these labels were chosen"
+  "reasoning": "Brief explanation"
 }"""
 
 

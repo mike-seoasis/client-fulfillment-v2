@@ -491,6 +491,67 @@ class Crawl4AIClient:
         except Crawl4AIError:
             return False
 
+    async def _simple_crawl(self, url: str) -> CrawlResult:
+        """Simple httpx-based crawl fallback when Crawl4AI API is not configured.
+
+        Args:
+            url: URL to crawl
+
+        Returns:
+            CrawlResult with HTML content (no markdown conversion)
+        """
+        start_time = time.monotonic()
+        logger.info(f"Using simple httpx crawl for {url} (Crawl4AI not configured)")
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(self._timeout),
+                follow_redirects=True,
+            ) as client:
+                response = await client.get(
+                    url,
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    },
+                )
+                duration_ms = (time.monotonic() - start_time) * 1000
+
+                if response.status_code >= 400:
+                    return CrawlResult(
+                        success=False,
+                        url=url,
+                        error=f"HTTP {response.status_code}",
+                        status_code=response.status_code,
+                        duration_ms=duration_ms,
+                    )
+
+                html = response.text
+                return CrawlResult(
+                    success=True,
+                    url=url,
+                    html=html,
+                    markdown=None,  # Simple crawl doesn't convert to markdown
+                    status_code=response.status_code,
+                    duration_ms=duration_ms,
+                )
+
+        except httpx.TimeoutException:
+            duration_ms = (time.monotonic() - start_time) * 1000
+            return CrawlResult(
+                success=False,
+                url=url,
+                error=f"Request timed out after {self._timeout}s",
+                duration_ms=duration_ms,
+            )
+        except httpx.RequestError as e:
+            duration_ms = (time.monotonic() - start_time) * 1000
+            return CrawlResult(
+                success=False,
+                url=url,
+                error=str(e),
+                duration_ms=duration_ms,
+            )
+
     async def crawl(
         self,
         url: str,
@@ -505,6 +566,10 @@ class Crawl4AIClient:
         Returns:
             CrawlResult with extracted content
         """
+        # Use simple httpx fallback if Crawl4AI API is not configured
+        if not self._available:
+            return await self._simple_crawl(url)
+
         start_time = time.monotonic()
         options = options or CrawlOptions()
 
@@ -512,7 +577,7 @@ class Crawl4AIClient:
 
         try:
             request_body = {
-                "urls": url,  # Single URL
+                "urls": [url],  # Crawl4AI expects a list even for single URL
                 **options.to_dict(),
             }
 
@@ -522,8 +587,8 @@ class Crawl4AIClient:
 
             duration_ms = (time.monotonic() - start_time) * 1000
 
-            # Extract result from response
-            result_data = response.get("result", response)
+            # Extract result from response (API returns "results" plural)
+            result_data = response.get("results") or response.get("result") or response
 
             # Handle both single result and list of results
             if isinstance(result_data, list) and len(result_data) > 0:

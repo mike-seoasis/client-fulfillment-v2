@@ -40,6 +40,11 @@ class CrawlingService:
 
         Updates page status through lifecycle: pending -> crawling -> completed/failed.
 
+        NOTE: This method separates network operations (parallel) from database
+        operations (sequential) to avoid AsyncSession concurrency issues.
+        SQLAlchemy's AsyncSession is not safe for concurrent access from
+        multiple coroutines.
+
         Args:
             db: AsyncSession for database operations.
             page_ids: List of CrawledPage IDs to crawl.
@@ -61,18 +66,31 @@ class CrawlingService:
             )
             return {}
 
+        # Mark all pages as CRAWLING first (sequential db operation)
+        for page in pages.values():
+            page.status = CrawlStatus.CRAWLING.value
+        await db.flush()
+
         # Create semaphore for concurrency control
         semaphore = asyncio.Semaphore(self._settings.crawl_concurrency)
 
-        # Crawl all pages in parallel with semaphore
-        async def crawl_with_semaphore(page: CrawledPage) -> tuple[str, CrawlResult]:
+        # Crawl all pages in parallel with semaphore (network only, no db access)
+        async def crawl_with_semaphore(page_id: str, url: str) -> tuple[str, CrawlResult]:
             async with semaphore:
-                return await self._crawl_single_page(db, page)
+                logger.debug(
+                    "Starting crawl",
+                    extra={"page_id": page_id, "url": url},
+                )
+                crawl_result = await self._client.crawl(url)
+                return page_id, crawl_result
 
-        tasks = [crawl_with_semaphore(page) for page in pages.values()]
+        tasks = [
+            crawl_with_semaphore(page.id, page.normalized_url)
+            for page in pages.values()
+        ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Process results
+        # Process results and update pages (sequential db operations)
         crawl_results: dict[str, CrawlResult] = {}
         for item in results:
             if isinstance(item, BaseException):
@@ -81,9 +99,15 @@ class CrawlingService:
                     extra={"error": str(item), "error_type": type(item).__name__},
                 )
                 continue
+
             # item is tuple[str, CrawlResult] at this point
             page_id, crawl_result = item
             crawl_results[page_id] = crawl_result
+
+            # Update the page with crawl result
+            page = pages.get(page_id)
+            if page:
+                self._apply_crawl_result(page, crawl_result)
 
         # Flush all changes to database
         await db.flush()
@@ -99,33 +123,13 @@ class CrawlingService:
 
         return crawl_results
 
-    async def _crawl_single_page(
-        self,
-        db: AsyncSession,
-        page: CrawledPage,
-    ) -> tuple[str, CrawlResult]:
-        """Crawl a single page and update its status.
+    def _apply_crawl_result(self, page: CrawledPage, crawl_result: CrawlResult) -> None:
+        """Apply crawl result to a page object.
 
         Args:
-            db: AsyncSession for database operations.
-            page: CrawledPage to crawl.
-
-        Returns:
-            Tuple of (page_id, CrawlResult).
+            page: CrawledPage to update.
+            crawl_result: Result from the crawl operation.
         """
-        # Update status to crawling
-        page.status = CrawlStatus.CRAWLING.value
-        await db.flush()
-
-        logger.debug(
-            "Starting crawl",
-            extra={"page_id": page.id, "url": page.normalized_url},
-        )
-
-        # Perform the crawl
-        crawl_result = await self._client.crawl(page.normalized_url)
-
-        # Update page based on result
         if crawl_result.success:
             page.status = CrawlStatus.COMPLETED.value
             page.crawl_error = None
@@ -135,6 +139,7 @@ class CrawlingService:
             extracted = extract_content_from_html(
                 html=crawl_result.html,
                 markdown=crawl_result.markdown,
+                cleaned_html=crawl_result.cleaned_html,
             )
 
             # Apply extracted content to page
@@ -170,8 +175,6 @@ class CrawlingService:
                     "status_code": crawl_result.status_code,
                 },
             )
-
-        return page.id, crawl_result
 
     async def crawl_pending_pages(
         self,
