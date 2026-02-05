@@ -50,3 +50,21 @@ after each iteration and it's included in prompts for context.
   - `cascade="all, delete-orphan"` on relationship ensures ORM-level cascade
 ---
 
+## 2026-02-05 - S4-003
+- **What was implemented:** Updated PageKeywords model with new fields for approval and scoring
+- **Files changed:**
+  - `backend/app/models/page_keywords.py` - Added 6 new fields matching migration 0020
+- **Fields added:**
+  - `is_approved: Mapped[bool]` - Boolean with default=False, indexed
+  - `is_priority: Mapped[bool]` - Boolean with default=False, indexed
+  - `alternative_keywords: Mapped[list[Any]]` - JSONB with default=[]
+  - `composite_score: Mapped[float | None]` - Float, nullable
+  - `relevance_score: Mapped[float | None]` - Float, nullable
+  - `ai_reasoning: Mapped[str | None]` - Text, nullable
+- **Learnings:**
+  - Import `Boolean` and `Float` from sqlalchemy for explicit type declarations
+  - Boolean fields with `server_default=text("false")` match Alembic pattern
+  - JSONB fields need both `default=list` (Python) and `server_default=text("'[]'::jsonb")` (DB)
+  - Add `index=True` on columns that have corresponding indexes in migration
+---
+
