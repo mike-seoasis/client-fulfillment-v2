@@ -422,3 +422,32 @@ after each iteration and it's included in prompts for context.
   - PageKeywordsData schema has `from_attributes=True` but manual mapping gives more control
 ---
 
+## 2026-02-05 - S4-020
+- **What was implemented:** PUT `/api/v1/projects/{project_id}/pages/{page_id}/primary-keyword` endpoint
+- **Files changed:**
+  - `backend/app/api/v1/projects.py` - Added endpoint, imported PageKeywords model and UpdatePrimaryKeywordRequest schema
+  - `backend/tests/api/test_projects.py` - Added TestUpdatePrimaryKeyword class with 8 tests
+- **Endpoint features:**
+  - Accepts keyword in request body via UpdatePrimaryKeywordRequest schema
+  - Updates primary_keyword field on PageKeywords record
+  - Clears volume data (search_volume, composite_score, relevance_score) if custom keyword not in alternatives
+  - Preserves volume data from alternatives if keyword matches (case-insensitive)
+  - Returns full PageKeywordsData response with all fields
+  - Validates page exists and has keywords generated (404 otherwise)
+- **Test coverage:**
+  - test_update_primary_keyword_project_not_found - 404 for non-existent project
+  - test_update_primary_keyword_page_not_found - 404 for non-existent page
+  - test_update_primary_keyword_no_keywords_generated - 404 when keywords not generated
+  - test_update_primary_keyword_success - Basic keyword update
+  - test_update_primary_keyword_from_alternatives - Preserves volume data from alternatives
+  - test_update_primary_keyword_clears_volume_for_custom - Clears volume for custom keywords
+  - test_update_primary_keyword_validation_empty - Validates empty keyword (422)
+  - test_update_primary_keyword_returns_full_data - Full response data validation
+- **Learnings:**
+  - Use `joinedload` to eager-load the keywords relationship when fetching page by ID
+  - Use `scalar_one_or_none()` when expecting single result with potential null
+  - Alternative keywords can be stored as dict format (KeywordCandidate) - handle both dict and string formats
+  - Case-insensitive keyword matching: normalize to lowercase for comparison
+  - Keep primary_keyword in original casing from user input, normalize only for comparison
+---
+

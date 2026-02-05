@@ -17,6 +17,7 @@ from app.core.logging import get_logger
 from app.integrations.crawl4ai import Crawl4AIClient, get_crawl4ai
 from app.integrations.s3 import S3Client, get_s3
 from app.models.crawled_page import CrawledPage, CrawlStatus
+from app.models.page_keywords import PageKeywords
 from app.models.project import Project
 from app.schemas.crawled_page import (
     CrawledPageResponse,
@@ -33,6 +34,7 @@ from app.schemas.keyword_research import (
     PageKeywordsData,
     PageWithKeywords,
     PrimaryKeywordGenerationStatus,
+    UpdatePrimaryKeywordRequest,
 )
 from app.schemas.project import (
     ProjectCreate,
@@ -1299,6 +1301,129 @@ async def list_pages_with_keywords(
         )
 
     return response_pages
+
+
+@router.put(
+    "/{project_id}/pages/{page_id}/primary-keyword",
+    response_model=PageKeywordsData,
+)
+async def update_primary_keyword(
+    project_id: str,
+    page_id: str,
+    data: UpdatePrimaryKeywordRequest,
+    db: AsyncSession = Depends(get_session),
+) -> PageKeywordsData:
+    """Update the primary keyword for a page.
+
+    Allows users to select a different keyword from the alternatives or
+    type a custom keyword. If the keyword is custom (not in alternatives),
+    volume data is cleared since we don't have metrics for custom keywords.
+
+    Args:
+        project_id: UUID of the project.
+        page_id: UUID of the crawled page.
+        data: UpdatePrimaryKeywordRequest with keyword field.
+        db: AsyncSession for database operations.
+
+    Returns:
+        Updated PageKeywordsData with the new primary keyword.
+
+    Raises:
+        HTTPException: 404 if project, page, or page keywords not found.
+    """
+    # Verify project exists (raises 404 if not)
+    await ProjectService.get_project(db, project_id)
+
+    # Get the page with keywords relationship
+    stmt = (
+        select(CrawledPage)
+        .options(joinedload(CrawledPage.keywords))
+        .where(
+            CrawledPage.id == page_id,
+            CrawledPage.project_id == project_id,
+        )
+    )
+    result = await db.execute(stmt)
+    page = result.scalar_one_or_none()
+
+    if not page:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Page {page_id} not found in project {project_id}",
+        )
+
+    if not page.keywords:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Keywords not yet generated for page {page_id}",
+        )
+
+    page_keywords: PageKeywords = page.keywords
+    new_keyword = data.keyword.strip().lower()
+
+    # Check if keyword is from alternatives (normalize for comparison)
+    alternative_keywords = page_keywords.alternative_keywords or []
+    is_from_alternatives = False
+
+    for alt in alternative_keywords:
+        # Handle both dict format (KeywordCandidate) and string format
+        if isinstance(alt, dict):
+            alt_keyword = alt.get("keyword", "").strip().lower()
+        else:
+            alt_keyword = str(alt).strip().lower()
+
+        if alt_keyword == new_keyword:
+            is_from_alternatives = True
+            # If from alternatives, use the volume data from that alternative
+            if isinstance(alt, dict):
+                page_keywords.search_volume = alt.get("volume")
+                page_keywords.composite_score = alt.get("composite_score")
+                page_keywords.relevance_score = alt.get("relevance_score")
+            break
+
+    # Update primary keyword
+    page_keywords.primary_keyword = data.keyword.strip()
+
+    # Clear volume data if custom keyword (not in alternatives)
+    if not is_from_alternatives:
+        page_keywords.search_volume = None
+        page_keywords.composite_score = None
+        page_keywords.relevance_score = None
+        logger.info(
+            "Custom keyword set, cleared volume data",
+            extra={
+                "project_id": project_id,
+                "page_id": page_id,
+                "keyword": data.keyword,
+            },
+        )
+
+    await db.commit()
+    await db.refresh(page_keywords)
+
+    logger.info(
+        "Primary keyword updated",
+        extra={
+            "project_id": project_id,
+            "page_id": page_id,
+            "keyword": data.keyword,
+            "is_from_alternatives": is_from_alternatives,
+        },
+    )
+
+    return PageKeywordsData(
+        id=page_keywords.id,
+        primary_keyword=page_keywords.primary_keyword,
+        secondary_keywords=page_keywords.secondary_keywords or [],
+        alternative_keywords=page_keywords.alternative_keywords or [],
+        is_approved=page_keywords.is_approved,
+        is_priority=page_keywords.is_priority,
+        composite_score=page_keywords.composite_score,
+        relevance_score=page_keywords.relevance_score,
+        ai_reasoning=page_keywords.ai_reasoning,
+        search_volume=page_keywords.search_volume,
+        difficulty_score=page_keywords.difficulty_score,
+    )
 
 
 @router.put(

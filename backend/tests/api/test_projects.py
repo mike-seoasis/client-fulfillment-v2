@@ -1192,3 +1192,333 @@ class TestPagesWithKeywords:
         data = response.json()
         assert len(data) == 1
         assert data[0]["keywords"] is None
+
+
+class TestUpdatePrimaryKeyword:
+    """Tests for PUT /api/v1/projects/{project_id}/pages/{page_id}/primary-keyword endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_update_primary_keyword_project_not_found(
+        self, async_client: AsyncClient
+    ) -> None:
+        """PUT primary-keyword returns 404 for non-existent project."""
+        fake_project_id = str(uuid.uuid4())
+        fake_page_id = str(uuid.uuid4())
+        response = await async_client.put(
+            f"/api/v1/projects/{fake_project_id}/pages/{fake_page_id}/primary-keyword",
+            json={"keyword": "test keyword"},
+        )
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_update_primary_keyword_page_not_found(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """PUT primary-keyword returns 404 for non-existent page."""
+        from app.models.project import Project
+
+        project = Project(
+            name="Page Not Found Test",
+            site_url="https://page-not-found.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        fake_page_id = str(uuid.uuid4())
+        response = await async_client.put(
+            f"/api/v1/projects/{project.id}/pages/{fake_page_id}/primary-keyword",
+            json={"keyword": "test keyword"},
+        )
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_update_primary_keyword_no_keywords_generated(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """PUT primary-keyword returns 404 when keywords not yet generated."""
+        from app.models.crawled_page import CrawledPage
+        from app.models.project import Project
+
+        project = Project(
+            name="No Keywords Test",
+            site_url="https://no-keywords-update.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        page = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://no-keywords-update.example.com/products",
+            status="completed",
+            title="Products Page",
+        )
+        db_session.add(page)
+        await db_session.commit()
+        await db_session.refresh(page)
+
+        response = await async_client.put(
+            f"/api/v1/projects/{project.id}/pages/{page.id}/primary-keyword",
+            json={"keyword": "test keyword"},
+        )
+        assert response.status_code == 404
+        assert "Keywords not yet generated" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_update_primary_keyword_success(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """PUT primary-keyword successfully updates keyword."""
+        from app.models.crawled_page import CrawledPage
+        from app.models.page_keywords import PageKeywords
+        from app.models.project import Project
+
+        project = Project(
+            name="Update Keyword Test",
+            site_url="https://update-keyword.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        page = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://update-keyword.example.com/products",
+            status="completed",
+            title="Products Page",
+        )
+        db_session.add(page)
+        await db_session.commit()
+        await db_session.refresh(page)
+
+        keywords = PageKeywords(
+            crawled_page_id=page.id,
+            primary_keyword="old keyword",
+            search_volume=5000,
+            composite_score=75.0,
+            relevance_score=80.0,
+        )
+        db_session.add(keywords)
+        await db_session.commit()
+
+        response = await async_client.put(
+            f"/api/v1/projects/{project.id}/pages/{page.id}/primary-keyword",
+            json={"keyword": "new keyword"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["primary_keyword"] == "new keyword"
+        # Custom keyword should clear volume data
+        assert data["search_volume"] is None
+        assert data["composite_score"] is None
+        assert data["relevance_score"] is None
+
+    @pytest.mark.asyncio
+    async def test_update_primary_keyword_from_alternatives(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """PUT primary-keyword preserves volume data when keyword is from alternatives."""
+        from app.models.crawled_page import CrawledPage
+        from app.models.page_keywords import PageKeywords
+        from app.models.project import Project
+
+        project = Project(
+            name="Alternatives Keyword Test",
+            site_url="https://alternatives-keyword.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        page = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://alternatives-keyword.example.com/products",
+            status="completed",
+            title="Products Page",
+        )
+        db_session.add(page)
+        await db_session.commit()
+        await db_session.refresh(page)
+
+        keywords = PageKeywords(
+            crawled_page_id=page.id,
+            primary_keyword="original keyword",
+            search_volume=5000,
+            composite_score=75.0,
+            relevance_score=80.0,
+            alternative_keywords=[
+                {"keyword": "coffee canister", "volume": 3000, "composite_score": 68.5, "relevance_score": 72.0},
+                {"keyword": "airtight container", "volume": 8000, "composite_score": 82.0, "relevance_score": 85.0},
+            ],
+        )
+        db_session.add(keywords)
+        await db_session.commit()
+
+        # Update to a keyword from alternatives
+        response = await async_client.put(
+            f"/api/v1/projects/{project.id}/pages/{page.id}/primary-keyword",
+            json={"keyword": "Coffee Canister"},  # Case-insensitive match
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["primary_keyword"] == "Coffee Canister"
+        # Should preserve volume data from alternative
+        assert data["search_volume"] == 3000
+        assert data["composite_score"] == 68.5
+        assert data["relevance_score"] == 72.0
+
+    @pytest.mark.asyncio
+    async def test_update_primary_keyword_clears_volume_for_custom(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """PUT primary-keyword clears volume data for custom keywords not in alternatives."""
+        from app.models.crawled_page import CrawledPage
+        from app.models.page_keywords import PageKeywords
+        from app.models.project import Project
+
+        project = Project(
+            name="Custom Keyword Test",
+            site_url="https://custom-keyword.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        page = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://custom-keyword.example.com/products",
+            status="completed",
+            title="Products Page",
+        )
+        db_session.add(page)
+        await db_session.commit()
+        await db_session.refresh(page)
+
+        keywords = PageKeywords(
+            crawled_page_id=page.id,
+            primary_keyword="original keyword",
+            search_volume=5000,
+            composite_score=75.0,
+            relevance_score=80.0,
+            alternative_keywords=[
+                {"keyword": "suggested keyword one", "volume": 3000},
+                {"keyword": "suggested keyword two", "volume": 8000},
+            ],
+        )
+        db_session.add(keywords)
+        await db_session.commit()
+
+        # Update to a custom keyword not in alternatives
+        response = await async_client.put(
+            f"/api/v1/projects/{project.id}/pages/{page.id}/primary-keyword",
+            json={"keyword": "my custom keyword phrase"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["primary_keyword"] == "my custom keyword phrase"
+        # Custom keyword should clear volume data
+        assert data["search_volume"] is None
+        assert data["composite_score"] is None
+        assert data["relevance_score"] is None
+
+    @pytest.mark.asyncio
+    async def test_update_primary_keyword_validation_empty(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """PUT primary-keyword validates that keyword is not empty."""
+        from app.models.crawled_page import CrawledPage
+        from app.models.page_keywords import PageKeywords
+        from app.models.project import Project
+
+        project = Project(
+            name="Empty Keyword Test",
+            site_url="https://empty-keyword.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        page = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://empty-keyword.example.com/products",
+            status="completed",
+            title="Products Page",
+        )
+        db_session.add(page)
+        await db_session.commit()
+        await db_session.refresh(page)
+
+        keywords = PageKeywords(
+            crawled_page_id=page.id,
+            primary_keyword="existing keyword",
+        )
+        db_session.add(keywords)
+        await db_session.commit()
+
+        # Try to update with empty keyword
+        response = await async_client.put(
+            f"/api/v1/projects/{project.id}/pages/{page.id}/primary-keyword",
+            json={"keyword": "   "},  # Whitespace only
+        )
+        assert response.status_code == 422  # Validation error
+
+    @pytest.mark.asyncio
+    async def test_update_primary_keyword_returns_full_data(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """PUT primary-keyword returns full PageKeywordsData including unchanged fields."""
+        from app.models.crawled_page import CrawledPage
+        from app.models.page_keywords import PageKeywords
+        from app.models.project import Project
+
+        project = Project(
+            name="Full Data Test",
+            site_url="https://full-data.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        page = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://full-data.example.com/products",
+            status="completed",
+            title="Products Page",
+        )
+        db_session.add(page)
+        await db_session.commit()
+        await db_session.refresh(page)
+
+        keywords = PageKeywords(
+            crawled_page_id=page.id,
+            primary_keyword="original keyword",
+            secondary_keywords=["secondary one", "secondary two"],
+            alternative_keywords=[{"keyword": "alt one", "volume": 1000}],
+            is_approved=True,
+            is_priority=True,
+            ai_reasoning="Some AI reasoning text",
+            difficulty_score=45,
+        )
+        db_session.add(keywords)
+        await db_session.commit()
+        await db_session.refresh(keywords)
+
+        response = await async_client.put(
+            f"/api/v1/projects/{project.id}/pages/{page.id}/primary-keyword",
+            json={"keyword": "updated keyword"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        # Verify updated field
+        assert data["primary_keyword"] == "updated keyword"
+
+        # Verify unchanged fields are preserved
+        assert data["id"] == keywords.id
+        assert data["secondary_keywords"] == ["secondary one", "secondary two"]
+        assert len(data["alternative_keywords"]) == 1
+        assert data["is_approved"] is True
+        assert data["is_priority"] is True
+        assert data["ai_reasoning"] == "Some AI reasoning text"
+        assert data["difficulty_score"] == 45
