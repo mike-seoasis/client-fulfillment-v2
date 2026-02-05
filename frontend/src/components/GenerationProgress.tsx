@@ -408,9 +408,14 @@ export function GenerationProgress({
             </Button>
           </>
         ) : (
-          <Button variant="ghost" disabled>
-            Please wait...
-          </Button>
+          <>
+            <span className="text-sm text-warm-gray-500 mr-2">
+              Generation continues in background
+            </span>
+            <Button variant="secondary" onClick={onGoToProject}>
+              Go to Project
+            </Button>
+          </>
         )}
       </div>
     </div>

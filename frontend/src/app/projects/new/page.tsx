@@ -41,7 +41,7 @@ export default function CreateProjectPage() {
   const [formData, setFormData] = useState<ProjectFormData | null>(null);
 
   // Brand config generation mutation
-  const startGeneration = useStartBrandConfigGeneration(projectId ?? '');
+  const startGeneration = useStartBrandConfigGeneration();
 
   // Check generation status if resuming with a project ID
   const { data: statusData, isLoading: isCheckingStatus } = useBrandConfigStatus(
@@ -194,7 +194,7 @@ export default function CreateProjectPage() {
       setCurrentStep(2);
 
       // Start brand config generation
-      await startGeneration.mutateAsync();
+      await startGeneration.mutateAsync(project.id);
     } catch (err) {
       setError(
         err instanceof Error
@@ -222,7 +222,9 @@ export default function CreateProjectPage() {
 
   // Handle retry - restart generation
   async function handleRetry() {
-    await startGeneration.mutateAsync();
+    if (projectId) {
+      await startGeneration.mutateAsync(projectId);
+    }
   }
 
   const isSubmitting =

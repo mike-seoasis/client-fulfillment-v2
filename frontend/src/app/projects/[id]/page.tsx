@@ -289,7 +289,7 @@ export default function ProjectDetailPage() {
   const { data: project, isLoading, error } = useProject(projectId);
   const deleteProject = useDeleteProject();
   const generation = useBrandConfigGeneration(projectId);
-  const startGeneration = useStartBrandConfigGeneration(projectId);
+  const startGeneration = useStartBrandConfigGeneration();
 
   // Fetch crawl status for onboarding progress
   const { data: crawlStatus } = useCrawlStatus(projectId, {
@@ -466,7 +466,7 @@ export default function ProjectDetailPage() {
               variant="secondary"
               onClick={async () => {
                 try {
-                  await startGeneration.mutateAsync();
+                  await startGeneration.mutateAsync(projectId);
                 } catch {
                   setToastMessage('Failed to start brand generation');
                   setShowToast(true);

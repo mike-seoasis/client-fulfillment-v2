@@ -63,16 +63,17 @@ export function useBrandConfigStatus(
 /**
  * Start brand config generation for a project.
  * Returns the initial generation status.
+ *
+ * Note: projectId is passed to mutateAsync() to avoid closure issues
+ * when the hook is initialized before the project is created.
  */
-export function useStartBrandConfigGeneration(
-  projectId: string
-): UseMutationResult<GenerationStatus, Error, void> {
+export function useStartBrandConfigGeneration(): UseMutationResult<GenerationStatus, Error, string> {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: () =>
+    mutationFn: (projectId: string) =>
       apiClient.post<GenerationStatus>(`/projects/${projectId}/brand-config/generate`),
-    onSuccess: (data) => {
+    onSuccess: (data, projectId) => {
       // Update the status cache with the returned status
       queryClient.setQueryData(brandConfigKeys.status(projectId), data);
     },
@@ -104,7 +105,7 @@ export function useBrandConfigGeneration(projectId: string) {
     },
   });
 
-  const startGeneration = useStartBrandConfigGeneration(projectId);
+  const startGenerationMutation = useStartBrandConfigGeneration();
 
   // Calculate progress percentage
   const stepsTotal = status.data?.steps_total ?? 0;
@@ -135,11 +136,11 @@ export function useBrandConfigGeneration(projectId: string) {
     isComplete: status.data?.status === 'complete',
     isFailed: status.data?.status === 'failed',
 
-    // Actions
-    startGeneration: startGeneration.mutate,
-    startGenerationAsync: startGeneration.mutateAsync,
-    isStarting: startGeneration.isPending,
-    startError: startGeneration.error,
+    // Actions - wrap mutate to auto-pass projectId
+    startGeneration: () => startGenerationMutation.mutate(projectId),
+    startGenerationAsync: () => startGenerationMutation.mutateAsync(projectId),
+    isStarting: startGenerationMutation.isPending,
+    startError: startGenerationMutation.error,
 
     // Refetch
     refetch: status.refetch,

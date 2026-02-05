@@ -1,0 +1,807 @@
+{
+  "name": "Phase 4: Primary Keyword Generation + Approval",
+  "description": "Generate, score, and approve primary keywords for crawled pages. Uses Claude for candidate generation and filtering, DataForSEO for volume data, and weighted scoring (50% volume, 35% relevance, 15% competition).",
+  "branchName": "v2-rebuild",
+  "userStories": [
+    {
+      "id": "S4-001",
+      "title": "Create Alembic migration for PageKeywords fields",
+      "description": "As a developer, I need to add new fields to the page_keywords table so that approval status and scoring data can be stored.",
+      "acceptanceCriteria": [
+        "Create migration file in backend/alembic/versions/",
+        "Add is_approved Boolean field with default=False",
+        "Add is_priority Boolean field with default=False",
+        "Add alternative_keywords JSONB field with default=[]",
+        "Add composite_score Float field (nullable)",
+        "Add relevance_score Float field (nullable)",
+        "Add ai_reasoning Text field (nullable)"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Reference existing migrations for pattern. Use server_default for boolean fields.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S4-002",
+      "title": "Add CrawledPage to PageKeywords relationship",
+      "description": "As a developer, I need a relationship between CrawledPage and PageKeywords so that keywords can be accessed from page objects.",
+      "acceptanceCriteria": [
+        "Add keywords relationship to CrawledPage model",
+        "Configure cascade delete (when page deleted, keywords deleted)",
+        "Add back_populates to PageKeywords model",
+        "Relationship is one-to-one (one PageKeywords per CrawledPage)"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Reference content_briefs relationship in CrawledPage for pattern."
+    },
+    {
+      "id": "S4-003",
+      "title": "Update PageKeywords model with new fields",
+      "description": "As a developer, I need the PageKeywords model updated to match the migration so that the ORM works correctly.",
+      "acceptanceCriteria": [
+        "Add is_approved: Mapped[bool] with default=False",
+        "Add is_priority: Mapped[bool] with default=False",
+        "Add alternative_keywords: Mapped[list[Any]] as JSONB",
+        "Add composite_score: Mapped[float | None]",
+        "Add relevance_score: Mapped[float | None]",
+        "Add ai_reasoning: Mapped[str | None]",
+        "Add page relationship back_populates"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "File: backend/app/models/page_keywords.py"
+    },
+    {
+      "id": "S4-004",
+      "title": "Run migration and verify schema",
+      "description": "As a developer, I need to apply the migration so that the database schema is updated.",
+      "acceptanceCriteria": [
+        "Run: alembic upgrade head",
+        "Migration completes without errors",
+        "Verify columns exist in page_keywords table",
+        "Verify default values work correctly"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Test with: docker compose exec backend alembic upgrade head"
+    },
+    {
+      "id": "S4-005",
+      "title": "Create Pydantic schemas for keyword generation",
+      "description": "As a developer, I need request/response schemas for the keyword generation API so that data is validated.",
+      "acceptanceCriteria": [
+        "Create KeywordCandidate schema with: keyword, volume, cpc, competition, relevance_score, composite_score",
+        "Create PrimaryKeywordGenerationStatus schema with: status, total, completed, failed, current_page",
+        "Create PageWithKeywords schema combining CrawledPage data with PageKeywords data",
+        "Create UpdatePrimaryKeywordRequest schema with: keyword field",
+        "Create BulkApproveResponse schema with: approved_count",
+        "All schemas in backend/app/schemas/keyword_research.py"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Reference existing schemas in backend/app/schemas/ for patterns."
+    },
+    {
+      "id": "S4-006",
+      "title": "Create PrimaryKeywordService class",
+      "description": "As a developer, I need a service class to orchestrate keyword generation so that the logic is reusable.",
+      "acceptanceCriteria": [
+        "Create backend/app/services/primary_keyword.py",
+        "Class accepts ClaudeClient and DataForSEOClient in __init__",
+        "Add tracking for used_primary_keywords set (prevent duplicates)",
+        "Add stats tracking dict for metrics",
+        "Class is importable from app.services"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Reference LabelTaxonomyService in backend/app/services/label_taxonomy.py for pattern."
+    },
+    {
+      "id": "S4-007",
+      "title": "Implement generate_candidates method",
+      "description": "As a developer, I need to generate keyword candidates from page content so that we have options to score.",
+      "acceptanceCriteria": [
+        "Method takes CrawledPage data as input",
+        "Builds prompt with URL, title, H1, headings, content excerpt, product count",
+        "Uses category-specific guidelines (collection pages get e-commerce focus)",
+        "Calls Claude API to generate 20-25 keywords",
+        "Returns list of keyword strings",
+        "Handles API failures with fallback to title/H1"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reference generate_keywords_with_llm in Old KW research logic/keyword_research.py"
+    },
+    {
+      "id": "S4-008",
+      "title": "Implement enrich_with_volume method",
+      "description": "As a developer, I need to get search volume data for keywords so that we can score them.",
+      "acceptanceCriteria": [
+        "Method takes list of keywords",
+        "Calls DataForSEOClient.get_keyword_volume_batch()",
+        "Returns dict mapping keyword -> KeywordVolumeData",
+        "Handles DataForSEO failures gracefully (returns empty for failed keywords)",
+        "Logs API cost for tracking"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "DataForSEOClient already handles batching up to 1000 keywords per request."
+    },
+    {
+      "id": "S4-009",
+      "title": "Implement filter_to_specific method",
+      "description": "As a developer, I need to filter generic keywords so that only page-specific keywords remain.",
+      "acceptanceCriteria": [
+        "Method takes keywords with volume data and page context",
+        "Builds prompt with specificity criteria and examples",
+        "Calls Claude API to filter to specific keywords",
+        "Returns filtered keywords with relevance scores (0.0-1.0)",
+        "Handles API failures by returning all keywords with default relevance"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reference filter_to_specific_keywords in Old KW research logic/keyword_research.py for prompt pattern."
+    },
+    {
+      "id": "S4-010",
+      "title": "Implement calculate_score method",
+      "description": "As a developer, I need to calculate composite scores so that keywords can be ranked.",
+      "acceptanceCriteria": [
+        "Method takes keyword with volume, competition, relevance",
+        "Calculates volume_score = min(50, max(0, log10(volume) * 10))",
+        "Calculates competition_score = (1 - competition) * 100",
+        "Calculates relevance_score = relevance * 100",
+        "Returns composite = (volume * 0.50) + (relevance * 0.35) + (competition * 0.15)",
+        "Handles zero/null volume gracefully"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Formula weights: 50% volume, 35% relevance, 15% competition"
+    },
+    {
+      "id": "S4-011",
+      "title": "Implement select_primary_and_alternatives method",
+      "description": "As a developer, I need to select the best keyword and alternatives so that users have options.",
+      "acceptanceCriteria": [
+        "Method takes scored keywords and used_primaries set",
+        "Sorts by composite_score descending",
+        "Skips keywords already in used_primaries",
+        "Selects highest unused as primary",
+        "Stores next 4 highest as alternatives",
+        "Adds selected primary to used_primaries set",
+        "Returns primary keyword and alternatives list"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Duplicate prevention is critical for SEO - same keyword shouldn't target multiple pages."
+    },
+    {
+      "id": "S4-012",
+      "title": "Implement process_page method",
+      "description": "As a developer, I need to orchestrate the full pipeline for one page so that it can be called in a loop.",
+      "acceptanceCriteria": [
+        "Method takes CrawledPage and db session",
+        "Calls generate_candidates",
+        "Calls enrich_with_volume",
+        "Calls filter_to_specific",
+        "Calls calculate_score for each keyword",
+        "Calls select_primary_and_alternatives",
+        "Creates/updates PageKeywords record",
+        "Returns success/failure status"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Each step should have error handling with appropriate fallbacks."
+    },
+    {
+      "id": "S4-013",
+      "title": "Implement generate_for_project method",
+      "description": "As a developer, I need to process all pages in a project so that keywords are generated for the whole site.",
+      "acceptanceCriteria": [
+        "Method takes project_id and db session",
+        "Loads all CrawledPages with status=completed",
+        "Initializes used_primaries set",
+        "Loops through pages calling process_page",
+        "Updates project.phase_status with progress",
+        "Tracks completed/failed counts",
+        "Returns final status with stats"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Progress tracking enables frontend polling. Update phase_status after each page."
+    },
+    {
+      "id": "S4-014",
+      "title": "Write unit tests for scoring formula",
+      "description": "As a developer, I need tests for the scoring formula so that ranking works correctly.",
+      "acceptanceCriteria": [
+        "Test with high volume, low competition keyword",
+        "Test with low volume, high relevance keyword",
+        "Test with zero volume (should not crash)",
+        "Test with null values",
+        "Verify formula weights are correct (50/35/15)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "File: backend/tests/unit/test_primary_keyword_service.py"
+    },
+    {
+      "id": "S4-015",
+      "title": "Write unit tests for duplicate prevention",
+      "description": "As a developer, I need tests for duplicate prevention so that unique keywords are assigned.",
+      "acceptanceCriteria": [
+        "Test that used keyword is skipped",
+        "Test that next best is selected when first is used",
+        "Test behavior when all top keywords are used",
+        "Test used_primaries set is updated correctly"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "File: backend/tests/unit/test_primary_keyword_service.py"
+    },
+    {
+      "id": "S4-016",
+      "title": "Write integration tests for generation pipeline",
+      "description": "As a developer, I need integration tests so that the full pipeline works correctly.",
+      "acceptanceCriteria": [
+        "Test full pipeline with mocked Claude and DataForSEO",
+        "Test fallback when Claude fails",
+        "Test fallback when DataForSEO fails",
+        "Test PageKeywords record is created correctly",
+        "Test alternatives are stored correctly"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "File: backend/tests/integration/test_primary_keyword_generation.py"
+    },
+    {
+      "id": "S4-017",
+      "title": "Add POST generate-primary-keywords endpoint",
+      "description": "As a developer, I need an endpoint to start keyword generation so that the frontend can trigger it.",
+      "acceptanceCriteria": [
+        "Endpoint: POST /api/v1/projects/{project_id}/generate-primary-keywords",
+        "Validates project exists and has crawled pages",
+        "Starts background task for generation",
+        "Returns 202 Accepted with task_id",
+        "Updates project.phase_status to 'generating_keywords'"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reference crawl endpoint pattern in backend/app/api/v1/projects.py"
+    },
+    {
+      "id": "S4-018",
+      "title": "Add GET primary-keywords-status endpoint",
+      "description": "As a developer, I need a status endpoint so that the frontend can poll for progress.",
+      "acceptanceCriteria": [
+        "Endpoint: GET /api/v1/projects/{project_id}/primary-keywords-status",
+        "Returns status (generating/complete/failed)",
+        "Returns progress (total, completed, failed counts)",
+        "Returns current_page being processed",
+        "Returns error message if failed"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reference crawl-status endpoint for pattern."
+    },
+    {
+      "id": "S4-019",
+      "title": "Add GET pages-with-keywords endpoint",
+      "description": "As a developer, I need an endpoint to list pages with keywords so that the UI can display them.",
+      "acceptanceCriteria": [
+        "Endpoint: GET /api/v1/projects/{project_id}/pages-with-keywords",
+        "Returns list of CrawledPages with their PageKeywords data",
+        "Includes alternative_keywords in response",
+        "Ordered by URL for consistent display",
+        "Only returns pages with status=completed"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Use joinedload for efficient query."
+    },
+    {
+      "id": "S4-020",
+      "title": "Add PUT primary-keyword endpoint",
+      "description": "As a developer, I need an endpoint to update a keyword so that users can edit their selection.",
+      "acceptanceCriteria": [
+        "Endpoint: PUT /api/v1/projects/{project_id}/pages/{page_id}/primary-keyword",
+        "Accepts keyword in request body",
+        "Updates primary_keyword field",
+        "Clears volume data if custom keyword (not in alternatives)",
+        "Returns updated PageKeywords"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Allow users to type custom keywords not in the generated list."
+    },
+    {
+      "id": "S4-021",
+      "title": "Add POST approve-keyword endpoint",
+      "description": "As a developer, I need an endpoint to approve a keyword so that users can confirm their selection.",
+      "acceptanceCriteria": [
+        "Endpoint: POST /api/v1/projects/{project_id}/pages/{page_id}/approve-keyword",
+        "Sets is_approved=true on PageKeywords",
+        "Returns updated PageKeywords",
+        "Idempotent (calling twice is OK)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "S4-022",
+      "title": "Add POST approve-all-keywords endpoint",
+      "description": "As a developer, I need a bulk approve endpoint so that users can approve all at once.",
+      "acceptanceCriteria": [
+        "Endpoint: POST /api/v1/projects/{project_id}/approve-all-keywords",
+        "Sets is_approved=true for all PageKeywords in project",
+        "Returns count of approved keywords",
+        "Only approves pages that have keywords"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "S4-023",
+      "title": "Add PUT priority endpoint",
+      "description": "As a developer, I need an endpoint to toggle priority so that users can mark important pages.",
+      "acceptanceCriteria": [
+        "Endpoint: PUT /api/v1/projects/{project_id}/pages/{page_id}/priority",
+        "Toggles is_priority value (true->false, false->true)",
+        "Returns updated PageKeywords",
+        "Can also accept explicit value in body"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Priority pages will receive more internal links in Phase 5."
+    },
+    {
+      "id": "S4-024",
+      "title": "Implement background task for keyword generation",
+      "description": "As a developer, I need a background task function so that generation runs asynchronously.",
+      "acceptanceCriteria": [
+        "Function creates its own DB session (not from request)",
+        "Calls PrimaryKeywordService.generate_for_project()",
+        "Updates project.phase_status on completion/failure",
+        "Logs errors appropriately",
+        "Handles cancellation gracefully"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reference _crawl_pages_background for pattern."
+    },
+    {
+      "id": "S4-025",
+      "title": "Write API tests for all endpoints",
+      "description": "As a developer, I need API tests so that endpoints work correctly.",
+      "acceptanceCriteria": [
+        "Test generate-primary-keywords returns 202",
+        "Test primary-keywords-status returns progress",
+        "Test pages-with-keywords returns correct data",
+        "Test update primary-keyword works",
+        "Test approve-keyword sets flag",
+        "Test approve-all-keywords bulk operation",
+        "Test priority toggle works"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "File: backend/tests/api/test_primary_keywords.py"
+    },
+    {
+      "id": "S4-026",
+      "title": "Add API client functions for keyword endpoints",
+      "description": "As a developer, I need frontend API functions so that the UI can call the backend.",
+      "acceptanceCriteria": [
+        "Add generatePrimaryKeywords(projectId) function",
+        "Add getPrimaryKeywordsStatus(projectId) function",
+        "Add getPagesWithKeywords(projectId) function",
+        "Add updatePrimaryKeyword(projectId, pageId, keyword) function",
+        "Add approveKeyword(projectId, pageId) function",
+        "Add approveAllKeywords(projectId) function",
+        "Add togglePriority(projectId, pageId) function"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "File: frontend/src/lib/api.ts"
+    },
+    {
+      "id": "S4-027",
+      "title": "Create useKeywordGeneration hook",
+      "description": "As a developer, I need a hook for polling generation status so that the UI updates automatically.",
+      "acceptanceCriteria": [
+        "Hook polls getPrimaryKeywordsStatus every 2 seconds",
+        "Stops polling when status='complete' or status='failed'",
+        "Returns status, progress, isGenerating, error",
+        "Exposes startGeneration function"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reference useCrawlStatus hook for pattern. File: frontend/src/hooks/useKeywordGeneration.ts"
+    },
+    {
+      "id": "S4-028",
+      "title": "Create usePagesWithKeywords hook",
+      "description": "As a developer, I need a hook for fetching pages with keywords so that the list is reactive.",
+      "acceptanceCriteria": [
+        "Hook calls getPagesWithKeywords",
+        "Returns pages array, isLoading, error",
+        "Exposes refetch function",
+        "Uses appropriate staleTime and cacheTime"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "File: frontend/src/hooks/usePagesWithKeywords.ts"
+    },
+    {
+      "id": "S4-029",
+      "title": "Create keyword mutation hooks",
+      "description": "As a developer, I need mutation hooks so that updates trigger re-fetches.",
+      "acceptanceCriteria": [
+        "Create useUpdatePrimaryKeyword mutation hook",
+        "Create useApproveKeyword mutation hook",
+        "Create useApproveAllKeywords mutation hook",
+        "Create useTogglePriority mutation hook",
+        "All mutations invalidate pages-with-keywords query on success"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "File: frontend/src/hooks/useKeywordMutations.ts"
+    },
+    {
+      "id": "S4-030",
+      "title": "Create keywords page",
+      "description": "As a developer, I need the main keywords page so that users can see and approve keywords.",
+      "acceptanceCriteria": [
+        "Create page at frontend/src/app/projects/[id]/onboarding/keywords/page.tsx",
+        "Fetches project and pages with keywords",
+        "Shows generation progress if generating",
+        "Shows page list with keywords if complete",
+        "Includes step indicator showing Step 3 of 5"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reference crawl page for structure pattern."
+    },
+    {
+      "id": "S4-031",
+      "title": "Add step indicator to keywords page",
+      "description": "As a developer, I need a step indicator so that users know where they are in the flow.",
+      "acceptanceCriteria": [
+        "Shows 5 steps: Upload, Crawl, Keywords (active), Content, Export",
+        "Steps 1-2 show as complete (filled)",
+        "Step 3 shows as active (highlighted)",
+        "Steps 4-5 show as pending (empty)",
+        "Matches styling from crawl page"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reuse StepIndicator component if exists, or extract from crawl page."
+    },
+    {
+      "id": "S4-032",
+      "title": "Implement generation progress UI",
+      "description": "As a developer, I need a progress display so that users see generation status.",
+      "acceptanceCriteria": [
+        "Shows when status='generating_keywords'",
+        "Displays progress bar with completed/total",
+        "Shows current page being processed",
+        "Includes spinner animation",
+        "Matches GenerationProgress component style"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reference GenerationProgress component for pattern."
+    },
+    {
+      "id": "S4-033",
+      "title": "Create KeywordPageRow component",
+      "description": "As a developer, I need a row component so that each page's keyword is displayed consistently.",
+      "acceptanceCriteria": [
+        "Shows page URL (truncated with tooltip for full URL)",
+        "Shows page title",
+        "Shows primary keyword in editable field",
+        "Shows search volume badge (formatted with commas)",
+        "Shows composite score",
+        "Shows approval status (approve button or checkmark)",
+        "Shows priority toggle (star icon)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Use tropical oasis styling: bg-sand-50 hover, border-cream-500, rounded-sm"
+    },
+    {
+      "id": "S4-034",
+      "title": "Create AlternativeKeywordDropdown component",
+      "description": "As a developer, I need a dropdown so that users can select from alternatives.",
+      "acceptanceCriteria": [
+        "Dropdown shows when clicking primary keyword field",
+        "Lists current primary at top (selected)",
+        "Lists up to 4 alternatives below",
+        "Each option shows keyword and volume",
+        "Selecting alternative calls updatePrimaryKeyword",
+        "Closes on selection or click outside"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Use Headless UI Listbox or similar for accessibility."
+    },
+    {
+      "id": "S4-035",
+      "title": "Create PriorityToggle component",
+      "description": "As a developer, I need a toggle so that users can mark priority pages.",
+      "acceptanceCriteria": [
+        "Shows star icon (filled when priority, empty when not)",
+        "Clicking toggles priority via API",
+        "Shows loading state during toggle",
+        "Tooltip explains 'Mark as priority for internal linking'"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Use palm-500 color for filled star."
+    },
+    {
+      "id": "S4-036",
+      "title": "Create ApproveButton component",
+      "description": "As a developer, I need an approve button so that users can confirm keywords.",
+      "acceptanceCriteria": [
+        "Shows 'Approve' button when not approved",
+        "Shows checkmark when approved",
+        "Clicking toggles approval state via API",
+        "Shows loading state during toggle",
+        "Uses palm-500 for approved state"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "S4-037",
+      "title": "Implement inline keyword editing",
+      "description": "As a developer, I need inline editing so that users can type custom keywords.",
+      "acceptanceCriteria": [
+        "Double-click or 'Edit' button enables text input mode",
+        "Input is pre-filled with current keyword",
+        "Enter key saves the change",
+        "Escape key cancels edit",
+        "Blur saves the change",
+        "Shows loading state while saving"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Custom keywords won't have volume data - show dash instead."
+    },
+    {
+      "id": "S4-038",
+      "title": "Implement score tooltip",
+      "description": "As a developer, I need a tooltip so that users understand the score breakdown.",
+      "acceptanceCriteria": [
+        "Hovering over score shows tooltip",
+        "Tooltip shows: Volume score, Relevance score, Competition score",
+        "Shows formula weights (50%, 35%, 15%)",
+        "Styled consistently with other tooltips"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "S4-039",
+      "title": "Add Approve All button",
+      "description": "As a developer, I need a bulk approve button so that users can approve all at once.",
+      "acceptanceCriteria": [
+        "Button shows at top of keyword list",
+        "Clicking approves all unapproved keywords",
+        "Button disabled when all already approved",
+        "Shows loading state during operation",
+        "Shows success toast on completion"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "S4-040",
+      "title": "Add Continue to Content button",
+      "description": "As a developer, I need a continue button so that users can proceed to Phase 5.",
+      "acceptanceCriteria": [
+        "Button shows at bottom of page",
+        "Enabled only when all keywords are approved",
+        "Disabled with tooltip when some unapproved",
+        "Clicking navigates to content generation page",
+        "Styled as primary button (bg-palm-500)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Content generation is Phase 5 - page may not exist yet. Navigate to placeholder or project page."
+    },
+    {
+      "id": "S4-041",
+      "title": "Add approval progress display",
+      "description": "As a developer, I need a progress count so that users see how many are approved.",
+      "acceptanceCriteria": [
+        "Shows 'Approved: X of Y' text",
+        "Updates reactively when approvals change",
+        "Positioned near Approve All button",
+        "Shows checkmark icon when all complete"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "S4-042",
+      "title": "Style components with tropical oasis theme",
+      "description": "As a developer, I need consistent styling so that the UI matches the design system.",
+      "acceptanceCriteria": [
+        "Primary buttons use bg-palm-500",
+        "Card backgrounds use bg-sand-50 or bg-cream-50",
+        "Borders use border-cream-500",
+        "All corners use rounded-sm",
+        "Focus rings use ring-palm-400",
+        "Approved states use palm green color"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reference CLAUDE.md Design Context section for color guidelines."
+    },
+    {
+      "id": "S4-043",
+      "title": "Write component tests for KeywordPageRow",
+      "description": "As a developer, I need tests so that the row component works correctly.",
+      "acceptanceCriteria": [
+        "Test renders keyword and volume correctly",
+        "Test approve button toggles state",
+        "Test priority star toggles state",
+        "Test score tooltip appears on hover"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "File: frontend/src/components/__tests__/KeywordPageRow.test.tsx"
+    },
+    {
+      "id": "S4-044",
+      "title": "Write component tests for AlternativeKeywordDropdown",
+      "description": "As a developer, I need tests so that the dropdown works correctly.",
+      "acceptanceCriteria": [
+        "Test dropdown opens on click",
+        "Test alternatives are listed",
+        "Test selecting alternative calls mutation",
+        "Test dropdown closes after selection"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "File: frontend/src/components/__tests__/AlternativeKeywordDropdown.test.tsx"
+    },
+    {
+      "id": "S4-045",
+      "title": "Write component tests for approval flow",
+      "description": "As a developer, I need tests so that approval works correctly.",
+      "acceptanceCriteria": [
+        "Test individual approve works",
+        "Test bulk approve works",
+        "Test continue button state changes with approvals"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "S4-046",
+      "title": "Write integration test for keywords page",
+      "description": "As a developer, I need an integration test so that the full page works correctly.",
+      "acceptanceCriteria": [
+        "Test page loads with mocked API",
+        "Test generation progress displays",
+        "Test page list renders after generation",
+        "Test approve all flow"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "File: frontend/src/app/projects/[id]/onboarding/keywords/__tests__/page.test.tsx"
+    },
+    {
+      "id": "S4-047",
+      "title": "Update crawl completion to navigate to keywords",
+      "description": "As a developer, I need the crawl page to link to keywords so that users can continue.",
+      "acceptanceCriteria": [
+        "When crawl is complete, Continue button navigates to /keywords",
+        "Update any hardcoded next step references"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "File: frontend/src/app/projects/[id]/onboarding/crawl/page.tsx"
+    },
+    {
+      "id": "S4-048",
+      "title": "Add loading and error states",
+      "description": "As a developer, I need loading/error states so that the UI handles edge cases.",
+      "acceptanceCriteria": [
+        "Show skeleton loading while fetching pages",
+        "Show error message if fetch fails",
+        "Show retry button on error",
+        "Handle empty state (no pages)"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "S4-049",
+      "title": "Add toast notifications",
+      "description": "As a developer, I need toasts so that users get feedback on actions.",
+      "acceptanceCriteria": [
+        "Show success toast on keyword update",
+        "Show success toast on approve",
+        "Show success toast on bulk approve with count",
+        "Show error toast on failures"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Use existing Toast component."
+    },
+    {
+      "id": "S4-050",
+      "title": "Test full flow end-to-end",
+      "description": "As a developer, I need to verify the full flow works so that Phase 4 is complete.",
+      "acceptanceCriteria": [
+        "Create project and upload URLs",
+        "Complete crawling",
+        "Generate keywords (verify progress polling)",
+        "View generated keywords with volumes",
+        "Select alternative keyword",
+        "Toggle priority on a page",
+        "Approve individual and bulk",
+        "Verify Continue button enables"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Manual testing walkthrough."
+    },
+    {
+      "id": "S4-051",
+      "title": "Test DataForSEO integration with real API",
+      "description": "As a developer, I need to verify DataForSEO works so that we get real volume data.",
+      "acceptanceCriteria": [
+        "Set DATAFORSEO_API_LOGIN and DATAFORSEO_API_PASSWORD env vars",
+        "Generate keywords for a small test project (2-3 pages)",
+        "Verify volume and competition data returned",
+        "Check API cost in DataForSEO dashboard"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Use test credentials, monitor costs."
+    },
+    {
+      "id": "S4-098",
+      "title": "Update V2_REBUILD_PLAN.md",
+      "description": "As a developer, I need to update the plan status so that progress is tracked.",
+      "acceptanceCriteria": [
+        "Mark Phase 4 checkboxes as [x] complete in V2_REBUILD_PLAN.md",
+        "Update Current Status table: Phase=5, Last Session=today's date, Next Action=Content Generation",
+        "Add new row to Session Log table with date, completed items, next up"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "This task maintains our planning discipline."
+    },
+    {
+      "id": "S4-099",
+      "title": "Verify Phase 4 completion",
+      "description": "As a developer, I need to verify all Phase 4 criteria are met before moving on.",
+      "acceptanceCriteria": [
+        "All tests pass: pytest backend/tests/ && npm test",
+        "Manual verification: Can generate keywords, select alternatives, approve, see Continue enabled",
+        "Git commit created with message: feat(phase-4): Primary keyword generation and approval",
+        "No uncommitted changes remain"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Do not proceed to Phase 5 until this passes."
+    }
+  ],
+  "metadata": {
+    "updatedAt": "2026-02-05T14:08:08.128Z"
+  }
+}
