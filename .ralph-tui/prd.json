@@ -250,8 +250,9 @@
         "Test used_primaries set is updated correctly"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "File: backend/tests/unit/test_primary_keyword_service.py"
+      "passes": true,
+      "notes": "File: backend/tests/unit/test_primary_keyword_service.py",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S4-016",
@@ -815,6 +816,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-05T14:29:41.171Z"
+    "updatedAt": "2026-02-05T14:32:07.406Z"
   }
 }

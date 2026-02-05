@@ -304,3 +304,24 @@ after each iteration and it's included in prompts for context.
   - Run `ruff check --fix` to auto-fix import sorting issues
 ---
 
+## 2026-02-05 - S4-015
+- **What was implemented:** Unit tests for duplicate prevention in PrimaryKeywordService
+- **Files changed:**
+  - `backend/tests/services/test_primary_keyword_service.py` - Added 13 new tests (40 total)
+- **Test coverage:**
+  - Used keyword is skipped (3 tests) - single skip, multiple skips, case-insensitive
+  - Next best selection (2 tests) - maintains sort order, alternatives exclude used keywords
+  - All keywords used behavior (3 tests) - returns None, selects last available, empty list
+  - Used primaries set updates (5 tests) - primary added, alternatives not added, accumulates, no modification when none selected, custom set respected
+- **Acceptance criteria verified:**
+  - [x] Test that used keyword is skipped
+  - [x] Test that next best is selected when first is used
+  - [x] Test behavior when all top keywords are used
+  - [x] Test used_primaries set is updated correctly
+- **Learnings:**
+  - `select_primary_and_alternatives` method checks used_primaries set to skip duplicates
+  - Keywords are normalized (lowercase, stripped) for consistent duplicate checking
+  - Only the selected primary is added to used_primaries, not alternatives
+  - Method accepts optional custom used_primaries set parameter but still adds to instance set
+---
+
