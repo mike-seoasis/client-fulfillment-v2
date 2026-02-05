@@ -1133,3 +1133,26 @@ after each iteration and it's included in prompts for context.
   - Empty state should guide users to the next step (complete crawl first)
 ---
 
+## 2026-02-05 - S4-049
+- **What was implemented:** Added toast notifications for keyword operations (update, approve, priority toggle)
+- **Files changed:**
+  - `frontend/src/components/onboarding/KeywordPageRow.tsx` - Added `onShowToast` callback prop and toast calls in `handleApprove`, `handleTogglePriority`, `handleSaveEdit`
+  - `frontend/src/components/onboarding/AlternativeKeywordDropdown.tsx` - Added `onShowToast` callback prop and toast calls in `handleSelect`
+  - `frontend/src/app/projects/[id]/onboarding/keywords/page.tsx` - Passed `onShowToast` callback to `KeywordPageRow`
+- **Acceptance criteria verified:**
+  - [x] Show success toast on keyword update - via inline edit or dropdown selection
+  - [x] Show success toast on approve - "Keyword approved" message
+  - [x] Show success toast on bulk approve with count - Already implemented in S4-039
+  - [x] Show error toast on failures - Shows error message from catch block
+- **Toast messages:**
+  - Keyword update success: "Keyword updated"
+  - Approve success: "Keyword approved"
+  - Priority toggle success: "Marked as priority" / "Removed from priority"
+  - Errors: Display the error message from the API
+- **Learnings:**
+  - Pattern for bubbling toast notifications: Add optional `onShowToast` callback prop to child components
+  - Keep toast state at the page level where the Toast component is rendered
+  - Use optional chaining (`onShowToast?.()`) for optional callbacks
+  - Priority toggle returns `is_priority` in response, use it for dynamic message
+---
+

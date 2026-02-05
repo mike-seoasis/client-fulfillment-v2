@@ -592,6 +592,11 @@ export default function KeywordsPage() {
                       key={page.id}
                       page={page}
                       projectId={projectId}
+                      onShowToast={(message, variant) => {
+                        setToastMessage(message);
+                        setToastVariant(variant);
+                        setShowToast(true);
+                      }}
                     />
                   ))
                 )}

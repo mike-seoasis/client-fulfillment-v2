@@ -14,6 +14,8 @@ interface KeywordPageRowProps {
   projectId: string;
   /** Callback when keyword is clicked (for opening edit dropdown) - optional, if not provided uses built-in dropdown */
   onKeywordClick?: (pageId: string) => void;
+  /** Callback to show toast notification */
+  onShowToast?: (message: string, variant: 'success' | 'error') => void;
 }
 
 // SVG Icons
@@ -200,7 +202,7 @@ function extractPath(url: string): string {
  * KeywordPageRow component displays a single page's keyword data
  * with interactive controls for approval and priority.
  */
-export function KeywordPageRow({ page, projectId, onKeywordClick }: KeywordPageRowProps) {
+export function KeywordPageRow({ page, projectId, onKeywordClick, onShowToast }: KeywordPageRowProps) {
   const approveKeyword = useApproveKeyword();
   const togglePriority = useTogglePriority();
   const updatePrimaryKeyword = useUpdatePrimaryKeyword();
@@ -236,8 +238,11 @@ export function KeywordPageRow({ page, projectId, onKeywordClick }: KeywordPageR
         projectId,
         pageId: page.id,
       });
+      onShowToast?.('Keyword approved', 'success');
     } catch (error) {
       console.error('Failed to approve keyword:', error);
+      const message = error instanceof Error ? error.message : 'Failed to approve keyword';
+      onShowToast?.(message, 'error');
     }
   };
 
@@ -245,12 +250,16 @@ export function KeywordPageRow({ page, projectId, onKeywordClick }: KeywordPageR
     if (!page.keywords) return;
 
     try {
-      await togglePriority.mutateAsync({
+      const result = await togglePriority.mutateAsync({
         projectId,
         pageId: page.id,
       });
+      const newPriority = result.is_priority;
+      onShowToast?.(newPriority ? 'Marked as priority' : 'Removed from priority', 'success');
     } catch (error) {
       console.error('Failed to toggle priority:', error);
+      const message = error instanceof Error ? error.message : 'Failed to toggle priority';
+      onShowToast?.(message, 'error');
     }
   };
 
@@ -306,8 +315,11 @@ export function KeywordPageRow({ page, projectId, onKeywordClick }: KeywordPageR
         keyword: trimmedValue,
       });
       setIsEditing(false);
+      onShowToast?.('Keyword updated', 'success');
     } catch (error) {
       console.error('Failed to update keyword:', error);
+      const message = error instanceof Error ? error.message : 'Failed to update keyword';
+      onShowToast?.(message, 'error');
       // Keep editing mode open on error so user can retry
     }
   };
@@ -430,6 +442,7 @@ export function KeywordPageRow({ page, projectId, onKeywordClick }: KeywordPageR
                   isOpen={isDropdownOpen}
                   onClose={handleDropdownClose}
                   anchorRect={keywordButtonRect}
+                  onShowToast={onShowToast}
                 />
               )}
 

@@ -785,8 +785,9 @@
         "Show error toast on failures"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Use existing Toast component."
+      "passes": true,
+      "notes": "Use existing Toast component.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S4-050",
@@ -849,6 +850,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-05T15:57:17.310Z"
+    "updatedAt": "2026-02-05T15:59:40.534Z"
   }
 }

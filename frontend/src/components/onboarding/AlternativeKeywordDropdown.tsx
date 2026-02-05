@@ -21,6 +21,8 @@ interface AlternativeKeywordDropdownProps {
   onClose: () => void;
   /** Anchor element position (from getBoundingClientRect) */
   anchorRect?: DOMRect | null;
+  /** Callback to show toast notification */
+  onShowToast?: (message: string, variant: 'success' | 'error') => void;
 }
 
 // SVG Icons
@@ -79,6 +81,7 @@ export function AlternativeKeywordDropdown({
   isOpen,
   onClose,
   anchorRect,
+  onShowToast,
 }: AlternativeKeywordDropdownProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null);
@@ -129,9 +132,12 @@ export function AlternativeKeywordDropdown({
         pageId,
         keyword,
       });
+      onShowToast?.('Keyword updated', 'success');
       onClose();
     } catch (error) {
       console.error('Failed to update primary keyword:', error);
+      const message = error instanceof Error ? error.message : 'Failed to update keyword';
+      onShowToast?.(message, 'error');
     } finally {
       setSelectedKeyword(null);
     }
