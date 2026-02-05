@@ -1076,3 +1076,26 @@ after each iteration and it's included in prompts for context.
   - Pre-existing test failures in other test files don't block new feature tests
 ---
 
+## 2026-02-05 - S4-046
+- **What was implemented:** Integration tests for the keywords page covering full page functionality
+- **Files changed:**
+  - `frontend/src/app/projects/[id]/onboarding/keywords/__tests__/page.test.tsx` (new file, 37 tests)
+- **Test coverage:**
+  - Page loading with mocked API (6 tests): loading skeletons, 404 state, successful render, step indicator, back navigation
+  - Generation progress displays (9 tests): pending state, generate button, starting state, generating state with progress, progress bar, completed state, failed state with error
+  - Page list renders after generation (7 tests): page list with keywords, volume display, score display, summary stats, loading state, empty state, pages without keywords
+  - Approve all flow (12 tests): Approve All button enabled/disabled states, mutation call, loading state, success/error toasts, approval progress display, styled badge, Continue button enabled/disabled, navigation
+  - Edge cases (3 tests): null project, loading with generating, rerender with updated state
+- **Acceptance criteria verified:**
+  - [x] Test page loads with mocked API
+  - [x] Test generation progress displays
+  - [x] Test page list renders after generation
+  - [x] Test approve all flow
+- **Learnings:**
+  - Define typed interface for mock return values to avoid circular type references (e.g., `MockKeywordGeneration` interface)
+  - Use `getAllByText` with tagName check to avoid matching body element when using callback matchers
+  - Progress bar inline styles can be verified via `toHaveAttribute('style', expect.stringContaining('width:'))`
+  - When testing UI text that includes suffixes (e.g., "55.5 score"), match the full text exactly
+  - Test file structure: group by feature area (page loading, progress display, page list, approve flow, edge cases)
+---
+
