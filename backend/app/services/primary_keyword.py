@@ -11,6 +11,7 @@ The service maintains state for:
 - stats: Metrics tracking for the generation process
 """
 
+import json
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -152,3 +153,198 @@ class PrimaryKeywordService:
             "error_count": len(self._stats.errors),
             "used_keywords_count": len(self._used_primary_keywords),
         }
+
+    async def generate_candidates(
+        self,
+        url: str,
+        title: str | None,
+        h1: str | None,
+        headings: dict[str, Any] | None,
+        content_excerpt: str | None,
+        product_count: int | None,
+        category: str | None,
+    ) -> list[str]:
+        """Generate keyword candidates from page content using Claude.
+
+        Uses LLM to analyze page content and generate 20-25 relevant keyword
+        variations including head terms, mid-tail, and long-tail phrases.
+
+        Args:
+            url: Page URL for context.
+            title: Page title from HTML.
+            h1: Main H1 heading from page.
+            headings: Dict with h1, h2, h3 arrays of headings.
+            content_excerpt: First ~500 chars of body content.
+            product_count: Number of products on page (for collection pages).
+            category: Page category (product, collection, blog, etc.).
+
+        Returns:
+            List of keyword strings (20-25 keywords on success, fallback to
+            title/H1 on API failure).
+        """
+        # Build category-specific guidelines
+        category_guidelines = {
+            "product": """- Focus on buyer intent (product name, features, benefits, use cases)
+- Include product specifications and variations
+- Add price/quality modifiers (cheap, premium, best, affordable)
+- Consider user problems this product solves""",
+            "collection": """- Focus on category terms + modifiers (best, top, cheap, premium)
+- Include related categories and subcategories
+- Add shopping intent keywords (buy, shop, find)
+- Consider collection theme variations
+- This is an e-commerce collection page with {product_count} products""",
+            "blog": """- Focus on informational intent (how to, what is, guide, tutorial)
+- Include question-based keywords
+- Add topic variations and related concepts
+- Consider user learning goals""",
+            "homepage": """- Focus on brand name and main product categories
+- Include branded variations
+- Add top-level category terms
+- Consider what the site is known for""",
+            "other": """- Analyze page content and generate relevant topic keywords
+- Focus on page purpose and main theme
+- Include variations of main concepts""",
+        }
+
+        guidelines = category_guidelines.get(
+            category or "other", category_guidelines["other"]
+        )
+
+        # Format product count for collection pages
+        if category == "collection" and product_count:
+            guidelines = guidelines.format(product_count=product_count)
+        else:
+            guidelines = guidelines.replace(
+                "- This is an e-commerce collection page with {product_count} products",
+                "",
+            )
+
+        # Build headings summary
+        headings_text = ""
+        if headings:
+            h1_list = headings.get("h1", [])
+            h2_list = headings.get("h2", [])
+            if h1_list:
+                headings_text += f"H1: {', '.join(h1_list[:3])}\n"
+            if h2_list:
+                headings_text += f"H2: {', '.join(h2_list[:5])}"
+
+        # Build prompt
+        prompt = f"""Analyze this {category or 'web'} page and generate high-level keyword ideas.
+
+Page Data:
+- URL: {url}
+- Title: {title or 'N/A'}
+- H1: {h1 or 'N/A'}
+{f'- Headings: {headings_text}' if headings_text else ''}- Content excerpt (first 500 chars):
+{(content_excerpt or '')[:500]}
+- Category: {category or 'other'}
+{f'- Product count: {product_count}' if product_count else ''}
+
+Generate 20-25 relevant keyword variations including:
+- Head terms (short, 1-2 words, likely high volume)
+- Mid-tail phrases (2-3 words, moderate volume)
+- Long-tail phrases (4+ words, specific, lower competition)
+- Question-based keywords (if relevant)
+- Semantic variations and synonyms
+
+Category-specific guidelines for {category or 'other'} pages:
+{guidelines}
+
+IMPORTANT: Return ONLY a JSON array of keyword strings. No explanations, no markdown, just the array.
+Example: ["keyword one", "keyword two", "keyword three"]"""
+
+        try:
+            # Call Claude API
+            result = await self._claude.complete(
+                user_prompt=prompt,
+                max_tokens=500,
+                temperature=0.3,  # Slight variation for diverse keywords
+            )
+
+            # Update stats
+            self._stats.claude_calls += 1
+            if result.input_tokens:
+                self._stats.total_input_tokens += result.input_tokens
+            if result.output_tokens:
+                self._stats.total_output_tokens += result.output_tokens
+
+            if not result.success or not result.text:
+                raise ValueError(result.error or "Empty response from Claude")
+
+            # Parse JSON response
+            response_text = result.text.strip()
+
+            # Handle markdown code blocks
+            if "```json" in response_text:
+                response_text = response_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in response_text:
+                response_text = response_text.split("```")[1].split("```")[0].strip()
+
+            keywords = json.loads(response_text)
+
+            # Validate response is a list of strings
+            if not isinstance(keywords, list):
+                raise ValueError("LLM response is not a list")
+
+            # Filter to valid strings and clean up
+            keywords = [
+                k.strip().lower()
+                for k in keywords
+                if isinstance(k, str) and k.strip()
+            ]
+
+            if len(keywords) < 5:
+                raise ValueError(f"LLM generated too few keywords: {len(keywords)}")
+
+            # Update stats
+            self._stats.keywords_generated += len(keywords)
+
+            logger.info(
+                "Generated keyword candidates",
+                extra={
+                    "url": url[:100],
+                    "keyword_count": len(keywords),
+                    "category": category,
+                },
+            )
+
+            return keywords
+
+        except Exception as e:
+            # Log error
+            logger.warning(
+                "Keyword generation failed, using fallback",
+                extra={
+                    "url": url[:100],
+                    "error": str(e),
+                    "category": category,
+                },
+            )
+
+            # Record error in stats
+            self._stats.errors.append(
+                {
+                    "url": url,
+                    "error": str(e),
+                    "phase": "generate_candidates",
+                }
+            )
+
+            # Fallback: extract keywords from title and H1
+            fallback_keywords: list[str] = []
+            if title:
+                fallback_keywords.append(title.strip().lower())
+            if h1 and (not title or h1.strip().lower() != title.strip().lower()):
+                fallback_keywords.append(h1.strip().lower())
+
+            logger.info(
+                "Using fallback keywords from title/H1",
+                extra={
+                    "url": url[:100],
+                    "fallback_count": len(fallback_keywords),
+                },
+            )
+
+            self._stats.keywords_generated += len(fallback_keywords)
+            return fallback_keywords

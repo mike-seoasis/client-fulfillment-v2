@@ -117,3 +117,25 @@ after each iteration and it's included in prompts for context.
   - Export both the service class and any related dataclasses from __init__.py
 ---
 
+## 2026-02-05 - S4-007
+- **What was implemented:** Implemented `generate_candidates` async method for generating keyword candidates from page content
+- **Files changed:**
+  - `backend/app/services/primary_keyword.py` - Added `generate_candidates` method
+- **Method features:**
+  - Takes CrawledPage data as input: url, title, h1, headings, content_excerpt, product_count, category
+  - Builds category-specific prompts with guidelines for product, collection, blog, homepage, other page types
+  - Collection pages get e-commerce-focused guidelines with product count context
+  - Calls Claude API via `self._claude.complete()` with temperature=0.3 for keyword diversity
+  - Parses JSON array response, handles markdown code blocks
+  - Returns 20-25 keyword strings (lowercase, stripped)
+  - Handles API failures with fallback to title/H1
+  - Updates stats: claude_calls, total_input_tokens, total_output_tokens, keywords_generated, errors
+- **Learnings:**
+  - Reference Old KW research logic/keyword_research.py for prompt structure (generate_keywords_with_llm)
+  - Use temperature=0.3 for slight variation in keyword generation (vs 0.0 for deterministic)
+  - Category-specific guidelines improve keyword relevance (product=buyer intent, collection=category terms, blog=informational)
+  - Always handle markdown code blocks in LLM JSON responses (```json...```)
+  - Normalize keywords immediately (lowercase, strip) for consistency
+  - Fallback strategy: title first, then H1 if different from title
+---
+

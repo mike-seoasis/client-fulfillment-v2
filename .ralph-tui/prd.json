@@ -115,8 +115,9 @@
         "Handles API failures with fallback to title/H1"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Reference generate_keywords_with_llm in Old KW research logic/keyword_research.py"
+      "passes": true,
+      "notes": "Reference generate_keywords_with_llm in Old KW research logic/keyword_research.py",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S4-008",
@@ -807,6 +808,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-05T14:15:12.492Z"
+    "updatedAt": "2026-02-05T14:17:01.276Z"
   }
 }
