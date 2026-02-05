@@ -726,3 +726,19 @@ after each iteration and it's included in prompts for context.
   - Status-aware Continue button: disabled during generation, enabled when complete
 ---
 
+## 2026-02-05 - S4-031
+- **What was implemented:** Step indicator was already implemented in S4-030 when the keywords page was created
+- **Files changed:**
+  - None (already complete)
+- **Verification:**
+  - Step indicator shows all 5 steps: Upload, Crawl, Keywords, Content, Export
+  - Steps 1-2 (Upload, Crawl) show as complete (filled with bg-palm-500)
+  - Step 3 (Keywords) shows as active (highlighted with bg-palm-500)
+  - Steps 4-5 (Content, Export) show as pending (empty with bg-cream-300)
+  - Styling matches crawl page exactly (same StepIndicator component implementation)
+- **Learnings:**
+  - StepIndicator component is defined inline in each onboarding page with same implementation
+  - ONBOARDING_STEPS array is duplicated across pages (could be extracted to shared component)
+  - Component uses currentStep prop to determine which step is active
+---
+
