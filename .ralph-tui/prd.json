@@ -65,8 +65,9 @@
         "Verify default values work correctly"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Test with: docker compose exec backend alembic upgrade head"
+      "passes": true,
+      "notes": "Test with: docker compose exec backend alembic upgrade head",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S4-005",
@@ -804,6 +805,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-05T14:10:38.692Z"
+    "updatedAt": "2026-02-05T14:12:21.281Z"
   }
 }

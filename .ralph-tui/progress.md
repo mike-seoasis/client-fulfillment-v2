@@ -68,3 +68,18 @@ after each iteration and it's included in prompts for context.
   - Add `index=True` on columns that have corresponding indexes in migration
 ---
 
+## 2026-02-05 - S4-004
+- **What was implemented:** Ran Alembic migration and verified schema changes
+- **Files changed:**
+  - None (database schema update only)
+- **Verification results:**
+  - Migration 0019 -> 0020 ran successfully
+  - All 6 new columns exist: is_approved, is_priority, alternative_keywords, composite_score, relevance_score, ai_reasoning
+  - Indexes created: ix_page_keywords_is_approved, ix_page_keywords_is_priority
+  - Default values verified: is_approved=False, is_priority=False, alternative_keywords=[]
+- **Learnings:**
+  - Can run alembic migrations from host machine using `source .venv/bin/activate && alembic upgrade head`
+  - Database accessible at localhost:5432 when docker compose db service is running
+  - Use `sqlalchemy.inspect()` to verify table columns and indexes programmatically
+---
+
