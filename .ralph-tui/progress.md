@@ -864,3 +864,31 @@ after each iteration and it's included in prompts for context.
   - Reuse SVG icons across extracted components (CheckIcon, SpinnerIcon can be shared)
 ---
 
+## 2026-02-05 - S4-037
+- **What was implemented:** Added inline editing functionality to KeywordPageRow for custom keyword input
+- **Files changed:**
+  - `frontend/src/components/onboarding/KeywordPageRow.tsx` (updated with inline editing)
+- **Features implemented:**
+  - Double-click on keyword button OR click "Edit" button to enter edit mode
+  - Input pre-filled with current keyword, auto-focused and selected
+  - Enter key saves the change via `useUpdatePrimaryKeyword` mutation
+  - Escape key cancels and exits edit mode
+  - Blur event saves the change (with safeguard against double-save)
+  - Loading spinner shown next to input while saving
+  - Input disabled during save operation
+  - Custom keywords without volume data show dash (`—`) via formatNumber
+  - Custom keywords without composite score show `— score`
+- **Acceptance criteria verified:**
+  - [x] Double-click or 'Edit' button enables text input mode
+  - [x] Input is pre-filled with current keyword
+  - [x] Enter key saves the change
+  - [x] Escape key cancels edit
+  - [x] Blur saves the change
+  - [x] Shows loading state while saving
+- **Learnings:**
+  - Use `useEffect` to focus input when entering edit mode
+  - Check `isPending` before saving on blur to prevent double-save from Enter + blur
+  - Keep editing mode open on error so user can retry
+  - Always show volume/score badges (with dash for null) for consistent layout
+---
+

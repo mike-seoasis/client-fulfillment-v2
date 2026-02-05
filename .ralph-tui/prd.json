@@ -604,8 +604,9 @@
         "Shows loading state while saving"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Custom keywords won't have volume data - show dash instead."
+      "passes": true,
+      "notes": "Custom keywords won't have volume data - show dash instead.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S4-038",
@@ -837,6 +838,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-05T15:25:53.705Z"
+    "updatedAt": "2026-02-05T15:28:00.210Z"
   }
 }

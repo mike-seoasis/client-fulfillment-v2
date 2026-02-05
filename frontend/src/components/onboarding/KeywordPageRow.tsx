@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import type { PageWithKeywords } from '@/lib/api';
-import { useApproveKeyword, useTogglePriority } from '@/hooks/useKeywordMutations';
+import { useApproveKeyword, useTogglePriority, useUpdatePrimaryKeyword } from '@/hooks/useKeywordMutations';
 import { AlternativeKeywordDropdown } from './AlternativeKeywordDropdown';
 import { PriorityToggle } from './PriorityToggle';
 import { ApproveButton } from './ApproveButton';
@@ -29,6 +29,40 @@ function ChevronDownIcon({ className }: { className?: string }) {
       strokeLinejoin="round"
     >
       <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
+function PencilIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+  );
+}
+
+function SpinnerIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" opacity="0.25" />
+      <path d="M12 2a10 10 0 0 1 10 10" />
     </svg>
   );
 }
@@ -169,16 +203,30 @@ function extractPath(url: string): string {
 export function KeywordPageRow({ page, projectId, onKeywordClick }: KeywordPageRowProps) {
   const approveKeyword = useApproveKeyword();
   const togglePriority = useTogglePriority();
+  const updatePrimaryKeyword = useUpdatePrimaryKeyword();
 
   // State for built-in dropdown
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [keywordButtonRect, setKeywordButtonRect] = useState<DOMRect | null>(null);
   const keywordButtonRef = useRef<HTMLButtonElement>(null);
 
+  // State for inline editing
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
   const hasKeyword = !!page.keywords?.primary_keyword;
   const isApproved = page.keywords?.is_approved ?? false;
   const isPriority = page.keywords?.is_priority ?? false;
   const displayUrl = extractPath(page.url);
+
+  // Focus input when entering edit mode
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
 
   const handleApprove = async () => {
     if (!page.keywords || isApproved) return;
@@ -227,6 +275,68 @@ export function KeywordPageRow({ page, projectId, onKeywordClick }: KeywordPageR
     setKeywordButtonRect(null);
   };
 
+  // Start inline editing mode
+  const handleStartEdit = () => {
+    if (!hasKeyword || isEditing) return;
+    setEditValue(page.keywords?.primary_keyword || '');
+    setIsEditing(true);
+    // Close dropdown if open
+    setIsDropdownOpen(false);
+  };
+
+  // Handle double-click on keyword button to enable editing
+  const handleKeywordDoubleClick = () => {
+    handleStartEdit();
+  };
+
+  // Save the edited keyword
+  const handleSaveEdit = async () => {
+    const trimmedValue = editValue.trim();
+
+    // Don't save if empty or same as current
+    if (!trimmedValue || trimmedValue.toLowerCase() === page.keywords?.primary_keyword?.toLowerCase()) {
+      setIsEditing(false);
+      return;
+    }
+
+    try {
+      await updatePrimaryKeyword.mutateAsync({
+        projectId,
+        pageId: page.id,
+        keyword: trimmedValue,
+      });
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Failed to update keyword:', error);
+      // Keep editing mode open on error so user can retry
+    }
+  };
+
+  // Cancel editing
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditValue('');
+  };
+
+  // Handle keydown in edit input
+  const handleEditKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveEdit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCancelEdit();
+    }
+  };
+
+  // Handle blur - save on blur
+  const handleEditBlur = () => {
+    // Only save if not already saving (prevents double-save)
+    if (!updatePrimaryKeyword.isPending) {
+      handleSaveEdit();
+    }
+  };
+
   return (
     <div className="py-3 px-4 border-b border-cream-200 last:border-b-0 hover:bg-sand-50 transition-colors">
       <div className="flex items-start gap-3">
@@ -261,21 +371,56 @@ export function KeywordPageRow({ page, projectId, onKeywordClick }: KeywordPageR
           {/* Keyword and metrics row */}
           {hasKeyword && (
             <div className="flex items-center gap-3 flex-wrap">
-              {/* Primary keyword (clickable to edit) */}
-              <button
-                ref={keywordButtonRef}
-                onClick={handleKeywordClick}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-sm bg-lagoon-100 text-lagoon-700 rounded-sm font-medium hover:bg-lagoon-200 transition-colors"
-                title="Click to select alternative keyword"
-                aria-haspopup="listbox"
-                aria-expanded={isDropdownOpen}
-              >
-                {page.keywords?.primary_keyword}
-                <ChevronDownIcon className="w-3 h-3" />
-              </button>
+              {/* Inline edit input or keyword button */}
+              {isEditing ? (
+                <div className="inline-flex items-center gap-2">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onKeyDown={handleEditKeyDown}
+                    onBlur={handleEditBlur}
+                    disabled={updatePrimaryKeyword.isPending}
+                    className="px-2.5 py-1 text-sm border border-lagoon-300 rounded-sm bg-white focus:outline-none focus:ring-2 focus:ring-palm-400 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed min-w-[200px]"
+                    placeholder="Enter keyword..."
+                    aria-label="Edit primary keyword"
+                  />
+                  {updatePrimaryKeyword.isPending && (
+                    <SpinnerIcon className="w-4 h-4 text-lagoon-500 animate-spin flex-shrink-0" />
+                  )}
+                </div>
+              ) : (
+                <>
+                  {/* Primary keyword (clickable to open dropdown, double-click to edit) */}
+                  <button
+                    ref={keywordButtonRef}
+                    onClick={handleKeywordClick}
+                    onDoubleClick={handleKeywordDoubleClick}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-sm bg-lagoon-100 text-lagoon-700 rounded-sm font-medium hover:bg-lagoon-200 transition-colors"
+                    title="Click for alternatives, double-click to edit"
+                    aria-haspopup="listbox"
+                    aria-expanded={isDropdownOpen}
+                  >
+                    {page.keywords?.primary_keyword}
+                    <ChevronDownIcon className="w-3 h-3" />
+                  </button>
+
+                  {/* Edit button */}
+                  <button
+                    onClick={handleStartEdit}
+                    className="inline-flex items-center gap-1 px-2 py-1 text-xs text-warm-gray-500 hover:text-warm-gray-700 hover:bg-cream-100 rounded-sm transition-colors"
+                    title="Edit keyword"
+                    aria-label="Edit keyword"
+                  >
+                    <PencilIcon className="w-3.5 h-3.5" />
+                    <span>Edit</span>
+                  </button>
+                </>
+              )}
 
               {/* Alternative keyword dropdown */}
-              {page.keywords && !onKeywordClick && (
+              {page.keywords && !onKeywordClick && !isEditing && (
                 <AlternativeKeywordDropdown
                   primaryKeyword={page.keywords.primary_keyword}
                   alternatives={page.keywords.alternative_keywords || []}
@@ -288,21 +433,19 @@ export function KeywordPageRow({ page, projectId, onKeywordClick }: KeywordPageR
                 />
               )}
 
-              {/* Search volume badge */}
-              {page.keywords?.search_volume !== null && page.keywords?.search_volume !== undefined && (
-                <span className="inline-flex items-center px-2 py-0.5 text-xs bg-cream-100 text-warm-gray-600 rounded-sm">
-                  {formatNumber(page.keywords.search_volume)} vol
-                </span>
-              )}
+              {/* Search volume badge - show dash for custom keywords without volume */}
+              <span className="inline-flex items-center px-2 py-0.5 text-xs bg-cream-100 text-warm-gray-600 rounded-sm">
+                {formatNumber(page.keywords?.search_volume)} vol
+              </span>
 
-              {/* Composite score */}
-              {page.keywords?.composite_score !== null && page.keywords?.composite_score !== undefined && (
-                <ScoreTooltip compositeScore={page.keywords.composite_score}>
-                  <span className="inline-flex items-center px-2 py-0.5 text-xs bg-palm-100 text-palm-700 rounded-sm font-medium">
-                    {page.keywords.composite_score.toFixed(1)} score
-                  </span>
-                </ScoreTooltip>
-              )}
+              {/* Composite score - show dash for custom keywords without score */}
+              <ScoreTooltip compositeScore={page.keywords?.composite_score ?? null}>
+                <span className="inline-flex items-center px-2 py-0.5 text-xs bg-palm-100 text-palm-700 rounded-sm font-medium">
+                  {page.keywords?.composite_score !== null && page.keywords?.composite_score !== undefined
+                    ? `${page.keywords.composite_score.toFixed(1)} score`
+                    : '— score'}
+                </span>
+              </ScoreTooltip>
             </div>
           )}
 
