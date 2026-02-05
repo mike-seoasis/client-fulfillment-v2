@@ -892,3 +892,22 @@ after each iteration and it's included in prompts for context.
   - Always show volume/score badges (with dash for null) for consistent layout
 ---
 
+## 2026-02-05 - S4-038
+- **What was implemented:** Score tooltip was already implemented in S4-033 when KeywordPageRow was created
+- **Files changed:**
+  - None (already complete)
+- **Verification against acceptance criteria:**
+  - [x] Hovering over score shows tooltip - ScoreTooltip component shows on mouse enter/leave (lines 152-175)
+  - [x] Tooltip shows: Volume score, Relevance score, Competition score - Lines 168-170 display these labels
+  - [x] Shows formula weights (50%, 35%, 15%) - Lines 168-170 show "Volume: 50% weight", "Relevance: 35% weight", "Competition: 15% weight"
+  - [x] Styled consistently with other tooltips - Same pattern as Tooltip component (fixed positioning, warm-gray-800 bg, rounded-sm, arrow)
+- **Implementation details:**
+  - `ScoreTooltip` component (lines 124-177) in KeywordPageRow.tsx
+  - Used on line 442-448 to wrap the composite score badge
+  - If compositeScore is null, renders children without tooltip (graceful fallback)
+  - Uses `cursor-help` to indicate tooltip availability
+- **Learnings:**
+  - Score tooltip was implemented proactively alongside the KeywordPageRow component in S4-033
+  - Component handles null scores gracefully by not rendering the tooltip wrapper
+---
+
