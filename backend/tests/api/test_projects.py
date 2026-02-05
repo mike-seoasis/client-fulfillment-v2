@@ -1745,3 +1745,238 @@ class TestApproveKeyword:
         assert data["ai_reasoning"] == "Good keyword match"
         assert data["search_volume"] == 5000
         assert data["difficulty_score"] == 35
+
+
+class TestApproveAllKeywords:
+    """Tests for POST /api/v1/projects/{project_id}/approve-all-keywords endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_approve_all_keywords_project_not_found(
+        self, async_client: AsyncClient
+    ) -> None:
+        """POST approve-all-keywords returns 404 for non-existent project."""
+        fake_project_id = str(uuid.uuid4())
+        response = await async_client.post(
+            f"/api/v1/projects/{fake_project_id}/approve-all-keywords",
+        )
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_approve_all_keywords_no_pages(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """POST approve-all-keywords returns 0 approved when no pages with keywords."""
+        from app.models.project import Project
+
+        project = Project(
+            name="No Pages Bulk Approve Test",
+            site_url="https://no-pages-bulk-approve.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        response = await async_client.post(
+            f"/api/v1/projects/{project.id}/approve-all-keywords",
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["approved_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_approve_all_keywords_pages_without_keywords(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """POST approve-all-keywords returns 0 when pages exist but have no keywords."""
+        from app.models.crawled_page import CrawledPage
+        from app.models.project import Project
+
+        project = Project(
+            name="Pages No Keywords Test",
+            site_url="https://pages-no-keywords.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        page = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://pages-no-keywords.example.com/products",
+            status="completed",
+            title="Products Page",
+        )
+        db_session.add(page)
+        await db_session.commit()
+
+        response = await async_client.post(
+            f"/api/v1/projects/{project.id}/approve-all-keywords",
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["approved_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_approve_all_keywords_success(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """POST approve-all-keywords approves all unapproved keywords."""
+        from app.models.crawled_page import CrawledPage
+        from app.models.page_keywords import PageKeywords
+        from app.models.project import Project
+
+        project = Project(
+            name="Bulk Approve Test",
+            site_url="https://bulk-approve.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        # Create multiple pages with keywords
+        pages = []
+        for i in range(3):
+            page = CrawledPage(
+                project_id=project.id,
+                normalized_url=f"https://bulk-approve.example.com/page{i}",
+                status="completed",
+                title=f"Page {i}",
+            )
+            db_session.add(page)
+            pages.append(page)
+        await db_session.commit()
+        for page in pages:
+            await db_session.refresh(page)
+
+        # Add keywords - 2 unapproved, 1 already approved
+        keywords1 = PageKeywords(
+            crawled_page_id=pages[0].id,
+            primary_keyword="keyword one",
+            is_approved=False,
+        )
+        keywords2 = PageKeywords(
+            crawled_page_id=pages[1].id,
+            primary_keyword="keyword two",
+            is_approved=False,
+        )
+        keywords3 = PageKeywords(
+            crawled_page_id=pages[2].id,
+            primary_keyword="keyword three",
+            is_approved=True,  # Already approved
+        )
+        db_session.add_all([keywords1, keywords2, keywords3])
+        await db_session.commit()
+
+        response = await async_client.post(
+            f"/api/v1/projects/{project.id}/approve-all-keywords",
+        )
+        assert response.status_code == 200
+        data = response.json()
+        # Only 2 newly approved (the third was already approved)
+        assert data["approved_count"] == 2
+
+    @pytest.mark.asyncio
+    async def test_approve_all_keywords_idempotent(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """POST approve-all-keywords is idempotent - calling twice returns 0 on second call."""
+        from app.models.crawled_page import CrawledPage
+        from app.models.page_keywords import PageKeywords
+        from app.models.project import Project
+
+        project = Project(
+            name="Idempotent Bulk Approve Test",
+            site_url="https://idempotent-bulk-approve.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        page = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://idempotent-bulk-approve.example.com/page1",
+            status="completed",
+            title="Page 1",
+        )
+        db_session.add(page)
+        await db_session.commit()
+        await db_session.refresh(page)
+
+        keywords = PageKeywords(
+            crawled_page_id=page.id,
+            primary_keyword="test keyword",
+            is_approved=False,
+        )
+        db_session.add(keywords)
+        await db_session.commit()
+
+        # First call - should approve 1
+        response1 = await async_client.post(
+            f"/api/v1/projects/{project.id}/approve-all-keywords",
+        )
+        assert response1.status_code == 200
+        assert response1.json()["approved_count"] == 1
+
+        # Second call - should approve 0 (already approved)
+        response2 = await async_client.post(
+            f"/api/v1/projects/{project.id}/approve-all-keywords",
+        )
+        assert response2.status_code == 200
+        assert response2.json()["approved_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_approve_all_keywords_only_completed_pages(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """POST approve-all-keywords only approves keywords for completed pages."""
+        from app.models.crawled_page import CrawledPage
+        from app.models.page_keywords import PageKeywords
+        from app.models.project import Project
+
+        project = Project(
+            name="Only Completed Test",
+            site_url="https://only-completed.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        # Completed page
+        completed_page = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://only-completed.example.com/completed",
+            status="completed",
+            title="Completed Page",
+        )
+        # Failed page
+        failed_page = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://only-completed.example.com/failed",
+            status="failed",
+            title="Failed Page",
+        )
+        db_session.add_all([completed_page, failed_page])
+        await db_session.commit()
+        await db_session.refresh(completed_page)
+        await db_session.refresh(failed_page)
+
+        # Keywords for both pages
+        keywords_completed = PageKeywords(
+            crawled_page_id=completed_page.id,
+            primary_keyword="completed keyword",
+            is_approved=False,
+        )
+        keywords_failed = PageKeywords(
+            crawled_page_id=failed_page.id,
+            primary_keyword="failed keyword",
+            is_approved=False,
+        )
+        db_session.add_all([keywords_completed, keywords_failed])
+        await db_session.commit()
+
+        response = await async_client.post(
+            f"/api/v1/projects/{project.id}/approve-all-keywords",
+        )
+        assert response.status_code == 200
+        data = response.json()
+        # Only the completed page's keyword should be approved
+        assert data["approved_count"] == 1

@@ -476,3 +476,28 @@ after each iteration and it's included in prompts for context.
   - Reuse existing patterns: `joinedload`, `scalar_one_or_none()`, PageKeywordsData response mapping
 ---
 
+## 2026-02-05 - S4-022
+- **What was implemented:** POST `/api/v1/projects/{project_id}/approve-all-keywords` endpoint
+- **Files changed:**
+  - `backend/app/api/v1/projects.py` - Added approve-all-keywords endpoint, imported BulkApproveResponse schema
+  - `backend/tests/api/test_projects.py` - Added TestApproveAllKeywords class with 6 tests
+- **Endpoint features:**
+  - Sets `is_approved=true` for all PageKeywords in project
+  - Only approves keywords for pages with status=completed
+  - Returns BulkApproveResponse with approved_count
+  - Returns count of *newly* approved (already approved don't add to count)
+  - Idempotent - calling multiple times is safe
+  - Validates project exists (404 if not)
+- **Test coverage:**
+  - test_approve_all_keywords_project_not_found - 404 for non-existent project
+  - test_approve_all_keywords_no_pages - Returns 0 when no pages
+  - test_approve_all_keywords_pages_without_keywords - Returns 0 when pages have no keywords
+  - test_approve_all_keywords_success - Approves multiple keywords, counts correctly
+  - test_approve_all_keywords_idempotent - Second call returns 0
+  - test_approve_all_keywords_only_completed_pages - Only approves for completed pages
+- **Learnings:**
+  - Use `select().join()` to query PageKeywords through CrawledPage for project filtering
+  - Track count of *newly* approved vs already approved for accurate response
+  - Filter by page status=completed to match single-page approve behavior
+---
+

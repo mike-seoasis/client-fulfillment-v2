@@ -31,6 +31,7 @@ from app.schemas.crawled_page import (
     UrlUploadResponse,
 )
 from app.schemas.keyword_research import (
+    BulkApproveResponse,
     PageKeywordsData,
     PageWithKeywords,
     PrimaryKeywordGenerationStatus,
@@ -1508,6 +1509,66 @@ async def approve_keyword(
         search_volume=page_keywords.search_volume,
         difficulty_score=page_keywords.difficulty_score,
     )
+
+
+@router.post(
+    "/{project_id}/approve-all-keywords",
+    response_model=BulkApproveResponse,
+)
+async def approve_all_keywords(
+    project_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> BulkApproveResponse:
+    """Approve all keywords for pages in a project.
+
+    Sets is_approved=true for all PageKeywords records in the project
+    that have keywords generated. This is idempotent - calling multiple
+    times has the same effect.
+
+    Args:
+        project_id: UUID of the project.
+        db: AsyncSession for database operations.
+
+    Returns:
+        BulkApproveResponse with count of approved keywords.
+
+    Raises:
+        HTTPException: 404 if project not found.
+    """
+    # Verify project exists (raises 404 if not)
+    await ProjectService.get_project(db, project_id)
+
+    # Find all PageKeywords records for completed pages in this project
+    stmt = (
+        select(PageKeywords)
+        .join(CrawledPage, PageKeywords.crawled_page_id == CrawledPage.id)
+        .where(
+            CrawledPage.project_id == project_id,
+            CrawledPage.status == CrawlStatus.COMPLETED.value,
+        )
+    )
+    result = await db.execute(stmt)
+    page_keywords_list = list(result.scalars().all())
+
+    # Set is_approved=true for all records
+    approved_count = 0
+    for page_keywords in page_keywords_list:
+        if not page_keywords.is_approved:
+            page_keywords.is_approved = True
+            approved_count += 1
+
+    await db.commit()
+
+    logger.info(
+        "Bulk keyword approval completed",
+        extra={
+            "project_id": project_id,
+            "approved_count": approved_count,
+            "total_pages_with_keywords": len(page_keywords_list),
+        },
+    )
+
+    return BulkApproveResponse(approved_count=approved_count)
 
 
 @router.put(
