@@ -611,3 +611,31 @@ after each iteration and it's included in prompts for context.
   - All API functions use the existing `apiClient` convenience methods
 ---
 
+## 2026-02-05 - S4-027
+- **What was implemented:** useKeywordGeneration hook for polling generation status and triggering generation
+- **Files changed:**
+  - `frontend/src/hooks/useKeywordGeneration.ts` (new file)
+- **Exports added:**
+  - `keywordGenerationKeys` - Query keys factory for TanStack Query caching
+  - `useKeywordGenerationStatus` - Simple status query hook with optional polling
+  - `useStartKeywordGeneration` - Mutation hook to start keyword generation
+  - `useKeywordGeneration` - Full-featured hook combining status + mutation
+- **Hook features (useKeywordGeneration):**
+  - Polls `getPrimaryKeywordsStatus` every 2 seconds while status='generating'
+  - Stops polling when status='completed' or status='failed'
+  - Returns: status, progress (percentage), total, completed, failed, currentPage, error
+  - Returns: isLoading, isError, isGenerating, isComplete, isFailed (boolean states)
+  - Exposes: startGeneration(), startGenerationAsync(), isStarting, startError
+  - Includes: refetch(), invalidate(), invalidatePagesWithKeywords()
+- **Acceptance criteria verified:**
+  - [x] Hook polls getPrimaryKeywordsStatus every 2 seconds
+  - [x] Stops polling when status='complete' or status='failed'
+  - [x] Returns status, progress, isGenerating, error
+  - [x] Exposes startGeneration function
+- **Learnings:**
+  - Follow `useBrandConfigGeneration` pattern for generation hooks
+  - Use TanStack Query's `refetchInterval` callback to conditionally poll based on status
+  - Export query keys factory for cache invalidation from other components
+  - Include `invalidatePagesWithKeywords()` for downstream cache invalidation after generation
+---
+
