@@ -639,3 +639,35 @@ after each iteration and it's included in prompts for context.
   - Include `invalidatePagesWithKeywords()` for downstream cache invalidation after generation
 ---
 
+## 2026-02-05 - S4-028
+- **What was implemented:** usePagesWithKeywords hook for fetching pages with keyword data
+- **Files changed:**
+  - `frontend/src/hooks/usePagesWithKeywords.ts` (new file)
+- **Exports added:**
+  - `pagesWithKeywordsKeys` - Query keys factory for TanStack Query caching
+  - `usePagesWithKeywords` - Core hook returning UseQueryResult<PageWithKeywords[]>
+  - `usePagesWithKeywordsData` - Helper hook with convenient derived state and actions
+- **Hook features (usePagesWithKeywords):**
+  - Calls `getPagesWithKeywords(projectId)` API function
+  - Returns pages array via `UseQueryResult.data`
+  - Returns isLoading, isError, error states
+  - Exposes refetch function
+  - Configurable staleTime (default 30 seconds)
+  - Configurable gcTime (default 5 minutes)
+  - Optional enabled flag for conditional fetching
+- **Hook features (usePagesWithKeywordsData):**
+  - Returns `pages` array (defaults to empty array when loading)
+  - Returns isLoading, isError, error
+  - Exposes refetch() and invalidate() functions
+- **Acceptance criteria verified:**
+  - [x] Hook calls getPagesWithKeywords
+  - [x] Returns pages array, isLoading, error
+  - [x] Exposes refetch function
+  - [x] Uses appropriate staleTime and cacheTime
+- **Learnings:**
+  - Follow `useBrandConfig` pattern for simple data-fetching hooks
+  - TanStack Query v5 renamed `cacheTime` to `gcTime` (garbage collection time)
+  - Export query keys factory for cache invalidation from other components
+  - Provide helper hook with derived state for simpler component consumption
+---
+
