@@ -646,19 +646,289 @@ This means:
 
 ---
 
+## Feature 7: Blog Planning & Writing (MVP)
+
+**Priority:** MVP — Third core workflow
+
+### Overview
+
+Plan and write blog posts that support keyword clusters. Blogs are siloed to their parent cluster — they only link to pages within that cluster and other blogs in the same campaign. This creates tight topical relevance and clean internal link architecture.
+
+### Client Project Dashboard Structure
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    CLIENT PROJECT VIEW                       │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ ONBOARDING (Existing Pages)                          │   │
+│  │ Optimize existing collection pages                   │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ CLUSTERS (New Collection Pages)                      │   │
+│  │ Build new collection page clusters                   │   │
+│  │ ┌───────────┐ ┌───────────┐ ┌───────────┐           │   │
+│  │ │ Cluster 1 │ │ Cluster 2 │ │ + New     │           │   │
+│  │ │ 5 pages   │ │ 3 pending │ │ Cluster   │           │   │
+│  │ └───────────┘ └───────────┘ └───────────┘           │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ BLOGS (Supporting Content)                           │   │
+│  │ Plan & write blogs around clusters                   │   │
+│  │ ┌───────────┐ ┌───────────┐ ┌───────────┐           │   │
+│  │ │ Campaign 1│ │ Campaign 2│ │ + New     │           │   │
+│  │ │ 4 blogs   │ │ 2 pending │ │ Campaign  │           │   │
+│  │ │ Cluster 1 │ │ Cluster 2 │ │           │           │   │
+│  │ └───────────┘ └───────────┘ └───────────┘           │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Data Model
+
+```python
+BlogCampaign:
+  id: UUID
+  project_id: UUID
+  cluster_id: UUID              # Parent cluster this campaign supports
+  name: str                     # Campaign name (defaults to cluster name + "Blog")
+  status: str                   # "planning" | "writing" | "review" | "complete"
+  created_at: datetime
+  updated_at: datetime
+
+BlogPost:
+  id: UUID
+  campaign_id: UUID
+  primary_keyword: str
+  title: str | None
+  meta_description: str | None
+  content: str | None           # Full article HTML
+  content_json: JSON | None     # TipTap editor state (for resuming edits)
+  pop_score: float | None
+  pop_brief: JSON | None        # Stored POP brief data
+  is_approved: bool             # Keyword approved
+  status: str                   # "keyword_pending" | "generating" | "editing" | "complete"
+  created_at: datetime
+  updated_at: datetime
+```
+
+### Step 7.1: Create Blog Campaign
+
+**User provides:**
+- Select parent cluster (required)
+- Campaign name (optional, defaults to "[Cluster Name] Blog Campaign")
+
+**System does:**
+- Creates BlogCampaign linked to cluster
+- Calls POP API to discover blog topics around cluster's seed keyword
+- Returns 5-10 blog topic suggestions with estimated search volume
+
+**User sees:**
+- List of suggested blog topics/keywords
+- Search volume estimates
+- Can add custom topics
+- Can remove topics
+
+---
+
+### Step 7.2: Blog Keyword Approval (REUSES Shared UI)
+
+**User can:**
+- View suggested primary keywords for each blog post
+- Edit keywords
+- Approve keywords for each post
+- Bulk approve all
+
+**Same interface as collection page keyword approval** — reused component.
+
+---
+
+### Step 7.3: Blog Content Generation (REUSES Shared Pipeline)
+
+**System does (for each approved blog keyword):**
+
+```
+Phase 1: Get POP Content Brief
+├── Send blog keyword to POP API
+├── POP returns brief with:
+│   ├── lsi_terms
+│   ├── related_questions (for FAQ section)
+│   ├── word_count_target (typically longer for blogs)
+│   ├── heading_targets
+│   └── competitor analysis
+└── Store brief for reference
+
+Phase 2: Generate Blog Content
+├── Use Claude with blog-specific template:
+│   ├── Title (SEO-optimized)
+│   ├── Meta description
+│   ├── Introduction (hook + thesis)
+│   ├── Body sections (H2s with content)
+│   ├── FAQ section (from related_questions)
+│   └── Conclusion (with CTA)
+├── Apply brand voice from brand config
+├── Insert internal links (SILOED):
+│   ├── Links to parent cluster's collection pages
+│   ├── Links to sibling blogs in same campaign
+│   └── NO links outside the cluster silo
+└── Output as structured HTML
+
+Phase 3: Quality Check
+├── AI trope detection (same as collection pages)
+├── POP scoring API call
+│   └── Aim for score ≥70
+├── Internal link verification
+│   └── All links within cluster silo?
+└── Flag issues for review
+```
+
+---
+
+### Step 7.4: Rich Editor + Live POP Scoring (NEW)
+
+**User sees:**
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  Blog Editor: "Best Trail Running Shoes for Beginners"              │
+├─────────────────────────────────────────────────────┬───────────────┤
+│                                                     │ POP Score     │
+│  ┌───────────────────────────────────────────────┐ │ ┌───────────┐ │
+│  │ [B] [I] [H2] [H3] [Link] [Image] [Quote]      │ │ │    78     │ │
+│  ├───────────────────────────────────────────────┤ │ │  ▲ Good   │ │
+│  │                                               │ │ └───────────┘ │
+│  │ # Best Trail Running Shoes for Beginners     │ │               │
+│  │                                               │ │ Word Count    │
+│  │ Finding the right trail running shoes can    │ │ 1,847 / 2,000 │
+│  │ make or break your off-road experience...    │ │               │
+│  │                                               │ │ ─────────────│
+│  │ ## What to Look For                          │ │               │
+│  │                                               │ │ LSI Terms     │
+│  │ When shopping for [trail running shoes],     │ │ ☑ trail shoes │
+│  │ consider these key factors:                  │ │ ☑ grip        │
+│  │                                               │ │ ☐ traction    │
+│  │ ...                                          │ │ ☑ cushioning  │
+│  │                                               │ │               │
+│  │ ## FAQ                                       │ │ ─────────────│
+│  │                                               │ │               │
+│  │ **Are trail shoes worth it?**                │ │ Internal Links│
+│  │ Yes, trail-specific shoes provide...         │ │ ☑ 3 cluster   │
+│  │                                               │ │ ☑ 2 blog      │
+│  └───────────────────────────────────────────────┘ │               │
+│                                                     │ [Re-score]    │
+│  [Save Draft]              [Mark Complete]          │               │
+└─────────────────────────────────────────────────────┴───────────────┘
+```
+
+**Editor Features (TipTap-based):**
+- Rich text editing (bold, italic, headings, lists, links, images, quotes)
+- Keyboard shortcuts (Cmd+B, Cmd+I, etc.)
+- HTML source view toggle
+- Auto-save on changes
+
+**Live Scoring Sidebar:**
+- POP score (updates on re-score button click, debounced)
+- Word count progress
+- LSI term checklist (checked = term present in content)
+- Internal link status
+- Re-score button (calls POP API)
+
+**Internal Link Insertion:**
+- Link button shows only valid targets:
+  - Collection pages from parent cluster
+  - Other blogs in same campaign
+- Suggests anchor text based on target's primary keyword
+
+---
+
+### Step 7.5: Blog Export
+
+**User can:**
+- Export single blog or all completed blogs
+- Copy HTML to clipboard (for Shopify blog paste)
+- Download as HTML file
+
+**Export includes:**
+- Clean HTML (no editor artifacts)
+- Properly formatted internal links
+- SEO-ready structure
+
+---
+
+### Internal Linking Rules (Blog-Specific)
+
+```
+Blog posts are SILOED to their parent cluster:
+
+┌─────────────────────────────────────────────────────────────┐
+│                     CLUSTER SILO                            │
+│                                                             │
+│    ┌─────────────────────────────────────────────────┐     │
+│    │            CLUSTER PAGES                         │     │
+│    │  ┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐            │     │
+│    │  │Page1│  │Page2│  │Page3│  │Page4│            │     │
+│    │  └──▲──┘  └──▲──┘  └──▲──┘  └──▲──┘            │     │
+│    └─────┼────────┼────────┼────────┼────────────────┘     │
+│          │        │        │        │                       │
+│    ┌─────┼────────┼────────┼────────┼────────────────┐     │
+│    │     │  BLOG CAMPAIGN  │        │                │     │
+│    │  ┌──┴──┐  ┌──┴──┐  ┌──┴──┐  ┌──┴──┐            │     │
+│    │  │Blog1│◄►│Blog2│◄►│Blog3│◄►│Blog4│            │     │
+│    │  └─────┘  └─────┘  └─────┘  └─────┘            │     │
+│    └─────────────────────────────────────────────────┘     │
+│                                                             │
+│    ▲ = blogs link UP to cluster pages                      │
+│    ◄► = blogs link to sibling blogs                        │
+│                                                             │
+│    ✗ NO links outside this silo                            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Link targets per blog:**
+- 2-4 links to cluster collection pages (priority pages preferred)
+- 1-2 links to sibling blogs in same campaign
+- Total: 3-6 internal links per blog
+
+**Why siloed linking:**
+- Creates tight topical relevance
+- Concentrates link equity within the silo
+- Clean, predictable link architecture
+- Easier to audit and maintain
+
+---
+
+### Shared Components Summary
+
+| Component | Onboarding | Clusters | **Blogs** | Shared? |
+|-----------|------------|----------|-----------|---------|
+| Primary Keyword Approval UI | ✅ | ✅ | ✅ | **YES** |
+| POP Content Brief | ✅ | ✅ | ✅ | **YES** |
+| Content Generation (Claude) | ✅ | ✅ | ✅ | **YES** (blog template) |
+| Quality Checks | ✅ | ✅ | ✅ | **YES** |
+| Internal Linking | ✅ | ✅ | ✅ | **YES** (siloed mode) |
+| Blog Topic Discovery | ❌ | ❌ | ✅ | Blog only |
+| Rich Editor + Live Scoring | ❌ | ❌ | ✅ | Blog only |
+| Matrixify Export | ✅ | ✅ | ❌ | Not for blogs |
+| HTML/Copy Export | ❌ | ❌ | ✅ | Blog only |
+
+---
+
 ## Features for Later (NOT MVP)
 
-### Feature 7: SEMrush Integration (Future)
+### Feature 8: SEMrush Integration (Future)
 - When a new cluster is created, auto-import keywords to SEMrush project
 - Tag keywords by cluster name
 - Track rankings over time
 
-### Feature 8: Schema Markup Generation
+### Feature 9: Schema Markup Generation
 - Generate JSON-LD schema for collection pages
 - Product schema, BreadcrumbList, CollectionPage, etc.
 - Export for implementation
 
-### Feature 9: Template Code Updates
+### Feature 10: Template Code Updates
 - Analyze current Shopify template code
 - Suggest/generate template improvements
 - Export code snippets
@@ -791,8 +1061,19 @@ Based on dependencies and the shared component architecture:
 - Wire into shared components (approval, generation, review, export)
 - **Test:** Can create cluster, generate content, export
 
-### Slice 10: Polish
-- Dashboard metrics (clusters built/pending, content pending)
+### Slice 10: Blog Planning & Writing (Blogs-specific)
+- BlogCampaign and BlogPost models + migration
+- Blog topic discovery service (POP API for blog ideas around cluster)
+- Blog keyword approval (reuse shared KeywordApproval component)
+- Blog content generation (reuse pipeline with blog-specific template)
+- TipTap rich editor integration
+- Live POP scoring sidebar (score + word count + LSI checklist)
+- Siloed internal linking (only cluster pages + sibling blogs)
+- Blog export (HTML download + copy to clipboard for Shopify)
+- **Test:** Full blog flow works (campaign → keywords → generate → edit with live scoring → export)
+
+### Slice 11: Polish
+- Dashboard metrics (clusters built/pending, content pending, blogs pending)
 - Progress indicators
 - Error handling
 - Edge cases
@@ -805,30 +1086,35 @@ Build these as **standalone, reusable services/components**:
 
 ```
 backend/app/services/
-├── content_generation.py    # SHARED - used by both workflows
+├── content_generation.py    # SHARED - used by all three workflows
 ├── content_quality.py       # SHARED - AI trope checks
 ├── pop_integration.py       # SHARED - Content Brief + Scoring API
-├── matrixify_export.py      # SHARED - export formatting
+├── matrixify_export.py      # SHARED - export formatting (onboarding + clusters)
 ├── internal_linking.py      # SHARED - base linking utilities
 ├── onboarding_links.py      # Onboarding-only - label-based link algorithm
 ├── cluster_links.py         # Clusters-only - hierarchical link structure
+├── blog_links.py            # Blogs-only - siloed linking to cluster + siblings
 ├── crawling.py              # Onboarding-only
-└── cluster_suggestions.py   # Clusters-only
+├── cluster_suggestions.py   # Clusters-only
+├── blog_discovery.py        # Blogs-only - POP API for blog topic ideas
+└── blog_export.py           # Blogs-only - HTML export + clipboard
 
 backend/app/integrations/
 └── pop.py                   # POP API client (Content Brief + Scoring)
 
 frontend/src/components/
 ├── KeywordApproval/         # SHARED - primary keyword approval
-├── ContentEditor/           # SHARED
+├── ContentEditor/           # SHARED - basic content editing
 ├── ContentReview/           # SHARED - includes POP score display
 ├── LinkMapViewer/           # SHARED - visualize internal links
 ├── ExportButton/            # SHARED
 ├── UrlUploader/             # Onboarding-only
-└── SeedKeywordInput/        # Clusters-only
+├── SeedKeywordInput/        # Clusters-only
+├── BlogEditor/              # Blogs-only - TipTap rich editor
+└── LiveScoringSidebar/      # Blogs-only - real-time POP score + metrics
 ```
 
-This way, when we build Slice 6-8 for onboarding, they automatically work for clusters in Slice 9.
+This way, when we build Slice 6-8 for onboarding, they automatically work for clusters in Slice 9 and blogs in Slice 10.
 
 ### Files to Remove (from old flow)
 
@@ -845,13 +1131,17 @@ Per `backend/PLAN-remove-secondary-keywords-and-paa.md`:
 
 | Question | Answer |
 |----------|--------|
-| Dashboard metrics | Clusters built/pending, content generations pending |
+| Dashboard metrics | Clusters built/pending, content generations pending, blogs pending |
 | Keyword sources | **POP only** — keep it simple |
 | Content fields | Page title, meta description, top description, bottom description |
 | Matrixify format | User will provide example file |
 | Secondary keywords | **Removed** — POP's LSI terms replace them (better quality, SERP-based) |
 | PAA questions | **Removed** — POP's related_questions replace them (direct from Google, no DataForSEO costs) |
 | Keyword approval steps | **1 step only** — approve primary keyword, then POP provides everything else |
+| Blog editor | **TipTap** — flexible, well-maintained, good React integration |
+| Blog linking | **Siloed** — blogs only link to their parent cluster's pages + sibling blogs |
+| Blog export | **HTML + clipboard** — for pasting into Shopify blog creator |
+| Blog-cluster relationship | **One cluster can have multiple blog campaigns** |
 
 ---
 

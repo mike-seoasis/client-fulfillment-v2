@@ -203,8 +203,19 @@
 - [ ] Wire into shared components
 - [ ] **Verify:** Full cluster flow works (create → generate → export)
 
-### Phase 9: Polish
-- [ ] Dashboard metrics (clusters pending, content pending)
+### Phase 9: Blog Planning & Writing
+- [ ] BlogCampaign and BlogPost models + migration
+- [ ] Blog topic discovery service (POP API)
+- [ ] Blog keyword approval (reuse shared UI)
+- [ ] Blog content generation (reuse pipeline, blog template)
+- [ ] TipTap rich editor integration
+- [ ] Live POP scoring sidebar
+- [ ] Siloed internal linking (cluster pages + sibling blogs only)
+- [ ] Blog export (HTML + copy to clipboard)
+- [ ] **Verify:** Full blog flow works (campaign → keywords → generate → edit → export)
+
+### Phase 10: Polish
+- [ ] Dashboard metrics (clusters pending, content pending, blogs pending)
 - [ ] Progress indicators
 - [ ] Error handling
 - [ ] Edge cases
