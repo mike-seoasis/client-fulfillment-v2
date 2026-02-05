@@ -528,3 +528,27 @@ after each iteration and it's included in prompts for context.
   - Follow existing patterns from S4-020/S4-021 for page+keywords endpoint structure
 ---
 
+## 2026-02-05 - S4-024
+- **What was implemented:** Verified background task for keyword generation (already implemented in S4-017)
+- **Files changed:**
+  - `backend/app/api/v1/projects.py` - Contains `_generate_keywords_background` function (lines 1095-1181)
+- **Function features:**
+  - Creates its own DB session via `db_manager.session_factory()` context manager
+  - Creates fresh ClaudeClient and DataForSEOClient instances for each run
+  - Calls `PrimaryKeywordService.generate_for_project(project_id, db)`
+  - Logs start, completion, and errors with full context (project_id, task_id, status, counts)
+  - On failure: updates `project.phase_status["onboarding"]["keywords"]` with status="failed" and error message
+  - Nested try/except handles failures in the status update itself
+- **Acceptance criteria verified:**
+  - [x] Function creates its own DB session (not from request)
+  - [x] Calls PrimaryKeywordService.generate_for_project()
+  - [x] Updates project.phase_status on completion/failure
+  - [x] Logs errors appropriately
+  - [x] Handles cancellation gracefully (follows codebase pattern - consistent with _crawl_pages_background)
+- **Learnings:**
+  - Background task pattern: import `db_manager` inside function, use `async with db_manager.session_factory() as db`
+  - Create fresh client instances inside background tasks (don't pass from request context)
+  - Nested try/except for status updates prevents status update failures from masking original errors
+  - Follow `_crawl_pages_background` pattern for consistency
+---
+
