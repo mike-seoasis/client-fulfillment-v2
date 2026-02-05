@@ -17,7 +17,7 @@ from typing import Any
 
 from app.core.logging import get_logger
 from app.integrations.claude import ClaudeClient
-from app.integrations.dataforseo import DataForSEOClient
+from app.integrations.dataforseo import DataForSEOClient, KeywordVolumeData
 
 logger = get_logger(__name__)
 
@@ -348,3 +348,110 @@ Example: ["keyword one", "keyword two", "keyword three"]"""
 
             self._stats.keywords_generated += len(fallback_keywords)
             return fallback_keywords
+
+    async def enrich_with_volume(
+        self,
+        keywords: list[str],
+    ) -> dict[str, KeywordVolumeData]:
+        """Enrich keywords with search volume data from DataForSEO.
+
+        Calls DataForSEO API to get search volume, CPC, and competition
+        data for each keyword. Handles failures gracefully by returning
+        empty data for keywords that fail.
+
+        Args:
+            keywords: List of keyword strings to enrich.
+
+        Returns:
+            Dict mapping keyword (lowercase) to KeywordVolumeData.
+            Keywords that fail lookup will not be included in the dict.
+        """
+        if not keywords:
+            logger.debug("No keywords to enrich")
+            return {}
+
+        # Check if DataForSEO is available
+        if not self._dataforseo.available:
+            logger.warning(
+                "DataForSEO not available, skipping volume enrichment",
+                extra={"keyword_count": len(keywords)},
+            )
+            return {}
+
+        logger.info(
+            "Enriching keywords with volume data",
+            extra={"keyword_count": len(keywords)},
+        )
+
+        try:
+            # Call DataForSEO batch API
+            result = await self._dataforseo.get_keyword_volume_batch(keywords)
+
+            # Update stats
+            self._stats.dataforseo_calls += 1
+            if result.cost:
+                self._stats.dataforseo_cost += result.cost
+                logger.info(
+                    "DataForSEO API cost",
+                    extra={
+                        "cost": result.cost,
+                        "total_cost": self._stats.dataforseo_cost,
+                    },
+                )
+
+            if not result.success:
+                logger.warning(
+                    "DataForSEO volume lookup failed",
+                    extra={
+                        "error": result.error,
+                        "keyword_count": len(keywords),
+                    },
+                )
+                self._stats.errors.append(
+                    {
+                        "error": result.error or "Unknown DataForSEO error",
+                        "phase": "enrich_with_volume",
+                        "keyword_count": len(keywords),
+                    }
+                )
+                return {}
+
+            # Build keyword -> volume data mapping
+            volume_map: dict[str, KeywordVolumeData] = {}
+            for kw_data in result.keywords:
+                # Normalize keyword to lowercase for consistent lookup
+                normalized_kw = kw_data.keyword.strip().lower()
+                volume_map[normalized_kw] = kw_data
+
+            # Update stats
+            self._stats.keywords_enriched += len(volume_map)
+
+            logger.info(
+                "Volume enrichment complete",
+                extra={
+                    "keywords_requested": len(keywords),
+                    "keywords_enriched": len(volume_map),
+                    "cost": result.cost,
+                    "duration_ms": result.duration_ms,
+                },
+            )
+
+            return volume_map
+
+        except Exception as e:
+            logger.error(
+                "Unexpected error during volume enrichment",
+                extra={
+                    "error": str(e),
+                    "keyword_count": len(keywords),
+                },
+                exc_info=True,
+            )
+            self._stats.errors.append(
+                {
+                    "error": str(e),
+                    "phase": "enrich_with_volume",
+                    "keyword_count": len(keywords),
+                }
+            )
+            return {}

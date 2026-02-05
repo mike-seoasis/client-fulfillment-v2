@@ -139,3 +139,22 @@ after each iteration and it's included in prompts for context.
   - Fallback strategy: title first, then H1 if different from title
 ---
 
+## 2026-02-05 - S4-008
+- **What was implemented:** Implemented `enrich_with_volume` async method for getting search volume data from DataForSEO
+- **Files changed:**
+  - `backend/app/services/primary_keyword.py` - Added `enrich_with_volume` method, added `KeywordVolumeData` import
+- **Method features:**
+  - Takes list of keyword strings as input
+  - Checks DataForSEO availability before making API call
+  - Calls `DataForSEOClient.get_keyword_volume_batch()` for batch volume lookup
+  - Returns dict mapping keyword (lowercase, normalized) -> KeywordVolumeData
+  - Handles failures gracefully: returns empty dict on API errors, empty keywords, or unavailable client
+  - Logs API cost for tracking via both per-call log and stats accumulation
+  - Updates stats: `dataforseo_calls`, `dataforseo_cost`, `keywords_enriched`, `errors`
+- **Learnings:**
+  - `KeywordVolumeData` dataclass from dataforseo.py contains: keyword, search_volume, cpc, competition, competition_level, monthly_searches, error
+  - `get_keyword_volume_batch()` handles batching automatically (up to 1000 keywords per request)
+  - Always normalize keywords (lowercase, strip) when building lookup maps for consistent matching
+  - Log both individual API costs and cumulative totals in stats for tracking
+---
+
