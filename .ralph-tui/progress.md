@@ -1002,3 +1002,30 @@ after each iteration and it's included in prompts for context.
   - Pre-existing type errors in test files don't block styling changes
 ---
 
+## 2026-02-05 - S4-043
+- **What was implemented:** Component tests for KeywordPageRow covering all acceptance criteria
+- **Files changed:**
+  - `frontend/src/components/onboarding/__tests__/KeywordPageRow.test.tsx` (new file, 36 tests)
+- **Test coverage:**
+  - Rendering tests (9 tests): keyword, volume, score, URL path display, edge cases
+  - Approve button tests (5 tests): approve/approved states, click handler, loading state, disabled state
+  - Priority toggle tests (5 tests): star filled/empty states, click handler, aria-pressed, disabled state
+  - Score tooltip tests (4 tests): hover show/hide, weight breakdown display, null score handling
+  - URL tooltip tests (1 test): full URL display on hover
+  - Keyword dropdown tests (2 tests): opens on click, aria-haspopup
+  - Inline editing tests (4 tests): Edit button, edit mode, Enter to save, Escape to cancel
+  - Edge cases (6 tests): null title, empty title, invalid URL, large volumes, zero volume
+- **Acceptance criteria verified:**
+  - [x] Test renders keyword and volume correctly
+  - [x] Test approve button toggles state
+  - [x] Test priority star toggles state
+  - [x] Test score tooltip appears on hover
+- **Learnings:**
+  - Mock TanStack Query mutation hooks by returning object with `mutateAsync` function and `isPending` state
+  - Use `userEvent.hover()` and `userEvent.unhover()` for tooltip visibility tests
+  - Use `waitFor()` for async state changes like tooltip appearance
+  - PageWithKeywords interface requires `labels` and `product_count` fields
+  - PageKeywordsData interface requires `secondary_keywords` and `difficulty_score` fields
+  - KeywordCandidate in alternative_keywords array needs all fields (keyword, volume, cpc, competition, relevance_score, composite_score)
+---
+
