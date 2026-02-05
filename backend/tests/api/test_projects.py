@@ -1522,3 +1522,226 @@ class TestUpdatePrimaryKeyword:
         assert data["is_priority"] is True
         assert data["ai_reasoning"] == "Some AI reasoning text"
         assert data["difficulty_score"] == 45
+
+
+class TestApproveKeyword:
+    """Tests for POST /api/v1/projects/{project_id}/pages/{page_id}/approve-keyword endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_approve_keyword_project_not_found(
+        self, async_client: AsyncClient
+    ) -> None:
+        """POST approve-keyword returns 404 for non-existent project."""
+        fake_project_id = str(uuid.uuid4())
+        fake_page_id = str(uuid.uuid4())
+        response = await async_client.post(
+            f"/api/v1/projects/{fake_project_id}/pages/{fake_page_id}/approve-keyword",
+        )
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_approve_keyword_page_not_found(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """POST approve-keyword returns 404 for non-existent page."""
+        from app.models.project import Project
+
+        project = Project(
+            name="Page Not Found Approve Test",
+            site_url="https://page-not-found-approve.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        fake_page_id = str(uuid.uuid4())
+        response = await async_client.post(
+            f"/api/v1/projects/{project.id}/pages/{fake_page_id}/approve-keyword",
+        )
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_approve_keyword_no_keywords_generated(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """POST approve-keyword returns 404 when keywords not yet generated."""
+        from app.models.crawled_page import CrawledPage
+        from app.models.project import Project
+
+        project = Project(
+            name="No Keywords Approve Test",
+            site_url="https://no-keywords-approve.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        page = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://no-keywords-approve.example.com/products",
+            status="completed",
+            title="Products Page",
+        )
+        db_session.add(page)
+        await db_session.commit()
+        await db_session.refresh(page)
+
+        response = await async_client.post(
+            f"/api/v1/projects/{project.id}/pages/{page.id}/approve-keyword",
+        )
+        assert response.status_code == 404
+        assert "Keywords not yet generated" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_approve_keyword_success(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """POST approve-keyword successfully sets is_approved=true."""
+        from app.models.crawled_page import CrawledPage
+        from app.models.page_keywords import PageKeywords
+        from app.models.project import Project
+
+        project = Project(
+            name="Approve Keyword Test",
+            site_url="https://approve-keyword.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        page = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://approve-keyword.example.com/products",
+            status="completed",
+            title="Products Page",
+        )
+        db_session.add(page)
+        await db_session.commit()
+        await db_session.refresh(page)
+
+        keywords = PageKeywords(
+            crawled_page_id=page.id,
+            primary_keyword="coffee storage containers",
+            search_volume=5000,
+            composite_score=75.0,
+            relevance_score=80.0,
+            is_approved=False,
+        )
+        db_session.add(keywords)
+        await db_session.commit()
+
+        response = await async_client.post(
+            f"/api/v1/projects/{project.id}/pages/{page.id}/approve-keyword",
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["is_approved"] is True
+        assert data["primary_keyword"] == "coffee storage containers"
+
+    @pytest.mark.asyncio
+    async def test_approve_keyword_idempotent(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """POST approve-keyword is idempotent - calling twice returns same result."""
+        from app.models.crawled_page import CrawledPage
+        from app.models.page_keywords import PageKeywords
+        from app.models.project import Project
+
+        project = Project(
+            name="Idempotent Approve Test",
+            site_url="https://idempotent-approve.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        page = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://idempotent-approve.example.com/products",
+            status="completed",
+            title="Products Page",
+        )
+        db_session.add(page)
+        await db_session.commit()
+        await db_session.refresh(page)
+
+        keywords = PageKeywords(
+            crawled_page_id=page.id,
+            primary_keyword="coffee containers",
+            is_approved=True,  # Already approved
+        )
+        db_session.add(keywords)
+        await db_session.commit()
+
+        # Call approve again - should succeed without error
+        response = await async_client.post(
+            f"/api/v1/projects/{project.id}/pages/{page.id}/approve-keyword",
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["is_approved"] is True
+
+    @pytest.mark.asyncio
+    async def test_approve_keyword_returns_full_data(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """POST approve-keyword returns full PageKeywordsData with all fields."""
+        from app.models.crawled_page import CrawledPage
+        from app.models.page_keywords import PageKeywords
+        from app.models.project import Project
+
+        project = Project(
+            name="Full Data Approve Test",
+            site_url="https://full-data-approve.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        page = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://full-data-approve.example.com/products",
+            status="completed",
+            title="Products Page",
+        )
+        db_session.add(page)
+        await db_session.commit()
+        await db_session.refresh(page)
+
+        keywords = PageKeywords(
+            crawled_page_id=page.id,
+            primary_keyword="coffee storage",
+            secondary_keywords=["secondary one", "secondary two"],
+            alternative_keywords=[{"keyword": "alt one", "volume": 1000}],
+            is_approved=False,
+            is_priority=True,
+            composite_score=75.5,
+            relevance_score=82.0,
+            ai_reasoning="Good keyword match",
+            search_volume=5000,
+            difficulty_score=35,
+        )
+        db_session.add(keywords)
+        await db_session.commit()
+        await db_session.refresh(keywords)
+
+        response = await async_client.post(
+            f"/api/v1/projects/{project.id}/pages/{page.id}/approve-keyword",
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        # Verify is_approved was set to true
+        assert data["is_approved"] is True
+
+        # Verify all other fields are preserved
+        assert data["id"] == keywords.id
+        assert data["primary_keyword"] == "coffee storage"
+        assert data["secondary_keywords"] == ["secondary one", "secondary two"]
+        assert len(data["alternative_keywords"]) == 1
+        assert data["is_priority"] is True
+        assert data["composite_score"] == 75.5
+        assert data["relevance_score"] == 82.0
+        assert data["ai_reasoning"] == "Good keyword match"
+        assert data["search_volume"] == 5000
+        assert data["difficulty_score"] == 35

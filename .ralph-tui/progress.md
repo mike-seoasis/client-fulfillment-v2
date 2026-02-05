@@ -451,3 +451,28 @@ after each iteration and it's included in prompts for context.
   - Keep primary_keyword in original casing from user input, normalize only for comparison
 ---
 
+## 2026-02-05 - S4-021
+- **What was implemented:** POST `/api/v1/projects/{project_id}/pages/{page_id}/approve-keyword` endpoint
+- **Files changed:**
+  - `backend/app/api/v1/projects.py` - Added approve-keyword endpoint
+  - `backend/tests/api/test_projects.py` - Added TestApproveKeyword class with 6 tests
+- **Endpoint features:**
+  - Sets `is_approved=true` on PageKeywords record
+  - Returns updated PageKeywordsData with all fields
+  - Idempotent - calling multiple times is safe (always sets is_approved=true)
+  - Validates project exists (404 if not)
+  - Validates page exists in project (404 if not)
+  - Validates keywords generated for page (404 if not)
+- **Test coverage:**
+  - test_approve_keyword_project_not_found - 404 for non-existent project
+  - test_approve_keyword_page_not_found - 404 for non-existent page
+  - test_approve_keyword_no_keywords_generated - 404 when keywords not generated
+  - test_approve_keyword_success - Sets is_approved=true
+  - test_approve_keyword_idempotent - Calling twice returns same result
+  - test_approve_keyword_returns_full_data - Full response data validation
+- **Learnings:**
+  - Follow S4-020 pattern for page+keywords endpoint structure
+  - POST without request body is valid for idempotent state-change operations
+  - Reuse existing patterns: `joinedload`, `scalar_one_or_none()`, PageKeywordsData response mapping
+---
+

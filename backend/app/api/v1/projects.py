@@ -1426,6 +1426,90 @@ async def update_primary_keyword(
     )
 
 
+@router.post(
+    "/{project_id}/pages/{page_id}/approve-keyword",
+    response_model=PageKeywordsData,
+)
+async def approve_keyword(
+    project_id: str,
+    page_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> PageKeywordsData:
+    """Approve the primary keyword for a page.
+
+    Sets is_approved=true on the PageKeywords record. This endpoint is
+    idempotent - calling it multiple times has the same effect.
+
+    Args:
+        project_id: UUID of the project.
+        page_id: UUID of the crawled page.
+        db: AsyncSession for database operations.
+
+    Returns:
+        Updated PageKeywordsData with is_approved=true.
+
+    Raises:
+        HTTPException: 404 if project, page, or page keywords not found.
+    """
+    # Verify project exists (raises 404 if not)
+    await ProjectService.get_project(db, project_id)
+
+    # Get the page with keywords relationship
+    stmt = (
+        select(CrawledPage)
+        .options(joinedload(CrawledPage.keywords))
+        .where(
+            CrawledPage.id == page_id,
+            CrawledPage.project_id == project_id,
+        )
+    )
+    result = await db.execute(stmt)
+    page = result.scalar_one_or_none()
+
+    if not page:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Page {page_id} not found in project {project_id}",
+        )
+
+    if not page.keywords:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Keywords not yet generated for page {page_id}",
+        )
+
+    page_keywords: PageKeywords = page.keywords
+
+    # Set is_approved to true (idempotent)
+    page_keywords.is_approved = True
+
+    await db.commit()
+    await db.refresh(page_keywords)
+
+    logger.info(
+        "Keyword approved",
+        extra={
+            "project_id": project_id,
+            "page_id": page_id,
+            "primary_keyword": page_keywords.primary_keyword,
+        },
+    )
+
+    return PageKeywordsData(
+        id=page_keywords.id,
+        primary_keyword=page_keywords.primary_keyword,
+        secondary_keywords=page_keywords.secondary_keywords or [],
+        alternative_keywords=page_keywords.alternative_keywords or [],
+        is_approved=page_keywords.is_approved,
+        is_priority=page_keywords.is_priority,
+        composite_score=page_keywords.composite_score,
+        relevance_score=page_keywords.relevance_score,
+        ai_reasoning=page_keywords.ai_reasoning,
+        search_volume=page_keywords.search_volume,
+        difficulty_score=page_keywords.difficulty_score,
+    )
+
+
 @router.put(
     "/{project_id}/pages/{page_id}/labels",
     response_model=CrawledPageResponse,
