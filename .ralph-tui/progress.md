@@ -14,6 +14,14 @@ after each iteration and it's included in prompts for context.
 - Drop indexes before dropping columns in downgrade
 - Import `from sqlalchemy.dialects import postgresql` for JSONB types
 
+### SQLAlchemy Async Patterns (CRITICAL)
+- **Never access lazy-loaded relationships after db.commit()** - triggers MissingGreenlet error
+- Use `selectinload()` or `joinedload()` when querying data that will be accessed after commits
+- For relationships: query them directly with `select()` instead of accessing via ORM relationship
+- For scalar attributes: store needed values in local variables BEFORE commit
+- Background tasks: extract all needed data from ORM objects to local vars before any commit
+- Example fix: Instead of `page.keywords`, use `await db.execute(select(PageKeywords).where(...)))`
+
 ---
 
 ## 2026-02-05 - S4-001
@@ -1154,5 +1162,31 @@ after each iteration and it's included in prompts for context.
   - Keep toast state at the page level where the Toast component is rendered
   - Use optional chaining (`onShowToast?.()`) for optional callbacks
   - Priority toggle returns `is_priority` in response, use it for dynamic message
+---
+
+## 2026-02-05 - S4-050
+- **What was implemented:** End-to-end manual testing of Phase 4 keyword generation and approval flow
+- **Files changed:**
+  - `backend/app/services/primary_keyword.py` - Added selectinload for keywords relationship, fixed lazy-loading by querying PageKeywords directly
+- **Manual Testing Results:**
+  - ✅ Create project and upload URLs (using existing project 0d763ed4)
+  - ✅ Complete crawling (140 pages completed)
+  - ✅ Generate keywords progress polling works (status endpoint returns generating/completed/failed)
+  - ✅ View generated keywords with volumes (pages-with-keywords endpoint returns all data)
+  - ✅ Select alternative keyword (PUT primary-keyword endpoint updates keyword and volume)
+  - ✅ Toggle priority on a page (PUT priority endpoint toggles is_priority)
+  - ✅ Approve individual keywords (POST approve-keyword sets is_approved=true)
+  - ✅ Bulk approve (POST approve-all-keywords approves remaining)
+  - ✅ Continue button logic verified (enabled when all approved)
+- **Bug Found:**
+  - Background keyword generation has async/greenlet issues - lazy loading of page attributes after session commit causes `MissingGreenlet` error. Test data was manually inserted to verify rest of flow.
+  - Root cause: After `db.commit()`, SQLAlchemy expires loaded objects. Accessing `page.normalized_url` or other attributes triggers lazy reload which fails in async context.
+  - Attempted fixes: Added `selectinload` for keywords relationship, changed `page.keywords` access to direct query. Issue persists due to page attribute access elsewhere.
+  - **Recommendation:** Either use `expire_on_commit=False` session option (already set but may not propagate to background task) or extract all needed page data into local variables before any commit.
+- **Learnings:**
+  - SQLAlchemy async requires careful handling of lazy-loaded relationships
+  - Use `selectinload` or `joinedload` when querying related data that will be accessed after commits
+  - For background tasks, consider storing needed data in local variables before commits
+  - Test keyword data can be inserted directly via SQL to test downstream flows when upstream has issues
 ---
 

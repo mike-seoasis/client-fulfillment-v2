@@ -1014,8 +1014,13 @@ Example: [{{"keyword": "keyword one", "relevance_score": 0.95}}, {{"keyword": "k
             )
 
             # Step 6: Create or update PageKeywords record
-            # Check if record already exists for this page
-            existing_keywords = page.keywords
+            # Query for existing record directly to avoid lazy-loading issues
+            # in async context (page.keywords would trigger greenlet error)
+            from sqlalchemy import select
+
+            stmt = select(PageKeywords).where(PageKeywords.crawled_page_id == page_id)
+            result = await db.execute(stmt)
+            existing_keywords = result.scalar_one_or_none()
 
             if existing_keywords:
                 # Update existing record
@@ -1161,8 +1166,13 @@ Example: [{{"keyword": "keyword one", "relevance_score": 0.95}}, {{"keyword": "k
                 }
 
             # Load all completed crawled pages for this project
+            # Use selectinload to eager-load keywords relationship to avoid
+            # lazy loading issues in async context (greenlet error)
+            from sqlalchemy.orm import selectinload
+
             stmt = (
                 select(CrawledPage)
+                .options(selectinload(CrawledPage.keywords))
                 .where(CrawledPage.project_id == project_id)
                 .where(CrawledPage.status == CrawlStatus.COMPLETED.value)
                 .order_by(CrawledPage.normalized_url)
