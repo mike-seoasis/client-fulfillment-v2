@@ -740,3 +740,114 @@ Example: [{{"keyword": "keyword one", "relevance_score": 0.95}}, {{"keyword": "k
             "relevance_score": round(relevance_score, 2),
             "composite_score": round(composite_score, 2),
         }
+
+    def select_primary_and_alternatives(
+        self,
+        scored_keywords: list[dict[str, Any]],
+        used_primaries: set[str] | None = None,
+    ) -> dict[str, Any]:
+        """Select the best primary keyword and alternatives from scored keywords.
+
+        Sorts keywords by composite_score descending and selects the highest-scoring
+        keyword that hasn't already been used as a primary for another page.
+        Also returns the next 4 highest-scoring alternatives.
+
+        Duplicate prevention is critical for SEO - the same keyword should not
+        target multiple pages on a site.
+
+        Args:
+            scored_keywords: List of keyword dicts, each must contain at least
+                'keyword' and 'composite_score' keys. May also contain 'volume',
+                'cpc', 'competition', 'relevance_score'.
+            used_primaries: Optional set of keywords already assigned to other pages.
+                If None, uses self._used_primary_keywords.
+
+        Returns:
+            Dict with:
+            - 'primary': The selected primary keyword dict (or None if all used)
+            - 'alternatives': List of up to 4 alternative keyword dicts
+            - 'all_keywords': Full sorted list for reference
+        """
+        if not scored_keywords:
+            logger.debug("No scored keywords to select from")
+            return {
+                "primary": None,
+                "alternatives": [],
+                "all_keywords": [],
+            }
+
+        # Use instance tracking set if not provided
+        if used_primaries is None:
+            used_primaries = self._used_primary_keywords
+
+        # Sort by composite_score descending
+        sorted_keywords = sorted(
+            scored_keywords,
+            key=lambda x: -(x.get("composite_score") or 0),
+        )
+
+        logger.debug(
+            "Selecting primary from scored keywords",
+            extra={
+                "total_keywords": len(sorted_keywords),
+                "used_primaries_count": len(used_primaries),
+            },
+        )
+
+        # Find the first keyword not already used
+        primary: dict[str, Any] | None = None
+        alternatives: list[dict[str, Any]] = []
+        alternatives_count = 0
+        max_alternatives = 4
+
+        for kw_data in sorted_keywords:
+            keyword = kw_data.get("keyword", "").strip().lower()
+            if not keyword:
+                continue
+
+            # Check if this keyword is already used as a primary elsewhere
+            if keyword in used_primaries:
+                logger.debug(
+                    "Skipping keyword (already used as primary)",
+                    extra={"keyword": keyword},
+                )
+                continue
+
+            if primary is None:
+                # This is our primary keyword
+                primary = kw_data
+
+                # Add to used_primaries set to prevent duplicate assignment
+                self.add_used_keyword(keyword)
+
+                logger.info(
+                    "Selected primary keyword",
+                    extra={
+                        "keyword": keyword,
+                        "composite_score": kw_data.get("composite_score"),
+                        "volume": kw_data.get("volume"),
+                    },
+                )
+            elif alternatives_count < max_alternatives:
+                # Store as alternative
+                alternatives.append(kw_data)
+                alternatives_count += 1
+
+            # Stop once we have primary + 4 alternatives
+            if primary is not None and alternatives_count >= max_alternatives:
+                break
+
+        if primary is None:
+            logger.warning(
+                "Could not select primary keyword (all candidates already used)",
+                extra={
+                    "total_keywords": len(sorted_keywords),
+                    "used_primaries_count": len(used_primaries),
+                },
+            )
+
+        return {
+            "primary": primary,
+            "alternatives": alternatives,
+            "all_keywords": sorted_keywords,
+        }

@@ -199,3 +199,27 @@ after each iteration and it's included in prompts for context.
   - Round scores to 2 decimal places for cleaner output
 ---
 
+## 2026-02-05 - S4-011
+- **What was implemented:** Implemented `select_primary_and_alternatives` method to select best keyword and alternatives
+- **Files changed:**
+  - `backend/app/services/primary_keyword.py` - Added `select_primary_and_alternatives` method
+- **Method features:**
+  - Takes scored_keywords list and optional used_primaries set
+  - Sorts keywords by composite_score descending
+  - Skips keywords already in used_primaries set
+  - Selects highest unused keyword as primary
+  - Stores next 4 highest-scoring unused keywords as alternatives
+  - Adds selected primary to used_primaries via `add_used_keyword()` method
+  - Returns dict with 'primary', 'alternatives', and 'all_keywords' keys
+- **Edge case handling:**
+  - Empty scored_keywords list: returns None primary, empty alternatives
+  - All keywords already used: returns None primary with warning log
+  - Missing keyword field or empty string: skips the keyword
+  - None composite_score: treated as 0 for sorting
+- **Learnings:**
+  - Use existing `add_used_keyword()` method rather than directly modifying the set
+  - If `used_primaries` param is None, fall back to instance's `_used_primary_keywords` set
+  - Normalize keywords to lowercase for consistent duplicate checking
+  - Return `all_keywords` (full sorted list) in result for debugging/transparency
+---
+
