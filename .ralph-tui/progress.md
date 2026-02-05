@@ -325,3 +325,28 @@ after each iteration and it's included in prompts for context.
   - Method accepts optional custom used_primaries set parameter but still adds to instance set
 ---
 
+## 2026-02-05 - S4-016
+- **What was implemented:** Integration tests for the primary keyword generation pipeline
+- **Files changed:**
+  - `backend/tests/integrations/test_primary_keyword_generation.py` (new file, 29 tests)
+- **Test coverage:**
+  - Full pipeline with mocked Claude and DataForSEO (4 tests + 2 skipped)
+  - Fallback when Claude fails (3 tests)
+  - Fallback when DataForSEO fails (4 tests)
+  - PageKeywords record creation (6 tests)
+  - Alternatives storage (5 tests)
+  - Project-level generation (2 tests + 3 skipped)
+- **Acceptance criteria verified:**
+  - [x] Test full pipeline with mocked Claude and DataForSEO
+  - [x] Test fallback when Claude fails
+  - [x] Test fallback when DataForSEO fails
+  - [x] Test PageKeywords record is created correctly
+  - [x] Test alternatives are stored correctly
+- **Learnings:**
+  - SQLite async tests with aiosqlite don't support lazy loading - must use `selectinload` for relationships
+  - Use helper functions `get_page_with_keywords()` and `get_page_keywords()` to avoid lazy load issues
+  - `db_session.expire_all()` can force fresh loads but must save IDs first since expired objects can't be accessed
+  - Tests that call `generate_for_project` need PostgreSQL because the method fetches pages without eager loading
+  - Mock clients for Claude and DataForSEO need `available` property and appropriate async methods
+---
+

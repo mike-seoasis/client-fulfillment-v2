@@ -266,8 +266,9 @@
         "Test alternatives are stored correctly"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "File: backend/tests/integration/test_primary_keyword_generation.py"
+      "passes": true,
+      "notes": "File: backend/tests/integration/test_primary_keyword_generation.py",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S4-017",
@@ -816,6 +817,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-05T14:32:07.406Z"
+    "updatedAt": "2026-02-05T14:42:36.455Z"
   }
 }
