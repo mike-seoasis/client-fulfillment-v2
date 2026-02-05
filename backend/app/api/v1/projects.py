@@ -991,6 +991,186 @@ async def recrawl_all_pages(
     return {"pages_queued": len(page_ids)}
 
 
+@router.post(
+    "/{project_id}/generate-primary-keywords",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def generate_primary_keywords(
+    project_id: str,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, str]:
+    """Start primary keyword generation for all completed pages in a project.
+
+    This endpoint:
+    1. Validates project exists and has crawled pages with status=completed
+    2. Updates project.phase_status to 'generating_keywords'
+    3. Starts a background task to generate keywords for all pages
+    4. Returns 202 Accepted with a task_id for tracking
+
+    Args:
+        project_id: UUID of the project.
+        background_tasks: FastAPI background tasks.
+        db: AsyncSession for database operations.
+
+    Returns:
+        Dict with task_id and status message.
+
+    Raises:
+        HTTPException: 404 if project not found.
+        HTTPException: 400 if no completed pages exist.
+    """
+    # Verify project exists
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Project {project_id} not found",
+        )
+
+    # Check for completed pages
+    stmt = select(CrawledPage).where(
+        CrawledPage.project_id == project_id,
+        CrawledPage.status == CrawlStatus.COMPLETED.value,
+    )
+    result = await db.execute(stmt)
+    completed_pages = list(result.scalars().all())
+
+    if not completed_pages:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No completed pages found. Please crawl pages first.",
+        )
+
+    # Generate task ID
+    task_id = str(uuid4())
+
+    # Update project phase_status to indicate keyword generation starting
+    if "onboarding" not in project.phase_status:
+        project.phase_status["onboarding"] = {}
+    project.phase_status["onboarding"]["status"] = "generating_keywords"
+    project.phase_status["onboarding"]["keywords"] = {
+        "status": "pending",
+        "total": len(completed_pages),
+        "completed": 0,
+        "failed": 0,
+        "current_page": None,
+        "task_id": task_id,
+    }
+    flag_modified(project, "phase_status")
+    await db.commit()
+
+    logger.info(
+        "Starting primary keyword generation",
+        extra={
+            "project_id": project_id,
+            "task_id": task_id,
+            "page_count": len(completed_pages),
+        },
+    )
+
+    # Start background task
+    background_tasks.add_task(
+        _generate_keywords_background,
+        project_id=project_id,
+        task_id=task_id,
+    )
+
+    return {
+        "task_id": task_id,
+        "status": "Keyword generation started",
+        "page_count": str(len(completed_pages)),
+    }
+
+
+async def _generate_keywords_background(
+    project_id: str,
+    task_id: str,
+) -> None:
+    """Background task to generate primary keywords for all pages.
+
+    This function runs outside the request context, so it creates
+    its own database session and client instances.
+
+    Args:
+        project_id: Project ID.
+        task_id: Task ID for tracking/logging.
+    """
+    from app.core.database import db_manager
+    from app.integrations.claude import ClaudeClient
+    from app.integrations.dataforseo import DataForSEOClient
+    from app.services.primary_keyword import PrimaryKeywordService
+
+    logger.info(
+        "Starting background keyword generation task",
+        extra={
+            "project_id": project_id,
+            "task_id": task_id,
+        },
+    )
+
+    try:
+        async with db_manager.session_factory() as db:
+            # Create clients
+            claude_client = ClaudeClient()
+            dataforseo_client = DataForSEOClient()
+
+            # Create service
+            keyword_service = PrimaryKeywordService(
+                claude_client=claude_client,
+                dataforseo_client=dataforseo_client,
+            )
+
+            # Run generation for the project
+            result = await keyword_service.generate_for_project(project_id, db)
+
+            logger.info(
+                "Background keyword generation completed",
+                extra={
+                    "project_id": project_id,
+                    "task_id": task_id,
+                    "status": result.get("status"),
+                    "total": result.get("total"),
+                    "completed": result.get("completed"),
+                    "failed": result.get("failed"),
+                },
+            )
+
+    except Exception as e:
+        logger.error(
+            "Background keyword generation failed",
+            extra={
+                "project_id": project_id,
+                "task_id": task_id,
+                "error": str(e),
+                "error_type": type(e).__name__,
+            },
+            exc_info=True,
+        )
+
+        # Try to update phase_status with failure
+        try:
+            async with db_manager.session_factory() as db:
+                project = await db.get(Project, project_id)
+                if project:
+                    if "onboarding" not in project.phase_status:
+                        project.phase_status["onboarding"] = {}
+                    project.phase_status["onboarding"]["keywords"] = {
+                        "status": "failed",
+                        "error": str(e),
+                    }
+                    flag_modified(project, "phase_status")
+                    await db.commit()
+        except Exception as update_error:
+            logger.error(
+                "Failed to update project phase_status after error",
+                extra={
+                    "project_id": project_id,
+                    "error": str(update_error),
+                },
+            )
+
+
 @router.put(
     "/{project_id}/pages/{page_id}/labels",
     response_model=CrawledPageResponse,

@@ -350,3 +350,21 @@ after each iteration and it's included in prompts for context.
   - Mock clients for Claude and DataForSEO need `available` property and appropriate async methods
 ---
 
+## 2026-02-05 - S4-017
+- **What was implemented:** POST `/api/v1/projects/{project_id}/generate-primary-keywords` endpoint
+- **Files changed:**
+  - `backend/app/api/v1/projects.py` - Added endpoint and background task function
+- **Endpoint features:**
+  - Returns 202 Accepted with task_id
+  - Validates project exists (404 if not)
+  - Validates completed pages exist (400 if no pages with status=completed)
+  - Updates `phase_status.onboarding.status` to `"generating_keywords"`
+  - Initializes `phase_status.onboarding.keywords` with progress tracking structure
+  - Starts `_generate_keywords_background` task to run `PrimaryKeywordService.generate_for_project`
+- **Learnings:**
+  - Follow the crawl endpoint pattern for background tasks: use `db_manager.session_factory()` context manager
+  - Create fresh client instances in background tasks (ClaudeClient, DataForSEOClient)
+  - Return task_id in response for frontend polling
+  - Pre-initialize phase_status progress structure before starting background task for immediate progress visibility
+---
+
