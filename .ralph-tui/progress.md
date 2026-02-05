@@ -1190,3 +1190,35 @@ after each iteration and it's included in prompts for context.
   - Test keyword data can be inserted directly via SQL to test downstream flows when upstream has issues
 ---
 
+## 2026-02-05 - S4-051
+- **What was implemented:** Created test script for DataForSEO integration verification
+- **Files changed:**
+  - `backend/scripts/test_dataforseo.py` (new file) - Standalone test script to verify DataForSEO API integration
+- **Test script features:**
+  - Checks for DATAFORSEO_API_LOGIN and DATAFORSEO_API_PASSWORD in environment
+  - Tests `get_keyword_volume()` method with 3 sample keywords
+  - Reports volume, CPC, competition, and monthly search data
+  - Shows API cost for cost tracking verification
+  - Provides clear instructions for setting up credentials
+- **Acceptance criteria status:**
+  - [BLOCKED] Set DATAFORSEO_API_LOGIN and DATAFORSEO_API_PASSWORD env vars - Requires user to provide credentials
+  - [BLOCKED] Generate keywords for a small test project (2-3 pages) - Requires credentials
+  - [BLOCKED] Verify volume and competition data returned - Requires credentials
+  - [BLOCKED] Check API cost in DataForSEO dashboard - Requires credentials
+- **To complete this task:**
+  1. User must get DataForSEO credentials from https://app.dataforseo.com/
+  2. Add to `backend/.env`:
+     ```
+     DATAFORSEO_API_LOGIN=your-email@example.com
+     DATAFORSEO_API_PASSWORD=your-api-password
+     ```
+  3. Run: `cd backend && source .venv/bin/activate && python scripts/test_dataforseo.py`
+  4. Verify output shows volume/competition data
+  5. Check DataForSEO dashboard for cost tracking
+- **Learnings:**
+  - DataForSEO uses HTTP Basic Auth with email (login) and API password
+  - Expected cost for keyword volume lookup: ~$0.02-0.05 per 3 keywords
+  - Credentials obtained from https://app.dataforseo.com/ API Access page
+  - DataForSEOClient.available property indicates if credentials are configured
+---
+

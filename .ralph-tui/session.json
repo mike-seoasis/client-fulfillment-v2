@@ -3,10 +3,10 @@
   "sessionId": "2b630922-7a4d-43a6-bd55-09b19bc11943",
   "status": "running",
   "startedAt": "2026-02-05T14:07:07.468Z",
-  "updatedAt": "2026-02-05T16:12:16.031Z",
-  "currentIteration": 49,
+  "updatedAt": "2026-02-05T16:13:40.141Z",
+  "currentIteration": 50,
   "maxIterations": 10,
-  "tasksCompleted": 49,
+  "tasksCompleted": 50,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -311,8 +311,8 @@
       {
         "id": "S4-050",
         "title": "Test full flow end-to-end",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "S4-051",
@@ -824,6 +824,16 @@
       "durationMs": 142104,
       "startedAt": "2026-02-05T15:57:18.428Z",
       "endedAt": "2026-02-05T15:59:40.532Z"
+    },
+    {
+      "iteration": 50,
+      "status": "completed",
+      "taskId": "S4-050",
+      "taskTitle": "Test full flow end-to-end",
+      "taskCompleted": true,
+      "durationMs": 754381,
+      "startedAt": "2026-02-05T15:59:41.647Z",
+      "endedAt": "2026-02-05T16:12:16.028Z"
     }
   ],
   "skippedTaskIds": [],
