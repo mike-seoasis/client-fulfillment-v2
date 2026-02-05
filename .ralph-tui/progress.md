@@ -552,3 +552,36 @@ after each iteration and it's included in prompts for context.
   - Follow `_crawl_pages_background` pattern for consistency
 ---
 
+## 2026-02-05 - S4-025
+- **What was implemented:** API tests for all primary keyword endpoints
+- **Files changed:**
+  - `backend/tests/api/test_primary_keywords.py` (new file, 6 tests)
+- **Test coverage:**
+  - Test generate-primary-keywords returns 202 Accepted
+  - Test generate-primary-keywords returns 404 for non-existent project
+  - Test generate-primary-keywords returns 400 when no completed pages
+  - Test generate-primary-keywords returns 400 when only pending/failed pages
+  - Test response includes correct page_count
+  - Test response includes valid UUID task_id
+- **Note:** Many primary keyword endpoint tests already existed in `test_projects.py`:
+  - TestPrimaryKeywordsStatus (6 tests) - status polling endpoint
+  - TestPagesWithKeywords (6 tests) - list pages with keywords
+  - TestUpdatePrimaryKeyword (8 tests) - update primary keyword
+  - TestApproveKeyword (6 tests) - approve single keyword
+  - TestApproveAllKeywords (6 tests) - bulk approve
+  - TestTogglePriority (8 tests) - toggle priority flag
+- **Acceptance criteria verified:**
+  - [x] Test generate-primary-keywords returns 202
+  - [x] Test primary-keywords-status returns progress
+  - [x] Test pages-with-keywords returns correct data
+  - [x] Test update primary-keyword works
+  - [x] Test approve-keyword sets flag
+  - [x] Test approve-all-keywords bulk operation
+  - [x] Test priority toggle works
+- **Learnings:**
+  - Background tasks run immediately after FastAPI response in test environment
+  - Don't assert on database state after background task runs - the task will change state
+  - Test the synchronous response (202, task_id) separately from async background work
+  - Most endpoint tests were already written in test_projects.py during S4-018 through S4-023
+---
+

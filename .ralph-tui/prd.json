@@ -409,8 +409,9 @@
         "Test priority toggle works"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "File: backend/tests/api/test_primary_keywords.py"
+      "passes": true,
+      "notes": "File: backend/tests/api/test_primary_keywords.py",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S4-026",
@@ -825,6 +826,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-05T15:02:19.836Z"
+    "updatedAt": "2026-02-05T15:05:38.329Z"
   }
 }
