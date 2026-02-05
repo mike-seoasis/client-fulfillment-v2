@@ -223,3 +223,25 @@ after each iteration and it's included in prompts for context.
   - Return `all_keywords` (full sorted list) in result for debugging/transparency
 ---
 
+## 2026-02-05 - S4-012
+- **What was implemented:** Implemented `process_page` method to orchestrate the full keyword pipeline for a single page
+- **Files changed:**
+  - `backend/app/services/primary_keyword.py` - Added `process_page` async method, added AsyncSession and TYPE_CHECKING imports
+- **Method features:**
+  - Takes CrawledPage and AsyncSession as inputs
+  - Orchestrates all 5 pipeline methods in sequence: generate_candidates → enrich_with_volume → filter_to_specific → calculate_score → select_primary_and_alternatives
+  - Creates new PageKeywords record or updates existing one (via page.keywords relationship)
+  - Returns dict with success status, page_id, primary_keyword, composite_score, alternatives
+  - Commits on success, rolls back on failure
+- **Error handling:**
+  - Catches all exceptions, logs with context, and rolls back transaction
+  - Updates stats: pages_processed, pages_succeeded, pages_failed, errors list
+  - Handles missing volume data by creating placeholder KeywordVolumeData objects
+  - Handles empty candidates or filtered results by raising with meaningful message
+- **Learnings:**
+  - Access page.keywords relationship for existing one-to-one related record (returns None if doesn't exist)
+  - Import PageKeywords inside method to avoid circular import
+  - Use placeholder KeywordVolumeData when DataForSEO unavailable to allow pipeline to continue
+  - Always rollback db session on error to avoid partial state
+---
+

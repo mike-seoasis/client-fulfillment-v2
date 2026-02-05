@@ -14,11 +14,16 @@ The service maintains state for:
 import json
 import math
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
 from app.integrations.claude import ClaudeClient
 from app.integrations.dataforseo import DataForSEOClient, KeywordVolumeData
+
+if TYPE_CHECKING:
+    from app.models.crawled_page import CrawledPage
 
 logger = get_logger(__name__)
 
@@ -851,3 +856,243 @@ Example: [{{"keyword": "keyword one", "relevance_score": 0.95}}, {{"keyword": "k
             "alternatives": alternatives,
             "all_keywords": sorted_keywords,
         }
+
+    async def process_page(
+        self,
+        page: "CrawledPage",
+        db: AsyncSession,
+    ) -> dict[str, Any]:
+        """Process a single page through the full keyword generation pipeline.
+
+        Orchestrates:
+        1. generate_candidates - Get keyword ideas from page content
+        2. enrich_with_volume - Add search volume data from DataForSEO
+        3. filter_to_specific - Filter to page-specific keywords
+        4. calculate_score - Score each keyword
+        5. select_primary_and_alternatives - Pick primary and alternatives
+        6. Create/update PageKeywords record in database
+
+        Args:
+            page: CrawledPage model instance with content data.
+            db: AsyncSession for database operations.
+
+        Returns:
+            Dict with 'success' (bool), 'primary_keyword' (str or None),
+            'page_id', 'error' (str, only on failure).
+        """
+        from app.models.page_keywords import PageKeywords
+
+        page_id = page.id
+        url = page.normalized_url
+
+        logger.info(
+            "Processing page for primary keyword",
+            extra={"page_id": page_id, "url": url[:100]},
+        )
+
+        # Track page processing in stats
+        self._stats.pages_processed += 1
+
+        try:
+            # Step 1: Generate keyword candidates from page content
+            content_excerpt = (
+                page.body_content[:500] if page.body_content else None
+            )
+
+            candidates = await self.generate_candidates(
+                url=url,
+                title=page.title,
+                h1=page.headings.get("h1", [None])[0] if page.headings else None,
+                headings=page.headings,
+                content_excerpt=content_excerpt,
+                product_count=page.product_count,
+                category=page.category,
+            )
+
+            if not candidates:
+                raise ValueError("No keyword candidates generated")
+
+            logger.debug(
+                "Generated candidates",
+                extra={"page_id": page_id, "candidate_count": len(candidates)},
+            )
+
+            # Step 2: Enrich with search volume data
+            volume_data = await self.enrich_with_volume(candidates)
+
+            logger.debug(
+                "Enriched with volume",
+                extra={"page_id": page_id, "enriched_count": len(volume_data)},
+            )
+
+            # Step 3: Filter to page-specific keywords
+            # If no volume data, create minimal structure for filtering
+            if not volume_data:
+                # Create placeholder KeywordVolumeData for candidates without API data
+                from app.integrations.dataforseo import KeywordVolumeData as KVD
+
+                volume_data = {
+                    kw: KVD(
+                        keyword=kw,
+                        search_volume=None,
+                        cpc=None,
+                        competition=None,
+                        competition_level=None,
+                        monthly_searches=None,
+                        error=None,
+                    )
+                    for kw in candidates
+                }
+
+            filtered = await self.filter_to_specific(
+                keywords_with_volume=volume_data,
+                url=url,
+                title=page.title,
+                h1=page.headings.get("h1", [None])[0] if page.headings else None,
+                content_excerpt=content_excerpt,
+                category=page.category,
+            )
+
+            if not filtered:
+                raise ValueError("No keywords after filtering")
+
+            logger.debug(
+                "Filtered to specific",
+                extra={"page_id": page_id, "filtered_count": len(filtered)},
+            )
+
+            # Step 4: Calculate composite score for each keyword
+            scored_keywords: list[dict[str, Any]] = []
+            for kw_data in filtered:
+                scores = self.calculate_score(
+                    volume=kw_data.get("volume"),
+                    competition=kw_data.get("competition"),
+                    relevance=kw_data.get("relevance_score", 0.5),
+                )
+                scored_kw = {
+                    **kw_data,
+                    "composite_score": scores["composite_score"],
+                    "volume_score": scores["volume_score"],
+                    "competition_score": scores["competition_score"],
+                    "relevance_score_weighted": scores["relevance_score"],
+                }
+                scored_keywords.append(scored_kw)
+
+            logger.debug(
+                "Scored keywords",
+                extra={"page_id": page_id, "scored_count": len(scored_keywords)},
+            )
+
+            # Step 5: Select primary and alternatives
+            selection = self.select_primary_and_alternatives(scored_keywords)
+
+            primary = selection.get("primary")
+            alternatives = selection.get("alternatives", [])
+
+            if primary is None:
+                raise ValueError("Could not select primary keyword (all candidates already used)")
+
+            primary_keyword = primary.get("keyword", "")
+            primary_score = primary.get("composite_score")
+            primary_relevance = primary.get("relevance_score")
+            primary_volume = primary.get("volume")
+
+            # Extract alternative keyword strings
+            alternative_keywords = [
+                alt.get("keyword", "") for alt in alternatives if alt.get("keyword")
+            ]
+
+            logger.info(
+                "Selected primary keyword",
+                extra={
+                    "page_id": page_id,
+                    "primary": primary_keyword,
+                    "score": primary_score,
+                    "volume": primary_volume,
+                    "alternatives_count": len(alternative_keywords),
+                },
+            )
+
+            # Step 6: Create or update PageKeywords record
+            # Check if record already exists for this page
+            existing_keywords = page.keywords
+
+            if existing_keywords:
+                # Update existing record
+                existing_keywords.primary_keyword = primary_keyword
+                existing_keywords.alternative_keywords = alternative_keywords
+                existing_keywords.composite_score = primary_score
+                existing_keywords.relevance_score = primary_relevance
+                existing_keywords.search_volume = primary_volume
+                # Keep approval status unchanged on update
+
+                logger.debug(
+                    "Updated existing PageKeywords",
+                    extra={"page_id": page_id, "keywords_id": existing_keywords.id},
+                )
+            else:
+                # Create new record
+                new_keywords = PageKeywords(
+                    crawled_page_id=page_id,
+                    primary_keyword=primary_keyword,
+                    secondary_keywords=[],  # Not used in this pipeline
+                    alternative_keywords=alternative_keywords,
+                    is_approved=False,
+                    is_priority=False,
+                    composite_score=primary_score,
+                    relevance_score=primary_relevance,
+                    search_volume=primary_volume,
+                )
+                db.add(new_keywords)
+
+                logger.debug(
+                    "Created new PageKeywords",
+                    extra={"page_id": page_id},
+                )
+
+            # Commit changes
+            await db.commit()
+
+            # Update success stats
+            self._stats.pages_succeeded += 1
+
+            return {
+                "success": True,
+                "page_id": page_id,
+                "primary_keyword": primary_keyword,
+                "composite_score": primary_score,
+                "alternatives": alternative_keywords,
+            }
+
+        except Exception as e:
+            # Log error
+            logger.error(
+                "Failed to process page for keywords",
+                extra={
+                    "page_id": page_id,
+                    "url": url[:100],
+                    "error": str(e),
+                },
+                exc_info=True,
+            )
+
+            # Update failure stats
+            self._stats.pages_failed += 1
+            self._stats.errors.append(
+                {
+                    "page_id": page_id,
+                    "url": url,
+                    "error": str(e),
+                    "phase": "process_page",
+                }
+            )
+
+            # Rollback any partial changes
+            await db.rollback()
+
+            return {
+                "success": False,
+                "page_id": page_id,
+                "primary_keyword": None,
+                "error": str(e),
+            }
