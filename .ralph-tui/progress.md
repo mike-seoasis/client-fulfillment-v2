@@ -34,3 +34,19 @@ after each iteration and it's included in prompts for context.
   - Pattern documented above for Alembic migrations
 ---
 
+## 2026-02-05 - S4-002
+- **What was implemented:** Added bidirectional relationship between CrawledPage and PageKeywords models
+- **Files changed:**
+  - `backend/app/models/crawled_page.py` - Added `keywords` relationship with one-to-one config
+  - `backend/app/models/page_keywords.py` - Added ForeignKey constraint and `page` relationship
+- **Changes:**
+  - Added `ForeignKey("crawled_pages.id", ondelete="CASCADE")` to `crawled_page_id` column
+  - Added `page` relationship in PageKeywords with `back_populates="keywords"`
+  - Added `keywords` relationship in CrawledPage with `uselist=False` for one-to-one, `cascade="all, delete-orphan"`
+- **Learnings:**
+  - One-to-one relationships in SQLAlchemy use `uselist=False` on the parent side
+  - Follow TYPE_CHECKING pattern with forward references to avoid circular imports
+  - ForeignKey with `ondelete="CASCADE"` ensures database-level cascade
+  - `cascade="all, delete-orphan"` on relationship ensures ORM-level cascade
+---
+

@@ -8,14 +8,17 @@ The PageKeywords model represents keyword data for a page:
 """
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-from sqlalchemy import DateTime, Text, text
+from sqlalchemy import DateTime, ForeignKey, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+if TYPE_CHECKING:
+    from app.models.crawled_page import CrawledPage
 
 
 class PageKeywords(Base):
@@ -46,6 +49,7 @@ class PageKeywords(Base):
 
     crawled_page_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False),
+        ForeignKey("crawled_pages.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -84,6 +88,12 @@ class PageKeywords(Base):
         default=lambda: datetime.now(UTC),
         server_default=text("now()"),
         onupdate=lambda: datetime.now(UTC),
+    )
+
+    # Relationship to CrawledPage
+    page: Mapped["CrawledPage"] = relationship(
+        "CrawledPage",
+        back_populates="keywords",
     )
 
     def __repr__(self) -> str:

@@ -23,6 +23,7 @@ from app.core.database import Base
 if TYPE_CHECKING:
     from app.models.content_brief import ContentBrief
     from app.models.content_score import ContentScore
+    from app.models.page_keywords import PageKeywords
 
 
 class CrawlStatus(str, Enum):
@@ -182,6 +183,14 @@ class CrawledPage(Base):
         "ContentScore",
         back_populates="page",
         cascade="all, delete-orphan",
+    )
+
+    # Relationship to PageKeywords (one-to-one)
+    keywords: Mapped["PageKeywords | None"] = relationship(
+        "PageKeywords",
+        back_populates="page",
+        cascade="all, delete-orphan",
+        uselist=False,
     )
 
     def __repr__(self) -> str:
