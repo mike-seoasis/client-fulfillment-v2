@@ -1112,3 +1112,24 @@ after each iteration and it's included in prompts for context.
   - The crawl page was already correctly wired up during initial implementation
 ---
 
+## 2026-02-05 - S4-048
+- **What was implemented:** Added comprehensive loading, error, and empty states to the keywords page
+- **Files changed:**
+  - `frontend/src/app/projects/[id]/onboarding/keywords/page.tsx` - Added ErrorState, EmptyState components and skeleton loading rows
+  - `frontend/src/app/projects/[id]/onboarding/keywords/__tests__/page.test.tsx` - Added/updated tests for new states
+- **Components added:**
+  - `ErrorState` - Shows error icon, message, and retry button with loading state
+  - `EmptyState` - Shows document icon and helpful message about completing crawl first
+  - Skeleton loading rows - Replaces "Loading pages..." text with proper skeleton UI matching row layout
+- **Acceptance criteria verified:**
+  - [x] Show skeleton loading while fetching pages - Skeleton rows with animate-pulse, matching KeywordPageRow layout
+  - [x] Show error message if fetch fails - ErrorState component with error message display
+  - [x] Show retry button on error - Retry button calls refetchPages() with loading state
+  - [x] Handle empty state (no pages) - EmptyState with "No Pages Available" message
+- **Learnings:**
+  - Use separate state variable (`isRetrying`) for retry loading since refetch doesn't expose isPending
+  - Skeleton loading should match the actual row layout for better UX (not just a text message)
+  - Error state should provide actionable feedback (retry button, not just a message)
+  - Empty state should guide users to the next step (complete crawl first)
+---
+

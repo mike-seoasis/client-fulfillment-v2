@@ -183,6 +183,81 @@ function NotFoundState() {
   );
 }
 
+function ErrorState({
+  message,
+  onRetry,
+  isRetrying,
+}: {
+  message: string;
+  onRetry: () => void;
+  isRetrying?: boolean;
+}) {
+  return (
+    <div className="text-center py-12">
+      <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-coral-50 mb-4">
+        <svg
+          className="w-8 h-8 text-coral-500"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="15" y1="9" x2="9" y2="15" />
+          <line x1="9" y1="9" x2="15" y2="15" />
+        </svg>
+      </div>
+      <h2 className="text-xl font-semibold text-warm-gray-900 mb-2">
+        Failed to Load Pages
+      </h2>
+      <p className="text-warm-gray-600 mb-6">
+        {message}
+      </p>
+      <Button onClick={onRetry} disabled={isRetrying}>
+        {isRetrying ? (
+          <>
+            <SpinnerIcon className="w-4 h-4 mr-1.5 animate-spin" />
+            Retrying...
+          </>
+        ) : (
+          'Retry'
+        )}
+      </Button>
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="text-center py-12">
+      <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-cream-100 mb-4">
+        <svg
+          className="w-8 h-8 text-warm-gray-400"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="12" y1="18" x2="12" y2="12" />
+          <line x1="9" y1="15" x2="15" y2="15" />
+        </svg>
+      </div>
+      <h2 className="text-xl font-semibold text-warm-gray-900 mb-2">
+        No Pages Available
+      </h2>
+      <p className="text-warm-gray-600">
+        No crawled pages found. Please complete the crawl step first.
+      </p>
+    </div>
+  );
+}
+
 function GenerationProgressIndicator({
   status,
   completed,
@@ -296,8 +371,9 @@ export default function KeywordsPage() {
 
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
   const keywordGen = useKeywordGeneration(projectId);
-  const { pages, isLoading: isPagesLoading } = usePagesWithKeywordsData(projectId);
+  const { pages, isLoading: isPagesLoading, isError: isPagesError, error: pagesError, refetch: refetchPages } = usePagesWithKeywordsData(projectId);
   const approveAllMutation = useApproveAllKeywords();
+  const [isRetrying, setIsRetrying] = useState(false);
 
   const isLoading = isProjectLoading || keywordGen.isLoading;
 
@@ -323,6 +399,16 @@ export default function KeywordsPage() {
       setToastMessage(message);
       setToastVariant('error');
       setShowToast(true);
+    }
+  };
+
+  // Handle retry for pages fetch
+  const handleRetryFetch = async () => {
+    setIsRetrying(true);
+    try {
+      await refetchPages();
+    } finally {
+      setIsRetrying(false);
     }
   };
 
@@ -471,13 +557,35 @@ export default function KeywordsPage() {
             <div className="border border-cream-500 rounded-sm overflow-hidden">
               <div className="max-h-80 overflow-y-auto">
                 {isPagesLoading ? (
-                  <div className="py-8 text-center text-warm-gray-500">
-                    Loading pages...
+                  /* Skeleton loading rows */
+                  <div className="divide-y divide-cream-300">
+                    {[...Array(4)].map((_, i) => (
+                      <div key={i} className="px-4 py-3 animate-pulse">
+                        <div className="flex items-center gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="h-4 bg-cream-300 rounded w-48 mb-2" />
+                            <div className="h-3 bg-cream-200 rounded w-32" />
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="h-6 bg-cream-300 rounded w-20" />
+                            <div className="h-6 bg-cream-300 rounded w-16" />
+                            <div className="h-8 bg-cream-300 rounded w-20" />
+                            <div className="h-6 w-6 bg-cream-300 rounded-full" />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
+                ) : isPagesError ? (
+                  /* Error state with retry */
+                  <ErrorState
+                    message={pagesError instanceof Error ? pagesError.message : 'Failed to load pages. Please try again.'}
+                    onRetry={handleRetryFetch}
+                    isRetrying={isRetrying}
+                  />
                 ) : pages.length === 0 ? (
-                  <div className="py-8 text-center text-warm-gray-500">
-                    No pages to display
-                  </div>
+                  /* Empty state */
+                  <EmptyState />
                 ) : (
                   pages.map((page) => (
                     <KeywordPageRow

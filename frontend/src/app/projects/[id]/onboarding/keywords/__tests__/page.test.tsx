@@ -517,7 +517,7 @@ describe('Keywords Page - Integration Tests', () => {
       )).toBeInTheDocument();
     });
 
-    it('shows "Loading pages..." while pages are loading', () => {
+    it('shows skeleton loading rows while pages are loading', () => {
       mockUseProject.mockReturnValue(defaultMockProject());
       mockKeywordGeneration.mockReturnValue(defaultMockKeywordGen());
       mockPagesWithKeywords.mockReturnValue({
@@ -531,17 +531,20 @@ describe('Keywords Page - Integration Tests', () => {
 
       render(<KeywordsPage />);
 
-      expect(screen.getByText('Loading pages...')).toBeInTheDocument();
+      // Check for skeleton loading rows with animate-pulse class
+      const skeletonRows = document.querySelectorAll('.animate-pulse');
+      expect(skeletonRows.length).toBeGreaterThan(0);
     });
 
-    it('shows "No pages to display" when page list is empty', () => {
+    it('shows empty state when page list is empty', () => {
       mockUseProject.mockReturnValue(defaultMockProject());
       mockKeywordGeneration.mockReturnValue(defaultMockKeywordGen());
       mockPagesWithKeywords.mockReturnValue(defaultMockPages([]));
 
       render(<KeywordsPage />);
 
-      expect(screen.getByText('No pages to display')).toBeInTheDocument();
+      expect(screen.getByText('No Pages Available')).toBeInTheDocument();
+      expect(screen.getByText('No crawled pages found. Please complete the crawl step first.')).toBeInTheDocument();
     });
 
     it('renders pages without keywords (null keywords)', () => {
@@ -560,6 +563,80 @@ describe('Keywords Page - Integration Tests', () => {
       expect(screen.getByText('keyword one')).toBeInTheDocument();
       // Page without keyword should also render (row exists)
       expect(screen.getByText('Page page-2')).toBeInTheDocument();
+    });
+
+    it('shows error state when pages fetch fails', () => {
+      mockUseProject.mockReturnValue(defaultMockProject());
+      mockKeywordGeneration.mockReturnValue(defaultMockKeywordGen());
+      mockPagesWithKeywords.mockReturnValue({
+        pages: [],
+        isLoading: false,
+        isError: true,
+        error: new Error('Network error: Failed to fetch pages'),
+        refetch: vi.fn(),
+        invalidate: vi.fn(),
+      });
+
+      render(<KeywordsPage />);
+
+      expect(screen.getByText('Failed to Load Pages')).toBeInTheDocument();
+      expect(screen.getByText('Network error: Failed to fetch pages')).toBeInTheDocument();
+    });
+
+    it('shows retry button on error and calls refetch when clicked', async () => {
+      const mockRefetch = vi.fn().mockResolvedValue({});
+
+      mockUseProject.mockReturnValue(defaultMockProject());
+      mockKeywordGeneration.mockReturnValue(defaultMockKeywordGen());
+      mockPagesWithKeywords.mockReturnValue({
+        pages: [],
+        isLoading: false,
+        isError: true,
+        error: new Error('Failed to fetch'),
+        refetch: mockRefetch,
+        invalidate: vi.fn(),
+      });
+
+      render(<KeywordsPage />);
+
+      const retryButton = screen.getByRole('button', { name: 'Retry' });
+      expect(retryButton).toBeInTheDocument();
+
+      await userEvent.click(retryButton);
+
+      expect(mockRefetch).toHaveBeenCalled();
+    });
+
+    it('shows retrying state when retry button is clicked', async () => {
+      // Create a promise that we can control
+      let resolveRefetch: () => void;
+      const refetchPromise = new Promise<void>((resolve) => {
+        resolveRefetch = resolve;
+      });
+      const mockRefetch = vi.fn().mockReturnValue(refetchPromise);
+
+      mockUseProject.mockReturnValue(defaultMockProject());
+      mockKeywordGeneration.mockReturnValue(defaultMockKeywordGen());
+      mockPagesWithKeywords.mockReturnValue({
+        pages: [],
+        isLoading: false,
+        isError: true,
+        error: new Error('Failed to fetch'),
+        refetch: mockRefetch,
+        invalidate: vi.fn(),
+      });
+
+      render(<KeywordsPage />);
+
+      const retryButton = screen.getByRole('button', { name: 'Retry' });
+      await userEvent.click(retryButton);
+
+      // Should show retrying state
+      expect(screen.getByText('Retrying...')).toBeInTheDocument();
+      expect(retryButton).toBeDisabled();
+
+      // Resolve the refetch promise
+      resolveRefetch!();
     });
   });
 
@@ -810,7 +887,9 @@ describe('Keywords Page - Integration Tests', () => {
 
       render(<KeywordsPage />);
 
-      expect(screen.getByText('Loading pages...')).toBeInTheDocument();
+      // Check for skeleton loading rows with animate-pulse class
+      const skeletonRows = document.querySelectorAll('.animate-pulse');
+      expect(skeletonRows.length).toBeGreaterThan(0);
     });
 
     it('updates UI when rerender with new approved state', async () => {
