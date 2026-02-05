@@ -1096,3 +1096,239 @@ Example: [{{"keyword": "keyword one", "relevance_score": 0.95}}, {{"keyword": "k
                 "primary_keyword": None,
                 "error": str(e),
             }
+
+    async def generate_for_project(
+        self,
+        project_id: str,
+        db: AsyncSession,
+    ) -> dict[str, Any]:
+        """Process all completed pages in a project to generate primary keywords.
+
+        Orchestrates keyword generation for an entire project by:
+        1. Loading all CrawledPages with status=completed
+        2. Initializing/resetting the used_primaries tracking set
+        3. Processing each page through the keyword pipeline
+        4. Updating project.phase_status with progress after each page
+        5. Returning final status with statistics
+
+        Progress tracking in phase_status enables frontend polling during
+        the generation process.
+
+        Args:
+            project_id: UUID of the project to process.
+            db: AsyncSession for database operations.
+
+        Returns:
+            Dict with:
+            - 'success': bool - True if generation completed (even with some failures)
+            - 'status': str - 'completed', 'partial', or 'failed'
+            - 'total': int - Total pages processed
+            - 'completed': int - Pages with keywords successfully generated
+            - 'failed': int - Pages that failed keyword generation
+            - 'stats': dict - Full generation statistics summary
+            - 'error': str (optional) - Error message if completely failed
+        """
+        from sqlalchemy import select
+        from sqlalchemy.orm.attributes import flag_modified
+
+        from app.models.crawled_page import CrawledPage, CrawlStatus
+        from app.models.project import Project
+
+        logger.info(
+            "Starting keyword generation for project",
+            extra={"project_id": project_id},
+        )
+
+        # Reset stats and used keywords tracking for fresh generation
+        self.reset_stats()
+        self.reset_used_keywords()
+
+        try:
+            # Load project
+            project = await db.get(Project, project_id)
+            if not project:
+                logger.error(
+                    "Project not found for keyword generation",
+                    extra={"project_id": project_id},
+                )
+                return {
+                    "success": False,
+                    "status": "failed",
+                    "total": 0,
+                    "completed": 0,
+                    "failed": 0,
+                    "error": f"Project {project_id} not found",
+                }
+
+            # Load all completed crawled pages for this project
+            stmt = (
+                select(CrawledPage)
+                .where(CrawledPage.project_id == project_id)
+                .where(CrawledPage.status == CrawlStatus.COMPLETED.value)
+                .order_by(CrawledPage.normalized_url)
+            )
+            result = await db.execute(stmt)
+            pages = list(result.scalars().all())
+
+            total_pages = len(pages)
+
+            if total_pages == 0:
+                logger.warning(
+                    "No completed pages found for keyword generation",
+                    extra={"project_id": project_id},
+                )
+                return {
+                    "success": True,
+                    "status": "completed",
+                    "total": 0,
+                    "completed": 0,
+                    "failed": 0,
+                    "stats": self.get_stats_summary(),
+                }
+
+            logger.info(
+                "Found pages for keyword generation",
+                extra={"project_id": project_id, "page_count": total_pages},
+            )
+
+            # Initialize phase_status for keyword generation tracking
+            if "onboarding" not in project.phase_status:
+                project.phase_status["onboarding"] = {}
+
+            project.phase_status["onboarding"]["keywords"] = {
+                "status": "generating",
+                "total": total_pages,
+                "completed": 0,
+                "failed": 0,
+                "current_page": None,
+            }
+            flag_modified(project, "phase_status")
+            await db.commit()
+
+            # Process each page
+            completed_count = 0
+            failed_count = 0
+
+            for idx, page in enumerate(pages):
+                # Update progress with current page being processed
+                project.phase_status["onboarding"]["keywords"]["current_page"] = (
+                    page.normalized_url[:100]
+                )
+                flag_modified(project, "phase_status")
+                await db.commit()
+
+                logger.debug(
+                    "Processing page for keywords",
+                    extra={
+                        "project_id": project_id,
+                        "page_index": idx + 1,
+                        "total_pages": total_pages,
+                        "url": page.normalized_url[:100],
+                    },
+                )
+
+                # Process the page
+                page_result = await self.process_page(page, db)
+
+                if page_result.get("success"):
+                    completed_count += 1
+                else:
+                    failed_count += 1
+
+                # Update progress after each page
+                project.phase_status["onboarding"]["keywords"]["completed"] = (
+                    completed_count
+                )
+                project.phase_status["onboarding"]["keywords"]["failed"] = failed_count
+                flag_modified(project, "phase_status")
+                await db.commit()
+
+                logger.debug(
+                    "Page keyword generation result",
+                    extra={
+                        "project_id": project_id,
+                        "page_id": page.id,
+                        "success": page_result.get("success"),
+                        "primary_keyword": page_result.get("primary_keyword"),
+                        "progress": f"{idx + 1}/{total_pages}",
+                    },
+                )
+
+            # Determine final status
+            if failed_count == 0:
+                final_status = "completed"
+            elif completed_count == 0:
+                final_status = "failed"
+            else:
+                final_status = "partial"
+
+            # Update phase_status with final status
+            project.phase_status["onboarding"]["keywords"]["status"] = final_status
+            project.phase_status["onboarding"]["keywords"]["current_page"] = None
+            flag_modified(project, "phase_status")
+            await db.commit()
+
+            logger.info(
+                "Keyword generation completed for project",
+                extra={
+                    "project_id": project_id,
+                    "status": final_status,
+                    "total": total_pages,
+                    "completed": completed_count,
+                    "failed": failed_count,
+                    "stats": self.get_stats_summary(),
+                },
+            )
+
+            return {
+                "success": True,
+                "status": final_status,
+                "total": total_pages,
+                "completed": completed_count,
+                "failed": failed_count,
+                "stats": self.get_stats_summary(),
+            }
+
+        except Exception as e:
+            logger.error(
+                "Keyword generation failed for project",
+                extra={
+                    "project_id": project_id,
+                    "error": str(e),
+                },
+                exc_info=True,
+            )
+
+            # Try to update phase_status with failure
+            try:
+                project = await db.get(Project, project_id)
+                if project:
+                    if "onboarding" not in project.phase_status:
+                        project.phase_status["onboarding"] = {}
+                    project.phase_status["onboarding"]["keywords"] = {
+                        "status": "failed",
+                        "error": str(e),
+                        "total": self._stats.pages_processed,
+                        "completed": self._stats.pages_succeeded,
+                        "failed": self._stats.pages_failed,
+                    }
+                    flag_modified(project, "phase_status")
+                    await db.commit()
+            except Exception as update_error:
+                logger.error(
+                    "Failed to update project phase_status after error",
+                    extra={
+                        "project_id": project_id,
+                        "error": str(update_error),
+                    },
+                )
+
+            return {
+                "success": False,
+                "status": "failed",
+                "total": self._stats.pages_processed,
+                "completed": self._stats.pages_succeeded,
+                "failed": self._stats.pages_failed,
+                "error": str(e),
+                "stats": self.get_stats_summary(),
+            }

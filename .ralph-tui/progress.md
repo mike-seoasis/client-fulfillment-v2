@@ -245,3 +245,42 @@ after each iteration and it's included in prompts for context.
   - Always rollback db session on error to avoid partial state
 ---
 
+## 2026-02-05 - S4-013
+- **What was implemented:** Implemented `generate_for_project` method to process all pages in a project for keyword generation
+- **Files changed:**
+  - `backend/app/services/primary_keyword.py` - Added `generate_for_project` async method
+- **Method features:**
+  - Takes project_id and AsyncSession as inputs
+  - Loads all CrawledPages with status=completed, ordered by normalized_url
+  - Resets stats and used_primaries set for fresh generation
+  - Loops through pages calling `process_page()` for each
+  - Updates `project.phase_status["onboarding"]["keywords"]` with progress after each page
+  - Tracks current_page being processed for frontend display
+  - Returns final status with total, completed, failed counts and full stats summary
+- **Progress tracking structure in phase_status:**
+  ```json
+  {
+    "onboarding": {
+      "keywords": {
+        "status": "generating|completed|partial|failed",
+        "total": 10,
+        "completed": 5,
+        "failed": 0,
+        "current_page": "https://example.com/page"
+      }
+    }
+  }
+  ```
+- **Error handling:**
+  - Handles project not found case
+  - Handles zero completed pages (returns success with empty results)
+  - Catches unexpected exceptions and attempts to update phase_status with failure info
+  - Uses `flag_modified(project, "phase_status")` for JSONB updates
+- **Learnings:**
+  - Use `flag_modified()` from sqlalchemy.orm.attributes for JSONB field mutations
+  - Import models inside method to avoid circular imports (CrawledPage, CrawlStatus, Project)
+  - Reset service state (stats + used_primaries) at start of project-level operation
+  - Commit after each page to enable real-time progress tracking via frontend polling
+  - Final status can be "completed" (no failures), "partial" (some failures), or "failed" (all failures)
+---
+
