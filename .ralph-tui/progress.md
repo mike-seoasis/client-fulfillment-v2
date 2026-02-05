@@ -840,3 +840,27 @@ after each iteration and it's included in prompts for context.
   - Accessibility: use aria-pressed for toggle buttons, aria-label for icon-only buttons
 ---
 
+## 2026-02-05 - S4-036
+- **What was implemented:** Created ApproveButton component as a reusable button for approving keywords
+- **Files changed:**
+  - `frontend/src/components/onboarding/ApproveButton.tsx` (new file)
+  - `frontend/src/components/onboarding/KeywordPageRow.tsx` (updated to use ApproveButton, removed inline CheckIcon and SpinnerIcon)
+- **Component features:**
+  - Shows 'Approve' button when not approved (lagoon-100/700 colors)
+  - Shows checkmark badge when approved (palm-100/700 colors for approved state)
+  - Shows 'Pending' text when disabled (no keyword generated)
+  - Loading state shows spinner with "Approving..." text
+  - Accepts `onApprove` callback for API integration via parent
+  - Accepts `disabled` prop to show pending state
+- **Acceptance criteria verified:**
+  - [x] Shows 'Approve' button when not approved
+  - [x] Shows checkmark when approved
+  - [x] Clicking toggles approval state via API (via onApprove callback)
+  - [x] Shows loading state during toggle
+  - [x] Uses palm-500 for approved state
+- **Learnings:**
+  - Component extraction pattern: props interface with isApproved, isLoading, disabled, onApprove
+  - Three visual states: approved (badge), not approved (button), disabled (pending text)
+  - Reuse SVG icons across extracted components (CheckIcon, SpinnerIcon can be shared)
+---
+

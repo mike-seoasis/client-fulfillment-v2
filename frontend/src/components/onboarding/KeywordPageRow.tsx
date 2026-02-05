@@ -5,6 +5,7 @@ import type { PageWithKeywords } from '@/lib/api';
 import { useApproveKeyword, useTogglePriority } from '@/hooks/useKeywordMutations';
 import { AlternativeKeywordDropdown } from './AlternativeKeywordDropdown';
 import { PriorityToggle } from './PriorityToggle';
+import { ApproveButton } from './ApproveButton';
 
 interface KeywordPageRowProps {
   /** Page with keyword data */
@@ -16,40 +17,6 @@ interface KeywordPageRowProps {
 }
 
 // SVG Icons
-function CheckIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
-}
-
-
-function SpinnerIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="10" opacity="0.25" />
-      <path d="M12 2a10 10 0 0 1 10 10" />
-    </svg>
-  );
-}
-
 function ChevronDownIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -349,37 +316,12 @@ export function KeywordPageRow({ page, projectId, onKeywordClick }: KeywordPageR
 
         {/* Approval status */}
         <div className="flex-shrink-0">
-          {isApproved ? (
-            <div
-              className="flex items-center gap-1 px-2 py-1 bg-palm-100 text-palm-700 rounded-sm text-xs font-medium"
-              title="Approved"
-            >
-              <CheckIcon className="w-4 h-4" />
-              <span>Approved</span>
-            </div>
-          ) : hasKeyword ? (
-            <button
-              onClick={handleApprove}
-              disabled={approveKeyword.isPending}
-              className="flex items-center gap-1 px-2 py-1 bg-lagoon-100 text-lagoon-700 hover:bg-lagoon-200 rounded-sm text-xs font-medium transition-colors disabled:opacity-50"
-            >
-              {approveKeyword.isPending ? (
-                <>
-                  <SpinnerIcon className="w-4 h-4 animate-spin" />
-                  <span>Approving...</span>
-                </>
-              ) : (
-                <>
-                  <CheckIcon className="w-4 h-4" />
-                  <span>Approve</span>
-                </>
-              )}
-            </button>
-          ) : (
-            <span className="text-xs text-warm-gray-400 px-2 py-1">
-              Pending
-            </span>
-          )}
+          <ApproveButton
+            isApproved={isApproved}
+            isLoading={approveKeyword.isPending}
+            disabled={!hasKeyword}
+            onApprove={handleApprove}
+          />
         </div>
       </div>
     </div>
