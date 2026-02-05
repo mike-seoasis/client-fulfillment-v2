@@ -433,21 +433,38 @@ export default function KeywordsPage() {
                 </span>
               </div>
 
-              {/* Approve All button */}
-              <Button
-                variant="secondary"
-                onClick={handleApproveAll}
-                disabled={pendingApprovalCount === 0 || approveAllMutation.isPending}
-              >
-                {approveAllMutation.isPending ? (
-                  <>
-                    <SpinnerIcon className="w-4 h-4 mr-1.5 animate-spin" />
-                    Approving...
-                  </>
-                ) : (
-                  'Approve All'
-                )}
-              </Button>
+              {/* Approval progress display and Approve All button */}
+              <div className="flex items-center gap-3">
+                {/* Approval progress - shows "Approved: X of Y" with checkmark when complete */}
+                <div className="flex items-center gap-2">
+                  {approvedCount === pagesWithKeywords && pagesWithKeywords > 0 ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-sm font-medium text-palm-700 bg-palm-50 rounded-sm border border-palm-200">
+                      <CheckIcon className="w-4 h-4" />
+                      Approved: {approvedCount} of {pagesWithKeywords}
+                    </span>
+                  ) : pagesWithKeywords > 0 ? (
+                    <span className="text-sm text-warm-gray-600">
+                      Approved: <span className="font-medium">{approvedCount}</span> of <span className="font-medium">{pagesWithKeywords}</span>
+                    </span>
+                  ) : null}
+                </div>
+
+                {/* Approve All button */}
+                <Button
+                  variant="secondary"
+                  onClick={handleApproveAll}
+                  disabled={pendingApprovalCount === 0 || approveAllMutation.isPending}
+                >
+                  {approveAllMutation.isPending ? (
+                    <>
+                      <SpinnerIcon className="w-4 h-4 mr-1.5 animate-spin" />
+                      Approving...
+                    </>
+                  ) : (
+                    'Approve All'
+                  )}
+                </Button>
+              </div>
             </div>
 
             {/* Pages list */}

@@ -961,3 +961,24 @@ after each iteration and it's included in prompts for context.
   - Use `useRef` even if not strictly needed for the ref, keeping it in case future accessibility enhancements need it
 ---
 
+## 2026-02-05 - S4-041
+- **What was implemented:** Added approval progress display near Approve All button showing "Approved: X of Y"
+- **Files changed:**
+  - `frontend/src/app/projects/[id]/onboarding/keywords/page.tsx` - Added approval progress display component
+- **Features implemented:**
+  - Shows "Approved: X of Y" text near Approve All button
+  - Updates reactively when approvals change (derived from pages state)
+  - When all keywords approved: shows styled badge with checkmark icon (palm-700 text, palm-50 bg, palm-200 border)
+  - When some pending: shows plain text with bolded numbers
+  - Conditionally hidden when no keywords generated yet
+- **Acceptance criteria verified:**
+  - [x] Shows 'Approved: X of Y' text
+  - [x] Updates reactively when approvals change
+  - [x] Positioned near Approve All button
+  - [x] Shows checkmark icon when all complete
+- **Learnings:**
+  - Conditional rendering with three states: all complete (styled badge), some pending (plain text), none yet (null)
+  - Wrap progress display and button in flex container for proper alignment and spacing
+  - Use inline-flex for badge to center icon and text
+---
+
