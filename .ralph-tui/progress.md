@@ -396,3 +396,29 @@ after each iteration and it's included in prompts for context.
   - Project model uses `site_url` not `website_url`
 ---
 
+## 2026-02-05 - S4-019
+- **What was implemented:** GET `/api/v1/projects/{project_id}/pages-with-keywords` endpoint
+- **Files changed:**
+  - `backend/app/api/v1/projects.py` - Added endpoint with joinedload query
+  - `backend/tests/api/test_projects.py` - Added TestPagesWithKeywords class with 6 tests
+- **Endpoint features:**
+  - Returns list of CrawledPages with their PageKeywords data
+  - Uses `joinedload(CrawledPage.keywords)` for efficient single-query loading
+  - Filters to only status=completed pages
+  - Orders by normalized_url for consistent display
+  - Maps to PageWithKeywords/PageKeywordsData schemas
+  - Returns null keywords for pages without keyword data
+- **Test coverage:**
+  - test_pages_with_keywords_project_not_found - 404 for non-existent project
+  - test_pages_with_keywords_empty_project - Returns empty list
+  - test_pages_with_keywords_only_completed_pages - Filters non-completed pages
+  - test_pages_with_keywords_ordered_by_url - Verifies URL ordering
+  - test_pages_with_keywords_includes_keyword_data - Full keyword data validation
+  - test_pages_with_keywords_null_keywords - Handles pages without keywords
+- **Learnings:**
+  - Use `joinedload` from `sqlalchemy.orm` for efficient eager loading of relationships
+  - Call `.unique().all()` after `scalars()` when using joinedload to deduplicate results
+  - Manually map ORM objects to Pydantic schemas when nested relationships need transformation
+  - PageKeywordsData schema has `from_attributes=True` but manual mapping gives more control
+---
+

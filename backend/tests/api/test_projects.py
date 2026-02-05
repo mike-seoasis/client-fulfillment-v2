@@ -955,3 +955,240 @@ class TestPrimaryKeywordsStatus:
         data = response.json()
         assert data["status"] == "failed"
         assert data["error"] == "API rate limit exceeded"
+
+
+class TestPagesWithKeywords:
+    """Tests for GET /api/v1/projects/{project_id}/pages-with-keywords endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_pages_with_keywords_project_not_found(
+        self, async_client: AsyncClient
+    ) -> None:
+        """GET pages-with-keywords returns 404 for non-existent project."""
+        fake_id = str(uuid.uuid4())
+        response = await async_client.get(
+            f"/api/v1/projects/{fake_id}/pages-with-keywords"
+        )
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_pages_with_keywords_empty_project(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """GET pages-with-keywords returns empty list for project with no pages."""
+        from app.models.project import Project
+
+        project = Project(
+            name="Empty Project Test",
+            site_url="https://empty-project.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        response = await async_client.get(
+            f"/api/v1/projects/{project.id}/pages-with-keywords"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data == []
+
+    @pytest.mark.asyncio
+    async def test_pages_with_keywords_only_completed_pages(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """GET pages-with-keywords returns only completed pages."""
+        from app.models.crawled_page import CrawledPage
+        from app.models.project import Project
+
+        project = Project(
+            name="Mixed Status Test",
+            site_url="https://mixed-status.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        # Create pages with different statuses
+        completed_page = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://mixed-status.example.com/completed",
+            status="completed",
+            title="Completed Page",
+        )
+        pending_page = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://mixed-status.example.com/pending",
+            status="pending",
+            title="Pending Page",
+        )
+        failed_page = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://mixed-status.example.com/failed",
+            status="failed",
+            title="Failed Page",
+        )
+        db_session.add_all([completed_page, pending_page, failed_page])
+        await db_session.commit()
+
+        response = await async_client.get(
+            f"/api/v1/projects/{project.id}/pages-with-keywords"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["url"] == "https://mixed-status.example.com/completed"
+
+    @pytest.mark.asyncio
+    async def test_pages_with_keywords_ordered_by_url(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """GET pages-with-keywords returns pages ordered by URL."""
+        from app.models.crawled_page import CrawledPage
+        from app.models.project import Project
+
+        project = Project(
+            name="Ordering Test",
+            site_url="https://ordering-test.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        # Create pages in non-alphabetical order
+        page_z = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://ordering-test.example.com/z-page",
+            status="completed",
+        )
+        page_a = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://ordering-test.example.com/a-page",
+            status="completed",
+        )
+        page_m = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://ordering-test.example.com/m-page",
+            status="completed",
+        )
+        db_session.add_all([page_z, page_a, page_m])
+        await db_session.commit()
+
+        response = await async_client.get(
+            f"/api/v1/projects/{project.id}/pages-with-keywords"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 3
+        urls = [page["url"] for page in data]
+        assert urls == sorted(urls)
+
+    @pytest.mark.asyncio
+    async def test_pages_with_keywords_includes_keyword_data(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """GET pages-with-keywords includes keyword data when available."""
+        from app.models.crawled_page import CrawledPage
+        from app.models.page_keywords import PageKeywords
+        from app.models.project import Project
+
+        project = Project(
+            name="Keyword Data Test",
+            site_url="https://keyword-data-test.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        page = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://keyword-data-test.example.com/products",
+            status="completed",
+            title="Products Page",
+            labels=["collection", "products"],
+            product_count=25,
+        )
+        db_session.add(page)
+        await db_session.commit()
+        await db_session.refresh(page)
+
+        # Add keywords
+        keywords = PageKeywords(
+            crawled_page_id=page.id,
+            primary_keyword="coffee storage containers",
+            secondary_keywords=["airtight containers", "coffee jars"],
+            alternative_keywords=[
+                {"keyword": "coffee canister", "volume": 5000, "composite_score": 75.5},
+                {"keyword": "coffee bean storage", "volume": 3000, "composite_score": 68.2},
+            ],
+            is_approved=False,
+            is_priority=True,
+            composite_score=82.5,
+            relevance_score=90.0,
+            ai_reasoning="High relevance for product collection",
+            search_volume=8500,
+            difficulty_score=45,
+        )
+        db_session.add(keywords)
+        await db_session.commit()
+
+        response = await async_client.get(
+            f"/api/v1/projects/{project.id}/pages-with-keywords"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+
+        page_data = data[0]
+        assert page_data["id"] == page.id
+        assert page_data["url"] == "https://keyword-data-test.example.com/products"
+        assert page_data["title"] == "Products Page"
+        assert page_data["labels"] == ["collection", "products"]
+        assert page_data["product_count"] == 25
+
+        # Check keyword data
+        kw_data = page_data["keywords"]
+        assert kw_data is not None
+        assert kw_data["primary_keyword"] == "coffee storage containers"
+        assert kw_data["secondary_keywords"] == ["airtight containers", "coffee jars"]
+        assert len(kw_data["alternative_keywords"]) == 2
+        assert kw_data["is_approved"] is False
+        assert kw_data["is_priority"] is True
+        assert kw_data["composite_score"] == 82.5
+        assert kw_data["relevance_score"] == 90.0
+        assert kw_data["ai_reasoning"] == "High relevance for product collection"
+        assert kw_data["search_volume"] == 8500
+        assert kw_data["difficulty_score"] == 45
+
+    @pytest.mark.asyncio
+    async def test_pages_with_keywords_null_keywords(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """GET pages-with-keywords returns null for pages without keywords."""
+        from app.models.crawled_page import CrawledPage
+        from app.models.project import Project
+
+        project = Project(
+            name="No Keywords Test",
+            site_url="https://no-keywords.example.com",
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        page = CrawledPage(
+            project_id=project.id,
+            normalized_url="https://no-keywords.example.com/about",
+            status="completed",
+            title="About Page",
+        )
+        db_session.add(page)
+        await db_session.commit()
+
+        response = await async_client.get(
+            f"/api/v1/projects/{project.id}/pages-with-keywords"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["keywords"] is None

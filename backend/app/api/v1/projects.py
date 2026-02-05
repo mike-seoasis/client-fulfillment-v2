@@ -9,6 +9,7 @@ from uuid import uuid4
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.database import get_session
@@ -28,7 +29,11 @@ from app.schemas.crawled_page import (
     UrlsUploadRequest,
     UrlUploadResponse,
 )
-from app.schemas.keyword_research import PrimaryKeywordGenerationStatus
+from app.schemas.keyword_research import (
+    PageKeywordsData,
+    PageWithKeywords,
+    PrimaryKeywordGenerationStatus,
+)
 from app.schemas.project import (
     ProjectCreate,
     ProjectListResponse,
@@ -1217,6 +1222,83 @@ async def get_primary_keywords_status(
         current_page=keywords_status.get("current_page"),
         error=keywords_status.get("error"),
     )
+
+
+@router.get(
+    "/{project_id}/pages-with-keywords",
+    response_model=list[PageWithKeywords],
+)
+async def list_pages_with_keywords(
+    project_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> list[PageWithKeywords]:
+    """List all completed pages with their keyword research data.
+
+    Returns crawled pages (status=completed) with their associated PageKeywords
+    data, including primary keyword, scores, and alternative keywords.
+
+    This endpoint is used by the keyword approval interface to display
+    all pages that have completed keyword generation.
+
+    Args:
+        project_id: UUID of the project.
+        db: AsyncSession for database operations.
+
+    Returns:
+        List of PageWithKeywords objects ordered by URL.
+
+    Raises:
+        HTTPException: 404 if project not found.
+    """
+    # Verify project exists (raises 404 if not)
+    await ProjectService.get_project(db, project_id)
+
+    # Query completed pages with their keywords using joinedload for efficiency
+    stmt = (
+        select(CrawledPage)
+        .options(joinedload(CrawledPage.keywords))
+        .where(
+            CrawledPage.project_id == project_id,
+            CrawledPage.status == CrawlStatus.COMPLETED.value,
+        )
+        .order_by(CrawledPage.normalized_url)
+    )
+
+    result = await db.execute(stmt)
+    pages = result.scalars().unique().all()
+
+    # Map to response schema
+    response_pages: list[PageWithKeywords] = []
+    for page in pages:
+        # Build PageKeywordsData from the relationship if it exists
+        keywords_data = None
+        if page.keywords:
+            keywords_data = PageKeywordsData(
+                id=page.keywords.id,
+                primary_keyword=page.keywords.primary_keyword,
+                secondary_keywords=page.keywords.secondary_keywords or [],
+                alternative_keywords=page.keywords.alternative_keywords or [],
+                is_approved=page.keywords.is_approved,
+                is_priority=page.keywords.is_priority,
+                composite_score=page.keywords.composite_score,
+                relevance_score=page.keywords.relevance_score,
+                ai_reasoning=page.keywords.ai_reasoning,
+                search_volume=page.keywords.search_volume,
+                difficulty_score=page.keywords.difficulty_score,
+            )
+
+        response_pages.append(
+            PageWithKeywords(
+                id=page.id,
+                url=page.normalized_url,
+                title=page.title,
+                labels=page.labels or [],
+                product_count=page.product_count,
+                keywords=keywords_data,
+            )
+        )
+
+    return response_pages
 
 
 @router.put(

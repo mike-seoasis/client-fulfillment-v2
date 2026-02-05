@@ -314,8 +314,9 @@
         "Only returns pages with status=completed"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Use joinedload for efficient query."
+      "passes": true,
+      "notes": "Use joinedload for efficient query.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S4-020",
@@ -819,6 +820,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-05T14:48:35.523Z"
+    "updatedAt": "2026-02-05T14:50:50.941Z"
   }
 }
