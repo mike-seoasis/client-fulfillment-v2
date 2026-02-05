@@ -671,3 +671,30 @@ after each iteration and it's included in prompts for context.
   - Provide helper hook with derived state for simpler component consumption
 ---
 
+## 2026-02-05 - S4-029
+- **What was implemented:** Created keyword mutation hooks for update, approve, approve-all, and toggle-priority operations
+- **Files changed:**
+  - `frontend/src/hooks/useKeywordMutations.ts` (new file)
+- **Hooks added:**
+  - `useUpdatePrimaryKeyword` - Mutation to update primary keyword for a page
+  - `useApproveKeyword` - Mutation to approve a single keyword
+  - `useApproveAllKeywords` - Mutation to bulk approve all keywords in a project
+  - `useTogglePriority` - Mutation to toggle/set priority flag for a page's keyword
+- **Features:**
+  - All mutations use typed input interfaces (UpdatePrimaryKeywordInput, ApproveKeywordInput, TogglePriorityInput)
+  - All mutations invalidate pages-with-keywords query on success via `pagesWithKeywordsKeys.list(projectId)`
+  - Return full `UseMutationResult` type with proper generics for type safety
+  - Import query keys from usePagesWithKeywords hook for consistent cache key management
+- **Acceptance criteria verified:**
+  - [x] Create useUpdatePrimaryKeyword mutation hook
+  - [x] Create useApproveKeyword mutation hook
+  - [x] Create useApproveAllKeywords mutation hook
+  - [x] Create useTogglePriority mutation hook
+  - [x] All mutations invalidate pages-with-keywords query on success
+- **Learnings:**
+  - Import query keys from the query hook file (usePagesWithKeywords) to maintain single source of truth for cache keys
+  - Use typed input interfaces for mutations with multiple parameters for cleaner function signatures
+  - TanStack Query `onSuccess` callback receives the mutation variables as second argument for accessing projectId
+  - Follow consistent pattern: useQueryClient() at top, return useMutation() with mutationFn and onSuccess
+---
+
