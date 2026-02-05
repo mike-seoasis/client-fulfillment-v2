@@ -882,8 +882,20 @@ Example: [{{"keyword": "keyword one", "relevance_score": 0.95}}, {{"keyword": "k
         """
         from app.models.page_keywords import PageKeywords
 
+        # Extract all needed values immediately to avoid lazy-loading issues
+        # in async context (accessing page attributes after db.commit() can
+        # trigger greenlet errors)
         page_id = page.id
         url = page.normalized_url
+        title = page.title
+        headings = page.headings
+        body_content = page.body_content
+        product_count = page.product_count
+        category = page.category
+
+        # Extract H1 from headings
+        h1 = headings.get("h1", [None])[0] if headings else None
+        content_excerpt = body_content[:500] if body_content else None
 
         logger.info(
             "Processing page for primary keyword",
@@ -895,18 +907,14 @@ Example: [{{"keyword": "keyword one", "relevance_score": 0.95}}, {{"keyword": "k
 
         try:
             # Step 1: Generate keyword candidates from page content
-            content_excerpt = (
-                page.body_content[:500] if page.body_content else None
-            )
-
             candidates = await self.generate_candidates(
                 url=url,
-                title=page.title,
-                h1=page.headings.get("h1", [None])[0] if page.headings else None,
-                headings=page.headings,
+                title=title,
+                h1=h1,
+                headings=headings,
                 content_excerpt=content_excerpt,
-                product_count=page.product_count,
-                category=page.category,
+                product_count=product_count,
+                category=category,
             )
 
             if not candidates:
@@ -947,10 +955,10 @@ Example: [{{"keyword": "keyword one", "relevance_score": 0.95}}, {{"keyword": "k
             filtered = await self.filter_to_specific(
                 keywords_with_volume=volume_data,
                 url=url,
-                title=page.title,
-                h1=page.headings.get("h1", [None])[0] if page.headings else None,
+                title=title,
+                h1=h1,
                 content_excerpt=content_excerpt,
-                category=page.category,
+                category=category,
             )
 
             if not filtered:
