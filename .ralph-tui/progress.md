@@ -911,3 +911,28 @@ after each iteration and it's included in prompts for context.
   - Component handles null scores gracefully by not rendering the tooltip wrapper
 ---
 
+## 2026-02-05 - S4-039
+- **What was implemented:** Added "Approve All" button to keywords page for bulk approving unapproved keywords
+- **Files changed:**
+  - `frontend/src/app/projects/[id]/onboarding/keywords/page.tsx` - Added Approve All button with toast feedback
+- **Features implemented:**
+  - Button shows at top of keyword list (right side of summary stats row)
+  - Uses existing `useApproveAllKeywords` mutation hook
+  - Clicking approves all unapproved keywords via `/approve-all-keywords` API endpoint
+  - Button disabled when `pendingApprovalCount === 0` (all already approved)
+  - Shows loading state (`Approving...` with spinner) during operation via `approveAllMutation.isPending`
+  - Shows success toast on completion with count: `"X keywords approved"`
+  - Shows error toast on failure with error message
+- **Acceptance criteria verified:**
+  - [x] Button shows at top of keyword list
+  - [x] Clicking approves all unapproved keywords
+  - [x] Button disabled when all already approved
+  - [x] Shows loading state during operation
+  - [x] Shows success toast on completion
+- **Learnings:**
+  - Reuse existing mutation hooks (useApproveAllKeywords) rather than creating new API calls
+  - Follow existing toast pattern from crawl page: useState for showToast, toastMessage, toastVariant
+  - Use `mutateAsync` for async/await syntax with try/catch error handling
+  - Mutation result includes `approved_count` for feedback in toast message
+---
+

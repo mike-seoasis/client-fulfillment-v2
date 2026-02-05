@@ -1,11 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useProject } from '@/hooks/use-projects';
 import { useKeywordGeneration } from '@/hooks/useKeywordGeneration';
 import { usePagesWithKeywordsData } from '@/hooks/usePagesWithKeywords';
-import { Button } from '@/components/ui';
+import { useApproveAllKeywords } from '@/hooks/useKeywordMutations';
+import { Button, Toast } from '@/components/ui';
 import { KeywordPageRow } from '@/components/onboarding/KeywordPageRow';
 
 // Step indicator data - shared across onboarding pages
@@ -282,9 +284,15 @@ export default function KeywordsPage() {
   const params = useParams();
   const projectId = params.id as string;
 
+  // Toast state
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastVariant, setToastVariant] = useState<'success' | 'error'>('success');
+
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
   const keywordGen = useKeywordGeneration(projectId);
   const { pages, isLoading: isPagesLoading } = usePagesWithKeywordsData(projectId);
+  const approveAllMutation = useApproveAllKeywords();
 
   const isLoading = isProjectLoading || keywordGen.isLoading;
 
@@ -292,10 +300,26 @@ export default function KeywordsPage() {
   const totalPages = pages.length;
   const pagesWithKeywords = pages.filter(p => p.keywords?.primary_keyword).length;
   const approvedCount = pages.filter(p => p.keywords?.is_approved).length;
+  const pendingApprovalCount = pagesWithKeywords - approvedCount;
 
   // Determine if we should show the generating state or the list
   const showGeneratingState = keywordGen.status === 'generating';
   const showPendingState = keywordGen.status === 'pending' && pagesWithKeywords === 0;
+
+  // Handle approve all
+  const handleApproveAll = async () => {
+    try {
+      const result = await approveAllMutation.mutateAsync(projectId);
+      setToastMessage(`${result.approved_count} keywords approved`);
+      setToastVariant('success');
+      setShowToast(true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to approve keywords';
+      setToastMessage(message);
+      setToastVariant('error');
+      setShowToast(true);
+    }
+  };
 
   // Loading state
   if (isLoading) {
@@ -390,17 +414,35 @@ export default function KeywordsPage() {
         {/* Generating or completed state - show page list */}
         {!showPendingState && (
           <>
-            {/* Summary stats */}
-            <div className="flex gap-4 mb-4 text-sm">
-              <span className="text-warm-gray-600">
-                <span className="font-medium text-warm-gray-900">{pagesWithKeywords}</span> keywords generated
-              </span>
-              <span className="text-warm-gray-600">
-                <span className="font-medium text-palm-600">{approvedCount}</span> approved
-              </span>
-              <span className="text-warm-gray-600">
-                <span className="font-medium text-lagoon-600">{pagesWithKeywords - approvedCount}</span> pending
-              </span>
+            {/* Summary stats and Approve All button */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex gap-4 text-sm">
+                <span className="text-warm-gray-600">
+                  <span className="font-medium text-warm-gray-900">{pagesWithKeywords}</span> keywords generated
+                </span>
+                <span className="text-warm-gray-600">
+                  <span className="font-medium text-palm-600">{approvedCount}</span> approved
+                </span>
+                <span className="text-warm-gray-600">
+                  <span className="font-medium text-lagoon-600">{pendingApprovalCount}</span> pending
+                </span>
+              </div>
+
+              {/* Approve All button */}
+              <Button
+                variant="secondary"
+                onClick={handleApproveAll}
+                disabled={pendingApprovalCount === 0 || approveAllMutation.isPending}
+              >
+                {approveAllMutation.isPending ? (
+                  <>
+                    <SpinnerIcon className="w-4 h-4 mr-1.5 animate-spin" />
+                    Approving...
+                  </>
+                ) : (
+                  'Approve All'
+                )}
+              </Button>
             </div>
 
             {/* Pages list */}
@@ -454,6 +496,15 @@ export default function KeywordsPage() {
           )}
         </div>
       </div>
+
+      {/* Toast notification */}
+      {showToast && (
+        <Toast
+          message={toastMessage}
+          variant={toastVariant}
+          onClose={() => setShowToast(false)}
+        />
+      )}
     </div>
   );
 }
