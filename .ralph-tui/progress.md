@@ -763,3 +763,29 @@ after each iteration and it's included in prompts for context.
   - URL parsing in display helps show relevant info without full domain
 ---
 
+## 2026-02-05 - S4-033
+- **What was implemented:** Created KeywordPageRow component for displaying page keyword data with interactive controls
+- **Files changed:**
+  - `frontend/src/components/onboarding/KeywordPageRow.tsx` (new file)
+  - `frontend/src/app/projects/[id]/onboarding/keywords/page.tsx` (updated to use new component)
+- **Component features:**
+  - URL display with truncation and hover tooltip showing full URL
+  - Page title display
+  - Primary keyword shown as clickable button with dropdown chevron (for S4-034 AlternativeKeywordDropdown integration via `onKeywordClick` prop)
+  - Search volume badge formatted with `toLocaleString()` for comma separators
+  - Composite score badge with ScoreTooltip showing 50/35/15 weight breakdown
+  - Approve button (when not approved) / Approved badge with checkmark (when approved)
+  - Priority toggle using star icon (filled=priority, empty=not priority)
+  - Loading states for approve and priority toggle mutations
+- **Styling:**
+  - Tropical oasis theme: `bg-sand-50` hover, `border-cream-200` borders, `rounded-sm` corners
+  - `palm-500` for priority star and approved states
+  - `lagoon-100/700` for pending keyword states
+- **Learnings:**
+  - Simple tooltip implementation using `fixed` positioning and `getBoundingClientRect()` for accurate placement
+  - Score tooltip is a specialized tooltip that shows formula weight breakdown
+  - Use `onKeywordClick` callback prop to allow parent to control dropdown behavior (separation of concerns for S4-034)
+  - Mutation hooks from `useKeywordMutations.ts` provide `isPending` state for loading indicators
+  - Extract URL path for display while keeping full URL available in tooltip
+---
+

@@ -6,6 +6,7 @@ import { useProject } from '@/hooks/use-projects';
 import { useKeywordGeneration } from '@/hooks/useKeywordGeneration';
 import { usePagesWithKeywordsData } from '@/hooks/usePagesWithKeywords';
 import { Button } from '@/components/ui';
+import { KeywordPageRow } from '@/components/onboarding/KeywordPageRow';
 
 // Step indicator data - shared across onboarding pages
 const ONBOARDING_STEPS = [
@@ -277,117 +278,6 @@ function GenerationProgressIndicator({
   );
 }
 
-interface PageKeywordRowProps {
-  page: {
-    id: string;
-    url: string;
-    title: string | null;
-    labels: string[];
-    product_count: number | null;
-    keywords: {
-      id: string;
-      primary_keyword: string;
-      is_approved: boolean;
-      is_priority: boolean;
-      composite_score: number | null;
-      search_volume: number | null;
-    } | null;
-  };
-}
-
-function PageKeywordRow({ page }: PageKeywordRowProps) {
-  // Extract path from URL for display
-  const displayUrl = (() => {
-    try {
-      const url = new URL(page.url);
-      return url.pathname + url.search;
-    } catch {
-      return page.url;
-    }
-  })();
-
-  const hasKeyword = page.keywords?.primary_keyword;
-
-  return (
-    <div className="py-3 border-b border-cream-200 last:border-b-0">
-      <div className="flex items-start gap-3">
-        {/* Status indicator */}
-        <div className="flex-shrink-0 mt-0.5">
-          {page.keywords?.is_approved ? (
-            <CheckIcon className="w-5 h-5 text-palm-500" />
-          ) : hasKeyword ? (
-            <div className="w-5 h-5 rounded-full border-2 border-lagoon-400" />
-          ) : (
-            <div className="w-5 h-5 rounded-full border-2 border-warm-gray-300" />
-          )}
-        </div>
-
-        <div className="flex-1 min-w-0">
-          {/* URL and status */}
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-warm-gray-900 font-mono text-sm truncate">
-              {displayUrl}
-            </span>
-            <span className={`text-xs ${
-              page.keywords?.is_approved
-                ? 'text-palm-600'
-                : hasKeyword
-                ? 'text-lagoon-600'
-                : 'text-warm-gray-400'
-            }`}>
-              {page.keywords?.is_approved
-                ? 'Approved'
-                : hasKeyword
-                ? 'Pending approval'
-                : 'No keyword'}
-            </span>
-          </div>
-
-          {/* Title */}
-          {page.title && (
-            <div className="mt-1 text-sm text-warm-gray-600 truncate">
-              {page.title}
-            </div>
-          )}
-
-          {/* Primary keyword */}
-          {hasKeyword && (
-            <div className="mt-2 flex items-center gap-2 flex-wrap">
-              <span className="inline-flex items-center px-2.5 py-1 text-sm bg-lagoon-100 text-lagoon-700 rounded-sm font-medium">
-                {page.keywords?.primary_keyword}
-              </span>
-              {page.keywords?.search_volume !== null && page.keywords?.search_volume !== undefined && (
-                <span className="text-xs text-warm-gray-500">
-                  {page.keywords.search_volume.toLocaleString()} monthly searches
-                </span>
-              )}
-              {page.keywords?.is_priority && (
-                <span className="inline-flex items-center px-1.5 py-0.5 text-xs bg-coral-100 text-coral-700 rounded-sm">
-                  Priority
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* Labels */}
-          {page.labels && page.labels.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {page.labels.map((label) => (
-                <span
-                  key={label}
-                  className="inline-flex items-center px-2 py-0.5 text-xs bg-palm-100 text-palm-700 rounded-sm"
-                >
-                  {label}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function KeywordsPage() {
   const params = useParams();
   const projectId = params.id as string;
@@ -515,7 +405,7 @@ export default function KeywordsPage() {
 
             {/* Pages list */}
             <div className="border border-cream-300 rounded-sm overflow-hidden">
-              <div className="max-h-80 overflow-y-auto px-4">
+              <div className="max-h-80 overflow-y-auto">
                 {isPagesLoading ? (
                   <div className="py-8 text-center text-warm-gray-500">
                     Loading pages...
@@ -526,7 +416,11 @@ export default function KeywordsPage() {
                   </div>
                 ) : (
                   pages.map((page) => (
-                    <PageKeywordRow key={page.id} page={page} />
+                    <KeywordPageRow
+                      key={page.id}
+                      page={page}
+                      projectId={projectId}
+                    />
                   ))
                 )}
               </div>
