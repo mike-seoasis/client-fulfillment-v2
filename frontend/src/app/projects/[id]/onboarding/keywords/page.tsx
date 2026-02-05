@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useProject } from '@/hooks/use-projects';
+import { useKeywordGeneration } from '@/hooks/useKeywordGeneration';
+import { usePagesWithKeywordsData } from '@/hooks/usePagesWithKeywords';
 import { Button } from '@/components/ui';
 
 // Step indicator data - shared across onboarding pages
@@ -26,6 +28,39 @@ function BackArrowIcon({ className }: { className?: string }) {
       strokeLinejoin="round"
     >
       <path d="M19 12H5M12 19l-7-7 7-7" />
+    </svg>
+  );
+}
+
+function CheckIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function SpinnerIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" opacity="0.25" />
+      <path d="M12 2a10 10 0 0 1 10 10" className="animate-spin origin-center" />
     </svg>
   );
 }
@@ -103,7 +138,12 @@ function LoadingSkeleton() {
       {/* Content skeleton */}
       <div className="bg-white rounded-sm border border-cream-500 p-6">
         <div className="h-6 bg-cream-300 rounded w-48 mb-4" />
-        <div className="h-4 bg-cream-300 rounded w-full" />
+        <div className="h-4 bg-cream-300 rounded w-full mb-6" />
+        <div className="space-y-3">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-16 bg-cream-300 rounded w-full" />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -140,20 +180,211 @@ function NotFoundState() {
   );
 }
 
-function ComingSoonIcon({ className }: { className?: string }) {
+function GenerationProgressIndicator({
+  status,
+  completed,
+  total,
+  currentPage,
+}: {
+  status: 'pending' | 'generating' | 'completed' | 'failed';
+  completed: number;
+  total: number;
+  currentPage?: string | null;
+}) {
+  const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  // Extract path from current page URL for display
+  const displayCurrentPage = currentPage
+    ? (() => {
+        try {
+          const url = new URL(currentPage);
+          return url.pathname + url.search;
+        } catch {
+          return currentPage;
+        }
+      })()
+    : null;
+
   return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
+    <div className="mb-6">
+      {/* Status indicator with spinner */}
+      <div className="flex items-center gap-2 mb-3">
+        {status === 'generating' ? (
+          <>
+            <SpinnerIcon className="w-5 h-5 text-lagoon-500 animate-spin" />
+            <span className="text-warm-gray-700">
+              Generating keywords...{' '}
+              <span className="font-medium text-lagoon-600">
+                {completed}/{total} complete
+              </span>
+            </span>
+          </>
+        ) : status === 'completed' ? (
+          <>
+            <CheckIcon className="w-5 h-5 text-palm-500" />
+            <span className="text-warm-gray-700">
+              <span className="font-medium text-palm-600">
+                {completed}/{total} keywords generated
+              </span>
+            </span>
+          </>
+        ) : status === 'failed' ? (
+          <>
+            <svg
+              className="w-5 h-5 text-coral-500"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="15" y1="9" x2="9" y2="15" />
+              <line x1="9" y1="9" x2="15" y2="15" />
+            </svg>
+            <span className="text-coral-700 font-medium">
+              Generation failed
+            </span>
+          </>
+        ) : (
+          <>
+            <div className="w-5 h-5 rounded-full border-2 border-warm-gray-300" />
+            <span className="text-warm-gray-500">
+              Ready to generate keywords
+            </span>
+          </>
+        )}
+      </div>
+
+      {/* Progress bar - only show when generating */}
+      {status === 'generating' && (
+        <div className="h-2 bg-cream-200 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-palm-500 rounded-full transition-all duration-500"
+            style={{ width: `${percentage}%` }}
+          />
+        </div>
+      )}
+
+      {/* Current page being processed */}
+      {status === 'generating' && displayCurrentPage && (
+        <p className="mt-2 text-xs text-warm-gray-500 truncate">
+          Processing: <span className="font-mono">{displayCurrentPage}</span>
+        </p>
+      )}
+    </div>
+  );
+}
+
+interface PageKeywordRowProps {
+  page: {
+    id: string;
+    url: string;
+    title: string | null;
+    labels: string[];
+    product_count: number | null;
+    keywords: {
+      id: string;
+      primary_keyword: string;
+      is_approved: boolean;
+      is_priority: boolean;
+      composite_score: number | null;
+      search_volume: number | null;
+    } | null;
+  };
+}
+
+function PageKeywordRow({ page }: PageKeywordRowProps) {
+  // Extract path from URL for display
+  const displayUrl = (() => {
+    try {
+      const url = new URL(page.url);
+      return url.pathname + url.search;
+    } catch {
+      return page.url;
+    }
+  })();
+
+  const hasKeyword = page.keywords?.primary_keyword;
+
+  return (
+    <div className="py-3 border-b border-cream-200 last:border-b-0">
+      <div className="flex items-start gap-3">
+        {/* Status indicator */}
+        <div className="flex-shrink-0 mt-0.5">
+          {page.keywords?.is_approved ? (
+            <CheckIcon className="w-5 h-5 text-palm-500" />
+          ) : hasKeyword ? (
+            <div className="w-5 h-5 rounded-full border-2 border-lagoon-400" />
+          ) : (
+            <div className="w-5 h-5 rounded-full border-2 border-warm-gray-300" />
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          {/* URL and status */}
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-warm-gray-900 font-mono text-sm truncate">
+              {displayUrl}
+            </span>
+            <span className={`text-xs ${
+              page.keywords?.is_approved
+                ? 'text-palm-600'
+                : hasKeyword
+                ? 'text-lagoon-600'
+                : 'text-warm-gray-400'
+            }`}>
+              {page.keywords?.is_approved
+                ? 'Approved'
+                : hasKeyword
+                ? 'Pending approval'
+                : 'No keyword'}
+            </span>
+          </div>
+
+          {/* Title */}
+          {page.title && (
+            <div className="mt-1 text-sm text-warm-gray-600 truncate">
+              {page.title}
+            </div>
+          )}
+
+          {/* Primary keyword */}
+          {hasKeyword && (
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center px-2.5 py-1 text-sm bg-lagoon-100 text-lagoon-700 rounded-sm font-medium">
+                {page.keywords?.primary_keyword}
+              </span>
+              {page.keywords?.search_volume !== null && page.keywords?.search_volume !== undefined && (
+                <span className="text-xs text-warm-gray-500">
+                  {page.keywords.search_volume.toLocaleString()} monthly searches
+                </span>
+              )}
+              {page.keywords?.is_priority && (
+                <span className="inline-flex items-center px-1.5 py-0.5 text-xs bg-coral-100 text-coral-700 rounded-sm">
+                  Priority
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Labels */}
+          {page.labels && page.labels.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {page.labels.map((label) => (
+                <span
+                  key={label}
+                  className="inline-flex items-center px-2 py-0.5 text-xs bg-palm-100 text-palm-700 rounded-sm"
+                >
+                  {label}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -161,7 +392,20 @@ export default function KeywordsPage() {
   const params = useParams();
   const projectId = params.id as string;
 
-  const { data: project, isLoading, error: projectError } = useProject(projectId);
+  const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
+  const keywordGen = useKeywordGeneration(projectId);
+  const { pages, isLoading: isPagesLoading } = usePagesWithKeywordsData(projectId);
+
+  const isLoading = isProjectLoading || keywordGen.isLoading;
+
+  // Calculate counts
+  const totalPages = pages.length;
+  const pagesWithKeywords = pages.filter(p => p.keywords?.primary_keyword).length;
+  const approvedCount = pages.filter(p => p.keywords?.is_approved).length;
+
+  // Determine if we should show the generating state or the list
+  const showGeneratingState = keywordGen.status === 'generating';
+  const showPendingState = keywordGen.status === 'pending' && pagesWithKeywords === 0;
 
   // Loading state
   if (isLoading) {
@@ -203,7 +447,7 @@ export default function KeywordsPage() {
           <BackArrowIcon className="w-4 h-4 mr-1" />
           {project.name}
         </Link>
-        <span className="mx-2">›</span>
+        <span className="mx-2">&rsaquo;</span>
         <span className="text-warm-gray-900">Onboarding</span>
       </nav>
 
@@ -213,27 +457,107 @@ export default function KeywordsPage() {
       {/* Divider */}
       <hr className="border-cream-500 mb-6" />
 
-      {/* Coming Soon content */}
-      <div className="bg-white rounded-sm border border-cream-500 p-8 shadow-sm">
-        <div className="text-center max-w-md mx-auto">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-palm-50 mb-4">
-            <ComingSoonIcon className="w-8 h-8 text-palm-500" />
+      {/* Page content */}
+      <div className="bg-white rounded-sm border border-cream-500 p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-warm-gray-900 mb-4">
+          {showGeneratingState
+            ? 'Generating Keywords...'
+            : showPendingState
+            ? 'Generate Keywords'
+            : `${pagesWithKeywords} Keywords Generated`}
+        </h2>
+
+        {/* Progress/status indicator */}
+        <GenerationProgressIndicator
+          status={keywordGen.status}
+          completed={keywordGen.completed}
+          total={keywordGen.total}
+          currentPage={keywordGen.currentPage}
+        />
+
+        {/* Error message */}
+        {keywordGen.isFailed && keywordGen.error && (
+          <div className="mb-4 p-3 bg-coral-50 border border-coral-200 rounded-sm">
+            <p className="text-sm text-coral-700">{keywordGen.error}</p>
           </div>
-          <h2 className="text-xl font-semibold text-warm-gray-900 mb-2">
-            Keywords Coming Soon
-          </h2>
-          <p className="text-warm-gray-600 mb-6">
-            The keyword analysis feature is currently under development.
-            This step will help you identify and optimize keywords for your crawled pages.
-          </p>
-          <div className="flex justify-center gap-3">
-            <Link href={`/projects/${projectId}/onboarding/crawl`}>
-              <Button variant="secondary">Back to Crawl</Button>
-            </Link>
-            <Link href={`/projects/${projectId}`}>
-              <Button>Go to Project</Button>
-            </Link>
+        )}
+
+        {/* Pending state - show generate button */}
+        {showPendingState && (
+          <div className="text-center py-8">
+            <p className="text-warm-gray-600 mb-4">
+              Ready to generate primary keywords for {totalPages} pages.
+            </p>
+            <Button
+              onClick={() => keywordGen.startGeneration()}
+              disabled={keywordGen.isStarting}
+            >
+              {keywordGen.isStarting ? 'Starting...' : 'Generate Keywords'}
+            </Button>
           </div>
+        )}
+
+        {/* Generating or completed state - show page list */}
+        {!showPendingState && (
+          <>
+            {/* Summary stats */}
+            <div className="flex gap-4 mb-4 text-sm">
+              <span className="text-warm-gray-600">
+                <span className="font-medium text-warm-gray-900">{pagesWithKeywords}</span> keywords generated
+              </span>
+              <span className="text-warm-gray-600">
+                <span className="font-medium text-palm-600">{approvedCount}</span> approved
+              </span>
+              <span className="text-warm-gray-600">
+                <span className="font-medium text-lagoon-600">{pagesWithKeywords - approvedCount}</span> pending
+              </span>
+            </div>
+
+            {/* Pages list */}
+            <div className="border border-cream-300 rounded-sm overflow-hidden">
+              <div className="max-h-80 overflow-y-auto px-4">
+                {isPagesLoading ? (
+                  <div className="py-8 text-center text-warm-gray-500">
+                    Loading pages...
+                  </div>
+                ) : pages.length === 0 ? (
+                  <div className="py-8 text-center text-warm-gray-500">
+                    No pages to display
+                  </div>
+                ) : (
+                  pages.map((page) => (
+                    <PageKeywordRow key={page.id} page={page} />
+                  ))
+                )}
+              </div>
+            </div>
+          </>
+        )}
+
+        <hr className="border-cream-300 my-6" />
+
+        {/* Actions */}
+        <div className="flex justify-end gap-3">
+          <Link href={`/projects/${projectId}/onboarding/crawl`}>
+            <Button variant="secondary">Back</Button>
+          </Link>
+          {keywordGen.isComplete && pagesWithKeywords > 0 ? (
+            <Link href={`/projects/${projectId}/onboarding/content`}>
+              <Button>Continue to Content</Button>
+            </Link>
+          ) : showGeneratingState ? (
+            <Button disabled>
+              Generating...
+            </Button>
+          ) : showPendingState ? (
+            <Button disabled>
+              Continue to Content
+            </Button>
+          ) : (
+            <Link href={`/projects/${projectId}/onboarding/content`}>
+              <Button>Continue to Content</Button>
+            </Link>
+          )}
         </div>
       </div>
     </div>

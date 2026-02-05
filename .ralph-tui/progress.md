@@ -698,3 +698,31 @@ after each iteration and it's included in prompts for context.
   - Follow consistent pattern: useQueryClient() at top, return useMutation() with mutationFn and onSuccess
 ---
 
+## 2026-02-05 - S4-030
+- **What was implemented:** Created keywords page for primary keyword generation and approval interface
+- **Files changed:**
+  - `frontend/src/app/projects/[id]/onboarding/keywords/page.tsx` (new file)
+- **Page features:**
+  - Fetches project using `useProject(projectId)`
+  - Fetches keyword generation status using `useKeywordGeneration(projectId)`
+  - Fetches pages with keywords using `usePagesWithKeywordsData(projectId)`
+  - Shows generation progress indicator with spinner during generation
+  - Shows "Generate Keywords" button when status is pending and no keywords exist
+  - Shows page list with keywords when generation complete or in progress
+  - Shows summary stats: keywords generated, approved, pending
+  - Step indicator shows "Step 3 of 5: Keywords"
+  - Navigation: Back to Crawl, Continue to Content
+- **Acceptance criteria verified:**
+  - [x] Create page at frontend/src/app/projects/[id]/onboarding/keywords/page.tsx
+  - [x] Fetches project and pages with keywords
+  - [x] Shows generation progress if generating
+  - [x] Shows page list with keywords if complete
+  - [x] Includes step indicator showing Step 3 of 5
+- **Learnings:**
+  - Follow crawl page pattern for onboarding pages: breadcrumb, step indicator, card content, actions
+  - Reuse ONBOARDING_STEPS array for step indicator across all onboarding pages
+  - Use hooks (useKeywordGeneration, usePagesWithKeywordsData) instead of direct API calls for cleaner component code
+  - Derive UI state (showGeneratingState, showPendingState) from hook data for conditional rendering
+  - Status-aware Continue button: disabled during generation, enabled when complete
+---
+
