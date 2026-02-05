@@ -936,3 +936,28 @@ after each iteration and it's included in prompts for context.
   - Mutation result includes `approved_count` for feedback in toast message
 ---
 
+## 2026-02-05 - S4-040
+- **What was implemented:** Updated "Continue to Content" button to require all keywords approved before enabling
+- **Files changed:**
+  - `frontend/src/app/projects/[id]/onboarding/keywords/page.tsx` - Updated button logic and added tooltip
+- **Features implemented:**
+  - Button shows at bottom of page (already existed)
+  - Enabled only when all keywords are approved (`approvedCount === pagesWithKeywords`)
+  - Disabled with tooltip when some unapproved: "Approve all X remaining keywords to continue"
+  - Clicking navigates to `/projects/{id}/onboarding/content` (content page may not exist yet)
+  - Styled as primary button (bg-palm-500 via default Button variant)
+  - Shows "Generating..." during generation state
+- **Acceptance criteria verified:**
+  - [x] Button shows at bottom of page
+  - [x] Enabled only when all keywords are approved
+  - [x] Disabled with tooltip when some unapproved
+  - [x] Clicking navigates to content generation page
+  - [x] Styled as primary button (bg-palm-500)
+- **Learnings:**
+  - Use IIFE `{(() => { ... })()}` in JSX for complex conditional rendering with local variables
+  - Use `useRouter` from next/navigation for programmatic navigation in Next.js App Router
+  - Tooltip on disabled button: wrap button in relative div and use absolute positioning for tooltip
+  - Tooltip arrow: small rotated square positioned at bottom of tooltip
+  - Use `useRef` even if not strictly needed for the ref, keeping it in case future accessibility enhancements need it
+---
+

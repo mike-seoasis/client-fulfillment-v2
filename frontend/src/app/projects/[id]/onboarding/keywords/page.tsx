@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useProject } from '@/hooks/use-projects';
 import { useKeywordGeneration } from '@/hooks/useKeywordGeneration';
 import { usePagesWithKeywordsData } from '@/hooks/usePagesWithKeywords';
@@ -282,12 +282,17 @@ function GenerationProgressIndicator({
 
 export default function KeywordsPage() {
   const params = useParams();
+  const router = useRouter();
   const projectId = params.id as string;
 
   // Toast state
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastVariant, setToastVariant] = useState<'success' | 'error'>('success');
+
+  // Tooltip state for continue button
+  const [showContinueTooltip, setShowContinueTooltip] = useState(false);
+  const continueButtonRef = useRef<HTMLButtonElement>(null);
 
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
   const keywordGen = useKeywordGeneration(projectId);
@@ -477,23 +482,62 @@ export default function KeywordsPage() {
           <Link href={`/projects/${projectId}/onboarding/crawl`}>
             <Button variant="secondary">Back</Button>
           </Link>
-          {keywordGen.isComplete && pagesWithKeywords > 0 ? (
-            <Link href={`/projects/${projectId}/onboarding/content`}>
-              <Button>Continue to Content</Button>
-            </Link>
-          ) : showGeneratingState ? (
-            <Button disabled>
-              Generating...
-            </Button>
-          ) : showPendingState ? (
-            <Button disabled>
-              Continue to Content
-            </Button>
-          ) : (
-            <Link href={`/projects/${projectId}/onboarding/content`}>
-              <Button>Continue to Content</Button>
-            </Link>
-          )}
+          {(() => {
+            // All keywords approved - fully enabled
+            const allApproved = pagesWithKeywords > 0 && approvedCount === pagesWithKeywords;
+            // Some keywords generated but not all approved
+            const someUnapproved = pagesWithKeywords > 0 && approvedCount < pagesWithKeywords;
+
+            if (allApproved) {
+              return (
+                <Button onClick={() => router.push(`/projects/${projectId}/onboarding/content`)}>
+                  Continue to Content
+                </Button>
+              );
+            }
+
+            if (showGeneratingState) {
+              return (
+                <Button disabled>
+                  Generating...
+                </Button>
+              );
+            }
+
+            // Show disabled button with tooltip when some unapproved
+            return (
+              <div className="relative">
+                <Button
+                  ref={continueButtonRef}
+                  disabled
+                  onMouseEnter={() => someUnapproved && setShowContinueTooltip(true)}
+                  onMouseLeave={() => setShowContinueTooltip(false)}
+                >
+                  Continue to Content
+                </Button>
+                {showContinueTooltip && someUnapproved && (
+                  <div
+                    className="absolute z-50 px-3 py-2 text-sm bg-warm-gray-800 text-white rounded-sm shadow-lg whitespace-nowrap"
+                    style={{
+                      bottom: 'calc(100% + 8px)',
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                    }}
+                  >
+                    Approve all {pendingApprovalCount} remaining keywords to continue
+                    <div
+                      className="absolute w-2 h-2 bg-warm-gray-800 rotate-45"
+                      style={{
+                        bottom: '-4px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
 
