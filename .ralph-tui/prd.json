@@ -298,8 +298,9 @@
         "Returns error message if failed"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Reference crawl-status endpoint for pattern."
+      "passes": true,
+      "notes": "Reference crawl-status endpoint for pattern.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S4-019",
@@ -818,6 +819,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-05T14:43:55.554Z"
+    "updatedAt": "2026-02-05T14:48:35.523Z"
   }
 }

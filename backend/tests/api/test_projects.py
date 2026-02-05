@@ -750,3 +750,208 @@ class TestDeleteProjectWithFiles:
         # Verify the remaining file belongs to project 2
         remaining_key = list(mock_s3._files.keys())[0]
         assert project2_id in remaining_key
+
+
+# ---------------------------------------------------------------------------
+# Primary Keywords Status Tests
+# ---------------------------------------------------------------------------
+
+
+class TestPrimaryKeywordsStatus:
+    """Tests for GET /projects/{id}/primary-keywords-status endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_get_status_project_not_found(
+        self, async_client: AsyncClient
+    ) -> None:
+        """GET primary-keywords-status returns 404 for non-existent project."""
+        fake_id = str(uuid.uuid4())
+        response = await async_client.get(
+            f"/api/v1/projects/{fake_id}/primary-keywords-status"
+        )
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_get_status_no_keywords_yet(
+        self, async_client: AsyncClient
+    ) -> None:
+        """GET primary-keywords-status returns pending status for new project."""
+        # Create a project
+        create_response = await async_client.post(
+            "/api/v1/projects",
+            json={
+                "name": "Status Test Project",
+                "site_url": "https://status-test.example.com",
+            },
+        )
+        assert create_response.status_code == 201
+        project_id = create_response.json()["id"]
+
+        # Get status before any keyword generation
+        response = await async_client.get(
+            f"/api/v1/projects/{project_id}/primary-keywords-status"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "pending"
+        assert data["total"] == 0
+        assert data["completed"] == 0
+        assert data["failed"] == 0
+        assert data["current_page"] is None
+
+    @pytest.mark.asyncio
+    async def test_get_status_with_progress(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """GET primary-keywords-status returns accurate progress counts."""
+
+        from app.models.project import Project
+
+        # Create a project with phase_status containing keyword progress
+        project = Project(
+            name="Keyword Progress Test",
+            site_url="https://progress-test.example.com",
+            phase_status={
+                "onboarding": {
+                    "status": "generating_keywords",
+                    "keywords": {
+                        "status": "generating",
+                        "total": 10,
+                        "completed": 5,
+                        "failed": 1,
+                        "current_page": "https://example.com/products/widget",
+                    },
+                }
+            },
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        # Get status
+        response = await async_client.get(
+            f"/api/v1/projects/{project.id}/primary-keywords-status"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "generating"
+        assert data["total"] == 10
+        assert data["completed"] == 5
+        assert data["failed"] == 1
+        assert data["current_page"] == "https://example.com/products/widget"
+
+    @pytest.mark.asyncio
+    async def test_get_status_completed(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """GET primary-keywords-status returns completed status correctly."""
+        from app.models.project import Project
+
+        # Create a project with completed keyword generation
+        project = Project(
+            name="Completed Keywords Test",
+            site_url="https://completed-test.example.com",
+            phase_status={
+                "onboarding": {
+                    "status": "keywords_complete",
+                    "keywords": {
+                        "status": "completed",
+                        "total": 15,
+                        "completed": 14,
+                        "failed": 1,
+                        "current_page": None,
+                    },
+                }
+            },
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        # Get status
+        response = await async_client.get(
+            f"/api/v1/projects/{project.id}/primary-keywords-status"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "completed"
+        assert data["total"] == 15
+        assert data["completed"] == 14
+        assert data["failed"] == 1
+        assert data["current_page"] is None
+
+    @pytest.mark.asyncio
+    async def test_get_status_failed(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """GET primary-keywords-status returns failed status with error."""
+        from app.models.project import Project
+
+        # Create a project with failed keyword generation
+        project = Project(
+            name="Failed Keywords Test",
+            site_url="https://failed-test.example.com",
+            phase_status={
+                "onboarding": {
+                    "keywords": {
+                        "status": "failed",
+                        "total": 10,
+                        "completed": 3,
+                        "failed": 7,
+                        "current_page": None,
+                    },
+                }
+            },
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        # Get status
+        response = await async_client.get(
+            f"/api/v1/projects/{project.id}/primary-keywords-status"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "failed"
+        assert data["total"] == 10
+        assert data["completed"] == 3
+        assert data["failed"] == 7
+
+    @pytest.mark.asyncio
+    async def test_get_status_failed_with_error_message(
+        self, async_client: AsyncClient, db_session: Any
+    ) -> None:
+        """GET primary-keywords-status returns error message when failed."""
+        from app.models.project import Project
+
+        # Create a project with failed keyword generation and error message
+        project = Project(
+            name="Failed With Error Test",
+            site_url="https://failed-error-test.example.com",
+            phase_status={
+                "onboarding": {
+                    "keywords": {
+                        "status": "failed",
+                        "total": 5,
+                        "completed": 0,
+                        "failed": 5,
+                        "current_page": None,
+                        "error": "API rate limit exceeded",
+                    },
+                }
+            },
+        )
+        db_session.add(project)
+        await db_session.commit()
+        await db_session.refresh(project)
+
+        # Get status
+        response = await async_client.get(
+            f"/api/v1/projects/{project.id}/primary-keywords-status"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "failed"
+        assert data["error"] == "API rate limit exceeded"

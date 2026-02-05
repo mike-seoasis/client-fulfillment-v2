@@ -28,6 +28,7 @@ from app.schemas.crawled_page import (
     UrlsUploadRequest,
     UrlUploadResponse,
 )
+from app.schemas.keyword_research import PrimaryKeywordGenerationStatus
 from app.schemas.project import (
     ProjectCreate,
     ProjectListResponse,
@@ -1169,6 +1170,53 @@ async def _generate_keywords_background(
                     "error": str(update_error),
                 },
             )
+
+
+@router.get(
+    "/{project_id}/primary-keywords-status",
+    response_model=PrimaryKeywordGenerationStatus,
+)
+async def get_primary_keywords_status(
+    project_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> PrimaryKeywordGenerationStatus:
+    """Get status of primary keyword generation for a project.
+
+    Returns the current generation status including progress counts
+    and the page currently being processed. This endpoint is designed
+    to be polled by the frontend during keyword generation.
+
+    Args:
+        project_id: UUID of the project.
+        db: AsyncSession for database operations.
+
+    Returns:
+        PrimaryKeywordGenerationStatus with status, progress, and current_page.
+
+    Raises:
+        HTTPException: 404 if project not found.
+    """
+    # Get project (raises 404 if not found)
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Project {project_id} not found",
+        )
+
+    # Extract keyword generation status from phase_status
+    onboarding = project.phase_status.get("onboarding", {})
+    keywords_status = onboarding.get("keywords", {})
+
+    # Build response with defaults for missing fields
+    return PrimaryKeywordGenerationStatus(
+        status=keywords_status.get("status", "pending"),
+        total=keywords_status.get("total", 0),
+        completed=keywords_status.get("completed", 0),
+        failed=keywords_status.get("failed", 0),
+        current_page=keywords_status.get("current_page"),
+        error=keywords_status.get("error"),
+    )
 
 
 @router.put(

@@ -368,3 +368,31 @@ after each iteration and it's included in prompts for context.
   - Pre-initialize phase_status progress structure before starting background task for immediate progress visibility
 ---
 
+## 2026-02-05 - S4-018
+- **What was implemented:** GET `/api/v1/projects/{project_id}/primary-keywords-status` endpoint
+- **Files changed:**
+  - `backend/app/api/v1/projects.py` - Added status endpoint, imported PrimaryKeywordGenerationStatus schema
+  - `backend/app/schemas/keyword_research.py` - Added `error` field to PrimaryKeywordGenerationStatus schema
+  - `backend/tests/api/test_projects.py` - Added TestPrimaryKeywordsStatus class with 6 tests
+- **Endpoint features:**
+  - Returns 200 with PrimaryKeywordGenerationStatus schema
+  - Returns status (pending/generating/completed/failed)
+  - Returns progress counts (total, completed, failed)
+  - Returns current_page being processed (URL or None)
+  - Returns error message if generation failed
+  - Reads from `project.phase_status["onboarding"]["keywords"]`
+  - Raises 404 if project not found
+- **Test coverage:**
+  - test_get_status_project_not_found - 404 for non-existent project
+  - test_get_status_no_keywords_yet - Returns pending status with zero counts
+  - test_get_status_with_progress - Returns accurate progress during generation
+  - test_get_status_completed - Returns completed status with final counts
+  - test_get_status_failed - Returns failed status
+  - test_get_status_failed_with_error_message - Returns error message when failed
+- **Learnings:**
+  - Follow crawl-status endpoint pattern for status polling endpoints
+  - Use `.get()` with defaults when reading optional JSONB nested fields
+  - Extend existing schemas (PrimaryKeywordGenerationStatus) when needed to add error field
+  - Project model uses `site_url` not `website_url`
+---
+
