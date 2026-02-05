@@ -1099,3 +1099,16 @@ after each iteration and it's included in prompts for context.
   - Test file structure: group by feature area (page loading, progress display, page list, approve flow, edge cases)
 ---
 
+## 2026-02-05 - S4-047
+- **What was implemented:** Verified crawl page already navigates to keywords page on completion
+- **Files changed:**
+  - None (already implemented correctly)
+- **Verification:**
+  - Crawl page (line 903-905): `Continue to Keywords` button navigates to `/projects/${projectId}/onboarding/keywords` when `isComplete` is true
+  - No hardcoded references to skip keywords or go directly to content from crawl page
+  - Navigation flow is correct: upload → crawl → keywords → content → export
+- **Learnings:**
+  - Always verify existing implementation before making changes
+  - The crawl page was already correctly wired up during initial implementation
+---
+
