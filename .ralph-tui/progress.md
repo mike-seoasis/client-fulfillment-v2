@@ -1055,3 +1055,24 @@ after each iteration and it's included in prompts for context.
   - Console.error output from rejected promises is expected in error-handling tests (stderr output)
 ---
 
+## 2026-02-05 - S4-045
+- **What was implemented:** Component tests for approval flow covering individual approve, bulk approve, and continue button state changes
+- **Files changed:**
+  - `frontend/src/app/projects/[id]/onboarding/keywords/__tests__/ApprovalFlow.test.tsx` (new file, 19 tests)
+- **Test coverage:**
+  - Individual approve tests (3 tests): displays approve button, shows approved badge, counts approved/pending correctly
+  - Bulk approve tests (6 tests): shows Approve All button, disables when all approved, calls mutation, loading state, success toast, error toast
+  - Continue button state tests (6 tests): disabled when none approved, disabled when some approved, enabled when all approved, navigates on click, disabled state verified, shows Generating state
+  - Approval progress display tests (4 tests): shows X of Y, checkmark badge when all complete, progress when pending, hidden when no keywords
+- **Acceptance criteria verified:**
+  - [x] Test individual approve works (KeywordPageRow tests already cover approve button, added page-level count verification)
+  - [x] Test bulk approve works (Approve All button, mutation call, loading state, toast feedback)
+  - [x] Test continue button state changes with approvals (disabled/enabled based on approval count)
+- **Learnings:**
+  - When text is broken up by multiple `<span>` elements, use callback matcher: `screen.getByText((content, element) => element?.textContent === 'target text')`
+  - Mock hooks at the module level with `vi.mock()` and use `.mockReturnValue()` in tests for different scenarios
+  - Use `rerender()` from render result to test state changes (e.g., approval count updates)
+  - Page-level tests need to mock multiple hooks: useProject, useKeywordGeneration, usePagesWithKeywords, useApproveAllKeywords
+  - Pre-existing test failures in other test files don't block new feature tests
+---
+
