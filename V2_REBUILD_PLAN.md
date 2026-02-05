@@ -8,10 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Phase** | 4 - Primary Keyword + Approval |
+| **Phase** | 5 - Content Generation |
 | **Slice** | Starting |
-| **Last Session** | 2026-02-04 |
-| **Next Action** | Build primary keyword generation and approval interface |
+| **Last Session** | 2026-02-05 |
+| **Next Action** | Build POP Content Brief service and content generation pipeline |
 
 ### Session Log
 
@@ -26,6 +26,7 @@
 | 2026-02-04 | Phase 2 polish: Fixed JSON control char parsing for AI prompts, fixed Voice Characteristics field name (characteristic→trait_name), removed Examples Bank section (will add real examples later), renamed button to "Brand Details" | Phase 3 |
 | 2026-02-04 | Phase 3 complete (URL upload with paste/CSV, crawling pipeline with Crawl4AI, content extraction with BeautifulSoup, label taxonomy generation with Claude, label assignment service, crawl progress page with polling, retry failed pages, label editing dropdown, project detail onboarding status, comprehensive API and component tests - 47 stories total) | Phase 4 |
 | 2026-02-04 | Phase 3 polish: Fixed AsyncSession concurrency bug, improved product count extraction (exclude carousels), added crawl progress spinner UI, improved label prompts (cannabis-storage now works), added regenerate labels button, added recrawl-all endpoint. Deferred label improvements to Phase 3b. | Phase 4 |
+| 2026-02-05 | Phase 4 complete (PageKeywords model updates, Alembic migration for approval/scoring fields, PrimaryKeywordService with generate_candidates/enrich_with_volume/filter_to_specific/calculate_score/select_primary_and_alternatives/process_page/generate_for_project methods, 7 API endpoints for keyword generation/status/approval/priority, frontend API client and TypeScript types, useKeywordGeneration/usePagesWithKeywords/useKeywordMutations hooks, keywords page with generation progress UI, KeywordPageRow/AlternativeKeywordDropdown/PriorityToggle/ApproveButton components, inline keyword editing, score tooltips, bulk approve, comprehensive unit/integration/component tests - 51 stories total) | Phase 5 |
 
 ---
 
@@ -170,12 +171,12 @@
 - [ ] Test with diverse site types (not just e-commerce)
 - [ ] **Verify:** Labels are specific, accurate, and editable
 
-### Phase 4: Primary Keyword + Approval (SHARED)
-- [ ] Generate primary keyword candidates
-- [ ] Primary keyword approval interface (reusable component)
-- [ ] Edit primary keyword
-- [ ] **Verify:** Can see primary keyword, edit, approve
-- [ ] **Note:** No secondary keywords — POP provides LSI terms in Phase 5
+### Phase 4: Primary Keyword + Approval (SHARED) ✅
+- [x] Generate primary keyword candidates
+- [x] Primary keyword approval interface (reusable component)
+- [x] Edit primary keyword
+- [x] **Verify:** Can see primary keyword, edit, approve
+- [x] **Note:** No secondary keywords — POP provides LSI terms in Phase 5
 
 ### Phase 5: Content Generation (SHARED)
 - [ ] POP Content Brief service (returns LSI terms, related questions, targets)
