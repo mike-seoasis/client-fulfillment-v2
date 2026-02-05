@@ -208,7 +208,7 @@
 - [ ] Blog topic discovery service (POP API)
 - [ ] Blog keyword approval (reuse shared UI)
 - [ ] Blog content generation (reuse pipeline, blog template)
-- [ ] TipTap rich editor integration
+- [ ] Lexical rich editor integration
 - [ ] Live POP scoring sidebar
 - [ ] Siloed internal linking (cluster pages + sibling blogs only)
 - [ ] Blog export (HTML + copy to clipboard)

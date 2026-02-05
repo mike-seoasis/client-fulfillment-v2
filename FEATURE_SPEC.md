@@ -707,7 +707,7 @@ BlogPost:
   title: str | None
   meta_description: str | None
   content: str | None           # Full article HTML
-  content_json: JSON | None     # TipTap editor state (for resuming edits)
+  content_json: JSON | None     # Lexical editor state (for resuming edits)
   pop_score: float | None
   pop_brief: JSON | None        # Stored POP brief data
   is_approved: bool             # Keyword approved
@@ -823,7 +823,7 @@ Phase 3: Quality Check
 └─────────────────────────────────────────────────────┴───────────────┘
 ```
 
-**Editor Features (TipTap-based):**
+**Editor Features (Lexical-based):**
 - Rich text editing (bold, italic, headings, lists, links, images, quotes)
 - Keyboard shortcuts (Cmd+B, Cmd+I, etc.)
 - HTML source view toggle
@@ -1066,7 +1066,7 @@ Based on dependencies and the shared component architecture:
 - Blog topic discovery service (POP API for blog ideas around cluster)
 - Blog keyword approval (reuse shared KeywordApproval component)
 - Blog content generation (reuse pipeline with blog-specific template)
-- TipTap rich editor integration
+- Lexical rich editor integration
 - Live POP scoring sidebar (score + word count + LSI checklist)
 - Siloed internal linking (only cluster pages + sibling blogs)
 - Blog export (HTML download + copy to clipboard for Shopify)
@@ -1110,7 +1110,7 @@ frontend/src/components/
 ├── ExportButton/            # SHARED
 ├── UrlUploader/             # Onboarding-only
 ├── SeedKeywordInput/        # Clusters-only
-├── BlogEditor/              # Blogs-only - TipTap rich editor
+├── BlogEditor/              # Blogs-only - Lexical rich editor
 └── LiveScoringSidebar/      # Blogs-only - real-time POP score + metrics
 ```
 
@@ -1138,7 +1138,7 @@ Per `backend/PLAN-remove-secondary-keywords-and-paa.md`:
 | Secondary keywords | **Removed** — POP's LSI terms replace them (better quality, SERP-based) |
 | PAA questions | **Removed** — POP's related_questions replace them (direct from Google, no DataForSEO costs) |
 | Keyword approval steps | **1 step only** — approve primary keyword, then POP provides everything else |
-| Blog editor | **TipTap** — flexible, well-maintained, good React integration |
+| Blog editor | **Lexical** — 100% free (Meta), excellent React integration, great performance |
 | Blog linking | **Siloed** — blogs only link to their parent cluster's pages + sibling blogs |
 | Blog export | **HTML + clipboard** — for pasting into Shopify blog creator |
 | Blog-cluster relationship | **One cluster can have multiple blog campaigns** |
