@@ -83,3 +83,20 @@ after each iteration and it's included in prompts for context.
   - Use `sqlalchemy.inspect()` to verify table columns and indexes programmatically
 ---
 
+## 2026-02-05 - S4-005
+- **What was implemented:** Created Pydantic schemas for keyword generation API
+- **Files changed:**
+  - `backend/app/schemas/keyword_research.py` - Added 6 new schemas
+- **Schemas added:**
+  - `KeywordCandidate` - keyword with volume metrics and AI scoring (keyword, volume, cpc, competition, relevance_score, composite_score)
+  - `PrimaryKeywordGenerationStatus` - tracks generation progress (status, total, completed, failed, current_page)
+  - `PageKeywordsData` - keyword data matching PageKeywords model fields, with `from_attributes=True` for ORM support
+  - `PageWithKeywords` - combines CrawledPage summary data with PageKeywords data for approval interface
+  - `UpdatePrimaryKeywordRequest` - request to update primary keyword with validation
+  - `BulkApproveResponse` - response for bulk approval operations (approved_count)
+- **Learnings:**
+  - Use `ConfigDict(from_attributes=True)` for schemas that need to be created from SQLAlchemy models
+  - Nested schemas work well for combining related data (PageWithKeywords contains PageKeywordsData)
+  - Follow existing pattern in keyword_research.py for Field descriptions and validators
+---
+

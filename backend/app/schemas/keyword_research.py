@@ -25,7 +25,7 @@ Railway Deployment Requirements:
 - Health check endpoint at /health or /api/v1/health
 """
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # =============================================================================
 # KEYWORD IDEA GENERATION (Step 1)
@@ -568,4 +568,134 @@ class KeywordResearchStatsResponse(BaseModel):
     cache_stats: VolumeStatsResponse | None = Field(
         None,
         description="Keyword volume cache statistics",
+    )
+
+
+# =============================================================================
+# PRIMARY KEYWORD GENERATION & APPROVAL (Phase 4)
+# =============================================================================
+
+
+class KeywordCandidate(BaseModel):
+    """A keyword candidate with volume metrics and AI scoring.
+
+    Used in keyword generation to represent potential primary keyword options
+    with their search metrics and AI-computed relevance scores.
+    """
+
+    keyword: str = Field(..., description="The keyword phrase")
+    volume: int | None = Field(None, description="Monthly search volume")
+    cpc: float | None = Field(None, description="Cost per click in USD")
+    competition: float | None = Field(
+        None, description="Competition score (0.0 to 1.0)"
+    )
+    relevance_score: float | None = Field(
+        None, description="AI relevance score (0.0 to 100.0)"
+    )
+    composite_score: float | None = Field(
+        None, description="Overall composite score combining metrics (0.0 to 100.0)"
+    )
+
+
+class PrimaryKeywordGenerationStatus(BaseModel):
+    """Status of primary keyword generation for a project.
+
+    Tracks progress when generating primary keywords across multiple pages.
+    """
+
+    status: str = Field(
+        ...,
+        description="Generation status: pending, generating, completed, failed",
+    )
+    total: int = Field(..., ge=0, description="Total pages to process")
+    completed: int = Field(..., ge=0, description="Pages successfully processed")
+    failed: int = Field(..., ge=0, description="Pages that failed processing")
+    current_page: str | None = Field(
+        None, description="URL or title of page currently being processed"
+    )
+
+
+class PageKeywordsData(BaseModel):
+    """Keyword data for a page, matching the PageKeywords model fields.
+
+    Represents the keyword research results stored for a crawled page.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str = Field(..., description="PageKeywords record UUID")
+    primary_keyword: str = Field(..., description="The primary target keyword")
+    secondary_keywords: list[str] = Field(
+        default_factory=list, description="Supporting/related keywords"
+    )
+    alternative_keywords: list[KeywordCandidate] = Field(
+        default_factory=list, description="Alternative keyword candidates"
+    )
+    is_approved: bool = Field(False, description="Whether keywords are approved")
+    is_priority: bool = Field(False, description="Whether page is marked as priority")
+    composite_score: float | None = Field(
+        None, description="Overall AI-generated score"
+    )
+    relevance_score: float | None = Field(
+        None, description="Relevance score to page content"
+    )
+    ai_reasoning: str | None = Field(
+        None, description="AI explanation for keyword recommendation"
+    )
+    search_volume: int | None = Field(
+        None, description="Monthly search volume for primary keyword"
+    )
+    difficulty_score: int | None = Field(
+        None, description="SEO difficulty score (0-100)"
+    )
+
+
+class PageWithKeywords(BaseModel):
+    """Combined view of a crawled page with its keyword research data.
+
+    Merges CrawledPage summary data with PageKeywords data for the
+    keyword approval interface.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    # Page fields (from CrawledPage)
+    id: str = Field(..., description="CrawledPage UUID")
+    url: str = Field(..., description="Normalized page URL")
+    title: str | None = Field(None, description="Page title")
+    labels: list[str] = Field(default_factory=list, description="Page labels/tags")
+    product_count: int | None = Field(None, description="Products found on page")
+
+    # Keyword fields (from PageKeywords relationship)
+    keywords: PageKeywordsData | None = Field(
+        None, description="Keyword research data (null if not yet generated)"
+    )
+
+
+class UpdatePrimaryKeywordRequest(BaseModel):
+    """Request schema for updating the primary keyword for a page."""
+
+    keyword: str = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="The new primary keyword to set",
+        examples=["coffee storage containers", "airtight coffee jars"],
+    )
+
+    @field_validator("keyword")
+    @classmethod
+    def validate_keyword(cls, v: str) -> str:
+        """Validate and normalize the keyword."""
+        v = v.strip()
+        if not v:
+            raise ValueError("Keyword cannot be empty")
+        return v
+
+
+class BulkApproveResponse(BaseModel):
+    """Response schema for bulk keyword approval operations."""
+
+    approved_count: int = Field(
+        ..., ge=0, description="Number of pages whose keywords were approved"
     )
