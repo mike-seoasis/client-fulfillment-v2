@@ -284,3 +284,23 @@ after each iteration and it's included in prompts for context.
   - Final status can be "completed" (no failures), "partial" (some failures), or "failed" (all failures)
 ---
 
+## 2026-02-05 - S4-014
+- **What was implemented:** Unit tests for the scoring formula in PrimaryKeywordService
+- **Files changed:**
+  - `backend/tests/services/test_primary_keyword_service.py` (new file, 27 tests)
+- **Test coverage:**
+  - High volume, low competition scenarios (3 tests)
+  - Low volume, high relevance scenarios (2 tests)
+  - Zero volume handling (2 tests)
+  - Null value handling (3 tests)
+  - Formula weight verification - 50/35/15 (4 tests)
+  - Edge cases: float volume, boundary values, rounding (5 tests)
+  - KeywordGenerationStats dataclass (2 tests)
+  - Service initialization and state management (6 tests)
+- **Learnings:**
+  - Test files go in `backend/tests/services/` directory (not `unit/`)
+  - Mock clients only need `available` attribute for service initialization
+  - Follow pattern from `test_label_taxonomy.py` for test class organization
+  - Run `ruff check --fix` to auto-fix import sorting issues
+---
+
