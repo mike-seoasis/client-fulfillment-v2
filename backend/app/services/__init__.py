@@ -25,6 +25,10 @@ from app.services.label_taxonomy import (
     validate_labels,
     validate_page_labels,
 )
+from app.services.primary_keyword import (
+    KeywordGenerationStats,
+    PrimaryKeywordService,
+)
 from app.services.project import ProjectService
 
 __all__ = [
@@ -36,12 +40,14 @@ __all__ = [
     "GeneratedTaxonomy",
     "GenerationStatus",
     "get_project_taxonomy_labels",
+    "KeywordGenerationStats",
     "LabelAssignment",
     "LabelTaxonomyService",
     "LabelValidationError",
     "LabelValidationResult",
     "MAX_LABELS_PER_PAGE",
     "MIN_LABELS_PER_PAGE",
+    "PrimaryKeywordService",
     "ProjectService",
     "ResearchContext",
     "TaxonomyLabel",

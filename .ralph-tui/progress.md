@@ -100,3 +100,20 @@ after each iteration and it's included in prompts for context.
   - Follow existing pattern in keyword_research.py for Field descriptions and validators
 ---
 
+## 2026-02-05 - S4-006
+- **What was implemented:** Created PrimaryKeywordService class for orchestrating keyword generation
+- **Files changed:**
+  - `backend/app/services/primary_keyword.py` - New service class
+  - `backend/app/services/__init__.py` - Added exports for PrimaryKeywordService and KeywordGenerationStats
+- **Class features:**
+  - Accepts ClaudeClient and DataForSEOClient in __init__
+  - `_used_primary_keywords: set[str]` - Tracks keywords already assigned to prevent duplicates
+  - `_stats: KeywordGenerationStats` - Dataclass tracking generation metrics (pages processed, tokens, costs, errors)
+  - Helper methods: `add_used_keyword()`, `is_keyword_used()`, `reset_stats()`, `get_stats_summary()`
+- **Learnings:**
+  - Follow LabelTaxonomyService pattern for service class structure
+  - Use dataclass for stats to make it easy to track multiple metrics
+  - Normalize keywords (lowercase, strip) when checking for duplicates
+  - Export both the service class and any related dataclasses from __init__.py
+---
+
