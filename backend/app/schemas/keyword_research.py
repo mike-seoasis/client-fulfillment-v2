@@ -631,8 +631,8 @@ class PageKeywordsData(BaseModel):
     secondary_keywords: list[str] = Field(
         default_factory=list, description="Supporting/related keywords"
     )
-    alternative_keywords: list[KeywordCandidate] = Field(
-        default_factory=list, description="Alternative keyword candidates"
+    alternative_keywords: list[str] = Field(
+        default_factory=list, description="Alternative keyword strings"
     )
     is_approved: bool = Field(False, description="Whether keywords are approved")
     is_priority: bool = Field(False, description="Whether page is marked as priority")
