@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import type { PageWithKeywords } from '@/lib/api';
 import { useApproveKeyword, useTogglePriority } from '@/hooks/useKeywordMutations';
 import { AlternativeKeywordDropdown } from './AlternativeKeywordDropdown';
+import { PriorityToggle } from './PriorityToggle';
 
 interface KeywordPageRowProps {
   /** Page with keyword data */
@@ -31,21 +32,6 @@ function CheckIcon({ className }: { className?: string }) {
   );
 }
 
-function StarIcon({ className, filled }: { className?: string; filled?: boolean }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill={filled ? 'currentColor' : 'none'}
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-    </svg>
-  );
-}
 
 function SpinnerIcon({ className }: { className?: string }) {
   return (
@@ -278,28 +264,14 @@ export function KeywordPageRow({ page, projectId, onKeywordClick }: KeywordPageR
     <div className="py-3 px-4 border-b border-cream-200 last:border-b-0 hover:bg-sand-50 transition-colors">
       <div className="flex items-start gap-3">
         {/* Priority toggle */}
-        <button
-          onClick={handleTogglePriority}
-          disabled={!hasKeyword || togglePriority.isPending}
-          className={`flex-shrink-0 mt-0.5 p-1 rounded-sm transition-colors ${
-            hasKeyword
-              ? 'hover:bg-cream-200 cursor-pointer'
-              : 'cursor-not-allowed opacity-50'
-          }`}
-          title={isPriority ? 'Remove priority' : 'Mark as priority for internal linking'}
-          aria-label={isPriority ? 'Remove priority' : 'Mark as priority'}
-        >
-          {togglePriority.isPending ? (
-            <SpinnerIcon className="w-5 h-5 text-warm-gray-400 animate-spin" />
-          ) : (
-            <StarIcon
-              className={`w-5 h-5 ${
-                isPriority ? 'text-palm-500' : 'text-warm-gray-300'
-              }`}
-              filled={isPriority}
-            />
-          )}
-        </button>
+        <div className="flex-shrink-0 mt-0.5">
+          <PriorityToggle
+            isPriority={isPriority}
+            disabled={!hasKeyword}
+            isLoading={togglePriority.isPending}
+            onToggle={handleTogglePriority}
+          />
+        </div>
 
         {/* Main content */}
         <div className="flex-1 min-w-0">

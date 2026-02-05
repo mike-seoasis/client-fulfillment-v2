@@ -816,3 +816,27 @@ after each iteration and it's included in prompts for context.
   - Show loading spinner only on the specific keyword being updated via local `selectedKeyword` state
 ---
 
+## 2026-02-05 - S4-035
+- **What was implemented:** Created PriorityToggle component as a reusable star toggle for marking pages as priority
+- **Files changed:**
+  - `frontend/src/components/onboarding/PriorityToggle.tsx` (new file)
+  - `frontend/src/components/onboarding/KeywordPageRow.tsx` (updated to use PriorityToggle)
+- **Component features:**
+  - Shows star icon (filled when priority, empty when not)
+  - Clicking triggers `onToggle` callback (for API toggle via parent)
+  - Shows loading state (spinner) during toggle operation
+  - Tooltip explains "Mark as priority for internal linking" (or "Remove priority" when already priority)
+  - Uses palm-500 color for filled star, warm-gray-300 for empty star
+  - Accepts `disabled` prop to disable interaction (e.g., when no keyword generated)
+  - Uses `aria-pressed` for accessibility
+- **Acceptance criteria verified:**
+  - [x] Shows star icon (filled when priority, empty when not)
+  - [x] Clicking toggles priority via API (via onToggle callback)
+  - [x] Shows loading state during toggle
+  - [x] Tooltip explains 'Mark as priority for internal linking'
+- **Learnings:**
+  - Extracting components: even if functionality exists inline, extracting to a separate component improves reusability and maintainability
+  - Tooltip implementation: use fixed positioning with getBoundingClientRect for accurate placement
+  - Accessibility: use aria-pressed for toggle buttons, aria-label for icon-only buttons
+---
+
