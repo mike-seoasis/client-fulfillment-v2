@@ -178,3 +178,18 @@ after each iteration and it's included in prompts for context.
   - Content brief failure is non-blocking: pipeline continues with `content_brief=None` (services degrade gracefully)
 ---
 
+## 2026-02-06 - S5-011
+- Replaced legacy v1 content_generation schemas with Phase 5 Pydantic v2 schemas
+- Created 6 schema classes: ContentGenerationTriggerResponse, ContentGenerationStatus, PageGenerationStatusItem, BriefSummary, PageContentResponse, PromptLogResponse
+- PageContentResponse and PromptLogResponse use `model_config = ConfigDict(from_attributes=True)` for ORM serialization
+- BriefSummary is a nested schema in PageContentResponse with keyword and lsi_terms_count fields
+- Registered all new schemas in schemas/__init__.py with proper alphabetical import ordering
+- Files changed:
+  - `backend/app/schemas/content_generation.py` — Complete rewrite with v2 schemas
+  - `backend/app/schemas/__init__.py` — Added imports and __all__ entries for all 6 new schemas
+- **Learnings:**
+  - The old content_generation.py schemas (GeneratedContentOutput, ContentGenerationRequest, etc.) were not imported anywhere outside the file itself — safe to replace entirely
+  - `content_brief` sorts before `content_generation` alphabetically (ruff enforces strict module path ordering in import blocks)
+  - BriefSummary as a separate schema (not from_attributes) works well for computed/aggregated data that doesn't map 1:1 to a model column
+---
+

@@ -45,6 +45,14 @@ from app.schemas.content_brief import (
     RelatedQuestionSchema,
     RelatedSearchSchema,
 )
+from app.schemas.content_generation import (
+    BriefSummary,
+    ContentGenerationStatus,
+    ContentGenerationTriggerResponse,
+    PageContentResponse,
+    PageGenerationStatusItem,
+    PromptLogResponse,
+)
 from app.schemas.content_score import (
     ContentScoreBatchItemResponse,
     ContentScoreBatchRequest,
@@ -240,6 +248,13 @@ __all__ = [
     "VALID_SECTION_NAMES",
     # Brand Config Generation schemas
     "GenerationStatusResponse",
+    # Content Generation schemas
+    "ContentGenerationTriggerResponse",
+    "ContentGenerationStatus",
+    "PageGenerationStatusItem",
+    "BriefSummary",
+    "PageContentResponse",
+    "PromptLogResponse",
     # CrawledPage schemas
     "CrawledPageCreate",
     "CrawledPageFullResponse",
