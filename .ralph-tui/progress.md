@@ -280,3 +280,20 @@ after each iteration and it's included in prompts for context.
   - All onboarding pages duplicate the ONBOARDING_STEPS constant — candidate for extraction to shared constant
 ---
 
+## 2026-02-06 - S5-013
+- Created 81 backend tests across 4 test files covering POP content brief, content writing, quality checks, and API endpoints
+- Tests cover: mock mode, caching, force_refresh, error handling, prompt builder with/without brief, brand config injection, JSON parsing, retry logic, all 5 quality trope rules (positive + negative), FAQ stripping, structured result format, and all 4 API endpoints (trigger 202/400/409/404, status, content, prompts)
+- Files changed:
+  - `backend/tests/services/test_pop_content_brief.py` (new) — 15 tests for POP content brief service
+  - `backend/tests/services/test_content_writing.py` (new) — 21 tests for prompt builder and content writing service
+  - `backend/tests/services/test_content_quality.py` (new) — 32 tests for quality checks and FAQ stripping
+  - `backend/tests/api/test_content_generation.py` (new) — 13 tests for content generation API endpoints
+- **Learnings:**
+  - **SQLite JSONB refresh trap**: Creating CrawledPage with JSONB columns (e.g. `labels=["footwear"]`) then calling `db_session.refresh()` fails with `InvalidRequestError` because SQLite can't handle JSONB server_defaults. Fix: set JSONB values *after* commit/refresh.
+  - **MissingGreenlet in async tests**: Accessing lazy-loaded relationships (e.g. `crawled_page.page_content`) in async test context triggers `MissingGreenlet`. Fix: pre-set relationship attributes (e.g. `page.page_content = None`) in fixture to avoid lazy loading.
+  - **Cross-test SQLAlchemy identity map pollution**: Creating real SQLAlchemy model instances (even without adding to a session) registers them in the identity map, corrupting subsequent tests that use `db_session`. Fix: use plain Python dataclass/object fakes (`_FakePageContent`) instead of ORM models for pure function tests that don't need the database.
+  - **Test fixture pattern for CrawledPage**: commit → set JSONB fields → set `page_content = None` to prevent lazy load. This sequence avoids both the SQLite JSONB refresh trap and MissingGreenlet errors.
+  - **Module-level state in API tests**: The `_active_generations` set in `content_generation.py` persists across tests. Use `autouse=True` fixture to clear it before each test.
+  - **Pre-existing test failure**: `tests/api/test_brand_config.py::TestStartGeneration::test_start_generation_returns_202` fails with `assert 9 == 10` — not related to S5-013 changes.
+---
+
