@@ -155,3 +155,26 @@ after each iteration and it's included in prompts for context.
   - Import ordering: `content_extraction` sorts before `content_quality` alphabetically (ruff enforces strict module path ordering)
 ---
 
+## 2026-02-06 - S5-010
+- Created `run_content_pipeline()` async function in `backend/app/services/content_generation.py`
+- Pipeline orchestrates brief → write → check for each approved-keyword page
+- Per-page pipeline: (1) status=generating_brief → fetch POP brief, (2) status=writing → call Claude content writing, (3) status=checking → run quality checks, (4) status=complete
+- Uses `asyncio.Semaphore` for concurrency control with `CONTENT_GENERATION_CONCURRENCY` env var (default 1)
+- Error isolation: each page processed in its own database session; failures don't affect other pages
+- Failed pages get status='failed' with error in qa_results JSONB; error recovery uses a separate session in case the primary session is broken
+- Only processes pages where `PageKeywords.is_approved=True`, skips pages with existing complete content (unless `force_refresh=True`)
+- Loads page data (ids, urls, keywords) in a read-only session, then processes each page in isolated write sessions
+- Returns `PipelineResult` with per-page results and aggregate counts (succeeded/failed/skipped)
+- Added `content_generation_concurrency` setting to `config.py` (env var: `CONTENT_GENERATION_CONCURRENCY`)
+- Registered `PipelinePageResult`, `PipelineResult`, `run_content_pipeline` in `services/__init__.py`
+- Files changed:
+  - `backend/app/services/content_generation.py` (new) — Pipeline orchestrator with run_content_pipeline, PipelineResult/PipelinePageResult dataclasses
+  - `backend/app/core/config.py` — Added `content_generation_concurrency` int setting
+  - `backend/app/services/__init__.py` — Added imports and __all__ entries
+- **Learnings:**
+  - When reusing variable names across different `select()` calls in the same scope, mypy infers the type from the first assignment — use distinct variable names (`stmt` vs `err_stmt`) to avoid type conflicts
+  - `db_manager.session_factory()` can be used directly as an async context manager for background tasks that don't go through FastAPI's dependency injection
+  - `generate_content()` already handles PageContent creation and status=WRITING internally, so the pipeline only needs to set status=GENERATING_BRIEF before the brief step and status=CHECKING/COMPLETE after writing
+  - Content brief failure is non-blocking: pipeline continues with `content_brief=None` (services degrade gracefully)
+---
+

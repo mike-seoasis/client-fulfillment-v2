@@ -10,6 +10,11 @@ from app.services.content_extraction import (
     extract_content_from_html,
     truncate_body_content,
 )
+from app.services.content_generation import (
+    PipelinePageResult,
+    PipelineResult,
+    run_content_pipeline,
+)
 from app.services.content_quality import (
     QualityIssue,
     QualityResult,
@@ -69,10 +74,13 @@ __all__ = [
     "LabelValidationResult",
     "MAX_LABELS_PER_PAGE",
     "MIN_LABELS_PER_PAGE",
+    "PipelinePageResult",
+    "PipelineResult",
     "PrimaryKeywordService",
     "ProjectService",
     "PromptPair",
     "ResearchContext",
+    "run_content_pipeline",
     "run_quality_checks",
     "TaxonomyLabel",
     "truncate_body_content",

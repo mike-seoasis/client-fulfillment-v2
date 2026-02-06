@@ -419,6 +419,12 @@ class Settings(BaseSettings):
         description="Enable shadow mode to run both POP and legacy scoring for comparison analysis",
     )
 
+    # Content generation pipeline
+    content_generation_concurrency: int = Field(
+        default=1,
+        description="Max concurrent page content generations (1=sequential for dev, 5 for production)",
+    )
+
     # S3/Object Storage
     s3_bucket: str | None = Field(
         default=None,
