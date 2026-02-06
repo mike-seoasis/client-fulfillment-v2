@@ -231,3 +231,21 @@ after each iteration and it's included in prompts for context.
   - Composite helper hooks (e.g. `useContentGeneration`) wrap individual query/mutation hooks and derive convenience state (progress %, boolean flags)
 ---
 
+## 2026-02-06 - S5-015
+- Created ContentGenerationProgress page at `frontend/src/app/projects/[id]/onboarding/content/page.tsx`
+- Initial state: shows count of approved pages with "Generate Content" button (idle status with pages)
+- Empty state: shows message when no approved keywords exist (idle with no pages)
+- Generating state: shows progress bar with percentage, per-page table with 4-step pipeline indicator (Brief → Write → Check → Done), active step pulses with lagoon color
+- Complete state: shows summary (X complete, Y failed), completed pages have "View" link to content detail page
+- Failed state: shows error description per page, "Retry N Failed" button re-triggers pipeline
+- Polls every 3 seconds while status is 'generating' via `useContentGeneration` hook's built-in refetchInterval
+- Navigation: Back to Keywords, Continue to Export (only when complete)
+- Files changed:
+  - `frontend/src/app/projects/[id]/onboarding/content/page.tsx` (new) — Content generation progress page
+- **Learnings:**
+  - `useContentGeneration` composite hook provides all needed state: `overallStatus`, `pages`, `pagesTotal`, `pagesCompleted`, `pagesFailed`, `progress`, `startGenerationAsync`, `isStarting`, `startError`
+  - Backend ContentStatus enum values map to pipeline steps: `generating_brief` → Brief, `writing` → Write, `checking` → Check, `complete` → Done
+  - No individual page retry API exists yet — retry uses full `triggerContentGeneration` which skips already-complete pages
+  - StepIndicator and icon components are duplicated across onboarding pages (keywords, content) — candidate for extraction to shared component
+---
+
