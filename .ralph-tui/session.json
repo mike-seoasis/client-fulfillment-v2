@@ -3,10 +3,10 @@
   "sessionId": "0947a505-08ec-4007-837a-758e0a5a5e23",
   "status": "running",
   "startedAt": "2026-02-06T14:37:46.822Z",
-  "updatedAt": "2026-02-06T15:41:26.004Z",
-  "currentIteration": 17,
+  "updatedAt": "2026-02-06T15:42:35.865Z",
+  "currentIteration": 18,
   "maxIterations": 10,
-  "tasksCompleted": 17,
+  "tasksCompleted": 18,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -119,8 +119,8 @@
       {
         "id": "S5-018",
         "title": "End-to-end verification in mock mode",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "S5-098",
@@ -306,6 +306,16 @@
       "durationMs": 612968,
       "startedAt": "2026-02-06T15:19:30.688Z",
       "endedAt": "2026-02-06T15:29:43.656Z"
+    },
+    {
+      "iteration": 18,
+      "status": "completed",
+      "taskId": "S5-018",
+      "taskTitle": "End-to-end verification in mock mode",
+      "taskCompleted": true,
+      "durationMs": 701220,
+      "startedAt": "2026-02-06T15:29:44.776Z",
+      "endedAt": "2026-02-06T15:41:25.996Z"
     }
   ],
   "skippedTaskIds": [],

@@ -8,10 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Phase** | 5 - Content Generation |
-| **Slice** | In Progress (S5-001 through S5-008 complete via Ralph) |
+| **Phase** | 5 - Content Generation (Complete) |
+| **Slice** | Phase 5 complete (S5-001 through S5-018) |
 | **Last Session** | 2026-02-06 |
-| **Next Action** | Continue Phase 5: quality checks service, API endpoints, Pydantic schemas, frontend (S5-009 onward) |
+| **Next Action** | Phase 6: Content Review + Editing |
 
 ### Session Log
 
@@ -29,6 +29,7 @@
 | 2026-02-05 | Phase 4 complete (PageKeywords model updates, Alembic migration for approval/scoring fields, PrimaryKeywordService with generate_candidates/enrich_with_volume/filter_to_specific/calculate_score/select_primary_and_alternatives/process_page/generate_for_project methods, 7 API endpoints for keyword generation/status/approval/priority, frontend API client and TypeScript types, useKeywordGeneration/usePagesWithKeywords/useKeywordMutations hooks, keywords page with generation progress UI, KeywordPageRow/AlternativeKeywordDropdown/PriorityToggle/ApproveButton components, inline keyword editing, score tooltips, bulk approve, comprehensive unit/integration/component tests - 51 stories total) | Phase 5 |
 | 2026-02-06 | Phase 4 polish: Fixed DataForSEO competition parsing (use competition_index not competition string), fixed keyword scoring normalization (0-100 to 0-1), fixed AlternativeKeywordDropdown backwards compatibility for string[] format, fixed Crawl4AI markdown extraction for nested dict response, improved keyword generation polling (poll during pending state), added unapprove functionality for keywords | Phase 5 |
 | 2026-02-06 | Phase 5 planning complete (OpenSpec: proposal, design, 6 specs, tasks, prd.json). Ralph executing: S5-001 PageContent model, S5-002 PromptLog model, S5-003 model relationships, S5-004 Alembic migration, S5-005 POPMockClient, S5-006 POP content brief service, S5-007 prompt builder, S5-008 content writing service. Installed Playwright MCP + Chrome DevTools MCP + enabled agent teams. | Continue S5-009+ (quality checks, API, schemas, frontend, prompt inspector) |
+| 2026-02-06 | Phase 5 complete (S5-001 through S5-018): PageContent + PromptLog models, Alembic migration, POPMockClient, POP content brief service, prompt builder, content writing service (Claude Sonnet), quality checks (5 AI trope rules), content generation pipeline orchestrator, Pydantic v2 schemas, 4 API endpoints (trigger/status/content/prompts), frontend API client + TanStack Query hooks, ContentGenerationProgress page, PromptInspector side panel, onboarding navigation, 81 backend tests, end-to-end verification in mock mode (9 pages, 0 failures). | Phase 6: Content Review + Editing |
 
 ---
 
@@ -180,13 +181,13 @@
 - [x] **Verify:** Can see primary keyword, edit, approve
 - [x] **Note:** No secondary keywords — POP provides LSI terms in Phase 5
 
-### Phase 5: Content Generation (SHARED)
-- [ ] POP Content Brief service (returns LSI terms, related questions, targets)
-- [ ] Content writing service (Claude) using brief data
-- [ ] Quality checks (AI tropes + POP scoring API)
-- [ ] **Verify:** Can generate content that passes checks and achieves POP score ≥70
-- [ ] **Architecture:** Build as standalone shared services
-- [ ] **Reference:** See `backend/PLAN-remove-secondary-keywords-and-paa.md`
+### Phase 5: Content Generation (SHARED) ✅
+- [x] POP Content Brief service (returns LSI terms, related questions, targets)
+- [x] Content writing service (Claude) using brief data
+- [x] Quality checks (AI tropes + POP scoring API)
+- [x] **Verify:** Can generate content that passes checks and achieves POP score ≥70
+- [x] **Architecture:** Build as standalone shared services
+- [x] **Reference:** See `backend/PLAN-remove-secondary-keywords-and-paa.md`
 
 ### Phase 6: Content Review + Editing (SHARED)
 - [ ] Content detail view
