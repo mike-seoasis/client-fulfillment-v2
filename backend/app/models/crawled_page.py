@@ -23,6 +23,7 @@ from app.core.database import Base
 if TYPE_CHECKING:
     from app.models.content_brief import ContentBrief
     from app.models.content_score import ContentScore
+    from app.models.page_content import PageContent
     from app.models.page_keywords import PageKeywords
 
 
@@ -183,6 +184,14 @@ class CrawledPage(Base):
         "ContentScore",
         back_populates="page",
         cascade="all, delete-orphan",
+    )
+
+    # Relationship to PageContent (one-to-one)
+    page_content: Mapped["PageContent | None"] = relationship(
+        "PageContent",
+        back_populates="page",
+        cascade="all, delete-orphan",
+        uselist=False,
     )
 
     # Relationship to PageKeywords (one-to-one)

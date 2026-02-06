@@ -21,6 +21,7 @@ from app.models.notification import (
     NotificationTemplate,
     WebhookConfig,
 )
+from app.models.page_content import PageContent
 from app.models.page_keywords import PageKeywords
 from app.models.page_paa import PagePAA
 from app.models.project import Project
@@ -41,6 +42,7 @@ __all__ = [
     "NotificationLog",
     "NotificationStatus",
     "NotificationTemplate",
+    "PageContent",
     "PageKeywords",
     "PagePAA",
     "Project",
