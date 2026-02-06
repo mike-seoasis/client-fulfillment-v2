@@ -10,6 +10,10 @@ from app.services.content_extraction import (
     extract_content_from_html,
     truncate_body_content,
 )
+from app.services.content_writing import (
+    PromptPair,
+    build_content_prompt,
+)
 from app.services.crawling import CrawlingService
 from app.services.file import FileService
 from app.services.label_taxonomy import (
@@ -39,6 +43,7 @@ __all__ = [
     "BrandConfigService",
     "ContentBriefResult",
     "CrawlingService",
+    "build_content_prompt",
     "ExtractedContent",
     "extract_content_from_html",
     "fetch_content_brief",
@@ -55,6 +60,7 @@ __all__ = [
     "MIN_LABELS_PER_PAGE",
     "PrimaryKeywordService",
     "ProjectService",
+    "PromptPair",
     "ResearchContext",
     "TaxonomyLabel",
     "truncate_body_content",

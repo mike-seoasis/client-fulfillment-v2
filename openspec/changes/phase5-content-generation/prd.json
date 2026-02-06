@@ -118,8 +118,9 @@
         "bottom_description spec: HTML with headings and FAQ, targeting POP brief word count or 300-400 words fallback"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Brand config is stored as JSONB on Project model. Access via project.brand_config. The ai_prompt_snippet section is specifically designed for injection into content generation prompts. Design decision #3. Spec: openspec/changes/phase5-content-generation/specs/content-writing/spec.md."
+      "passes": true,
+      "notes": "Brand config is stored as JSONB on Project model. Access via project.brand_config. The ai_prompt_snippet section is specifically designed for injection into content generation prompts. Design decision #3. Spec: openspec/changes/phase5-content-generation/specs/content-writing/spec.md.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S5-008",
@@ -334,6 +335,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-06T14:49:34.111Z"
+    "updatedAt": "2026-02-06T14:52:07.202Z"
   }
 }

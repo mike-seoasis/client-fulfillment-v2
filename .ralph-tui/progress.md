@@ -99,3 +99,21 @@ after each iteration and it's included in prompts for context.
   - ContentBrief has a `unique=True` on page_id FK, so upsert pattern queries by page_id first then updates or creates
 ---
 
+## 2026-02-06 - S5-007
+- Created `build_content_prompt()` function in `backend/app/services/content_writing.py`
+- Returns `PromptPair` dataclass with `system_prompt` and `user_prompt`
+- System prompt: injects `ai_prompt_snippet.full_prompt` from brand config v2_schema as brand guidelines
+- User prompt has labeled sections: ## Task, ## Page Context (URL, current title, current meta, product count, labels), ## SEO Targets (LSI terms with weights/targetCount, variations, word count target from brief), ## Brand Voice (ai_prompt_snippet content, banned words from vocabulary), ## Output Format (JSON with page_title, meta_description, top_description, bottom_description)
+- Fallback mode: when ContentBrief is None, omits LSI terms, uses default 300-400 word target for bottom_description
+- Output format specifies: page_title under 60 chars with primary keyword, meta_description under 160 chars for CTR, top_description as plain text 1-2 sentences, bottom_description as HTML with headings and FAQ
+- Registered `PromptPair` and `build_content_prompt` in `services/__init__.py`
+- Files changed:
+  - `backend/app/services/content_writing.py` (new) — Prompt builder with build_content_prompt, PromptPair dataclass, and section builder helpers
+  - `backend/app/services/__init__.py` — Added imports and __all__ entries for PromptPair and build_content_prompt
+- **Learnings:**
+  - Brand config is stored in `BrandConfig.v2_schema` JSONB (not on Project model). Key sections: `ai_prompt_snippet.full_prompt` for system prompt injection, `vocabulary.banned_words` for banned word lists
+  - ContentBrief.lsi_terms is a JSONB list of dicts with keys: phrase, weight, averageCount, targetCount
+  - CrawledPage has direct access to product_count, labels, title, meta_description, normalized_url
+  - Import sorting: `content_extraction` sorts before `content_writing` alphabetically — ruff enforces strict module path ordering
+---
+
