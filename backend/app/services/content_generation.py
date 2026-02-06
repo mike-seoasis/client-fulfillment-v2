@@ -14,6 +14,7 @@ status='failed' with error details in qa_results.
 """
 
 import asyncio
+import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -29,6 +30,7 @@ from app.models.brand_config import BrandConfig
 from app.models.crawled_page import CrawledPage
 from app.models.page_content import ContentStatus, PageContent
 from app.models.page_keywords import PageKeywords
+from app.models.prompt_log import PromptLog
 from app.services.content_quality import run_quality_checks
 from app.services.content_writing import generate_content
 from app.services.pop_content_brief import fetch_content_brief
@@ -311,6 +313,11 @@ async def _process_single_page(
                     },
                 )
 
+            # Log the POP brief result to prompt_logs so it's visible in the inspector
+            await _log_content_brief(
+                db, page_content, keyword, content_brief, brief_result
+            )
+
             # --- Step 2: Write content ---
             # generate_content sets status to WRITING internally
             writing_result = await generate_content(
@@ -421,3 +428,111 @@ async def _ensure_page_content(
     # Attach to relationship so subsequent code can access it
     crawled_page.page_content = page_content
     return page_content
+
+
+async def _log_content_brief(
+    db: AsyncSession,
+    page_content: PageContent,
+    keyword: str,
+    content_brief: Any,
+    brief_result: Any,
+) -> None:
+    """Create a PromptLog entry for the POP content brief step.
+
+    Logs the keyword request as prompt_text and the POP API response (or error)
+    as response_text so it's visible in the Prompt Inspector.
+    """
+    prompt_text = f"POP content brief (get-terms + create-report + recommendations) for keyword: {keyword}"
+
+    if brief_result.success and content_brief is not None:
+        # Show a readable summary of all POP response data
+        raw = content_brief.raw_response or {}
+        summary_parts: list[str] = []
+
+        # LSI Terms
+        lsi_terms = content_brief.lsi_terms or []
+        if lsi_terms:
+            summary_parts.append(f"LSI Terms ({len(lsi_terms)}):")
+            for term in lsi_terms[:20]:  # Cap at 20 for readability
+                phrase = term.get("phrase", "")
+                weight = term.get("weight", 0)
+                avg_count = term.get("averageCount", 0)
+                summary_parts.append(f"  - {phrase} (weight: {weight}, target: {avg_count})")
+
+        # Keyword Variations
+        variations = content_brief.related_searches or []
+        if variations:
+            summary_parts.append(f"\nKeyword Variations ({len(variations)}):")
+            for v in variations:
+                summary_parts.append(f"  - {v}")
+
+        # Competitors
+        competitors = content_brief.competitors or []
+        if competitors:
+            summary_parts.append(f"\nCompetitors ({len(competitors)}):")
+            for comp in competitors:
+                url = comp.get("url", "")
+                score = comp.get("pageScore") or 0
+                wc = comp.get("wordCount") or 0
+                summary_parts.append(f"  - {url} (score: {score}, words: {wc})")
+
+        # Related Questions
+        related_questions = content_brief.related_questions or []
+        if related_questions:
+            summary_parts.append(f"\nRelated Questions ({len(related_questions)}):")
+            for q in related_questions:
+                summary_parts.append(f"  - {q}")
+
+        # Heading Structure Targets
+        heading_targets = content_brief.heading_targets or []
+        if heading_targets:
+            summary_parts.append(f"\nHeading Structure Targets ({len(heading_targets)}):")
+            for h in heading_targets:
+                tag = h.get("tag", "")
+                target = h.get("target", 0)
+                summary_parts.append(f"  - {tag}: {target}")
+
+        # Keyword Placement Targets
+        keyword_targets = content_brief.keyword_targets or []
+        if keyword_targets:
+            summary_parts.append(f"\nKeyword Placement Targets ({len(keyword_targets)}):")
+            for kt in keyword_targets:
+                signal = kt.get("signal", "")
+                kt_type = kt.get("type", "")
+                target = kt.get("target", 0)
+                phrase = kt.get("phrase", kt.get("comment", ""))
+                label = f"{signal} ({kt_type}): target={target}"
+                if phrase:
+                    label += f" [{phrase}]"
+                summary_parts.append(f"  - {label}")
+
+        # Page Score Target
+        page_score = content_brief.page_score_target
+        if page_score is not None:
+            summary_parts.append(f"\nPage Score Target: {page_score}")
+
+        # Word Count Range
+        wc_target = content_brief.word_count_target
+        wc_min = content_brief.word_count_min
+        wc_max = content_brief.word_count_max
+        if wc_min and wc_max:
+            wc_str = f"min={wc_min}, avg={wc_target or 'N/A'}, max={wc_max}"
+        elif wc_target:
+            wc_str = str(wc_target)
+        else:
+            wc_str = "N/A"
+        summary_parts.append(f"\nWord Count Range: {wc_str}")
+
+        response_text = "\n".join(summary_parts) if summary_parts else json.dumps(raw, indent=2)
+    else:
+        response_text = f"POP brief fetch failed: {brief_result.error or 'unknown error'}"
+
+    log = PromptLog(
+        page_content_id=page_content.id,
+        step="content_brief",
+        role="system",
+        prompt_text=prompt_text,
+        response_text=response_text,
+    )
+    db.add(log)
+    await db.flush()

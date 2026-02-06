@@ -167,41 +167,16 @@ def _build_seo_targets_section(
     keyword: str,
     content_brief: ContentBrief | None,
 ) -> str:
-    """Build the ## SEO Targets section with LSI terms, variations, and word count."""
+    """Build the ## SEO Targets section from POP's cleanedContentBrief.
+
+    Uses the per-location, per-term targets from POP directly rather than
+    our own reconstructed version. Falls back to parsed ContentBrief fields
+    if cleanedContentBrief is not available (e.g., mock mode).
+    """
     lines = ["## SEO Targets"]
     lines.append(f"- **Primary Keyword:** {keyword}")
 
-    if content_brief is not None:
-        # LSI terms with weights
-        lsi_terms: list[dict[str, Any]] = content_brief.lsi_terms or []
-        if lsi_terms:
-            lines.append("- **LSI Terms:**")
-            for term in lsi_terms:
-                phrase = term.get("phrase", "")
-                weight = term.get("weight", 0)
-                target_count = term.get("targetCount", 0)
-                lines.append(
-                    f"  - {phrase} (weight: {weight}, target count: {target_count})"
-                )
-
-        # Variations / related searches
-        variations: list[str] = content_brief.related_searches or []
-        if variations:
-            lines.append(f"- **Keyword Variations:** {', '.join(variations)}")
-
-        # Word count target from brief
-        wc_target = content_brief.word_count_target
-        if wc_target:
-            lines.append(
-                f"- **Word Count Target (bottom_description):** ~{wc_target} words"
-            )
-        else:
-            lines.append(
-                f"- **Word Count Target (bottom_description):** "
-                f"{DEFAULT_WORD_COUNT_MIN}-{DEFAULT_WORD_COUNT_MAX} words"
-            )
-    else:
-        # Fallback: no brief available
+    if content_brief is None:
         lines.append(
             "- **LSI Terms:** not available (generate naturally relevant content)"
         )
@@ -209,38 +184,260 @@ def _build_seo_targets_section(
             f"- **Word Count Target (bottom_description):** "
             f"{DEFAULT_WORD_COUNT_MIN}-{DEFAULT_WORD_COUNT_MAX} words"
         )
+        return "\n".join(lines)
+
+    raw = content_brief.raw_response or {}
+    cb = raw.get("cleanedContentBrief")
+
+    if isinstance(cb, dict) and cb:
+        lines.extend(_build_from_cleaned_brief(cb, keyword, content_brief, raw))
+    else:
+        # Fallback: use parsed ContentBrief fields (mock mode)
+        lines.extend(_build_from_parsed_brief(content_brief))
 
     return "\n".join(lines)
+
+
+def _build_from_cleaned_brief(
+    cb: dict[str, Any],
+    keyword: str,
+    content_brief: ContentBrief,
+    raw: dict[str, Any],
+) -> list[str]:
+    """Build SEO targets from POP's cleanedContentBrief data."""
+    lines: list[str] = []
+
+    # --- Title tag term targets ---
+    title_terms = cb.get("title") or cb.get("pageTitle") or []
+    if title_terms:
+        lines.append("")
+        lines.append("### Title Tag Targets")
+        for item in title_terms:
+            term = item.get("term", {})
+            brief = item.get("contentBrief", {})
+            phrase = term.get("phrase", "")
+            term_type = term.get("type", "")
+            target = brief.get("target")
+            t_min = brief.get("targetMin")
+            t_max = brief.get("targetMax")
+            count_str = _format_target_count(target, t_min, t_max)
+            lines.append(f"  - \"{phrase}\" ({term_type}): {count_str}")
+        title_total = cb.get("titleTotal") or cb.get("pageTitleTotal", {})
+        if isinstance(title_total, dict) and title_total:
+            lines.append(
+                f"  - **Total term count:** {title_total.get('min', 0)}-{title_total.get('max', 0)}"
+            )
+
+    # --- Subheading term targets ---
+    sub_terms = cb.get("subHeadings", [])
+    if sub_terms:
+        lines.append("")
+        lines.append("### Subheading Targets (H2/H3)")
+        for item in sub_terms:
+            term = item.get("term", {})
+            brief = item.get("contentBrief", {})
+            phrase = term.get("phrase", "")
+            term_type = term.get("type", "")
+            target = brief.get("target")
+            t_min = brief.get("targetMin")
+            t_max = brief.get("targetMax")
+            count_str = _format_target_count(target, t_min, t_max)
+            lines.append(f"  - \"{phrase}\" ({term_type}): {count_str}")
+        sub_total = cb.get("subHeadingsTotal", {})
+        if isinstance(sub_total, dict) and sub_total:
+            lines.append(
+                f"  - **Total term count:** {sub_total.get('min', 0)}-{sub_total.get('max', 0)}"
+            )
+
+    # --- Paragraph text term targets ---
+    p_terms = cb.get("p", [])
+    if p_terms:
+        lines.append("")
+        lines.append("### Paragraph Text Targets")
+        for item in p_terms:
+            term = item.get("term", {})
+            brief = item.get("contentBrief", {})
+            phrase = term.get("phrase", "")
+            term_type = term.get("type", "")
+            target = brief.get("target")
+            t_min = brief.get("targetMin")
+            t_max = brief.get("targetMax")
+            count_str = _format_target_count(target, t_min, t_max)
+            lines.append(f"  - \"{phrase}\" ({term_type}): {count_str}")
+        p_total = cb.get("pTotal", {})
+        if isinstance(p_total, dict) and p_total:
+            lines.append(
+                f"  - **Total term count:** {p_total.get('min', 0)}-{p_total.get('max', 0)}"
+            )
+
+    # --- Heading structure (from pageStructure recs) ---
+    heading_targets: list[dict[str, Any]] = content_brief.heading_targets or []
+    heading_items = [
+        h for h in heading_targets
+        if h.get("tag", "").lower().startswith("h") and "tag total" in h.get("tag", "").lower()
+    ]
+    if heading_items:
+        lines.append("")
+        lines.append("### Heading Structure")
+        for h in heading_items:
+            tag = h.get("tag", "")
+            target = h.get("target", 0)
+            h_min = h.get("min")
+            h_max = h.get("max")
+            if h_min is not None and h_max is not None:
+                lines.append(f"  - {tag}: {target} (range: {h_min}-{h_max})")
+            else:
+                lines.append(f"  - {tag}: {target}")
+
+    # --- Exact keyword placement ---
+    keyword_targets: list[dict[str, Any]] = content_brief.keyword_targets or []
+    exact_targets = [t for t in keyword_targets if t.get("type") == "exact"]
+    if exact_targets:
+        lines.append("")
+        lines.append("### Exact Keyword Placement")
+        for t in exact_targets:
+            signal = t.get("signal", "")
+            target = t.get("target", "")
+            comment = t.get("comment", "")
+            if comment:
+                lines.append(f"  - {signal}: {comment}")
+            elif target:
+                lines.append(f"  - {signal}: {target} time(s)")
+
+    # --- Related questions ---
+    related_questions: list[str] = content_brief.related_questions or []
+    if related_questions:
+        lines.append("")
+        lines.append("### Related Questions (use for FAQ section)")
+        for q in related_questions[:8]:
+            lines.append(f"  - {q}")
+
+    # --- Related searches ---
+    related_searches = raw.get("relatedSearches", [])
+    if related_searches:
+        lines.append("")
+        lines.append("### Related Searches")
+        for s in related_searches:
+            if isinstance(s, dict):
+                lines.append(f"  - {s.get('query', '')}")
+            elif isinstance(s, str):
+                lines.append(f"  - {s}")
+
+    # --- Keyword variations ---
+    variations: list[str] = content_brief.related_searches or []
+    if variations:
+        lines.append("")
+        lines.append(f"### Keyword Variations")
+        lines.append(f"{', '.join(variations)}")
+
+    # --- Word count ---
+    lines.append("")
+    wc_min = content_brief.word_count_min
+    wc_max = content_brief.word_count_max
+    wc_target = content_brief.word_count_target
+    if wc_min and wc_max:
+        lines.append(
+            f"- **Word Count Target (bottom_description):** {wc_min}-{wc_max} words"
+        )
+    elif wc_target:
+        lines.append(
+            f"- **Word Count Target (bottom_description):** ~{wc_target} words"
+        )
+    else:
+        lines.append(
+            f"- **Word Count Target (bottom_description):** "
+            f"{DEFAULT_WORD_COUNT_MIN}-{DEFAULT_WORD_COUNT_MAX} words"
+        )
+
+    # --- Competitor context ---
+    competitors: list[dict[str, Any]] = content_brief.competitors or []
+    if competitors:
+        avg_score = sum(c.get("pageScore") or 0 for c in competitors) / len(competitors)
+        lines.append(
+            f"- **Competitor Context:** {len(competitors)} competitors analyzed"
+            + (f" (avg score: {avg_score:.0f})" if avg_score else "")
+        )
+
+    return lines
+
+
+def _build_from_parsed_brief(content_brief: ContentBrief) -> list[str]:
+    """Fallback: build SEO targets from parsed ContentBrief fields (mock mode)."""
+    lines: list[str] = []
+
+    lsi_terms: list[dict[str, Any]] = content_brief.lsi_terms or []
+    if lsi_terms:
+        lines.append("- **LSI Terms:**")
+        for term in lsi_terms:
+            phrase = term.get("phrase", "")
+            weight = term.get("weight", 0)
+            avg_count = term.get("averageCount", 0)
+            lines.append(
+                f"  - {phrase} (weight: {weight}, target count: {avg_count})"
+            )
+
+    variations: list[str] = content_brief.related_searches or []
+    if variations:
+        lines.append(f"- **Keyword Variations:** {', '.join(variations)}")
+
+    related_questions: list[str] = content_brief.related_questions or []
+    if related_questions:
+        lines.append("- **Related Questions (use for FAQ section):**")
+        for q in related_questions[:8]:
+            lines.append(f"  - {q}")
+
+    wc_min = content_brief.word_count_min
+    wc_max = content_brief.word_count_max
+    wc_target = content_brief.word_count_target
+    if wc_min and wc_max:
+        lines.append(
+            f"- **Word Count Target (bottom_description):** {wc_min}-{wc_max} words"
+        )
+    elif wc_target:
+        lines.append(
+            f"- **Word Count Target (bottom_description):** ~{wc_target} words"
+        )
+    else:
+        lines.append(
+            f"- **Word Count Target (bottom_description):** "
+            f"{DEFAULT_WORD_COUNT_MIN}-{DEFAULT_WORD_COUNT_MAX} words"
+        )
+
+    return lines
+
+
+def _format_target_count(
+    target: int | None,
+    target_min: int | None,
+    target_max: int | None,
+) -> str:
+    """Format a term target count as a readable string."""
+    if target is not None:
+        return f"{target} time(s)"
+    if target_min is not None and target_max is not None:
+        if target_min == target_max:
+            return f"{target_min} time(s)"
+        return f"{target_min}-{target_max} times"
+    return "include naturally"
 
 
 def _build_brand_voice_section(brand_config: dict[str, Any]) -> str | None:
-    """Build the ## Brand Voice section from ai_prompt_snippet and vocabulary.
+    """Build the ## Brand Voice section with banned words only.
 
-    Returns None if no brand voice data is available.
+    The full brand guidelines (ai_prompt_snippet) are already included in the
+    system prompt, so we only add vocabulary constraints here to avoid duplication.
+
+    Returns None if no banned words are configured.
     """
-    lines = ["## Brand Voice"]
-    has_content = False
-
-    # ai_prompt_snippet content
-    ai_snippet = brand_config.get("ai_prompt_snippet", {})
-    if isinstance(ai_snippet, dict):
-        full_prompt = ai_snippet.get("full_prompt", "")
-        if full_prompt:
-            lines.append(full_prompt)
-            has_content = True
-
-    # Banned words from vocabulary section
     vocabulary = brand_config.get("vocabulary", {})
-    if isinstance(vocabulary, dict):
-        banned_words: list[str] = vocabulary.get("banned_words", [])
-        if banned_words:
-            lines.append(f"\n**Banned Words:** {', '.join(banned_words)}")
-            has_content = True
-
-    if not has_content:
+    if not isinstance(vocabulary, dict):
         return None
 
-    return "\n".join(lines)
+    banned_words: list[str] = vocabulary.get("banned_words", [])
+    if not banned_words:
+        return None
+
+    return f"## Brand Voice\n**Banned Words:** {', '.join(banned_words)}"
 
 
 def _build_output_format_section() -> str:
@@ -534,14 +731,26 @@ def _update_prompt_logs(
     result: CompletionResult,
     duration_ms: float,
 ) -> None:
-    """Update both prompt log records with Claude's response metadata."""
+    """Update prompt log records with Claude's response metadata.
+
+    Only the user log gets the response_text — there's a single Claude call
+    for the system+user prompt pair, so showing the response on both entries
+    is redundant.
+    """
     response_text = result.text or result.error or ""
-    for log in (system_log, user_log):
-        log.response_text = response_text
-        log.model = CONTENT_WRITING_MODEL
-        log.input_tokens = result.input_tokens
-        log.output_tokens = result.output_tokens
-        log.duration_ms = duration_ms
+
+    # System log: metadata only, no response text (avoids duplication in inspector)
+    system_log.model = CONTENT_WRITING_MODEL
+    system_log.input_tokens = result.input_tokens
+    system_log.output_tokens = result.output_tokens
+    system_log.duration_ms = duration_ms
+
+    # User log: includes the actual response
+    user_log.response_text = response_text
+    user_log.model = CONTENT_WRITING_MODEL
+    user_log.input_tokens = result.input_tokens
+    user_log.output_tokens = result.output_tokens
+    user_log.duration_ms = duration_ms
 
 
 def _mark_failed(page_content: PageContent, error: str) -> ContentWritingResult:

@@ -97,6 +97,67 @@ def content_brief_with_lsi(crawled_page: CrawledPage) -> ContentBrief:
 
 
 @pytest.fixture
+def content_brief_enriched(crawled_page: CrawledPage) -> ContentBrief:
+    """Create a ContentBrief with full 3-step POP data including cleanedContentBrief."""
+    brief = ContentBrief(
+        page_id=crawled_page.id,
+        keyword="winter boots",
+        lsi_terms=[
+            {"phrase": "snow boots", "weight": 85, "averageCount": 3.0, "targetCount": 4},
+            {"phrase": "waterproof boots", "weight": 70, "averageCount": 2.0, "targetCount": 3},
+        ],
+        related_searches=["mens winter boots", "warm boots for women"],
+        word_count_target=800,
+        word_count_min=600,
+        word_count_max=1200,
+        competitors=[
+            {"url": "https://comp1.com/boots", "pageScore": 80.0, "wordCount": 900, "h2Texts": [], "h3Texts": []},
+            {"url": "https://comp2.com/boots", "pageScore": 70.0, "wordCount": 700, "h2Texts": [], "h3Texts": []},
+        ],
+        related_questions=[
+            "What are the best winter boots?",
+            "How to choose winter boots?",
+            "Are winter boots waterproof?",
+        ],
+        heading_targets=[
+            {"tag": "H1 Tag Total", "target": 1, "min": 1, "max": 1, "source": "recommendations"},
+            {"tag": "H2 Tag Total", "target": 5, "min": 3, "max": 8, "source": "recommendations"},
+            {"tag": "H3 Tag Total", "target": 8, "min": 4, "max": 12, "source": "recommendations"},
+        ],
+        keyword_targets=[
+            {"signal": "Meta Title", "target": 1, "comment": "Include keyword in title", "type": "exact"},
+            {"signal": "H1", "target": 1, "comment": "Use keyword in H1", "type": "exact"},
+            {"signal": "Paragraph Text", "phrase": "winter boots", "target": 3, "type": "lsi"},
+        ],
+        page_score_target=85.0,
+        raw_response={
+            "cleanedContentBrief": {
+                "title": [
+                    {"term": {"type": "keyword", "phrase": "winter boots", "weight": 1}, "contentBrief": {"target": 1, "current": 0}},
+                ],
+                "titleTotal": {"min": 1, "max": 2, "current": 0},
+                "subHeadings": [
+                    {"term": {"type": "lsi", "phrase": "snow boots", "weight": 0.8}, "contentBrief": {"current": 0, "targetMin": 1, "targetMax": 2}},
+                ],
+                "subHeadingsTotal": {"min": 2, "max": 5, "current": 0},
+                "p": [
+                    {"term": {"type": "keyword", "phrase": "winter boots", "weight": 1}, "contentBrief": {"target": 3, "current": 0}},
+                    {"term": {"type": "lsi", "phrase": "snow boots", "weight": 0.8}, "contentBrief": {"current": 0, "targetMin": 2, "targetMax": 4}},
+                    {"term": {"type": "lsi", "phrase": "waterproof boots", "weight": 0.7}, "contentBrief": {"current": 0, "targetMin": 1, "targetMax": 3}},
+                ],
+                "pTotal": {"min": 10, "max": 25, "current": 0},
+                "pageScore": {"pageScore": 85.0},
+            },
+            "relatedSearches": [
+                {"query": "best winter boots 2026", "link": ""},
+                {"query": "warm boots for cold weather", "link": ""},
+            ],
+        },
+    )
+    return brief
+
+
+@pytest.fixture
 def valid_json_response() -> str:
     """Valid JSON response from Claude."""
     return json.dumps({
@@ -125,7 +186,7 @@ class TestBuildContentPromptWithBrief:
         assert "snow boots" in result.user_prompt
         assert "weight: 85" in result.user_prompt
         assert "waterproof boots" in result.user_prompt
-        assert "target count: 3" in result.user_prompt
+        assert "target count: 2.0" in result.user_prompt
 
     def test_includes_variations(
         self, crawled_page: CrawledPage, brand_config: dict, content_brief_with_lsi: ContentBrief
@@ -143,6 +204,78 @@ class TestBuildContentPromptWithBrief:
         result = build_content_prompt(crawled_page, "winter boots", brand_config, content_brief_with_lsi)
 
         assert "~500 words" in result.user_prompt
+
+
+# ---------------------------------------------------------------------------
+# Prompt Builder: with enriched brief (3-step data)
+# ---------------------------------------------------------------------------
+
+
+class TestBuildContentPromptWithEnrichedBrief:
+    """Tests for build_content_prompt when ContentBrief has 3-step data."""
+
+    def test_includes_related_questions(
+        self, crawled_page: CrawledPage, brand_config: dict, content_brief_enriched: ContentBrief
+    ) -> None:
+        """User prompt includes related questions for FAQ generation."""
+        result = build_content_prompt(crawled_page, "winter boots", brand_config, content_brief_enriched)
+        assert "Related Questions" in result.user_prompt
+        assert "What are the best winter boots?" in result.user_prompt
+        assert "How to choose winter boots?" in result.user_prompt
+
+    def test_includes_cleaned_brief_sections(
+        self, crawled_page: CrawledPage, brand_config: dict, content_brief_enriched: ContentBrief
+    ) -> None:
+        """User prompt includes per-location term targets from cleanedContentBrief."""
+        result = build_content_prompt(crawled_page, "winter boots", brand_config, content_brief_enriched)
+        assert "Title Tag Targets" in result.user_prompt
+        assert "Subheading Targets" in result.user_prompt
+        assert "Paragraph Text Targets" in result.user_prompt
+        assert "snow boots" in result.user_prompt
+        assert "waterproof boots" in result.user_prompt
+        assert "Total term count" in result.user_prompt
+
+    def test_includes_related_searches(
+        self, crawled_page: CrawledPage, brand_config: dict, content_brief_enriched: ContentBrief
+    ) -> None:
+        """User prompt includes related searches from POP."""
+        result = build_content_prompt(crawled_page, "winter boots", brand_config, content_brief_enriched)
+        assert "Related Searches" in result.user_prompt
+        assert "best winter boots 2026" in result.user_prompt
+
+
+    def test_includes_exact_keyword_placement(
+        self, crawled_page: CrawledPage, brand_config: dict, content_brief_enriched: ContentBrief
+    ) -> None:
+        """User prompt includes exact keyword placement targets."""
+        result = build_content_prompt(crawled_page, "winter boots", brand_config, content_brief_enriched)
+        assert "Exact Keyword Placement" in result.user_prompt
+        assert "Meta Title" in result.user_prompt
+        assert "Include keyword in title" in result.user_prompt
+
+    def test_includes_heading_structure(
+        self, crawled_page: CrawledPage, brand_config: dict, content_brief_enriched: ContentBrief
+    ) -> None:
+        """User prompt includes heading structure targets from pageStructure."""
+        result = build_content_prompt(crawled_page, "winter boots", brand_config, content_brief_enriched)
+        assert "Heading Structure" in result.user_prompt
+        assert "H2 Tag Total: 5" in result.user_prompt
+        assert "H3 Tag Total: 8" in result.user_prompt
+
+    def test_includes_word_count_range(
+        self, crawled_page: CrawledPage, brand_config: dict, content_brief_enriched: ContentBrief
+    ) -> None:
+        """User prompt uses word count range when min/max available."""
+        result = build_content_prompt(crawled_page, "winter boots", brand_config, content_brief_enriched)
+        assert "600-1200 words" in result.user_prompt
+
+    def test_includes_competitor_context(
+        self, crawled_page: CrawledPage, brand_config: dict, content_brief_enriched: ContentBrief
+    ) -> None:
+        """User prompt includes competitor context summary."""
+        result = build_content_prompt(crawled_page, "winter boots", brand_config, content_brief_enriched)
+        assert "Competitor Context" in result.user_prompt
+        assert "2 competitors" in result.user_prompt
 
 
 # ---------------------------------------------------------------------------
@@ -381,13 +514,18 @@ class TestGenerateContent:
         assert "system" in roles
         assert "user" in roles
 
-        # Logs should have response metadata
+        # Both logs should have response metadata
         for log in logs:
             assert log.step == "content_writing"
-            assert log.response_text is not None
             assert log.input_tokens == 1000
             assert log.output_tokens == 500
             assert log.model is not None
+
+        # Only the user log should have response_text (avoids duplication in inspector)
+        system_log = next(l for l in logs if l.role == "system")
+        user_log = next(l for l in logs if l.role == "user")
+        assert system_log.response_text is None
+        assert user_log.response_text is not None
 
     @pytest.mark.asyncio
     async def test_invalid_json_triggers_retry(
