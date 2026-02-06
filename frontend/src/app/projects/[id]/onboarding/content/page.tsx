@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useProject } from '@/hooks/use-projects';
 import { useContentGeneration } from '@/hooks/useContentGeneration';
 import { Button, Toast } from '@/components/ui';
+import { PromptInspector } from '@/components/PromptInspector';
 import type { PageGenerationStatusItem } from '@/lib/api';
 
 // Step indicator data - shared across onboarding pages
@@ -276,15 +277,34 @@ function PipelineIndicator({ status }: { status: string }) {
   );
 }
 
+function CodeIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="16 18 22 12 16 6" />
+      <polyline points="8 6 2 12 8 18" />
+    </svg>
+  );
+}
+
 /** Single page row in the generation table */
 function PageRow({
   page,
   projectId,
   isGenerating,
+  onInspect,
 }: {
   page: PageGenerationStatusItem;
   projectId: string;
   isGenerating: boolean;
+  onInspect: (pageId: string, pageUrl: string) => void;
 }) {
   // Extract path from URL for compact display
   const displayUrl = (() => {
@@ -330,6 +350,17 @@ function PageRow({
         {/* Right side: pipeline indicator + actions */}
         <div className="flex items-center gap-3 shrink-0">
           <PipelineIndicator status={page.status} />
+          {page.status !== 'pending' && (
+            <button
+              type="button"
+              onClick={() => onInspect(page.page_id, page.url)}
+              className="inline-flex items-center gap-1 text-xs text-warm-gray-500 hover:text-lagoon-600 px-2 py-1 rounded-sm hover:bg-cream-100 transition-colors"
+              title="Inspect prompts"
+            >
+              <CodeIcon className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Inspect</span>
+            </button>
+          )}
           {isComplete && (
             <Link href={`/projects/${projectId}/onboarding/content/${page.page_id}`}>
               <Button variant="secondary" className="text-xs px-2.5 py-1">
@@ -352,6 +383,15 @@ export default function ContentGenerationPage() {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastVariant, setToastVariant] = useState<'success' | 'error'>('success');
+
+  // Prompt inspector state
+  const [inspectPageId, setInspectPageId] = useState<string | null>(null);
+  const [inspectPageUrl, setInspectPageUrl] = useState('');
+
+  const handleInspect = (pageId: string, pageUrl: string) => {
+    setInspectPageId(pageId);
+    setInspectPageUrl(pageUrl);
+  };
 
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
   const contentGen = useContentGeneration(projectId);
@@ -571,6 +611,7 @@ export default function ContentGenerationPage() {
                   page={page}
                   projectId={projectId}
                   isGenerating={isGenerating}
+                  onInspect={handleInspect}
                 />
               ))}
             </div>
@@ -603,6 +644,16 @@ export default function ContentGenerationPage() {
           )}
         </div>
       </div>
+
+      {/* Prompt Inspector panel */}
+      <PromptInspector
+        projectId={projectId}
+        pageId={inspectPageId ?? ''}
+        pageUrl={inspectPageUrl}
+        isOpen={inspectPageId !== null}
+        onClose={() => setInspectPageId(null)}
+        isGenerating={isGenerating}
+      />
 
       {/* Toast */}
       {showToast && (

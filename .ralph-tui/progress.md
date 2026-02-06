@@ -249,3 +249,22 @@ after each iteration and it's included in prompts for context.
   - StepIndicator and icon components are duplicated across onboarding pages (keywords, content) — candidate for extraction to shared component
 ---
 
+## 2026-02-06 - S5-016
+- Created `PromptInspector` collapsible side panel component for QA-ing Claude prompts during content generation
+- Panel slides in from right with backdrop overlay, shows all PromptLog entries grouped by step
+- Each entry shows: role badge (system/user), model, collapsible prompt text, collapsible response text, token usage (input/output), duration
+- Copy-to-clipboard on individual entries (prompt + response) and "Copy All" button in header with success toast
+- Collapsible sections show 200-char truncated preview when collapsed, full text when expanded, monospace font
+- Real-time polling: `refetchInterval: 3000` while `isGenerating` is true fetches new PromptLog entries as pipeline runs
+- Added "Inspect" button (code icon) to PageRow — visible for any non-pending page (during and after generation)
+- Footer shows aggregate stats: total prompt entries, total input/output tokens
+- Files changed:
+  - `frontend/src/components/PromptInspector.tsx` (new) — Side panel with CollapsibleSection, CopyButton, PromptEntry, StepGroup sub-components
+  - `frontend/src/app/projects/[id]/onboarding/content/page.tsx` — Added inspect button to PageRow, PromptInspector panel state management, CodeIcon
+- **Learnings:**
+  - Use `useQuery` directly with `refetchInterval` for conditional polling instead of separate `useEffect` + `setInterval` — cleaner and TanStack Query handles cleanup automatically
+  - `contentGenerationKeys` and `getPagePrompts` can be imported separately from hooks and api modules for direct `useQuery` usage outside the pre-built hooks
+  - Side panel pattern: `fixed top-0 right-0 h-full` with `z-50` for panel, `z-40` for backdrop overlay with `onClick={onClose}`
+  - `Map` preserves insertion order in JS — good for grouping prompts by step while maintaining chronological order from the API response
+---
+
