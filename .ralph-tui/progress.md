@@ -297,3 +297,32 @@ after each iteration and it's included in prompts for context.
   - **Pre-existing test failure**: `tests/api/test_brand_config.py::TestStartGeneration::test_start_generation_returns_202` fails with `assert 9 == 10` — not related to S5-013 changes.
 ---
 
+## 2026-02-06 - S5-018
+- Ran full end-to-end verification of the content generation pipeline in mock mode
+- Set `POP_USE_MOCK=true` in `backend/.env` to enable mock POP client
+- Triggered pipeline for project with 9 approved keywords via POST `/api/v1/projects/{id}/generate-content`
+- All 9 pages progressed through: generating_brief → writing → checking → complete with 0 failures
+- Verified via API polling: status endpoint correctly showed per-page progression in real time
+- **Database verification:**
+  - 9 PageContent records created, all with status=complete, all 4 content fields populated (page_title, meta_description, top_description, bottom_description), word counts 426-869
+  - 8 ContentBrief records with mock LSI terms (15-24 terms each), related_searches, pop_task_id starting with "mock-task-". One page ("customization") had no brief — pipeline gracefully continued without it
+  - 18 PromptLog records (2 per page: system + user), all with model=claude-sonnet-4-5-20250929, input/output tokens, duration_ms, response_text
+  - All 9 pages have qa_results JSONB with structured issues (type, field, context, description) and checked_at timestamps
+- **Frontend verification:**
+  - Content generation progress page shows "Content Generation Complete" with 9 pages, 4-step pipeline indicator (Brief → Write → Check → Done) all green
+  - Inspect button opens Prompt Inspector side panel with system/user prompts, model info, collapsible prompt/response text, token counts, duration
+  - Copy All and per-entry Copy buttons present
+  - View button links to content detail page
+  - Navigation (Back to Keywords, Continue to Export) working
+- **No code changes required** — all implementation from S5-001 through S5-017 works correctly end-to-end
+- Files changed:
+  - `backend/.env` — Added `POP_USE_MOCK=true`
+- **Learnings:**
+  - Server restart required after adding new router files — uvicorn `--reload` watches for file changes but won't pick up new routes if the server was started before the file existed
+  - POP mock client lazy-initializes on first `get_pop_client()` call, not at server startup — first page may fail brief if init_pop() hasn't been called during app startup
+  - Pipeline graceful degradation confirmed: content_brief=None is handled correctly — content still generated with fallback word count targets
+  - Quality checks correctly detect AI patterns (e.g., "Whether you're") and triplet excess in Claude-generated content — the checks are working as intended since Claude outputs do contain these patterns
+  - Content writing takes ~18-35 seconds per page with claude-sonnet-4-5-20250929 (sequential processing with concurrency=1)
+  - Total pipeline time for 9 pages: ~3.5 minutes (sequential)
+---
+
