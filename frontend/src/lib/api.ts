@@ -213,15 +213,17 @@ export function updatePrimaryKeyword(
 }
 
 /**
- * Approve the keyword for a specific page.
- * Sets is_approved=true. Idempotent.
+ * Approve or unapprove the keyword for a specific page.
+ * Pass value=false to unapprove (undo accidental approval).
  */
 export function approveKeyword(
   projectId: string,
-  pageId: string
+  pageId: string,
+  value: boolean = true
 ): Promise<PageKeywordsData> {
+  const queryParam = value ? "" : "?value=false";
   return apiClient.post<PageKeywordsData>(
-    `/projects/${projectId}/pages/${pageId}/approve-keyword`
+    `/projects/${projectId}/pages/${pageId}/approve-keyword${queryParam}`
   );
 }
 

@@ -30,6 +30,7 @@ interface UpdatePrimaryKeywordInput {
 interface ApproveKeywordInput {
   projectId: string;
   pageId: string;
+  value?: boolean;
 }
 
 interface TogglePriorityInput {
@@ -61,8 +62,8 @@ export function useUpdatePrimaryKeyword(): UseMutationResult<
 }
 
 /**
- * Mutation hook to approve a single keyword.
- * Invalidates pages-with-keywords query on success.
+ * Mutation hook to approve or unapprove a single keyword.
+ * Pass value=false to unapprove. Invalidates pages-with-keywords query on success.
  */
 export function useApproveKeyword(): UseMutationResult<
   PageKeywordsData,
@@ -72,8 +73,8 @@ export function useApproveKeyword(): UseMutationResult<
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ projectId, pageId }: ApproveKeywordInput) =>
-      approveKeyword(projectId, pageId),
+    mutationFn: ({ projectId, pageId, value = true }: ApproveKeywordInput) =>
+      approveKeyword(projectId, pageId, value),
     onSuccess: (_data, { projectId }) => {
       queryClient.invalidateQueries({
         queryKey: pagesWithKeywordsKeys.list(projectId),

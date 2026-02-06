@@ -1435,19 +1435,21 @@ async def approve_keyword(
     project_id: str,
     page_id: str,
     db: AsyncSession = Depends(get_session),
+    value: bool = True,
 ) -> PageKeywordsData:
-    """Approve the primary keyword for a page.
+    """Approve or unapprove the primary keyword for a page.
 
-    Sets is_approved=true on the PageKeywords record. This endpoint is
-    idempotent - calling it multiple times has the same effect.
+    By default, sets is_approved=true. Pass value=false to unapprove.
+    This allows users to undo an accidental approval.
 
     Args:
         project_id: UUID of the project.
         page_id: UUID of the crawled page.
         db: AsyncSession for database operations.
+        value: Approval state to set (default: true).
 
     Returns:
-        Updated PageKeywordsData with is_approved=true.
+        Updated PageKeywordsData with new is_approved value.
 
     Raises:
         HTTPException: 404 if project, page, or page keywords not found.
@@ -1481,18 +1483,19 @@ async def approve_keyword(
 
     page_keywords: PageKeywords = page.keywords
 
-    # Set is_approved to true (idempotent)
-    page_keywords.is_approved = True
+    # Set is_approved to the specified value
+    page_keywords.is_approved = value
 
     await db.commit()
     await db.refresh(page_keywords)
 
     logger.info(
-        "Keyword approved",
+        "Keyword approval updated",
         extra={
             "project_id": project_id,
             "page_id": page_id,
             "primary_keyword": page_keywords.primary_keyword,
+            "is_approved": value,
         },
     )
 

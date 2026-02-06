@@ -74,15 +74,20 @@ export function useStartKeywordGeneration(): UseMutationResult<
 export function useKeywordGeneration(projectId: string) {
   const queryClient = useQueryClient();
 
-  // Poll status - refetch every 2 seconds while generating
+  // Poll status - refetch every 2 seconds while generating or pending
   const status = useQuery({
     queryKey: keywordGenerationKeys.status(projectId),
     queryFn: () => getPrimaryKeywordsStatus(projectId),
     enabled: !!projectId,
-    // Poll every 2 seconds while generating, stop when complete/failed
+    // Poll every 2 seconds while generating or pending, stop when complete/failed
     refetchInterval: (query) => {
       const data = query.state.data as PrimaryKeywordGenerationStatus | undefined;
+      // Poll while generating
       if (data?.status === 'generating') {
+        return 2000;
+      }
+      // Also poll while pending if we have pages to process (generation may be starting)
+      if (data?.status === 'pending' && data?.total > 0) {
         return 2000;
       }
       return false;

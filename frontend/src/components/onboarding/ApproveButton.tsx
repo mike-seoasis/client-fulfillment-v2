@@ -9,6 +9,8 @@ interface ApproveButtonProps {
   disabled?: boolean;
   /** Callback when approve button is clicked */
   onApprove: () => void | Promise<void>;
+  /** Callback when unapprove is clicked (optional - if not provided, approved state is not clickable) */
+  onUnapprove?: () => void | Promise<void>;
 }
 
 // SVG Icons
@@ -46,11 +48,11 @@ function SpinnerIcon({ className }: { className?: string }) {
 }
 
 /**
- * ApproveButton component - a button for approving keywords.
+ * ApproveButton component - a button for approving/unapproving keywords.
  *
  * Features:
  * - Shows 'Approve' button when not approved
- * - Shows checkmark when approved
+ * - Shows checkmark when approved (clickable to unapprove if onUnapprove provided)
  * - Clicking toggles approval state via API
  * - Shows loading state during toggle
  * - Uses palm-500 for approved state
@@ -60,9 +62,33 @@ export function ApproveButton({
   isLoading = false,
   disabled = false,
   onApprove,
+  onUnapprove,
 }: ApproveButtonProps) {
   if (isApproved) {
-    // Approved state - show checkmark badge
+    // Approved state - show checkmark badge (clickable if onUnapprove provided)
+    if (onUnapprove) {
+      return (
+        <button
+          onClick={onUnapprove}
+          disabled={isLoading}
+          className="flex items-center gap-1 px-2 py-1 bg-palm-100 text-palm-700 hover:bg-palm-200 rounded-sm text-xs font-medium transition-colors disabled:opacity-50"
+          title="Click to unapprove"
+        >
+          {isLoading ? (
+            <>
+              <SpinnerIcon className="w-4 h-4 animate-spin" />
+              <span>Updating...</span>
+            </>
+          ) : (
+            <>
+              <CheckIcon className="w-4 h-4" />
+              <span>Approved</span>
+            </>
+          )}
+        </button>
+      );
+    }
+    // No unapprove handler - show static badge
     return (
       <div
         className="flex items-center gap-1 px-2 py-1 bg-palm-100 text-palm-700 rounded-sm text-xs font-medium"

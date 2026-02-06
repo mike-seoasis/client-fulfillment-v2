@@ -237,11 +237,29 @@ export function KeywordPageRow({ page, projectId, onKeywordClick, onShowToast }:
       await approveKeyword.mutateAsync({
         projectId,
         pageId: page.id,
+        value: true,
       });
       onShowToast?.('Keyword approved', 'success');
     } catch (error) {
       console.error('Failed to approve keyword:', error);
       const message = error instanceof Error ? error.message : 'Failed to approve keyword';
+      onShowToast?.(message, 'error');
+    }
+  };
+
+  const handleUnapprove = async () => {
+    if (!page.keywords || !isApproved) return;
+
+    try {
+      await approveKeyword.mutateAsync({
+        projectId,
+        pageId: page.id,
+        value: false,
+      });
+      onShowToast?.('Keyword unapproved', 'success');
+    } catch (error) {
+      console.error('Failed to unapprove keyword:', error);
+      const message = error instanceof Error ? error.message : 'Failed to unapprove keyword';
       onShowToast?.(message, 'error');
     }
   };
@@ -478,6 +496,7 @@ export function KeywordPageRow({ page, projectId, onKeywordClick, onShowToast }:
             isLoading={approveKeyword.isPending}
             disabled={!hasKeyword}
             onApprove={handleApprove}
+            onUnapprove={handleUnapprove}
           />
         </div>
       </div>
