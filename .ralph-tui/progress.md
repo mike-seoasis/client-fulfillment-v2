@@ -64,3 +64,20 @@ after each iteration and it's included in prompts for context.
   - venv binaries are at `backend/.venv/bin/` (use `.venv/bin/alembic` not bare `alembic`)
 ---
 
+## 2026-02-06 - S5-005
+- Created `POPMockClient` class in `backend/app/integrations/pop.py` with deterministic fixture data generation
+- Mock returns 15-25 realistic LSI terms with phrase, weight (0-100), averageCount, and targetCount fields
+- Mock returns keyword variations array (5-10 entries) and fake prepareId string
+- Output is deterministic: same keyword always produces same fixture data via SHA-256 seed
+- Mock implements same interface as real POPClient: `create_report_task()`, `poll_for_result()`, plus convenience `get_terms()` method
+- Added `pop_use_mock` setting to `config.py` (env var: `POP_USE_MOCK`)
+- Wired `init_pop()` and `get_pop_client()` to return `POPMockClient` when `POP_USE_MOCK=true`
+- Files changed:
+  - `backend/app/integrations/pop.py` — Added POPMockClient class, LSI term corpus, updated global client functions
+  - `backend/app/core/config.py` — Added `pop_use_mock` bool setting
+- **Learnings:**
+  - Mock methods that match a real interface but don't use all params: use `# noqa: ARG002` for ruff
+  - `random.Random(seed)` provides deterministic random number generation without affecting global state
+  - `dict.fromkeys(list)` is a clean Python idiom for ordered deduplication
+---
+

@@ -394,6 +394,11 @@ class Settings(BaseSettings):
         default=70,
         description="Minimum page score (0-100) for content to pass quality gate",
     )
+    # POP mock mode for development (returns fixture data, no API calls)
+    pop_use_mock: bool = Field(
+        default=False,
+        description="Use mock POP client with fixture data instead of real API calls",
+    )
     # POP feature flags for safe rollout
     use_pop_content_brief: bool = Field(
         default=False,

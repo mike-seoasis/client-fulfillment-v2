@@ -39,6 +39,7 @@ API ENDPOINTS:
 """
 
 import asyncio
+import hashlib
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -1008,23 +1009,297 @@ class POPClient:
             await asyncio.sleep(poll_interval)
 
 
-# Global POP client instance
-_pop_client: POPClient | None = None
+# ---------------------------------------------------------------------------
+# LSI term corpus for mock data generation
+# ---------------------------------------------------------------------------
+
+# Generic SEO-related terms that get mixed with keyword-derived terms.
+# Grouped by broad topic to allow keyword-aware selection.
+_GENERIC_LSI_TERMS: list[str] = [
+    "best practices",
+    "buying guide",
+    "comparison",
+    "cost",
+    "customer reviews",
+    "deals",
+    "expert tips",
+    "features",
+    "frequently asked questions",
+    "how to choose",
+    "maintenance",
+    "materials",
+    "online shopping",
+    "price range",
+    "product reviews",
+    "quality",
+    "ratings",
+    "recommendations",
+    "shipping options",
+    "size guide",
+    "top rated",
+    "types",
+    "value for money",
+    "warranty",
+    "what to look for",
+]
 
 
-async def init_pop() -> POPClient:
+class POPMockClient:
+    """Mock POP client that returns deterministic fixture data.
+
+    Uses keyword hash as seed so the same keyword always produces the
+    same fixture data. No actual API calls are made.
+
+    The mock implements the same interface as POPClient (create_report_task
+    and poll_for_result) so the brief service can use either transparently.
+    """
+
+    def __init__(self) -> None:
+        self._available = True
+
+    @property
+    def available(self) -> bool:
+        return self._available
+
+    async def close(self) -> None:
+        """No-op for mock client."""
+
+    def _seed_from_keyword(self, keyword: str) -> int:
+        """Derive a deterministic integer seed from a keyword."""
+        return int(hashlib.sha256(keyword.lower().strip().encode()).hexdigest(), 16)
+
+    def _generate_lsa_phrases(
+        self, keyword: str, seed: int
+    ) -> list[dict[str, Any]]:
+        """Generate 15-25 realistic LSI terms seeded by keyword hash."""
+        import random
+
+        rng = random.Random(seed)
+
+        # Split keyword into tokens for building related phrases
+        tokens = keyword.lower().split()
+
+        # Build keyword-derived terms by combining tokens with modifiers
+        modifiers = [
+            "best",
+            "top",
+            "affordable",
+            "premium",
+            "lightweight",
+            "durable",
+            "comfortable",
+            "waterproof",
+            "popular",
+            "new",
+        ]
+        keyword_derived: list[str] = []
+        for mod in modifiers:
+            phrase = f"{mod} {keyword.lower()}"
+            keyword_derived.append(phrase)
+        # Also add partial-keyword combos
+        if len(tokens) >= 2:
+            keyword_derived.append(f"{tokens[0]} {tokens[-1]}")
+            keyword_derived.append(f"{tokens[-1]} {tokens[0]}")
+            for t in tokens:
+                keyword_derived.append(f"best {t}")
+
+        # Merge keyword-derived + generic, deduplicate
+        all_terms = keyword_derived + _GENERIC_LSI_TERMS
+        rng.shuffle(all_terms)
+
+        # Pick 15-25 unique terms
+        count = rng.randint(15, 25)
+        selected = list(dict.fromkeys(all_terms))[:count]
+
+        phrases: list[dict[str, Any]] = []
+        for phrase_text in selected:
+            weight = rng.randint(10, 100)
+            avg_count = round(rng.uniform(0.5, 8.0), 1)
+            target_count = max(1, round(avg_count * rng.uniform(0.8, 1.3)))
+            phrases.append(
+                {
+                    "phrase": phrase_text,
+                    "weight": weight,
+                    "averageCount": avg_count,
+                    "targetCount": target_count,
+                }
+            )
+
+        # Sort by weight descending (mimics real API)
+        phrases.sort(key=lambda p: p["weight"], reverse=True)
+        return phrases
+
+    def _generate_variations(self, keyword: str, seed: int) -> list[str]:
+        """Generate keyword variations seeded by keyword hash."""
+        import random
+
+        rng = random.Random(seed + 1)  # offset seed for independent stream
+
+        tokens = keyword.lower().split()
+        variations: list[str] = [keyword.lower()]
+
+        # Rearrangements
+        if len(tokens) >= 2:
+            variations.append(" ".join(reversed(tokens)))
+            variations.append(f"{tokens[-1]} for {tokens[0]}")
+
+        # Plurals / singulars
+        for t in tokens:
+            if t.endswith("s"):
+                variations.append(keyword.lower().replace(t, t[:-1]))
+            else:
+                variations.append(keyword.lower().replace(t, t + "s"))
+
+        # Question forms
+        variations.append(f"what are the best {keyword.lower()}")
+        variations.append(f"how to choose {keyword.lower()}")
+
+        # Deduplicate, shuffle deterministically, take 5-10
+        unique = list(dict.fromkeys(variations))
+        rng.shuffle(unique)
+        count = rng.randint(5, min(10, len(unique)))
+        return unique[:count]
+
+    def _generate_prepare_id(self, keyword: str) -> str:
+        """Generate a fake prepareId string."""
+        # Use first 12 hex chars of keyword hash as a realistic-looking ID
+        hex_str = hashlib.sha256(keyword.lower().strip().encode()).hexdigest()
+        return f"mock-{hex_str[:12]}"
+
+    async def create_report_task(
+        self,
+        keyword: str,
+        url: str,
+        location_name: str = "United States",  # noqa: ARG002
+        target_language: str = "english",  # noqa: ARG002
+    ) -> POPTaskResult:
+        """Mock create_report_task — returns a fake task ID immediately."""
+        seed = self._seed_from_keyword(keyword)
+        task_id = f"mock-task-{hashlib.sha256(keyword.lower().strip().encode()).hexdigest()[:8]}"
+
+        logger.info(
+            "POPMockClient: created mock report task",
+            extra={
+                "keyword": keyword[:50],
+                "url": url[:100],
+                "task_id": task_id,
+            },
+        )
+
+        return POPTaskResult(
+            success=True,
+            task_id=task_id,
+            status=POPTaskStatus.PENDING,
+            data={"task_id": task_id},
+            duration_ms=0.0,
+            request_id=f"mock-{seed % 100000:05d}",
+        )
+
+    async def poll_for_result(
+        self,
+        task_id: str,
+        poll_interval: float | None = None,  # noqa: ARG002
+        timeout: float | None = None,  # noqa: ARG002
+    ) -> POPTaskResult:
+        """Mock poll_for_result — returns fixture data immediately."""
+        logger.info(
+            "POPMockClient: returning mock result for task",
+            extra={"task_id": task_id},
+        )
+
+        return POPTaskResult(
+            success=True,
+            task_id=task_id,
+            status=POPTaskStatus.SUCCESS,
+            data={},
+            duration_ms=0.0,
+        )
+
+    async def get_terms(
+        self,
+        keyword: str,
+        url: str,  # noqa: ARG002
+        location_name: str = "United States",  # noqa: ARG002
+        target_language: str = "english",  # noqa: ARG002
+    ) -> POPTaskResult:
+        """Combined convenience method: creates task + returns mock results.
+
+        This is the primary method the brief service should use. It matches
+        the create_report_task → poll_for_result pattern but returns
+        complete fixture data in one call.
+
+        Args:
+            keyword: Target keyword for content optimization
+            url: URL of the page to analyze
+            location_name: Google search location
+            target_language: Target language
+
+        Returns:
+            POPTaskResult with mock lsaPhrases, variations, and prepareId
+        """
+        seed = self._seed_from_keyword(keyword)
+        task_id = f"mock-task-{hashlib.sha256(keyword.lower().strip().encode()).hexdigest()[:8]}"
+
+        lsa_phrases = self._generate_lsa_phrases(keyword, seed)
+        variations = self._generate_variations(keyword, seed)
+        prepare_id = self._generate_prepare_id(keyword)
+
+        response_data = {
+            "lsaPhrases": lsa_phrases,
+            "variations": variations,
+            "prepareId": prepare_id,
+            "status": "success",
+            "task_id": task_id,
+        }
+
+        logger.info(
+            "POPMockClient: returning mock get-terms data",
+            extra={
+                "keyword": keyword[:50],
+                "lsi_term_count": len(lsa_phrases),
+                "variation_count": len(variations),
+                "prepare_id": prepare_id,
+                "task_id": task_id,
+            },
+        )
+
+        return POPTaskResult(
+            success=True,
+            task_id=task_id,
+            status=POPTaskStatus.SUCCESS,
+            data=response_data,
+            duration_ms=0.0,
+            request_id=f"mock-{seed % 100000:05d}",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Global POP client instance (real or mock)
+# ---------------------------------------------------------------------------
+
+_pop_client: POPClient | POPMockClient | None = None
+
+
+async def init_pop() -> POPClient | POPMockClient:
     """Initialize the global POP client.
 
+    Uses POPMockClient when POP_USE_MOCK=true, otherwise real POPClient.
+
     Returns:
-        Initialized POPClient instance
+        Initialized POPClient or POPMockClient instance
     """
     global _pop_client
     if _pop_client is None:
-        _pop_client = POPClient()
-        if _pop_client.available:
-            logger.info("POP client initialized")
+        settings = get_settings()
+        if settings.pop_use_mock:
+            _pop_client = POPMockClient()
+            logger.info("POP mock client initialized (POP_USE_MOCK=true)")
         else:
-            logger.info("POP not configured (missing API key)")
+            _pop_client = POPClient()
+            if _pop_client.available:
+                logger.info("POP client initialized")
+            else:
+                logger.info("POP not configured (missing API key)")
     return _pop_client
 
 
@@ -1036,14 +1311,16 @@ async def close_pop() -> None:
         _pop_client = None
 
 
-async def get_pop_client() -> POPClient:
+async def get_pop_client() -> POPClient | POPMockClient:
     """Dependency for getting POP client.
+
+    Returns POPMockClient when POP_USE_MOCK=true, otherwise real POPClient.
 
     Usage:
         @app.get("/content-score")
         async def score_content(
             url: str,
-            client: POPClient = Depends(get_pop_client)
+            client: POPClient | POPMockClient = Depends(get_pop_client)
         ):
             result = await client.score_content(url)
             ...
