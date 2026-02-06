@@ -34,3 +34,17 @@ after each iteration and it's included in prompts for context.
   - Many-to-one pattern: FK column without `unique=True` + `Mapped[list["Child"]]` on parent side for one-to-many
 ---
 
+## 2026-02-06 - S5-003
+- Verified ContentBrief model has all required fields (keyword, lsi_terms, related_searches, raw_response, pop_task_id)
+- Changed CrawledPage.content_briefs (list) to CrawledPage.content_brief (one-to-one with uselist=False)
+- Added unique=True to ContentBrief.page_id FK for proper one-to-one constraint
+- Updated ContentBrief.page back_populates from "content_briefs" to "content_brief"
+- Verified PageContent.prompt_logs one-to-many and CrawledPage.page_content one-to-one already existed from S5-001/S5-002
+- Files changed:
+  - `backend/app/models/crawled_page.py` — Changed content_briefs list relationship to content_brief one-to-one
+  - `backend/app/models/content_brief.py` — Added unique=True to page_id FK, updated back_populates
+- **Learnings:**
+  - When converting list relationship to one-to-one: change Mapped type to Optional, add uselist=False, and add unique=True on FK column
+  - Always grep for attribute references in app code before renaming relationship attributes
+---
+

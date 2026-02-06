@@ -173,11 +173,12 @@ class CrawledPage(Base):
         onupdate=lambda: datetime.now(UTC),
     )
 
-    # Relationships to content brief and score models
-    content_briefs: Mapped[list["ContentBrief"]] = relationship(
+    # Relationship to ContentBrief (one-to-one)
+    content_brief: Mapped["ContentBrief | None"] = relationship(
         "ContentBrief",
         back_populates="page",
         cascade="all, delete-orphan",
+        uselist=False,
     )
 
     content_scores: Mapped[list["ContentScore"]] = relationship(
