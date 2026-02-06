@@ -253,3 +253,119 @@ export function togglePriority(
     `/projects/${projectId}/pages/${pageId}/priority${queryParam}`
   );
 }
+
+// =============================================================================
+// CONTENT GENERATION API TYPES
+// =============================================================================
+
+/** Response when content generation pipeline is triggered. */
+export interface ContentGenerationTriggerResponse {
+  status: string;
+  message: string;
+}
+
+/** Per-page status within the content generation pipeline. */
+export interface PageGenerationStatusItem {
+  page_id: string;
+  url: string;
+  keyword: string;
+  status: string;
+  error: string | null;
+}
+
+/** Overall content generation pipeline status for a project. */
+export interface ContentGenerationStatus {
+  overall_status: string;
+  pages_total: number;
+  pages_completed: number;
+  pages_failed: number;
+  pages: PageGenerationStatusItem[];
+}
+
+/** Lightweight summary of the content brief used during generation. */
+export interface BriefSummary {
+  keyword: string;
+  lsi_terms_count: number;
+}
+
+/** Generated content for a single page. */
+export interface PageContentResponse {
+  page_title: string | null;
+  meta_description: string | null;
+  top_description: string | null;
+  bottom_description: string | null;
+  word_count: number | null;
+  status: string;
+  qa_results: Record<string, unknown> | null;
+  brief_summary: BriefSummary | null;
+  generation_started_at: string | null;
+  generation_completed_at: string | null;
+}
+
+/** A prompt/response exchange record. */
+export interface PromptLogResponse {
+  id: string;
+  step: string;
+  role: string;
+  prompt_text: string;
+  response_text: string | null;
+  model: string | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  duration_ms: number | null;
+  created_at: string;
+}
+
+// =============================================================================
+// CONTENT GENERATION API FUNCTIONS
+// =============================================================================
+
+/**
+ * Trigger content generation for all pages with approved keywords.
+ * Returns 202 on success. Background task runs the pipeline.
+ */
+export function triggerContentGeneration(
+  projectId: string
+): Promise<ContentGenerationTriggerResponse> {
+  return apiClient.post<ContentGenerationTriggerResponse>(
+    `/projects/${projectId}/generate-content`
+  );
+}
+
+/**
+ * Poll content generation status for a project.
+ * Returns overall status and per-page breakdown.
+ */
+export function pollContentGenerationStatus(
+  projectId: string
+): Promise<ContentGenerationStatus> {
+  return apiClient.get<ContentGenerationStatus>(
+    `/projects/${projectId}/content-generation-status`
+  );
+}
+
+/**
+ * Get generated content for a specific page.
+ * Returns 404 if content has not been generated yet.
+ */
+export function getPageContent(
+  projectId: string,
+  pageId: string
+): Promise<PageContentResponse> {
+  return apiClient.get<PageContentResponse>(
+    `/projects/${projectId}/pages/${pageId}/content`
+  );
+}
+
+/**
+ * Get all prompt logs for a specific page.
+ * Returns empty array if no prompts exist.
+ */
+export function getPagePrompts(
+  projectId: string,
+  pageId: string
+): Promise<PromptLogResponse[]> {
+  return apiClient.get<PromptLogResponse[]>(
+    `/projects/${projectId}/pages/${pageId}/prompts`
+  );
+}

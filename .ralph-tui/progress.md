@@ -216,3 +216,18 @@ after each iteration and it's included in prompts for context.
   - Background task deferred import (`from app.services.content_generation import run_content_pipeline`) avoids circular imports at module level
 ---
 
+## 2026-02-06 - S5-014
+- Created frontend API client types and functions for content generation endpoints
+- Created TanStack Query hooks with polling support for content generation status
+- API functions: `triggerContentGeneration`, `pollContentGenerationStatus`, `getPageContent`, `getPagePrompts`
+- Hooks: `useContentGenerationStatus` (3s polling while generating), `usePageContent`, `usePagePrompts`, `useTriggerContentGeneration` mutation, `useContentGeneration` (composite helper)
+- Query keys factory: `contentGenerationKeys.status`, `contentGenerationKeys.pageContent`, `contentGenerationKeys.pagePrompts`
+- Files changed:
+  - `frontend/src/lib/api.ts` — Added 6 TypeScript interfaces and 4 API client functions for content generation
+  - `frontend/src/hooks/useContentGeneration.ts` (new) — 5 TanStack Query hooks following existing keyword generation patterns
+- **Learnings:**
+  - Hook pattern: `refetchInterval` callback receives `query` object where `query.state.data` provides current data for conditional polling
+  - API types mirror backend Pydantic schemas but use `string` for datetimes (JSON serialized) and `Record<string, unknown>` for JSONB dict fields
+  - Composite helper hooks (e.g. `useContentGeneration`) wrap individual query/mutation hooks and derive convenience state (progress %, boolean flags)
+---
+
