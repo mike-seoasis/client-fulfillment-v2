@@ -289,8 +289,9 @@
         "Onboarding layout wraps the content page correctly"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Reference frontend/src/components/onboarding/ for existing stepper/layout pattern. The onboarding flow currently has 3 steps — add a 4th."
+      "passes": true,
+      "notes": "Reference frontend/src/components/onboarding/ for existing stepper/layout pattern. The onboarding flow currently has 3 steps — add a 4th.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S5-018",
@@ -343,6 +344,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-06T15:17:44.144Z"
+    "updatedAt": "2026-02-06T15:19:29.591Z"
   }
 }

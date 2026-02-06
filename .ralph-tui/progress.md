@@ -268,3 +268,15 @@ after each iteration and it's included in prompts for context.
   - `Map` preserves insertion order in JS — good for grouping prompts by step while maintaining chronological order from the API response
 ---
 
+## 2026-02-06 - S5-017
+- Verified all acceptance criteria already met by prior stories (S5-015, S5-016, and existing keywords page)
+- ONBOARDING_STEPS array already includes Content as step 4 across all 4 onboarding pages (upload, crawl, keywords, content)
+- Content page uses `<StepIndicator currentStep="content" />` to highlight step 4
+- Keywords page has "Continue to Content" button with `router.push` navigation to `/projects/{id}/onboarding/content`
+- Content page follows same onboarding layout pattern (breadcrumb + stepper + card)
+- No code changes needed — all work was completed in S5-015 (content page creation) and prior keyword page implementation
+- **Learnings:**
+  - Content generation step was wired into navigation as part of S5-015 page creation, not as a separate task
+  - All onboarding pages duplicate the ONBOARDING_STEPS constant — candidate for extraction to shared constant
+---
+
