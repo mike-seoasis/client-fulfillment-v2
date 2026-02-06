@@ -48,3 +48,19 @@ after each iteration and it's included in prompts for context.
   - Always grep for attribute references in app code before renaming relationship attributes
 ---
 
+## 2026-02-06 - S5-004
+- Created Alembic migration 0021 for Phase 5 content tables
+- Migration creates `page_contents` table with unique constraint on `crawled_page_id` (one-to-one with crawled_pages)
+- Migration creates `prompt_logs` table with FK to `page_contents`
+- Migration upgrades `content_briefs.page_id` index from non-unique to unique (matching S5-003 model change)
+- Did NOT create `content_scores` table (deferred to Phase 6)
+- Did NOT drop `generated_content` table
+- Files changed:
+  - `backend/alembic/versions/0021_create_page_contents_and_prompt_logs.py` (new) — Migration file
+- **Learnings:**
+  - Migration pattern: Use `sa.UniqueConstraint("col", name="uq_table_col")` for explicit unique constraints
+  - To upgrade an index from non-unique to unique: drop existing index then recreate with `unique=True`
+  - content_briefs table was created in migration 0012 but the unique constraint on page_id was missing — added in this migration
+  - venv binaries are at `backend/.venv/bin/` (use `.venv/bin/alembic` not bare `alembic`)
+---
+
