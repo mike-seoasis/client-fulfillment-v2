@@ -208,8 +208,9 @@
         "All endpoints are added to the router and accessible"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Add to backend/app/api/v1/projects.py or create a new content router file. Reference existing endpoints in projects.py for pattern (background tasks, polling). Spec: openspec/changes/phase5-content-generation/specs/content-generation-api/spec.md."
+      "passes": true,
+      "notes": "Add to backend/app/api/v1/projects.py or create a new content router file. Reference existing endpoints in projects.py for pattern (background tasks, polling). Spec: openspec/changes/phase5-content-generation/specs/content-generation-api/spec.md.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S5-013",
@@ -339,6 +340,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-06T15:05:06.525Z"
+    "updatedAt": "2026-02-06T15:08:03.226Z"
   }
 }

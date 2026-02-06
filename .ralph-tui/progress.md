@@ -178,6 +178,11 @@ after each iteration and it's included in prompts for context.
   - Content brief failure is non-blocking: pipeline continues with `content_brief=None` (services degrade gracefully)
 ---
 
+## Codebase Patterns Update
+- **Router pattern**: New feature domains get their own router file in `api/v1/` with `APIRouter(prefix="/projects", tags=["Feature Name"])`, registered in `api/v1/__init__.py`. Background tasks use module-level state tracking (e.g. `_active_generations: set[str]`) for duplicate prevention in single-process deployments.
+
+---
+
 ## 2026-02-06 - S5-011
 - Replaced legacy v1 content_generation schemas with Phase 5 Pydantic v2 schemas
 - Created 6 schema classes: ContentGenerationTriggerResponse, ContentGenerationStatus, PageGenerationStatusItem, BriefSummary, PageContentResponse, PromptLogResponse
@@ -191,5 +196,23 @@ after each iteration and it's included in prompts for context.
   - The old content_generation.py schemas (GeneratedContentOutput, ContentGenerationRequest, etc.) were not imported anywhere outside the file itself — safe to replace entirely
   - `content_brief` sorts before `content_generation` alphabetically (ruff enforces strict module path ordering in import blocks)
   - BriefSummary as a separate schema (not from_attributes) works well for computed/aggregated data that doesn't map 1:1 to a model column
+---
+
+## 2026-02-06 - S5-012
+- Created 4 content generation API endpoints in a new dedicated router file
+- POST /projects/{id}/generate-content — Returns 202, validates approved keywords (400), prevents duplicates (409), runs pipeline as background task
+- GET /projects/{id}/content-generation-status — Returns overall status (idle/generating/complete/failed), per-page status array with page_id/url/keyword/status/error
+- GET /projects/{id}/pages/{page_id}/content — Returns PageContent with brief summary and qa_results (404 if not generated)
+- GET /projects/{id}/pages/{page_id}/prompts — Returns PromptLog array ordered by created_at (empty array if none)
+- Uses module-level `_active_generations: set[str]` for duplicate run prevention, cleaned up in `finally` block
+- All endpoints use proper Pydantic response models from S5-011 schemas
+- Registered router in api/v1/__init__.py
+- Files changed:
+  - `backend/app/api/v1/content_generation.py` (new) — Content generation router with 4 endpoints and background task wrapper
+  - `backend/app/api/v1/__init__.py` — Registered content_generation router
+- **Learnings:**
+  - New routers with `prefix="/projects"` share the same prefix as the main projects router — FastAPI merges them correctly when both are included via `include_router()`
+  - `selectinload` + `.scalars().unique()` pattern is required when joining with eager-loaded relationships to avoid duplicate rows
+  - Background task deferred import (`from app.services.content_generation import run_content_pipeline`) avoids circular imports at module level
 ---
 
