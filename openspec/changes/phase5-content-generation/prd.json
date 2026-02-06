@@ -99,8 +99,9 @@
         "Wire POP_USE_MOCK env var: when true, use POPMockClient instead of real client"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Reference backend/app/services/primary_keyword.py for service pattern. POP client at backend/app/integrations/pop.py has create_report_task() and poll_for_result(). Spec: openspec/changes/phase5-content-generation/specs/pop-content-brief/spec.md. Design decision #2: get-terms only, skip create-report."
+      "passes": true,
+      "notes": "Reference backend/app/services/primary_keyword.py for service pattern. POP client at backend/app/integrations/pop.py has create_report_task() and poll_for_result(). Spec: openspec/changes/phase5-content-generation/specs/pop-content-brief/spec.md. Design decision #2: get-terms only, skip create-report.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S5-007",
@@ -333,6 +334,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-06T14:47:05.789Z"
+    "updatedAt": "2026-02-06T14:49:34.111Z"
   }
 }

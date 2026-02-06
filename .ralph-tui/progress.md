@@ -81,3 +81,21 @@ after each iteration and it's included in prompts for context.
   - `dict.fromkeys(list)` is a clean Python idiom for ordered deduplication
 ---
 
+## 2026-02-06 - S5-006
+- Created `fetch_content_brief()` async function in `backend/app/services/pop_content_brief.py`
+- Service calls POP get-terms endpoint with keyword and target URL, polls for completion
+- Parses lsaPhrases into lsi_terms, variations into related_searches, stores raw_response and pop_task_id
+- Caching: returns existing ContentBrief if one exists for the page (unless force_refresh=True)
+- Force refresh: makes new API call and upserts (updates in place) the existing ContentBrief
+- On POP API error or timeout, returns failure result with error details (does NOT raise or block)
+- Uses POPMockClient.get_terms() when mock client detected, real client uses create_report_task + poll_for_result
+- Registered ContentBriefResult and fetch_content_brief in services/__init__.py
+- Files changed:
+  - `backend/app/services/pop_content_brief.py` (new) — Service with fetch_content_brief, ContentBriefResult dataclass, parse helpers, upsert helper
+  - `backend/app/services/__init__.py` — Added imports and __all__ entries
+- **Learnings:**
+  - POPMockClient has a convenience `get_terms()` method that combines create+poll, while real POPClient needs separate create_report_task + poll_for_result calls
+  - Use `isinstance(client, POPMockClient)` to branch between mock convenience method and real client two-step flow
+  - ContentBrief has a `unique=True` on page_id FK, so upsert pattern queries by page_id first then updates or creates
+---
+

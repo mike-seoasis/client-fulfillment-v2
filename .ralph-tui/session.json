@@ -3,10 +3,10 @@
   "sessionId": "0947a505-08ec-4007-837a-758e0a5a5e23",
   "status": "running",
   "startedAt": "2026-02-06T14:37:46.822Z",
-  "updatedAt": "2026-02-06T14:47:05.791Z",
-  "currentIteration": 4,
+  "updatedAt": "2026-02-06T14:49:34.113Z",
+  "currentIteration": 5,
   "maxIterations": 10,
-  "tasksCompleted": 4,
+  "tasksCompleted": 5,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -41,8 +41,8 @@
       {
         "id": "S5-005",
         "title": "Create POPMockClient with realistic fixture data",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "S5-006",
@@ -176,6 +176,16 @@
       "durationMs": 103828,
       "startedAt": "2026-02-06T14:42:13.968Z",
       "endedAt": "2026-02-06T14:43:57.796Z"
+    },
+    {
+      "iteration": 5,
+      "status": "completed",
+      "taskId": "S5-005",
+      "taskTitle": "Create POPMockClient with realistic fixture data",
+      "taskCompleted": true,
+      "durationMs": 186888,
+      "startedAt": "2026-02-06T14:43:58.900Z",
+      "endedAt": "2026-02-06T14:47:05.788Z"
     }
   ],
   "skippedTaskIds": [],

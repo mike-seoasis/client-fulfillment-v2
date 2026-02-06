@@ -25,6 +25,10 @@ from app.services.label_taxonomy import (
     validate_labels,
     validate_page_labels,
 )
+from app.services.pop_content_brief import (
+    ContentBriefResult,
+    fetch_content_brief,
+)
 from app.services.primary_keyword import (
     KeywordGenerationStats,
     PrimaryKeywordService,
@@ -33,9 +37,11 @@ from app.services.project import ProjectService
 
 __all__ = [
     "BrandConfigService",
+    "ContentBriefResult",
     "CrawlingService",
     "ExtractedContent",
     "extract_content_from_html",
+    "fetch_content_brief",
     "FileService",
     "GeneratedTaxonomy",
     "GenerationStatus",
