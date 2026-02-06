@@ -23,3 +23,14 @@ after each iteration and it's included in prompts for context.
   - All existing models follow the same UUID/timestamp/status pattern consistently
 ---
 
+## 2026-02-06 - S5-002
+- Created `PromptLog` SQLAlchemy model for persisting all Claude prompts/responses during content generation
+- Files changed:
+  - `backend/app/models/prompt_log.py` (new) — PromptLog model with all fields per acceptance criteria
+  - `backend/app/models/page_content.py` — Added `prompt_logs` one-to-many relationship and TYPE_CHECKING import for PromptLog
+  - `backend/app/models/__init__.py` — Registered PromptLog import and __all__ entry
+- **Learnings:**
+  - Ruff import sorting: `project` sorts before `prompt_log` alphabetically — need to maintain strict alphabetical order by module path
+  - Many-to-one pattern: FK column without `unique=True` + `Mapped[list["Child"]]` on parent side for one-to-many
+---
+

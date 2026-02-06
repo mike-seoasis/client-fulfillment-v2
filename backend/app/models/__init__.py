@@ -26,6 +26,7 @@ from app.models.page_keywords import PageKeywords
 from app.models.page_paa import PagePAA
 from app.models.project import Project
 from app.models.project_file import ProjectFile
+from app.models.prompt_log import PromptLog
 
 __all__ = [
     "Base",
@@ -47,5 +48,6 @@ __all__ = [
     "PagePAA",
     "Project",
     "ProjectFile",
+    "PromptLog",
     "WebhookConfig",
 ]

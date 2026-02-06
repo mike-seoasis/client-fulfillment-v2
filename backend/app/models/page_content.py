@@ -22,6 +22,7 @@ from app.core.database import Base
 
 if TYPE_CHECKING:
     from app.models.crawled_page import CrawledPage
+    from app.models.prompt_log import PromptLog
 
 
 class ContentStatus(str, Enum):
@@ -137,6 +138,12 @@ class PageContent(Base):
     # Relationship to CrawledPage (one-to-one)
     page: Mapped["CrawledPage"] = relationship(
         "CrawledPage",
+        back_populates="page_content",
+    )
+
+    # Relationship to PromptLog (one-to-many)
+    prompt_logs: Mapped[list["PromptLog"]] = relationship(
+        "PromptLog",
         back_populates="page_content",
     )
 
