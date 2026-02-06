@@ -117,3 +117,23 @@ after each iteration and it's included in prompts for context.
   - Import sorting: `content_extraction` sorts before `content_writing` alphabetically — ruff enforces strict module path ordering
 ---
 
+## 2026-02-06 - S5-008
+- Created `generate_content()` async function in `backend/app/services/content_writing.py`
+- Service calls Claude Sonnet (`claude-sonnet-4-5-20250929`) via a dedicated `ClaudeClient` instance with model override
+- Parses JSON response into PageContent fields (page_title, meta_description, top_description, bottom_description, word_count)
+- If Claude returns invalid JSON, retries once with stricter prompt (temperature 0.0); if still invalid, marks status='failed' with error in qa_results JSONB
+- Creates PromptLog records: one for system prompt, one for user prompt, both updated with response_text, input_tokens, output_tokens, duration_ms after completion
+- Updates PageContent.status progression: writing → complete (or failed)
+- Sets generation_started_at when writing begins, generation_completed_at when done (success or failure)
+- Added helper functions: `_parse_content_json` (handles markdown fences + regex extraction), `_apply_parsed_content` (populates fields + word count), `_update_prompt_logs`, `_mark_failed`
+- Registered `ContentWritingResult` and `generate_content` in `services/__init__.py`
+- Files changed:
+  - `backend/app/services/content_writing.py` — Added generate_content, ContentWritingResult, retry logic, parsing helpers
+  - `backend/app/services/__init__.py` — Added imports and __all__ entries for ContentWritingResult and generate_content
+- **Learnings:**
+  - ClaudeClient accepts `model` param in constructor to override default haiku — use `ClaudeClient(model="claude-sonnet-4-5-20250929")` for per-service model selection
+  - PageContent has no dedicated `error` column — use `qa_results` JSONB field to store error details when status='failed'
+  - ClaudeClient needs explicit `close()` after use when creating ad-hoc instances (not using the global singleton)
+  - The `complete()` method returns `CompletionResult` with `text`, `input_tokens`, `output_tokens`, `duration_ms` — but `duration_ms` on the result is the total across retries, so we track our own wall-clock time for PromptLog
+---
+

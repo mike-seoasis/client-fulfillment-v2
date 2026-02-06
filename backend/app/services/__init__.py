@@ -11,8 +11,10 @@ from app.services.content_extraction import (
     truncate_body_content,
 )
 from app.services.content_writing import (
+    ContentWritingResult,
     PromptPair,
     build_content_prompt,
+    generate_content,
 )
 from app.services.crawling import CrawlingService
 from app.services.file import FileService
@@ -42,12 +44,14 @@ from app.services.project import ProjectService
 __all__ = [
     "BrandConfigService",
     "ContentBriefResult",
+    "ContentWritingResult",
     "CrawlingService",
     "build_content_prompt",
     "ExtractedContent",
     "extract_content_from_html",
     "fetch_content_brief",
     "FileService",
+    "generate_content",
     "GeneratedTaxonomy",
     "GenerationStatus",
     "get_project_taxonomy_labels",

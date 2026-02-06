@@ -1,14 +1,32 @@
-"""Content writing prompt builder for SEO collection page content.
+"""Content writing service for SEO collection page content.
 
 Constructs structured prompts from ContentBrief, brand config, and page context
 for generating page_title, meta_description, top_description, and bottom_description.
+Calls Claude Sonnet to generate content and stores results in PageContent.
 """
 
+import json
+import re
+import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.logging import get_logger
+from app.integrations.claude import ClaudeClient, CompletionResult
 from app.models.content_brief import ContentBrief
 from app.models.crawled_page import CrawledPage
+from app.models.page_content import ContentStatus, PageContent
+from app.models.prompt_log import PromptLog
+
+logger = get_logger(__name__)
+
+# Model to use for content writing (Sonnet for quality)
+CONTENT_WRITING_MODEL = "claude-sonnet-4-5-20250929"
+CONTENT_WRITING_MAX_TOKENS = 4096
+CONTENT_WRITING_TEMPERATURE = 0.7
 
 # Default word count target when ContentBrief is missing
 DEFAULT_WORD_COUNT_MIN = 300
@@ -248,3 +266,288 @@ def _build_output_format_section() -> str:
         "- **bottom_description**: HTML with headings (`<h2>`, `<h3>`) and an FAQ section. "
         "Target the word count specified above. Use semantic HTML (no inline styles)."
     )
+
+
+# ---------------------------------------------------------------------------
+# Content generation service
+# ---------------------------------------------------------------------------
+
+REQUIRED_CONTENT_KEYS = {"page_title", "meta_description", "top_description", "bottom_description"}
+
+STRICT_RETRY_PROMPT = (
+    "Your previous response was not valid JSON. "
+    "You MUST respond with ONLY a raw JSON object. "
+    "No markdown fencing (```), no explanation, no text before or after. "
+    "Just the JSON object with these exact keys: "
+    "page_title, meta_description, top_description, bottom_description."
+)
+
+
+@dataclass
+class ContentWritingResult:
+    """Result of a content generation attempt."""
+
+    success: bool
+    page_content: PageContent | None = None
+    error: str | None = None
+
+
+async def generate_content(
+    db: AsyncSession,
+    crawled_page: CrawledPage,
+    content_brief: ContentBrief | None,
+    brand_config: dict[str, Any],
+    keyword: str,
+) -> ContentWritingResult:
+    """Generate content for a page using Claude Sonnet.
+
+    Builds prompts, calls Claude, parses the JSON response into PageContent fields,
+    and creates PromptLog records for auditing.
+
+    Args:
+        db: Async database session.
+        crawled_page: The page to generate content for.
+        content_brief: Optional POP content brief with LSI terms.
+        brand_config: The BrandConfig.v2_schema dict.
+        keyword: Primary target keyword.
+
+    Returns:
+        ContentWritingResult with success status and the PageContent record.
+    """
+    # Get or create PageContent record
+    page_content = crawled_page.page_content
+    if page_content is None:
+        page_content = PageContent(crawled_page_id=crawled_page.id)
+        db.add(page_content)
+        await db.flush()
+
+    # Mark as writing
+    page_content.status = ContentStatus.WRITING.value
+    page_content.generation_started_at = datetime.now(UTC)
+    await db.flush()
+
+    # Build prompts
+    prompts = build_content_prompt(crawled_page, keyword, brand_config, content_brief)
+
+    # Create PromptLog records before calling Claude
+    system_log = PromptLog(
+        page_content_id=page_content.id,
+        step="content_writing",
+        role="system",
+        prompt_text=prompts.system_prompt,
+    )
+    user_log = PromptLog(
+        page_content_id=page_content.id,
+        step="content_writing",
+        role="user",
+        prompt_text=prompts.user_prompt,
+    )
+    db.add(system_log)
+    db.add(user_log)
+    await db.flush()
+
+    # Call Claude Sonnet
+    client = ClaudeClient(
+        model=CONTENT_WRITING_MODEL,
+        max_tokens=CONTENT_WRITING_MAX_TOKENS,
+    )
+    try:
+        start_ms = time.monotonic()
+        result = await client.complete(
+            user_prompt=prompts.user_prompt,
+            system_prompt=prompts.system_prompt,
+            max_tokens=CONTENT_WRITING_MAX_TOKENS,
+            temperature=CONTENT_WRITING_TEMPERATURE,
+        )
+        duration_ms = (time.monotonic() - start_ms) * 1000
+    except Exception as exc:
+        duration_ms = 0.0
+        result = CompletionResult(success=False, error=str(exc))
+    finally:
+        await client.close()
+
+    # Update prompt logs with response metadata
+    _update_prompt_logs(system_log, user_log, result, duration_ms)
+
+    if not result.success:
+        return _mark_failed(page_content, f"Claude API error: {result.error}")
+
+    # Parse JSON response
+    parsed = _parse_content_json(result.text or "")
+    if parsed is None:
+        # Retry once with stricter prompt
+        logger.warning(
+            "Invalid JSON from Claude, retrying with strict prompt",
+            extra={"page_id": crawled_page.id},
+        )
+        return await _retry_with_strict_prompt(
+            db, client, page_content, prompts, result.text or "", brand_config
+        )
+
+    # Populate PageContent fields
+    _apply_parsed_content(page_content, parsed)
+    page_content.status = ContentStatus.COMPLETE.value
+    page_content.generation_completed_at = datetime.now(UTC)
+    await db.flush()
+
+    logger.info(
+        "Content generated successfully",
+        extra={
+            "page_id": crawled_page.id,
+            "word_count": page_content.word_count,
+            "input_tokens": result.input_tokens,
+            "output_tokens": result.output_tokens,
+        },
+    )
+
+    return ContentWritingResult(success=True, page_content=page_content)
+
+
+async def _retry_with_strict_prompt(
+    db: AsyncSession,
+    _client: ClaudeClient,  # noqa: ARG001
+    page_content: PageContent,
+    original_prompts: PromptPair,
+    original_response: str,
+    brand_config: dict[str, Any],  # noqa: ARG001
+) -> ContentWritingResult:
+    """Retry content generation with a stricter JSON-only prompt.
+
+    Creates new PromptLog records for the retry attempt.
+    """
+    retry_user_prompt = f"{STRICT_RETRY_PROMPT}\n\nOriginal prompt:\n{original_prompts.user_prompt}"
+
+    # Create retry prompt logs
+    retry_system_log = PromptLog(
+        page_content_id=page_content.id,
+        step="content_writing_retry",
+        role="system",
+        prompt_text=original_prompts.system_prompt,
+    )
+    retry_user_log = PromptLog(
+        page_content_id=page_content.id,
+        step="content_writing_retry",
+        role="user",
+        prompt_text=retry_user_prompt,
+    )
+    db.add(retry_system_log)
+    db.add(retry_user_log)
+    await db.flush()
+
+    retry_client = ClaudeClient(
+        model=CONTENT_WRITING_MODEL,
+        max_tokens=CONTENT_WRITING_MAX_TOKENS,
+    )
+    try:
+        start_ms = time.monotonic()
+        retry_result = await retry_client.complete(
+            user_prompt=retry_user_prompt,
+            system_prompt=original_prompts.system_prompt,
+            max_tokens=CONTENT_WRITING_MAX_TOKENS,
+            temperature=0.0,  # Deterministic for retry
+        )
+        duration_ms = (time.monotonic() - start_ms) * 1000
+    except Exception as exc:
+        duration_ms = 0.0
+        retry_result = CompletionResult(success=False, error=str(exc))
+    finally:
+        await retry_client.close()
+
+    _update_prompt_logs(retry_system_log, retry_user_log, retry_result, duration_ms)
+
+    if not retry_result.success:
+        return _mark_failed(
+            page_content,
+            f"Retry Claude API error: {retry_result.error}",
+        )
+
+    parsed = _parse_content_json(retry_result.text or "")
+    if parsed is None:
+        return _mark_failed(
+            page_content,
+            f"Invalid JSON after retry. Original response: {original_response[:500]}",
+        )
+
+    _apply_parsed_content(page_content, parsed)
+    page_content.status = ContentStatus.COMPLETE.value
+    page_content.generation_completed_at = datetime.now(UTC)
+    await db.flush()
+
+    return ContentWritingResult(success=True, page_content=page_content)
+
+
+def _parse_content_json(text: str) -> dict[str, str] | None:
+    """Parse Claude's response as JSON with the 4 required content keys.
+
+    Handles markdown code fences and extracts JSON. Returns None if invalid.
+    """
+    cleaned = text.strip()
+
+    # Strip markdown code fences
+    if cleaned.startswith("```"):
+        lines = cleaned.split("\n")
+        lines = lines[1:]  # Remove opening fence line
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        cleaned = "\n".join(lines).strip()
+
+    # Try to extract JSON object if surrounded by other text
+    if not cleaned.startswith("{"):
+        match = re.search(r"\{[\s\S]*\}", cleaned)
+        if match:
+            cleaned = match.group(0)
+
+    try:
+        parsed = json.loads(cleaned)
+    except json.JSONDecodeError:
+        return None
+
+    if not isinstance(parsed, dict):
+        return None
+
+    # Validate required keys exist
+    if not REQUIRED_CONTENT_KEYS.issubset(parsed.keys()):
+        return None
+
+    return {k: str(v) for k, v in parsed.items() if k in REQUIRED_CONTENT_KEYS}
+
+
+def _apply_parsed_content(page_content: PageContent, parsed: dict[str, str]) -> None:
+    """Apply parsed content fields to PageContent and compute word count."""
+    page_content.page_title = parsed["page_title"]
+    page_content.meta_description = parsed["meta_description"]
+    page_content.top_description = parsed["top_description"]
+    page_content.bottom_description = parsed["bottom_description"]
+
+    # Compute total word count across all fields
+    total_words = 0
+    for value in parsed.values():
+        # Strip HTML tags for word counting
+        text_only = re.sub(r"<[^>]+>", " ", value)
+        total_words += len(text_only.split())
+    page_content.word_count = total_words
+
+
+def _update_prompt_logs(
+    system_log: PromptLog,
+    user_log: PromptLog,
+    result: CompletionResult,
+    duration_ms: float,
+) -> None:
+    """Update both prompt log records with Claude's response metadata."""
+    response_text = result.text or result.error or ""
+    for log in (system_log, user_log):
+        log.response_text = response_text
+        log.model = CONTENT_WRITING_MODEL
+        log.input_tokens = result.input_tokens
+        log.output_tokens = result.output_tokens
+        log.duration_ms = duration_ms
+
+
+def _mark_failed(page_content: PageContent, error: str) -> ContentWritingResult:
+    """Mark PageContent as failed and return a failure result."""
+    page_content.status = ContentStatus.FAILED.value
+    page_content.generation_completed_at = datetime.now(UTC)
+    page_content.qa_results = {"error": error}
+    logger.error("Content generation failed", extra={"error": error, "page_content_id": page_content.id})
+    return ContentWritingResult(success=False, page_content=page_content, error=error)

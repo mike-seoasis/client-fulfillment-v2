@@ -136,8 +136,9 @@
         "Sets generation_started_at when writing begins, generation_completed_at when done"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Claude client at backend/app/integrations/claude.py has complete(user_prompt, system_prompt, max_tokens, temperature) returning CompletionResult. Currently uses haiku — content writing needs sonnet. Spec: openspec/changes/phase5-content-generation/specs/content-writing/spec.md."
+      "passes": true,
+      "notes": "Claude client at backend/app/integrations/claude.py has complete(user_prompt, system_prompt, max_tokens, temperature) returning CompletionResult. Currently uses haiku — content writing needs sonnet. Spec: openspec/changes/phase5-content-generation/specs/content-writing/spec.md.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S5-009",
@@ -335,6 +336,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-06T14:52:07.202Z"
+    "updatedAt": "2026-02-06T14:55:39.603Z"
   }
 }
