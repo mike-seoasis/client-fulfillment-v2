@@ -10,6 +10,11 @@ from app.services.content_extraction import (
     extract_content_from_html,
     truncate_body_content,
 )
+from app.services.content_quality import (
+    QualityIssue,
+    QualityResult,
+    run_quality_checks,
+)
 from app.services.content_writing import (
     ContentWritingResult,
     PromptPair,
@@ -46,6 +51,8 @@ __all__ = [
     "ContentBriefResult",
     "ContentWritingResult",
     "CrawlingService",
+    "QualityIssue",
+    "QualityResult",
     "build_content_prompt",
     "ExtractedContent",
     "extract_content_from_html",
@@ -66,6 +73,7 @@ __all__ = [
     "ProjectService",
     "PromptPair",
     "ResearchContext",
+    "run_quality_checks",
     "TaxonomyLabel",
     "truncate_body_content",
     "validate_labels",

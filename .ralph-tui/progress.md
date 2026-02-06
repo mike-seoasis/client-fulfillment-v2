@@ -137,3 +137,21 @@ after each iteration and it's included in prompts for context.
   - The `complete()` method returns `CompletionResult` with `text`, `input_tokens`, `output_tokens`, `duration_ms` — but `duration_ms` on the result is the total across retries, so we track our own wall-clock time for PromptLog
 ---
 
+## 2026-02-06 - S5-009
+- Created `run_quality_checks()` function in `backend/app/services/content_quality.py` with 5 deterministic AI trope checks
+- Check 1 (banned_word): Word-boundary regex matching against brand config vocabulary.banned_words
+- Check 2 (em_dash): Detects em dash character (—) in any content field with surrounding context
+- Check 3 (ai_pattern): Detects AI opener phrases ("In today's", "Whether you're", "Look no further", "In the world of", "When it comes to")
+- Check 4 (triplet_excess): Flags >2 instances of "X, Y, and Z" triplet list patterns across all fields
+- Check 5 (rhetorical_excess): Flags >1 rhetorical question outside FAQ sections (FAQ heading detection strips FAQ content before checking)
+- Returns structured QualityResult with passed/issues/checked_at, stored in PageContent.qa_results JSONB
+- Registered QualityIssue, QualityResult, run_quality_checks in services/__init__.py
+- Files changed:
+  - `backend/app/services/content_quality.py` (new) — Quality checks service with run_quality_checks, QualityResult/QualityIssue dataclasses, 5 check functions
+  - `backend/app/services/__init__.py` — Added imports and __all__ entries
+- **Learnings:**
+  - FAQ section stripping: Use `[^<]*` instead of `.*?` (even non-greedy) in HTML tag content matching to avoid crossing tag boundaries
+  - SQLAlchemy models can't use `__new__` for test instantiation — instrumented attributes need proper `__init__`; test individual functions with plain dicts instead
+  - Import ordering: `content_extraction` sorts before `content_quality` alphabetically (ruff enforces strict module path ordering)
+---
+
