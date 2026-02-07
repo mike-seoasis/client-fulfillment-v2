@@ -43,3 +43,20 @@ after each iteration and it's included in prompts for context.
   - ruff passes clean
 ---
 
+## 2026-02-07 - S6-011
+- Installed Lexical packages: lexical, @lexical/react, @lexical/html, @lexical/rich-text, @lexical/list (all ^0.40.0)
+- Updated frontend TypeScript types in `frontend/src/lib/api.ts` to match backend Pydantic schemas:
+  - Added `pages_approved` (number) to `ContentGenerationStatus`
+  - Added `is_approved` (boolean) and `approved_at` (string|null) to `PageContentResponse`
+  - Added `brief` (ContentBriefData|null) to `PageContentResponse`
+  - Added `ContentBriefData` type (keyword, lsi_terms, heading_targets, keyword_targets)
+  - Added `ContentUpdateRequest` type (optional page_title, meta_description, top_description, bottom_description)
+  - Added `ContentBulkApproveResponse` type (approved_count)
+- Files changed: `frontend/package.json`, `frontend/package-lock.json`, `frontend/src/lib/api.ts`
+- **Learnings:**
+  - Lexical packages all install at same version (0.40.0) — they're a monorepo
+  - Backend uses `list[Any]` for JSONB brief fields; mapped to `unknown[]` on frontend for type safety
+  - Pre-existing TS error in GenerationProgress.test.tsx (tuple index out of bounds) is unrelated
+  - Named content bulk approve `ContentBulkApproveResponse` to avoid collision with existing keyword `BulkApproveResponse`
+---
+

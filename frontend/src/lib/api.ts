@@ -279,6 +279,7 @@ export interface ContentGenerationStatus {
   pages_total: number;
   pages_completed: number;
   pages_failed: number;
+  pages_approved: number;
   pages: PageGenerationStatusItem[];
 }
 
@@ -286,6 +287,27 @@ export interface ContentGenerationStatus {
 export interface BriefSummary {
   keyword: string;
   lsi_terms_count: number;
+}
+
+/** Full content brief data for the review/editing UI. */
+export interface ContentBriefData {
+  keyword: string;
+  lsi_terms: unknown[];
+  heading_targets: unknown[];
+  keyword_targets: unknown[];
+}
+
+/** Request for partial content updates during review/editing. */
+export interface ContentUpdateRequest {
+  page_title?: string | null;
+  meta_description?: string | null;
+  top_description?: string | null;
+  bottom_description?: string | null;
+}
+
+/** Response for bulk content approval. */
+export interface ContentBulkApproveResponse {
+  approved_count: number;
 }
 
 /** Generated content for a single page. */
@@ -296,8 +318,11 @@ export interface PageContentResponse {
   bottom_description: string | null;
   word_count: number | null;
   status: string;
+  is_approved: boolean;
+  approved_at: string | null;
   qa_results: Record<string, unknown> | null;
   brief_summary: BriefSummary | null;
+  brief: ContentBriefData | null;
   generation_started_at: string | null;
   generation_completed_at: string | null;
 }
