@@ -426,3 +426,11 @@ after each iteration and it's included in prompts for context.
   - End-to-end data flow verified: status endpoint → review table → editor page → save/recheck/approve → back to list
   - No new regressions introduced by Phase 6 work
 ---
+
+## 2026-02-07 - S6-098
+- Updated V2_REBUILD_PLAN.md: marked Phase 6 checkboxes as [x] complete, updated Current Status table (Phase=6 Complete, Next=Phase 7: Export), added session log row summarizing all Phase 6 work (S6-001 through S6-026)
+- Files changed: `V2_REBUILD_PLAN.md`
+- **Learnings:**
+  - Phase 6 encompassed 26 stories (S6-001 through S6-026) covering backend endpoints, Lexical editor, highlight plugins, auto-save, sidebar panels, review table, and comprehensive tests
+  - No code changes needed — purely a planning discipline update
+---
