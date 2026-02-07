@@ -195,8 +195,9 @@
         "All hooks are in frontend/src/hooks/useContentGeneration.ts (extend existing file)"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Follow the existing pattern in frontend/src/hooks/useContentGeneration.ts. Use queryClient.invalidateQueries() in onSuccess callbacks. Reference useKeywordMutations for the approve pattern."
+      "passes": true,
+      "notes": "Follow the existing pattern in frontend/src/hooks/useContentGeneration.ts. Use queryClient.invalidateQueries() in onSuccess callbacks. Reference useKeywordMutations for the approve pattern.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S6-013",
@@ -467,6 +468,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-07T21:03:30.324Z"
+    "updatedAt": "2026-02-07T21:05:10.254Z"
   }
 }

@@ -140,3 +140,15 @@ after each iteration and it's included in prompts for context.
   - Schema field `pages_approved` was already added in S6-003 with `default=0`, so no schema changes needed
   - Pre-existing mypy errors unchanged; ruff passes clean
 ---
+
+## 2026-02-07 - S6-012
+- Added 4 API functions to `frontend/src/lib/api.ts`: `updatePageContent`, `approvePageContent`, `recheckPageContent`, `bulkApproveContent`
+- Added 4 mutation hooks to `frontend/src/hooks/useContentGeneration.ts`: `useUpdatePageContent`, `useApprovePageContent`, `useRecheckPageContent`, `useBulkApproveContent`
+- Files changed: `frontend/src/lib/api.ts`, `frontend/src/hooks/useContentGeneration.ts`
+- **Learnings:**
+  - Content approval pattern mirrors keyword approval: `?value=false` query param to unapprove, same as `approveKeyword` in api.ts
+  - `useApprovePageContent` invalidates both `pageContent` and `status` queries (approval count changes the status response); `useBulkApproveContent` only invalidates `status` (no single-page context)
+  - `useUpdatePageContent` and `useRecheckPageContent` only invalidate the specific page's content query
+  - `useBulkApproveContent` takes a plain `string` (projectId) like `useApproveAllKeywords`, not an object
+  - Pre-existing TS error in GenerationProgress.test.tsx (tuple index out of bounds) is unrelated; eslint passes clean
+---

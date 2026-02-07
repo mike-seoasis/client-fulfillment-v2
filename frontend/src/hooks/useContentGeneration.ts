@@ -19,10 +19,16 @@ import {
   pollContentGenerationStatus,
   getPageContent,
   getPagePrompts,
+  updatePageContent,
+  approvePageContent,
+  recheckPageContent,
+  bulkApproveContent,
   type ContentGenerationTriggerResponse,
   type ContentGenerationStatus,
   type PageContentResponse,
   type PromptLogResponse,
+  type ContentUpdateRequest,
+  type ContentBulkApproveResponse,
 } from '@/lib/api';
 
 // Query keys factory
@@ -168,4 +174,112 @@ export function useContentGeneration(projectId: string) {
         queryKey: contentGenerationKeys.status(projectId),
       }),
   };
+}
+
+// =============================================================================
+// CONTENT EDITING / APPROVAL MUTATION HOOKS
+// =============================================================================
+
+/**
+ * Mutation hook to update page content (partial update).
+ * Invalidates the page content query on success.
+ */
+export function useUpdatePageContent(): UseMutationResult<
+  PageContentResponse,
+  Error,
+  { projectId: string; pageId: string; data: ContentUpdateRequest }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      pageId,
+      data,
+    }: {
+      projectId: string;
+      pageId: string;
+      data: ContentUpdateRequest;
+    }) => updatePageContent(projectId, pageId, data),
+    onSuccess: (_data, { projectId, pageId }) => {
+      queryClient.invalidateQueries({
+        queryKey: contentGenerationKeys.pageContent(projectId, pageId),
+      });
+    },
+  });
+}
+
+/**
+ * Mutation hook to approve or unapprove page content.
+ * Invalidates both the page content and generation status queries on success.
+ */
+export function useApprovePageContent(): UseMutationResult<
+  PageContentResponse,
+  Error,
+  { projectId: string; pageId: string; value?: boolean }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      pageId,
+      value = true,
+    }: {
+      projectId: string;
+      pageId: string;
+      value?: boolean;
+    }) => approvePageContent(projectId, pageId, value),
+    onSuccess: (_data, { projectId, pageId }) => {
+      queryClient.invalidateQueries({
+        queryKey: contentGenerationKeys.pageContent(projectId, pageId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: contentGenerationKeys.status(projectId),
+      });
+    },
+  });
+}
+
+/**
+ * Mutation hook to re-run quality checks on page content.
+ * Invalidates the page content query on success.
+ */
+export function useRecheckPageContent(): UseMutationResult<
+  PageContentResponse,
+  Error,
+  { projectId: string; pageId: string }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ projectId, pageId }: { projectId: string; pageId: string }) =>
+      recheckPageContent(projectId, pageId),
+    onSuccess: (_data, { projectId, pageId }) => {
+      queryClient.invalidateQueries({
+        queryKey: contentGenerationKeys.pageContent(projectId, pageId),
+      });
+    },
+  });
+}
+
+/**
+ * Mutation hook to bulk approve all eligible content in a project.
+ * Invalidates the generation status query on success.
+ */
+export function useBulkApproveContent(): UseMutationResult<
+  ContentBulkApproveResponse,
+  Error,
+  string
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (projectId: string) => bulkApproveContent(projectId),
+    onSuccess: (_data, projectId) => {
+      queryClient.invalidateQueries({
+        queryKey: contentGenerationKeys.status(projectId),
+      });
+    },
+  });
 }

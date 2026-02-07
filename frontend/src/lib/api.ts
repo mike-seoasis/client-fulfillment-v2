@@ -399,3 +399,59 @@ export function getPagePrompts(
     `/projects/${projectId}/pages/${pageId}/prompts`
   );
 }
+
+/**
+ * Update generated content for a page (partial update).
+ * Only provided fields are updated; omitted fields remain unchanged.
+ * Clears approval on edit.
+ */
+export function updatePageContent(
+  projectId: string,
+  pageId: string,
+  data: ContentUpdateRequest
+): Promise<PageContentResponse> {
+  return apiClient.put<PageContentResponse>(
+    `/projects/${projectId}/pages/${pageId}/content`,
+    data
+  );
+}
+
+/**
+ * Approve or unapprove generated content for a page.
+ * Pass value=false to unapprove.
+ */
+export function approvePageContent(
+  projectId: string,
+  pageId: string,
+  value: boolean = true
+): Promise<PageContentResponse> {
+  const queryParam = value ? '' : '?value=false';
+  return apiClient.post<PageContentResponse>(
+    `/projects/${projectId}/pages/${pageId}/approve-content${queryParam}`
+  );
+}
+
+/**
+ * Re-run quality checks on generated content for a page.
+ * Returns updated content with fresh qa_results.
+ */
+export function recheckPageContent(
+  projectId: string,
+  pageId: string
+): Promise<PageContentResponse> {
+  return apiClient.post<PageContentResponse>(
+    `/projects/${projectId}/pages/${pageId}/recheck-content`
+  );
+}
+
+/**
+ * Bulk approve all eligible content (complete + QA passed) for a project.
+ * Returns count of newly approved pages.
+ */
+export function bulkApproveContent(
+  projectId: string
+): Promise<ContentBulkApproveResponse> {
+  return apiClient.post<ContentBulkApproveResponse>(
+    `/projects/${projectId}/bulk-approve-content`
+  );
+}
