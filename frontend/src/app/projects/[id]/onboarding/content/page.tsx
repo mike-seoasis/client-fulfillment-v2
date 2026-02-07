@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useProject } from '@/hooks/use-projects';
-import { useContentGeneration } from '@/hooks/useContentGeneration';
+import { useContentGeneration, useBulkApproveContent } from '@/hooks/useContentGeneration';
 import { Button, Toast } from '@/components/ui';
 import { PromptInspector } from '@/components/PromptInspector';
 import type { PageGenerationStatusItem } from '@/lib/api';
@@ -396,6 +396,119 @@ function PageRow({
   );
 }
 
+function WarningIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  );
+}
+
+/** Review table shown after generation is complete */
+function ReviewTable({
+  pages,
+  projectId,
+}: {
+  pages: PageGenerationStatusItem[];
+  projectId: string;
+}) {
+  // Only show completed pages in the review table
+  const completedPages = pages.filter((p) => p.status === 'complete');
+
+  return (
+    <div className="border border-cream-500 rounded-sm overflow-hidden">
+      {/* Table header */}
+      <div className="grid grid-cols-[1fr_1fr_100px_120px_80px] gap-4 px-4 py-2.5 bg-cream-100 border-b border-cream-500 text-xs font-medium text-warm-gray-600 uppercase tracking-wide">
+        <div>Page URL</div>
+        <div>Primary Keyword</div>
+        <div className="text-center">QA Status</div>
+        <div className="text-center">Approval</div>
+        <div className="text-center">Action</div>
+      </div>
+      {/* Table body */}
+      <div className="max-h-[28rem] overflow-y-auto divide-y divide-cream-300">
+        {completedPages.map((page) => {
+          const displayUrl = (() => {
+            try {
+              const url = new URL(page.url);
+              return url.pathname + url.search;
+            } catch {
+              return page.url;
+            }
+          })();
+
+          return (
+            <div
+              key={page.page_id}
+              className="grid grid-cols-[1fr_1fr_100px_120px_80px] gap-4 px-4 py-3 items-center hover:bg-cream-50 transition-colors"
+            >
+              {/* Page URL */}
+              <p className="text-sm text-warm-gray-900 truncate" title={page.url}>
+                {displayUrl}
+              </p>
+
+              {/* Primary Keyword */}
+              <p className="text-sm text-warm-gray-700 truncate">
+                {page.keyword}
+              </p>
+
+              {/* QA Status */}
+              <div className="flex justify-center">
+                {page.qa_passed === true && (
+                  <CheckIcon className="w-4.5 h-4.5 text-palm-500" />
+                )}
+                {page.qa_passed === false && (
+                  <span className="inline-flex items-center gap-1 text-xs text-coral-600">
+                    <WarningIcon className="w-4 h-4" />
+                    {page.qa_issue_count}
+                  </span>
+                )}
+                {page.qa_passed === null && (
+                  <span className="text-xs text-warm-gray-400">—</span>
+                )}
+              </div>
+
+              {/* Approval Status */}
+              <div className="flex justify-center">
+                {page.is_approved ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-sm bg-palm-100 text-palm-700">
+                    <CheckIcon className="w-3 h-3" />
+                    Approved
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-sm bg-cream-200 text-warm-gray-600">
+                    Pending
+                  </span>
+                )}
+              </div>
+
+              {/* Action */}
+              <div className="flex justify-center">
+                <Link
+                  href={`/projects/${projectId}/onboarding/content/${page.page_id}`}
+                  className="text-xs font-medium text-lagoon-600 hover:text-lagoon-700 hover:underline"
+                >
+                  Review
+                </Link>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function ContentGenerationPage() {
   const params = useParams();
   const router = useRouter();
@@ -420,6 +533,7 @@ export default function ContentGenerationPage() {
 
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
   const contentGen = useContentGeneration(projectId);
+  const bulkApproveMutation = useBulkApproveContent();
 
   const isLoading = isProjectLoading || contentGen.isLoading;
 
@@ -473,6 +587,21 @@ export default function ContentGenerationPage() {
       setShowToast(true);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to start regeneration';
+      setToastMessage(message);
+      setToastVariant('error');
+      setShowToast(true);
+    }
+  };
+
+  // Handle bulk approve
+  const handleBulkApprove = async () => {
+    try {
+      const result = await bulkApproveMutation.mutateAsync(projectId);
+      setToastMessage(`Approved ${result.approved_count} page${result.approved_count === 1 ? '' : 's'}`);
+      setToastVariant('success');
+      setShowToast(true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to bulk approve';
       setToastMessage(message);
       setToastVariant('error');
       setShowToast(true);
@@ -690,8 +819,8 @@ export default function ContentGenerationPage() {
           </div>
         )}
 
-        {/* Pages table - shown when there are pages */}
-        {hasPages && (
+        {/* Pages table - generation progress view */}
+        {hasPages && (isGenerating || isIdle) && (
           <div className="border border-cream-500 rounded-sm overflow-hidden">
             <div className="max-h-[28rem] overflow-y-auto divide-y divide-cream-300">
               {contentGen.pages.map((page) => (
@@ -707,6 +836,11 @@ export default function ContentGenerationPage() {
           </div>
         )}
 
+        {/* Review table - shown after generation complete/failed */}
+        {hasPages && !isGenerating && (isComplete || isFailed) && (
+          <ReviewTable pages={contentGen.pages} projectId={projectId} />
+        )}
+
         {/* Start error */}
         {contentGen.startError && (
           <div className="mt-4 p-3 bg-coral-50 border border-coral-200 rounded-sm">
@@ -716,15 +850,54 @@ export default function ContentGenerationPage() {
 
         <hr className="border-cream-500 my-6" />
 
+        {/* Summary + actions for review state */}
+        {(isComplete || isFailed) && !isGenerating && completedPages.length > 0 && (
+          <div className="flex items-center justify-between mb-6">
+            <p className="text-sm text-warm-gray-700">
+              Approved: <span className="font-semibold text-warm-gray-900">{contentGen.pagesApproved} of {completedPages.length}</span>
+            </p>
+            <div className="flex items-center gap-3">
+              {/* Approve All Ready — only eligible pages: complete + qa passed + not yet approved */}
+              {(() => {
+                const eligibleCount = contentGen.pages.filter(
+                  (p) => p.status === 'complete' && p.qa_passed === true && !p.is_approved
+                ).length;
+                return (
+                  <Button
+                    variant="secondary"
+                    onClick={handleBulkApprove}
+                    disabled={eligibleCount === 0 || bulkApproveMutation.isPending}
+                  >
+                    {bulkApproveMutation.isPending ? (
+                      <>
+                        <SpinnerIcon className="w-4 h-4 mr-1.5 animate-spin" />
+                        Approving...
+                      </>
+                    ) : (
+                      `Approve All Ready${eligibleCount > 0 ? ` (${eligibleCount})` : ''}`
+                    )}
+                  </Button>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
         {/* Navigation */}
         <div className="flex justify-end gap-3">
           <Link href={`/projects/${projectId}/onboarding/keywords`}>
             <Button variant="secondary">Back</Button>
           </Link>
-          {isComplete && (
-            <Button onClick={() => router.push(`/projects/${projectId}/onboarding/export`)}>
-              Continue to Export
-            </Button>
+          {(isComplete || isFailed) && !isGenerating && (
+            contentGen.pagesApproved > 0 ? (
+              <Button onClick={() => router.push(`/projects/${projectId}/onboarding/export`)}>
+                Continue to Export
+              </Button>
+            ) : (
+              <Button disabled title="Approve at least 1 page to continue">
+                Continue to Export
+              </Button>
+            )
           )}
           {isGenerating && (
             <Button disabled>

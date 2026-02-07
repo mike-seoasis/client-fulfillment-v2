@@ -338,3 +338,21 @@ after each iteration and it's included in prompts for context.
   - `content.status` field on `PageContentResponse` is the right field to check for 'complete' guard on approve
   - Pre-existing TS error in GenerationProgress.test.tsx unchanged; eslint passes clean
 ---
+
+## 2026-02-07 - S6-024
+- Updated content list page to show review table with QA Status, Approval Status, and Action columns after generation completes
+- Added `qa_passed`, `qa_issue_count`, `is_approved` fields to `PageGenerationStatusItem` (backend schema + API endpoint + frontend type)
+- Exposed `pagesApproved` from `useContentGeneration` hook
+- Review table: green checkmark for QA passed, coral warning icon with issue count for QA failed, "Approved"/"Pending" badges for approval status, "Review" link to editor page
+- Summary line shows "Approved: N of M" with approved count vs total completed
+- "Approve All Ready" button calls `bulkApproveContent`, shows toast with count, disabled when no eligible pages (eligible = complete + QA passed + not yet approved)
+- "Continue to Export" button enabled when at least 1 page approved, disabled with title text otherwise
+- Generation progress table (PageRow) only shown during generation/idle; review table (ReviewTable) shown when complete/failed
+- Files changed: `backend/app/schemas/content_generation.py`, `backend/app/api/v1/content_generation.py`, `frontend/src/lib/api.ts`, `frontend/src/hooks/useContentGeneration.ts`, `frontend/src/app/projects/[id]/onboarding/content/page.tsx`
+- **Learnings:**
+  - `PageGenerationStatusItem` didn't originally include QA or approval data — needed to extend both backend schema and API endpoint population loop to surface per-page review info
+  - Backend `qa_results` is a JSONB dict with `passed` (bool) and `issues` (list) — extracting `len(issues)` gives the issue count for display
+  - Review table uses CSS grid (`grid-cols-[1fr_1fr_100px_120px_80px]`) for clean column alignment
+  - Bulk approve eligibility count is computed inline in JSX using an IIFE to keep the button text and disabled logic co-located
+  - Pre-existing TS error in GenerationProgress.test.tsx unchanged; eslint passes clean
+---

@@ -271,6 +271,9 @@ export interface PageGenerationStatusItem {
   keyword: string;
   status: string;
   error: string | null;
+  qa_passed: boolean | null;
+  qa_issue_count: number;
+  is_approved: boolean;
 }
 
 /** Overall content generation pipeline status for a project. */

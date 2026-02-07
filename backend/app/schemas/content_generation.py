@@ -81,6 +81,9 @@ class PageGenerationStatusItem(BaseModel):
         description="Page generation status (pending, generating_brief, writing, checking, complete, failed)",
     )
     error: str | None = Field(None, description="Error message if failed")
+    qa_passed: bool | None = Field(None, description="Whether QA checks passed (null if not yet checked)")
+    qa_issue_count: int = Field(0, description="Number of QA issues found")
+    is_approved: bool = Field(False, description="Whether content has been approved")
 
 
 class ContentGenerationStatus(BaseModel):

@@ -139,6 +139,7 @@ export function useContentGeneration(projectId: string) {
   const pagesTotal = status.data?.pages_total ?? 0;
   const pagesCompleted = status.data?.pages_completed ?? 0;
   const pagesFailed = status.data?.pages_failed ?? 0;
+  const pagesApproved = status.data?.pages_approved ?? 0;
   const progress = pagesTotal > 0 ? Math.round((pagesCompleted / pagesTotal) * 100) : 0;
 
   return {
@@ -147,6 +148,7 @@ export function useContentGeneration(projectId: string) {
     pagesTotal,
     pagesCompleted,
     pagesFailed,
+    pagesApproved,
     progress,
     pages: status.data?.pages ?? [],
 

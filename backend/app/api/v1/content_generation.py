@@ -217,6 +217,17 @@ async def get_content_generation_status(
             if page.page_content.is_approved:
                 pages_approved += 1
 
+        # Extract QA status for review list
+        qa_passed = None
+        qa_issue_count = 0
+        page_is_approved = False
+        if page.page_content:
+            qa = page.page_content.qa_results
+            if qa and "passed" in qa:
+                qa_passed = qa["passed"]
+                qa_issue_count = len(qa.get("issues", []))
+            page_is_approved = page.page_content.is_approved
+
         page_items.append(
             PageGenerationStatusItem(
                 page_id=page.id,
@@ -224,6 +235,9 @@ async def get_content_generation_status(
                 keyword=keyword,
                 status=page_status,
                 error=error,
+                qa_passed=qa_passed,
+                qa_issue_count=qa_issue_count,
+                is_approved=page_is_approved,
             )
         )
 

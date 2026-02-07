@@ -407,8 +407,9 @@
         "'Continue to Export' button: enabled when at least 1 page approved, disabled otherwise with helpful text"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Update the existing frontend/src/app/projects/[id]/onboarding/content/page.tsx. The generation progress view stays for when generation is running — add the review view for when generation is complete."
+      "passes": true,
+      "notes": "Update the existing frontend/src/app/projects/[id]/onboarding/content/page.tsx. The generation progress view stays for when generation is running — add the review view for when generation is complete.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S6-025",
@@ -479,6 +480,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-07T21:38:51.024Z"
+    "updatedAt": "2026-02-07T21:43:12.791Z"
   }
 }
