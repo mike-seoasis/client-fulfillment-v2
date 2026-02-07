@@ -225,3 +225,18 @@ after each iteration and it's included in prompts for context.
   - `Spread` type utility imported from `lexical` for serialized node type definitions
   - Pre-existing TS error in GenerationProgress.test.tsx unchanged; eslint passes clean
 ---
+
+## 2026-02-07 - S6-017
+- Created `frontend/src/components/content-editor/HighlightToggleControls.tsx` — three toggle buttons for highlight layers
+- `HighlightVisibility` interface tracks keyword/lsi/trope boolean states
+- `highlightVisibilityClasses()` utility converts visibility state to container CSS classes (`hide-hl-keyword`, `hide-hl-lsi`, `hide-hl-trope`)
+- Button styling matches wireframe: colored backgrounds, colored dot indicators, opacity toggle (1.0 active / 0.4 inactive)
+- Keywords + Vars button controls both `hl-keyword` and `hl-keyword-var` layers together
+- Added CSS rules to `HighlightPlugin.tsx` `injectHighlightStyles` for container-level toggle: `.hide-hl-keyword .hl-keyword` etc. use `!important` to override inline highlight styles
+- Toggle state is local `useState`, no persistence
+- Files changed: `frontend/src/components/content-editor/HighlightToggleControls.tsx` (new), `frontend/src/components/content-editor/HighlightPlugin.tsx` (modified)
+- **Learnings:**
+  - Container-class approach for toggling highlights (`.hide-hl-keyword .hl-keyword { background: none !important }`) is cleaner than directly manipulating each span's inline styles — single class toggle on parent hides all matching children
+  - `!important` is needed on the hide rules because the highlight CSS uses specific property values that would otherwise take precedence
+  - Pre-existing TS error in GenerationProgress.test.tsx unchanged; eslint passes clean
+---

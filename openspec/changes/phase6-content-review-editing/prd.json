@@ -284,8 +284,9 @@
         "Toggle state is local (useState), no persistence needed"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Reference wireframes/phase6-content-editor.html for the exact button styling. Toggling works by adding/removing a CSS class on the editor container that hides the relevant highlight spans."
+      "passes": true,
+      "notes": "Reference wireframes/phase6-content-editor.html for the exact button styling. Toggling works by adding/removing a CSS class on the editor container that hides the relevant highlight spans.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S6-018",
@@ -472,6 +473,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-07T21:15:48.092Z"
+    "updatedAt": "2026-02-07T21:17:41.250Z"
   }
 }

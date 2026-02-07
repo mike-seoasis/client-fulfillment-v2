@@ -371,6 +371,20 @@ function injectHighlightStyles(container: HTMLElement): () => void {
       text-decoration-thickness: 2px;
       text-underline-offset: 3px;
     }
+
+    /* Toggle visibility: container classes hide highlight layers */
+    .hide-hl-keyword .${HL_KEYWORD},
+    .hide-hl-keyword .${HL_KEYWORD_VAR} {
+      background: none !important;
+      border-bottom: none !important;
+    }
+    .hide-hl-lsi .${HL_LSI} {
+      background: none !important;
+      border-bottom: none !important;
+    }
+    .hide-hl-trope .${HL_TROPE} {
+      text-decoration: none !important;
+    }
   `;
   container.prepend(style);
 
