@@ -1,152 +1,661 @@
 'use client';
 
+import { useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useProject } from '@/hooks/use-projects';
-import { usePageContent } from '@/hooks/useContentGeneration';
+import {
+  usePageContent,
+  useContentGenerationStatus,
+  useUpdatePageContent,
+  useApprovePageContent,
+  useRecheckPageContent,
+} from '@/hooks/useContentGeneration';
+import { ContentEditorWithSource } from '@/components/content-editor/ContentEditorWithSource';
+import {
+  HighlightToggleControls,
+  type HighlightVisibility,
+  highlightVisibilityClasses,
+} from '@/components/content-editor/HighlightToggleControls';
+import { generateVariations } from '@/lib/keyword-variations';
 import { Button } from '@/components/ui';
 
-function BackArrowIcon({ className }: { className?: string }) {
+// ---------------------------------------------------------------------------
+// Utility helpers
+// ---------------------------------------------------------------------------
+
+function countWords(text: string | null | undefined): number {
+  if (!text) return 0;
+  const stripped = text.replace(/<[^>]+>/g, ' ');
+  return stripped.split(/\s+/).filter(Boolean).length;
+}
+
+function countHeadings(html: string | null | undefined): { h2: number; h3: number } {
+  if (!html) return { h2: 0, h3: 0 };
+  const h2 = (html.match(/<h2[\s>]/gi) || []).length;
+  const h3 = (html.match(/<h3[\s>]/gi) || []).length;
+  return { h2, h3 };
+}
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
+
+function CharCounter({ value, max }: { value: number; max: number }) {
+  const isOver = value > max;
   return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M19 12H5M12 19l-7-7 7-7" />
-    </svg>
+    <span className={`text-xs font-mono ${isOver ? 'text-coral-600' : 'text-palm-600'}`}>
+      {value} / {max}
+    </span>
   );
 }
 
-function FieldCard({
-  label,
-  value,
-  html,
-  mono,
-}: {
-  label: string;
-  value: string | null;
-  html?: boolean;
-  mono?: boolean;
-}) {
-  if (!value) return null;
+function WordCounter({ count }: { count: number }) {
+  return <span className="text-xs font-mono text-warm-500">{count} words</span>;
+}
+
+interface QaIssue {
+  type: string;
+  field: string;
+  description: string;
+  context: string;
+}
+
+interface QaResults {
+  passed: boolean;
+  issues: QaIssue[];
+  checked_at?: string;
+}
+
+function QualityStatusCard({ qaResults }: { qaResults: QaResults | null }) {
+  if (!qaResults) return null;
+
+  const issueCount = qaResults.issues?.length ?? 0;
+  const passed = qaResults.passed;
+
+  // Build check result summary — group by type to show pass/fail per check category
+  const checkTypes = [
+    'banned_word',
+    'em_dash',
+    'ai_opener',
+    'triplet_list',
+    'rhetorical_question',
+    'tier1_ai_word',
+    'tier2_ai_word',
+    'negation_contrast',
+  ];
+  const checkLabels: Record<string, string> = {
+    banned_word: 'Banned Words',
+    em_dash: 'Em Dashes',
+    ai_opener: 'AI Openers',
+    triplet_list: 'Triplet Lists',
+    rhetorical_question: 'Rhetorical Questions',
+    tier1_ai_word: 'Tier 1 AI Words',
+    tier2_ai_word: 'Tier 2 AI Words',
+    negation_contrast: 'Negation Contrast',
+  };
+
+  const issuesByType: Record<string, number> = {};
+  for (const issue of qaResults.issues ?? []) {
+    issuesByType[issue.type] = (issuesByType[issue.type] ?? 0) + 1;
+  }
 
   return (
-    <div className="border border-cream-400 rounded-sm overflow-hidden">
-      <div className="px-3 py-2 bg-cream-100 border-b border-cream-400">
-        <span className="text-xs font-medium text-warm-gray-700 uppercase tracking-wide">
-          {label}
-        </span>
+    <div className="bg-white rounded-sm border border-sand-400/60 overflow-hidden">
+      <div className={`px-4 py-3 border-b ${passed ? 'bg-palm-50 border-palm-100' : 'bg-coral-50 border-coral-100'}`}>
+        <div className="flex items-center gap-2">
+          <div className={`w-5 h-5 rounded-full flex items-center justify-center ${passed ? 'bg-palm-100' : 'bg-coral-100'}`}>
+            {passed ? (
+              <svg className="w-3 h-3 text-palm-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+              </svg>
+            ) : (
+              <svg className="w-3 h-3 text-coral-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            )}
+          </div>
+          <span className={`text-sm font-semibold ${passed ? 'text-palm-800' : 'text-coral-800'}`}>
+            {passed ? 'All Checks Passed' : `${issueCount} Issue${issueCount !== 1 ? 's' : ''} Found`}
+          </span>
+        </div>
       </div>
-      <div className="px-4 py-3">
-        {html ? (
-          <div
-            className="prose prose-sm max-w-none text-warm-gray-800"
-            dangerouslySetInnerHTML={{ __html: value }}
-          />
-        ) : (
-          <p className={`text-sm text-warm-gray-800 leading-relaxed ${mono ? 'font-mono' : ''}`}>
-            {value}
-          </p>
-        )}
+
+      <div className="p-4 space-y-2">
+        {checkTypes.map((type) => {
+          const count = issuesByType[type] ?? 0;
+          return (
+            <div key={type} className="flex items-center justify-between text-xs">
+              <span className="text-warm-600">{checkLabels[type] ?? type}</span>
+              {count > 0 ? (
+                <span className="text-coral-600 font-medium">{count} found</span>
+              ) : (
+                <span className="text-palm-600 font-medium">Pass</span>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-export default function PageContentViewPage() {
+function FlaggedPassagesCard({ issues }: { issues: QaIssue[] }) {
+  if (!issues || issues.length === 0) return null;
+
+  return (
+    <div className="bg-white rounded-sm border border-sand-400/60 p-4">
+      <h3 className="text-xs font-semibold text-warm-700 uppercase tracking-wider mb-3">Flagged Passages</h3>
+      <div className="space-y-3">
+        {issues.map((issue, idx) => (
+          <div key={idx} className="flex items-start gap-2.5">
+            <div className="w-1.5 h-1.5 rounded-full bg-coral-500 mt-1.5 flex-shrink-0" />
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-warm-800">{issue.description}</p>
+              <p className="text-xs text-warm-500 mt-0.5 leading-relaxed">
+                &ldquo;{issue.context}&rdquo;
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ContentStatsCard({
+  wordCount,
+  headings,
+  primaryKeyword,
+  bottomHtml,
+}: {
+  wordCount: number;
+  headings: { h2: number; h3: number };
+  primaryKeyword: string;
+  bottomHtml: string | null;
+}) {
+  // Count exact keyword matches in bottom description
+  const keywordStats = useMemo(() => {
+    if (!bottomHtml || !primaryKeyword) return { exact: 0, density: '0' };
+    const text = bottomHtml.replace(/<[^>]+>/g, ' ').toLowerCase();
+    const kw = primaryKeyword.toLowerCase();
+    const words = text.split(/\s+/).filter(Boolean);
+    let exact = 0;
+    // Count occurrences of the full keyword phrase
+    const regex = new RegExp(`\\b${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+    const stripped = bottomHtml.replace(/<[^>]+>/g, ' ');
+    const matches = stripped.match(regex);
+    exact = matches?.length ?? 0;
+    const density = words.length > 0 ? ((exact * kw.split(/\s+/).length / words.length) * 100).toFixed(1) : '0';
+    return { exact, density };
+  }, [bottomHtml, primaryKeyword]);
+
+  return (
+    <div className="bg-white rounded-sm border border-sand-400/60 p-4">
+      <h3 className="text-xs font-semibold text-warm-700 uppercase tracking-wider mb-3">Content Stats</h3>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-warm-600">Word Count</span>
+          <span className="font-mono font-medium text-warm-800">{wordCount}</span>
+        </div>
+        <div>
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span className="text-warm-600">Headings</span>
+            <span className="font-mono font-medium text-warm-800">{headings.h2} H2 · {headings.h3} H3</span>
+          </div>
+        </div>
+        <div className="h-px bg-sand-200" />
+        <div>
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span className="text-warm-600">Exact match</span>
+            <span className="font-mono font-medium text-warm-800">{keywordStats.exact} uses</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 h-1.5 bg-sand-200 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-palm-400 rounded-full"
+                style={{ width: `${Math.min(parseFloat(keywordStats.density) * 25, 100)}%` }}
+              />
+            </div>
+            <span className="text-xs font-mono text-warm-500">{keywordStats.density}%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LsiTermsCard({
+  lsiTerms,
+  bottomHtml,
+}: {
+  lsiTerms: string[];
+  bottomHtml: string | null;
+}) {
+  const termCounts = useMemo(() => {
+    if (!bottomHtml || lsiTerms.length === 0) return [];
+    const text = bottomHtml.replace(/<[^>]+>/g, ' ');
+    return lsiTerms.map((term) => {
+      const regex = new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+      const matches = text.match(regex);
+      return { term, count: matches?.length ?? 0 };
+    });
+  }, [bottomHtml, lsiTerms]);
+
+  const found = termCounts.filter((t) => t.count > 0);
+  const missing = termCounts.filter((t) => t.count === 0);
+
+  return (
+    <div className="bg-white rounded-sm border border-sand-400/60 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-xs font-semibold text-warm-700 uppercase tracking-wider">LSI Terms</h3>
+        <span className="text-xs font-mono text-palm-600 font-medium">
+          {found.length} / {termCounts.length}
+        </span>
+      </div>
+      <div className="space-y-1.5">
+        {found.map((t) => (
+          <div
+            key={t.term}
+            className="relative flex items-center justify-between py-1 px-2 rounded-sm hover:bg-sand-50 group"
+          >
+            <div className="absolute left-[-8px] top-1/2 -translate-y-1/2 w-1 h-1 rounded-full bg-palm-500" />
+            <span className="text-xs text-warm-800">{t.term}</span>
+            <span className="text-xs font-mono text-palm-600 opacity-0 group-hover:opacity-100 transition-opacity">
+              {t.count}x
+            </span>
+          </div>
+        ))}
+        {missing.length > 0 && found.length > 0 && <div className="h-px bg-sand-200 my-1" />}
+        {missing.map((t) => (
+          <div key={t.term} className="flex items-center justify-between py-1 px-2 rounded-sm">
+            <span className="text-xs text-warm-600">{t.term}</span>
+            <span className="text-xs text-warm-400 italic">not found</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function HeadingOutlineCard({ html }: { html: string | null }) {
+  const headings = useMemo(() => {
+    if (!html) return [];
+    const regex = /<(h[23])[^>]*>(.*?)<\/\1>/gi;
+    const result: { level: string; text: string }[] = [];
+    let match;
+    while ((match = regex.exec(html)) !== null) {
+      const text = match[2].replace(/<[^>]+>/g, '');
+      result.push({ level: match[1].toUpperCase(), text });
+    }
+    return result;
+  }, [html]);
+
+  if (headings.length === 0) return null;
+
+  return (
+    <div className="bg-white rounded-sm border border-sand-400/60 p-4">
+      <h3 className="text-xs font-semibold text-warm-700 uppercase tracking-wider mb-3">Structure</h3>
+      <div className="space-y-1">
+        {headings.map((h, idx) => (
+          <div
+            key={idx}
+            className={`text-xs py-0.5 ${
+              h.level === 'H2'
+                ? 'text-warm-700 font-medium'
+                : 'text-warm-500 pl-4'
+            } ${h.level === 'H2' && idx > 0 ? 'mt-1' : ''}`}
+          >
+            {h.level} — {h.text}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main Page Component
+// ---------------------------------------------------------------------------
+
+export default function ContentEditorPage() {
   const params = useParams();
   const projectId = params.id as string;
   const pageId = params.pageId as string;
 
-  const { data: project } = useProject(projectId);
   const { data: content, isLoading, isError } = usePageContent(projectId, pageId);
+  const { data: status } = useContentGenerationStatus(projectId);
+  const updateContent = useUpdatePageContent();
+  const approveContent = useApprovePageContent();
+  const recheckContent = useRecheckPageContent();
 
-  return (
-    <div>
-      {/* Breadcrumb */}
-      <nav className="flex items-center text-sm text-warm-gray-600 mb-6">
-        <Link
-          href={`/projects/${projectId}/onboarding/content`}
-          className="hover:text-warm-gray-900 flex items-center"
-        >
-          <BackArrowIcon className="w-4 h-4 mr-1" />
-          {project?.name ?? 'Project'}
-        </Link>
-        <span className="mx-2">&rsaquo;</span>
-        <span className="text-warm-gray-900">Content Preview</span>
-      </nav>
+  // Find this page's metadata from the status endpoint
+  const pageInfo = useMemo(() => {
+    if (!status?.pages) return null;
+    return status.pages.find((p) => p.page_id === pageId) ?? null;
+  }, [status, pageId]);
 
-      {/* Loading */}
-      {isLoading && (
-        <div className="bg-white rounded-sm border border-cream-500 p-6 shadow-sm animate-pulse">
-          <div className="h-6 bg-cream-300 rounded w-64 mb-4" />
+  // Local editable state — initialized from server data
+  const [pageTitle, setPageTitle] = useState<string | null>(null);
+  const [metaDescription, setMetaDescription] = useState<string | null>(null);
+  const [topDescription, setTopDescription] = useState<string | null>(null);
+  const [bottomDescription, setBottomDescription] = useState<string | null>(null);
+  const [initialized, setInitialized] = useState(false);
+
+  // Initialize local state when content loads
+  if (content && !initialized) {
+    setPageTitle(content.page_title);
+    setMetaDescription(content.meta_description);
+    setTopDescription(content.top_description);
+    setBottomDescription(content.bottom_description);
+    setInitialized(true);
+  }
+
+  // Highlight visibility
+  const [hlVisibility, setHlVisibility] = useState<HighlightVisibility>({
+    keyword: true,
+    lsi: true,
+    trope: true,
+  });
+
+  // Derive keyword and brief data
+  const primaryKeyword = content?.brief?.keyword ?? content?.brief_summary?.keyword ?? '';
+  const lsiTerms = useMemo(() => {
+    if (!content?.brief?.lsi_terms) return [];
+    return (content.brief.lsi_terms as { term?: string; text?: string }[])
+      .map((t) => (typeof t === 'string' ? t : t.term ?? t.text ?? ''))
+      .filter(Boolean);
+  }, [content?.brief?.lsi_terms]);
+
+  const variations = useMemo(() => generateVariations(primaryKeyword), [primaryKeyword]);
+
+  // Derive trope ranges from QA issues
+  const tropeRanges = useMemo(() => {
+    const qa = content?.qa_results as QaResults | null;
+    if (!qa?.issues) return [];
+    return qa.issues.map((issue) => ({ text: issue.context }));
+  }, [content?.qa_results]);
+
+  // Computed counts
+  const titleLen = pageTitle?.length ?? 0;
+  const metaLen = metaDescription?.length ?? 0;
+  const topWordCount = countWords(topDescription);
+  const bottomWordCount = countWords(bottomDescription);
+  const totalWordCount = countWords(pageTitle) + countWords(metaDescription) + topWordCount + bottomWordCount;
+  const headings = countHeadings(bottomDescription);
+
+  // Save handler
+  const handleSave = useCallback(() => {
+    if (!content) return;
+    updateContent.mutate({
+      projectId,
+      pageId,
+      data: {
+        page_title: pageTitle,
+        meta_description: metaDescription,
+        top_description: topDescription,
+        bottom_description: bottomDescription,
+      },
+    });
+  }, [projectId, pageId, pageTitle, metaDescription, topDescription, bottomDescription, content, updateContent]);
+
+  // Approve handler
+  const handleApprove = useCallback(() => {
+    approveContent.mutate({
+      projectId,
+      pageId,
+      value: !content?.is_approved,
+    });
+  }, [projectId, pageId, content?.is_approved, approveContent]);
+
+  // Recheck handler
+  const handleRecheck = useCallback(() => {
+    // Save first, then recheck
+    updateContent.mutate(
+      {
+        projectId,
+        pageId,
+        data: {
+          page_title: pageTitle,
+          meta_description: metaDescription,
+          top_description: topDescription,
+          bottom_description: bottomDescription,
+        },
+      },
+      {
+        onSuccess: () => {
+          recheckContent.mutate({ projectId, pageId });
+        },
+      },
+    );
+  }, [projectId, pageId, pageTitle, metaDescription, topDescription, bottomDescription, updateContent, recheckContent]);
+
+  const qaResults = content?.qa_results as QaResults | null;
+  const hlClasses = highlightVisibilityClasses(hlVisibility);
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="max-w-[1600px] mx-auto">
+        <div className="bg-white rounded-sm border border-sand-400/60 p-6 shadow-sm animate-pulse">
+          <div className="h-6 bg-sand-300 rounded w-64 mb-4" />
           <div className="space-y-4">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-24 bg-cream-200 rounded" />
+              <div key={i} className="h-24 bg-sand-200 rounded" />
             ))}
           </div>
         </div>
-      )}
+      </div>
+    );
+  }
 
-      {/* Error */}
-      {isError && (
-        <div className="bg-white rounded-sm border border-cream-500 p-6 shadow-sm text-center py-12">
-          <p className="text-warm-gray-600 mb-4">Failed to load content for this page.</p>
+  // Error state
+  if (isError) {
+    return (
+      <div className="max-w-[1600px] mx-auto">
+        <div className="bg-white rounded-sm border border-sand-400/60 p-6 shadow-sm text-center py-12">
+          <p className="text-warm-600 mb-4">Failed to load content for this page.</p>
           <Link href={`/projects/${projectId}/onboarding/content`}>
             <Button variant="secondary">Back to Content</Button>
           </Link>
         </div>
-      )}
+      </div>
+    );
+  }
 
-      {/* Content */}
-      {content && (
-        <div className="bg-white rounded-sm border border-cream-500 p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold text-warm-gray-900">Content Preview</h2>
-            {content.word_count && (
-              <span className="text-xs text-warm-gray-500 font-mono">
-                {content.word_count.toLocaleString()} words
-              </span>
+  if (!content) return null;
+
+  return (
+    <div className="max-w-[1600px] mx-auto pb-24">
+      {/* Page Header */}
+      <div className="pt-1 pb-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <Link
+              href={`/projects/${projectId}/onboarding/content`}
+              className="inline-flex items-center gap-1.5 text-sm text-warm-500 hover:text-warm-700 mb-3 group"
+            >
+              <svg
+                className="w-4 h-4 transition-transform group-hover:-translate-x-0.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15 19l-7-7 7-7" />
+              </svg>
+              Back to content list
+            </Link>
+            <div className="flex items-center gap-3">
+              <h1 className="text-lg font-semibold text-warm-900">
+                {pageInfo?.url ?? pageId}
+              </h1>
+              {primaryKeyword && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-medium bg-palm-100 text-palm-700 border border-palm-200">
+                  {primaryKeyword}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Highlight Controls */}
+          <div className="mt-6">
+            <HighlightToggleControls onChange={setHlVisibility} />
+          </div>
+        </div>
+      </div>
+
+      {/* Two-column layout */}
+      <div className="flex gap-6 items-start">
+        {/* Left Column: Editor (~65%) */}
+        <div className="flex-1 min-w-0 space-y-4">
+          {/* Field 1: Page Title */}
+          <div className="field-section bg-white rounded-sm border border-sand-400/60 p-5">
+            <div className="flex items-center justify-between mb-2.5">
+              <label className="text-sm font-semibold text-warm-800">Page Title</label>
+              <CharCounter value={titleLen} max={70} />
+            </div>
+            <input
+              type="text"
+              value={pageTitle ?? ''}
+              onChange={(e) => setPageTitle(e.target.value)}
+              className="w-full px-3 py-2.5 text-sm bg-sand-50 border border-sand-300 rounded-sm text-warm-900 placeholder-warm-400 focus:outline-none focus:ring-2 focus:ring-palm-400/30 focus:border-palm-400 transition-all"
+            />
+          </div>
+
+          {/* Field 2: Meta Description */}
+          <div className="field-section bg-white rounded-sm border border-sand-400/60 p-5">
+            <div className="flex items-center justify-between mb-2.5">
+              <label className="text-sm font-semibold text-warm-800">Meta Description</label>
+              <CharCounter value={metaLen} max={160} />
+            </div>
+            <textarea
+              rows={2}
+              value={metaDescription ?? ''}
+              onChange={(e) => setMetaDescription(e.target.value)}
+              className="w-full px-3 py-2.5 text-sm bg-sand-50 border border-sand-300 rounded-sm text-warm-900 placeholder-warm-400 focus:outline-none focus:ring-2 focus:ring-palm-400/30 focus:border-palm-400 transition-all resize-none"
+            />
+          </div>
+
+          {/* Field 3: Top Description */}
+          <div className="field-section bg-white rounded-sm border border-sand-400/60 p-5">
+            <div className="flex items-center justify-between mb-2.5">
+              <label className="text-sm font-semibold text-warm-800">Top Description</label>
+              <WordCounter count={topWordCount} />
+            </div>
+            <textarea
+              rows={3}
+              value={topDescription ?? ''}
+              onChange={(e) => setTopDescription(e.target.value)}
+              className="w-full px-3 py-2.5 text-sm bg-sand-50 border border-sand-300 rounded-sm text-warm-900 placeholder-warm-400 focus:outline-none focus:ring-2 focus:ring-palm-400/30 focus:border-palm-400 transition-all resize-none leading-relaxed"
+            />
+          </div>
+
+          {/* Field 4: Bottom Description (Lexical Editor) */}
+          <div className={`field-section bg-white rounded-sm border border-sand-400/60 ${hlClasses}`}>
+            <div className="flex items-center justify-between px-5 pt-4 pb-0">
+              <label className="text-sm font-semibold text-warm-800">Bottom Description</label>
+            </div>
+
+            <ContentEditorWithSource
+              initialHtml={bottomDescription ?? ''}
+              onChange={setBottomDescription}
+              primaryKeyword={primaryKeyword}
+              variations={variations}
+              lsiTerms={lsiTerms}
+              tropeRanges={tropeRanges}
+            />
+
+            {/* Word count footer */}
+            <div className="flex items-center justify-between px-5 py-3 border-t border-sand-200 bg-sand-50/50">
+              <span className="text-xs font-mono text-warm-500">{bottomWordCount} words</span>
+              <div className="flex items-center gap-4 text-xs text-warm-400">
+                <span>{headings.h2} H2</span>
+                <span className="text-warm-300">·</span>
+                <span>{headings.h3} H3</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Sidebar (~35%) */}
+        <div className="w-[340px] flex-shrink-0 space-y-4 sticky top-[72px] max-h-[calc(100vh-140px)] overflow-y-auto pb-4 sidebar-scroll">
+          <QualityStatusCard qaResults={qaResults} />
+          <FlaggedPassagesCard issues={qaResults?.issues ?? []} />
+          <ContentStatsCard
+            wordCount={totalWordCount}
+            headings={headings}
+            primaryKeyword={primaryKeyword}
+            bottomHtml={bottomDescription}
+          />
+          <LsiTermsCard lsiTerms={lsiTerms} bottomHtml={bottomDescription} />
+          <HeadingOutlineCard html={bottomDescription} />
+        </div>
+      </div>
+
+      {/* Bottom Action Bar */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-sand-300 z-30 shadow-[0_-1px_0_rgba(201,189,168,0.4),0_-4px_16px_rgba(0,0,0,0.04)]">
+        <div className="max-w-[1600px] mx-auto px-6 h-16 flex items-center justify-between">
+          {/* Left: save status */}
+          <div className="flex items-center gap-2 text-xs text-warm-400">
+            {updateContent.isPending ? (
+              <>
+                <div className="w-1.5 h-1.5 rounded-full bg-lagoon-400 animate-pulse" />
+                Saving...
+              </>
+            ) : updateContent.isSuccess ? (
+              <>
+                <div className="w-1.5 h-1.5 rounded-full bg-palm-400" />
+                Saved
+              </>
+            ) : (
+              <>
+                <div className="w-1.5 h-1.5 rounded-full bg-warm-300" />
+                Unsaved changes
+              </>
             )}
           </div>
 
-          <div className="space-y-4">
-            <FieldCard label="Page Title" value={content.page_title} />
-            <FieldCard label="Meta Description" value={content.meta_description} />
-            <FieldCard label="Top Description" value={content.top_description} />
-            <FieldCard label="Bottom Description (HTML)" value={content.bottom_description} html />
-          </div>
-
-          {/* QA Results */}
-          {content.qa_results && Object.keys(content.qa_results).length > 0 && (
-            <div className="mt-6 border border-cream-400 rounded-sm overflow-hidden">
-              <div className="px-3 py-2 bg-cream-100 border-b border-cream-400">
-                <span className="text-xs font-medium text-warm-gray-700 uppercase tracking-wide">
-                  QA Results
-                </span>
-              </div>
-              <div className="px-4 py-3">
-                <pre className="text-xs text-warm-gray-700 font-mono whitespace-pre-wrap">
-                  {JSON.stringify(content.qa_results, null, 2)}
-                </pre>
-              </div>
-            </div>
-          )}
-
-          <hr className="border-cream-500 my-6" />
-
-          <div className="flex justify-end">
-            <Link href={`/projects/${projectId}/onboarding/content`}>
-              <Button variant="secondary">Back to Content</Button>
-            </Link>
+          {/* Right: Actions */}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleRecheck}
+              disabled={recheckContent.isPending || updateContent.isPending}
+              className="px-4 py-2 text-sm font-medium text-warm-600 bg-sand-200 hover:bg-sand-300 rounded-sm transition-colors disabled:opacity-50"
+            >
+              {recheckContent.isPending ? 'Checking...' : 'Re-run Checks'}
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={updateContent.isPending}
+              className="px-4 py-2 text-sm font-medium text-warm-700 bg-white border border-sand-400 hover:bg-sand-50 rounded-sm transition-colors disabled:opacity-50"
+            >
+              {updateContent.isPending ? 'Saving...' : 'Save Draft'}
+            </button>
+            <button
+              type="button"
+              onClick={handleApprove}
+              disabled={approveContent.isPending}
+              className={`px-5 py-2 text-sm font-semibold rounded-sm transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50 ${
+                content.is_approved
+                  ? 'text-warm-700 bg-sand-200 hover:bg-sand-300'
+                  : 'text-white bg-palm-500 hover:bg-palm-600'
+              }`}
+            >
+              {content.is_approved ? (
+                'Unapprove'
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                  Approve
+                </>
+              )}
+            </button>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

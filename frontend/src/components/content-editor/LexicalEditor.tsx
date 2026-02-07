@@ -14,7 +14,7 @@ import { ListNode, ListItemNode } from '@lexical/list';
 import { $generateNodesFromDOM } from '@lexical/html';
 import { $generateHtmlFromNodes } from '@lexical/html';
 import { $getRoot, $insertNodes, type EditorState, type LexicalEditor as LexicalEditorType } from 'lexical';
-import { HighlightNode } from './HighlightPlugin';
+import { HighlightNode, HighlightPlugin, type TropeRange } from './HighlightPlugin';
 
 const theme = {
   paragraph: 'mb-3 leading-relaxed text-warm-gray-800',
@@ -74,10 +74,14 @@ interface LexicalEditorProps {
   initialHtml: string;
   onChange?: (html: string) => void;
   className?: string;
+  primaryKeyword?: string;
+  variations?: Set<string>;
+  lsiTerms?: string[];
+  tropeRanges?: TropeRange[];
 }
 
 export const LexicalEditor = forwardRef<LexicalEditorHandle, LexicalEditorProps>(
-  function LexicalEditor({ initialHtml, onChange, className = '' }, ref) {
+  function LexicalEditor({ initialHtml, onChange, className = '', primaryKeyword, variations, lsiTerms, tropeRanges }, ref) {
     const editorRef = useRef<LexicalEditorType | null>(null);
 
     useImperativeHandle(ref, () => ({
@@ -128,6 +132,14 @@ export const LexicalEditor = forwardRef<LexicalEditorHandle, LexicalEditorProps>
           <OnChangePlugin onChange={handleChange} ignoreSelectionChange />
           <HtmlLoaderPlugin initialHtml={initialHtml} />
           <EditorRefPlugin editorRef={editorRef} />
+          {primaryKeyword && variations && lsiTerms && tropeRanges && (
+            <HighlightPlugin
+              primaryKeyword={primaryKeyword}
+              variations={variations}
+              lsiTerms={lsiTerms}
+              tropeRanges={tropeRanges}
+            />
+          )}
         </div>
       </LexicalComposer>
     );

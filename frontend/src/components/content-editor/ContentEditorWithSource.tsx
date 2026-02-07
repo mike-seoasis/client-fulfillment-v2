@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { LexicalEditor, type LexicalEditorHandle } from './LexicalEditor';
+import type { TropeRange } from './HighlightPlugin';
 
 type ViewMode = 'rendered' | 'html';
 
@@ -9,12 +10,20 @@ interface ContentEditorWithSourceProps {
   initialHtml: string;
   onChange?: (html: string) => void;
   className?: string;
+  primaryKeyword?: string;
+  variations?: Set<string>;
+  lsiTerms?: string[];
+  tropeRanges?: TropeRange[];
 }
 
 export function ContentEditorWithSource({
   initialHtml,
   onChange,
   className = '',
+  primaryKeyword,
+  variations,
+  lsiTerms,
+  tropeRanges,
 }: ContentEditorWithSourceProps) {
   const [activeTab, setActiveTab] = useState<ViewMode>('rendered');
   const [htmlSource, setHtmlSource] = useState(initialHtml);
@@ -87,6 +96,10 @@ export function ContentEditorWithSource({
               ref={editorRef}
               initialHtml={htmlSource}
               onChange={handleEditorChange}
+              primaryKeyword={primaryKeyword}
+              variations={variations}
+              lsiTerms={lsiTerms}
+              tropeRanges={tropeRanges}
             />
           </div>
         </div>

@@ -240,3 +240,25 @@ after each iteration and it's included in prompts for context.
   - `!important` is needed on the hide rules because the highlight CSS uses specific property values that would otherwise take precedence
   - Pre-existing TS error in GenerationProgress.test.tsx unchanged; eslint passes clean
 ---
+
+## 2026-02-07 - S6-018
+- Replaced read-only content preview page with full content editor layout
+- Two-column layout: left ~65% editor with 4 fields, right ~35% sidebar with QA/stats/LSI/outline
+- Header: back link, page URL (from status endpoint), primary keyword badge, highlight toggle controls
+- Field 1 — Page Title: text input with live character counter (N / 70, palm-600 under, coral-600 over)
+- Field 2 — Meta Description: textarea with live character counter (N / 160)
+- Field 3 — Top Description: textarea with live word counter
+- Field 4 — Bottom Description: ContentEditorWithSource (Lexical + HTML tabs) with word + heading count footer
+- Sidebar cards: Quality Status (pass/fail per check type), Flagged Passages, Content Stats, LSI Terms (found/missing), Heading Outline
+- Bottom action bar: save status indicator, Re-run Checks (saves first then rechecks), Save Draft, Approve/Unapprove
+- Updated ContentEditorWithSource and LexicalEditor to accept and pass through highlight props (primaryKeyword, variations, lsiTerms, tropeRanges)
+- HighlightPlugin now renders inside LexicalEditor when highlight props are provided
+- Files changed: `frontend/src/app/projects/[id]/onboarding/content/[pageId]/page.tsx` (replaced), `frontend/src/components/content-editor/ContentEditorWithSource.tsx` (modified), `frontend/src/components/content-editor/LexicalEditor.tsx` (modified)
+- **Learnings:**
+  - Page URL is not in PageContentResponse — must be fetched from ContentGenerationStatus (status endpoint) which includes `pages[]` with page_id, url, keyword per page
+  - LSI terms from brief come as `unknown[]` — need to handle both string and `{term: string}` / `{text: string}` object shapes
+  - QA results structure: `{passed: bool, issues: [{type, field, description, context}], checked_at: string}` — check types are lowercase snake_case (banned_word, em_dash, ai_opener, etc.)
+  - Highlight toggle visibility classes (hide-hl-keyword etc.) need to be applied on the editor's outer container, not directly on the Lexical root
+  - HighlightPlugin is a Lexical plugin that must render inside LexicalComposer — passed through ContentEditorWithSource → LexicalEditor as optional props
+  - Pre-existing TS error in GenerationProgress.test.tsx unchanged; eslint passes clean
+---
