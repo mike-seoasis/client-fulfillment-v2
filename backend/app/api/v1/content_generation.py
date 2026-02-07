@@ -43,12 +43,19 @@ _active_generations: set[str] = set()
 async def generate_content(
     project_id: str,
     background_tasks: BackgroundTasks,
+    force_refresh: bool = False,
+    refresh_briefs: bool = False,
     db: AsyncSession = Depends(get_session),
 ) -> ContentGenerationTriggerResponse:
     """Trigger content generation for all pages with approved keywords.
 
     Starts a background task that processes each approved page through
     the brief -> write -> check pipeline.
+
+    Args:
+        force_refresh: If True, regenerate content even for completed pages.
+        refresh_briefs: If True, also re-fetch POP briefs (costs API credits).
+            Only used when force_refresh is True.
 
     Returns 400 if no approved keywords exist.
     Returns 409 if generation is already in progress for this project.
@@ -88,6 +95,8 @@ async def generate_content(
     background_tasks.add_task(
         _run_generation_background,
         project_id=project_id,
+        force_refresh=force_refresh,
+        refresh_briefs=refresh_briefs,
     )
 
     logger.info(
@@ -104,7 +113,11 @@ async def generate_content(
     )
 
 
-async def _run_generation_background(project_id: str) -> None:
+async def _run_generation_background(
+    project_id: str,
+    force_refresh: bool = False,
+    refresh_briefs: bool = False,
+) -> None:
     """Background task wrapper for the content generation pipeline.
 
     Runs the pipeline and cleans up the active generation tracking.
@@ -112,7 +125,11 @@ async def _run_generation_background(project_id: str) -> None:
     from app.services.content_generation import run_content_pipeline
 
     try:
-        result = await run_content_pipeline(project_id)
+        result = await run_content_pipeline(
+            project_id,
+            force_refresh=force_refresh,
+            refresh_briefs=refresh_briefs,
+        )
         logger.info(
             "Content generation pipeline finished",
             extra={
@@ -267,10 +284,23 @@ async def get_page_content(
     # Build brief summary if content brief exists
     brief_summary = None
     if page.content_brief:
-        lsi_terms = page.content_brief.lsi_terms or []
+        brief = page.content_brief
+        lsi_terms = brief.lsi_terms or []
+        competitors = brief.competitors or []
+        related_questions = brief.related_questions or []
+
+        # Build word count range string
+        word_count_range = None
+        if brief.word_count_min and brief.word_count_max:
+            word_count_range = f"{brief.word_count_min}-{brief.word_count_max}"
+
         brief_summary = BriefSummary(
-            keyword=page.content_brief.keyword,
+            keyword=brief.keyword,
             lsi_terms_count=len(lsi_terms),
+            competitors_count=len(competitors),
+            related_questions_count=len(related_questions),
+            page_score_target=brief.page_score_target,
+            word_count_range=word_count_range,
         )
 
     content = page.page_content

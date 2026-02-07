@@ -19,7 +19,10 @@ from app.services.content_quality import (
     _check_ai_openers,
     _check_banned_words,
     _check_em_dashes,
+    _check_negation_contrast,
     _check_rhetorical_questions,
+    _check_tier1_ai_words,
+    _check_tier2_ai_words,
     _check_triplet_lists,
     _strip_faq_section,
     run_quality_checks,
@@ -303,6 +306,152 @@ class TestCheckRhetoricalQuestions:
 
         issues = _check_rhetorical_questions(fields)
         assert len(issues) == 0
+
+
+# ---------------------------------------------------------------------------
+# Check 6: Tier 1 AI Words
+# ---------------------------------------------------------------------------
+
+
+class TestCheckTier1AiWords:
+    """Tests for Tier 1 AI word detection."""
+
+    def test_detects_tier1_word(self) -> None:
+        """Positive: Tier 1 AI word 'delve' is detected."""
+        fields = {"bottom_description": "Let's delve into the details of these boots."}
+
+        issues = _check_tier1_ai_words(fields)
+        assert len(issues) == 1
+        assert issues[0].type == "tier1_ai_word"
+        assert "delve" in issues[0].description.lower()
+
+    def test_passes_without_tier1_words(self) -> None:
+        """Negative: clean content without Tier 1 words passes."""
+        fields = {"bottom_description": "These boots are warm and waterproof."}
+
+        issues = _check_tier1_ai_words(fields)
+        assert len(issues) == 0
+
+    def test_detects_multiple_tier1_words(self) -> None:
+        """Multiple Tier 1 words produce multiple issues."""
+        fields = {"bottom_description": "Unlock the crucial path to better footwear."}
+
+        issues = _check_tier1_ai_words(fields)
+        assert len(issues) == 2
+        words_found = {i.description for i in issues}
+        assert any("unlock" in d.lower() for d in words_found)
+        assert any("crucial" in d.lower() for d in words_found)
+
+    def test_case_insensitive(self) -> None:
+        """Tier 1 detection is case-insensitive."""
+        fields = {"page_title": "UNLEASH Your Potential"}
+
+        issues = _check_tier1_ai_words(fields)
+        assert len(issues) == 1
+        assert "unleash" in issues[0].description.lower()
+
+    def test_detects_multi_word_phrases(self) -> None:
+        """Multi-word Tier 1 phrases like 'tap into' are detected."""
+        fields = {"bottom_description": "Tap into the power of quality boots."}
+
+        issues = _check_tier1_ai_words(fields)
+        assert len(issues) >= 1
+        assert any("tap into" in i.description.lower() for i in issues)
+
+
+# ---------------------------------------------------------------------------
+# Check 7: Tier 2 AI Words
+# ---------------------------------------------------------------------------
+
+
+class TestCheckTier2AiWords:
+    """Tests for Tier 2 AI word excess detection."""
+
+    def test_detects_excess_tier2_words(self) -> None:
+        """Positive: 2+ Tier 2 words flagged."""
+        fields = {"bottom_description": "Our robust and seamless collection enhances your wardrobe."}
+
+        issues = _check_tier2_ai_words(fields)
+        assert len(issues) == 1
+        assert issues[0].type == "tier2_ai_excess"
+        assert "robust" in issues[0].context.lower()
+        assert "seamless" in issues[0].context.lower()
+
+    def test_passes_single_tier2_word(self) -> None:
+        """Negative: exactly 1 Tier 2 word is acceptable."""
+        fields = {"bottom_description": "Our seamless checkout makes ordering easy."}
+
+        issues = _check_tier2_ai_words(fields)
+        assert len(issues) == 0
+
+    def test_passes_no_tier2_words(self) -> None:
+        """Negative: no Tier 2 words passes."""
+        fields = {"bottom_description": "These boots are warm and waterproof."}
+
+        issues = _check_tier2_ai_words(fields)
+        assert len(issues) == 0
+
+    def test_counts_across_fields(self) -> None:
+        """Tier 2 words counted across all content fields."""
+        fields = {
+            "page_title": "Curated Winter Boots",
+            "bottom_description": "Our comprehensive collection.",
+        }
+
+        issues = _check_tier2_ai_words(fields)
+        assert len(issues) == 1
+        assert issues[0].type == "tier2_ai_excess"
+
+
+# ---------------------------------------------------------------------------
+# Check 8: Negation/Contrast Pattern
+# ---------------------------------------------------------------------------
+
+
+class TestCheckNegationContrast:
+    """Tests for negation/contrast pattern detection."""
+
+    def test_detects_excess_negation(self) -> None:
+        """Positive: 2+ negation patterns flagged."""
+        fields = {
+            "bottom_description": (
+                "It's not just a boot, it's a statement. "
+                "It's not about price, it's about value."
+            )
+        }
+
+        issues = _check_negation_contrast(fields)
+        assert len(issues) == 1
+        assert issues[0].type == "negation_contrast"
+        assert "2 found" in issues[0].description
+
+    def test_passes_single_negation(self) -> None:
+        """Negative: exactly 1 negation pattern is acceptable."""
+        fields = {
+            "bottom_description": "It's not just a boot, it's a statement. Great quality materials."
+        }
+
+        issues = _check_negation_contrast(fields)
+        assert len(issues) == 0
+
+    def test_passes_no_negation(self) -> None:
+        """Negative: no negation patterns passes."""
+        fields = {"bottom_description": "These boots are warm and durable."}
+
+        issues = _check_negation_contrast(fields)
+        assert len(issues) == 0
+
+    def test_detects_contracted_form(self) -> None:
+        """Detects both 'It's' and 'Its' forms (though 'Its' is grammatically different)."""
+        fields = {
+            "bottom_description": (
+                "It's not just style, it's substance. "
+                "Its not only warm, its also waterproof."
+            )
+        }
+
+        issues = _check_negation_contrast(fields)
+        assert len(issues) == 1  # 2 matches → flagged
 
 
 class TestStripFaqSection:

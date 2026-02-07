@@ -315,11 +315,15 @@ class TestBuildContentPromptBrandConfig:
     def test_system_prompt_includes_ai_snippet(
         self, crawled_page: CrawledPage, brand_config: dict
     ) -> None:
-        """System prompt includes ai_prompt_snippet.full_prompt."""
+        """System prompt includes ai_prompt_snippet.full_prompt and writing rules."""
         result = build_content_prompt(crawled_page, "winter boots", brand_config, None)
 
         assert "warm, friendly tone" in result.system_prompt
         assert "Brand Guidelines" in result.system_prompt
+        # Skill bible sections
+        assert "Writing Rules" in result.system_prompt
+        assert "AI Writing Avoidance" in result.system_prompt
+        assert "Benefits over features" in result.system_prompt
 
     def test_user_prompt_includes_banned_words(
         self, crawled_page: CrawledPage, brand_config: dict
@@ -334,13 +338,18 @@ class TestBuildContentPromptBrandConfig:
     def test_no_brand_config_still_works(
         self, crawled_page: CrawledPage
     ) -> None:
-        """Empty brand config produces valid prompts without brand sections."""
+        """Empty brand config produces valid prompts with writing rules but no brand sections."""
         result = build_content_prompt(crawled_page, "winter boots", {}, None)
 
         assert "SEO copywriter" in result.system_prompt
+        # Writing rules still present even without brand config
+        assert "Writing Rules" in result.system_prompt
+        assert "AI Writing Avoidance" in result.system_prompt
         assert "## Task" in result.user_prompt
         # Brand Voice section should be omitted entirely
         assert "Banned Words" not in result.user_prompt
+        # Brand Guidelines section should be omitted
+        assert "Brand Guidelines" not in result.system_prompt
 
     def test_page_context_included(
         self, crawled_page: CrawledPage, brand_config: dict
@@ -352,6 +361,129 @@ class TestBuildContentPromptBrandConfig:
         assert "Winter Boots Collection" in result.user_prompt
         assert "42" in result.user_prompt
         assert "footwear" in result.user_prompt
+
+
+# ---------------------------------------------------------------------------
+# Prompt Builder: dynamic output format
+# ---------------------------------------------------------------------------
+
+
+class TestBuildContentPromptOutputFormat:
+    """Tests for dynamic output format template from POP heading data."""
+
+    def test_output_format_has_dynamic_template(
+        self, crawled_page: CrawledPage, brand_config: dict, content_brief_enriched: ContentBrief
+    ) -> None:
+        """With enriched brief, output format uses POP heading and word count data."""
+        result = build_content_prompt(crawled_page, "winter boots", brand_config, content_brief_enriched)
+
+        # H2/H3 section counts from heading_targets
+        assert "5 H2 sections" in result.user_prompt
+        assert "range: 3-8" in result.user_prompt
+        assert "8 H3 subsections" in result.user_prompt
+        assert "range: 4-12" in result.user_prompt
+        # Word count range from POP
+        assert "600-1200 words" in result.user_prompt
+        # Formatting rules from bible
+        assert "Title Case" in result.user_prompt
+        assert "Max 7 Words" in result.user_prompt
+
+    def test_output_format_fallback_without_brief(
+        self, crawled_page: CrawledPage, brand_config: dict
+    ) -> None:
+        """Without brief, output format uses sensible default structure."""
+        result = build_content_prompt(crawled_page, "winter boots", brand_config, None)
+
+        # Default heading counts
+        assert "3 H2 sections" in result.user_prompt
+        assert "4 H3 subsections" in result.user_prompt
+        # Default word count
+        assert "300-400 words" in result.user_prompt
+        # Formatting rules always present
+        assert "Title Case" in result.user_prompt
+        assert "Max 7 Words" in result.user_prompt
+
+    def test_output_format_page_title_spec(
+        self, crawled_page: CrawledPage, brand_config: dict
+    ) -> None:
+        """Output format includes enriched page_title spec."""
+        result = build_content_prompt(crawled_page, "winter boots", brand_config, None)
+
+        assert "benefit-driven" in result.user_prompt
+        assert "under 60 chars" in result.user_prompt
+
+    def test_output_format_meta_description_spec(
+        self, crawled_page: CrawledPage, brand_config: dict
+    ) -> None:
+        """Output format includes enriched meta_description spec."""
+        result = build_content_prompt(crawled_page, "winter boots", brand_config, None)
+
+        assert "150-160 chars" in result.user_prompt
+        assert "CTA" in result.user_prompt
+
+    def test_output_format_semantic_html_rules(
+        self, crawled_page: CrawledPage, brand_config: dict
+    ) -> None:
+        """Output format includes semantic HTML rules."""
+        result = build_content_prompt(crawled_page, "winter boots", brand_config, None)
+
+        assert "semantic HTML only" in result.user_prompt
+        assert "No inline styles" in result.user_prompt
+        assert "No div wrappers" in result.user_prompt
+
+
+# ---------------------------------------------------------------------------
+# Prompt Builder: content_limits word count override
+# ---------------------------------------------------------------------------
+
+
+class TestBuildContentPromptWordCountOverride:
+    """Tests for brand_config.content_limits.max_word_count capping."""
+
+    def test_caps_word_count_without_brief(
+        self, crawled_page: CrawledPage
+    ) -> None:
+        """max_word_count caps the default 300-400 range."""
+        config: dict = {"content_limits": {"max_word_count": 250}}
+        result = build_content_prompt(crawled_page, "winter boots", config, None)
+
+        # Both SEO targets and output format should show capped range
+        assert "250 words" in result.user_prompt
+        assert "300-400" not in result.user_prompt
+
+    def test_caps_word_count_with_brief(
+        self, crawled_page: CrawledPage, content_brief_enriched: ContentBrief
+    ) -> None:
+        """max_word_count caps POP's word count range (600-1200 → capped at 500)."""
+        config: dict = {
+            "ai_prompt_snippet": {"full_prompt": "Be concise."},
+            "content_limits": {"max_word_count": 500},
+        }
+        result = build_content_prompt(crawled_page, "winter boots", config, content_brief_enriched)
+
+        # SEO targets should show 500 as max
+        assert "500 words" in result.user_prompt
+        # Should NOT show the original 1200 max
+        assert "1200" not in result.user_prompt
+
+    def test_no_cap_when_not_set(
+        self, crawled_page: CrawledPage, content_brief_enriched: ContentBrief
+    ) -> None:
+        """Without content_limits, POP word count is used as-is."""
+        config: dict = {"ai_prompt_snippet": {"full_prompt": "Normal tone."}}
+        result = build_content_prompt(crawled_page, "winter boots", config, content_brief_enriched)
+
+        assert "600-1200 words" in result.user_prompt
+
+    def test_cap_higher_than_pop_is_noop(
+        self, crawled_page: CrawledPage, content_brief_enriched: ContentBrief
+    ) -> None:
+        """max_word_count higher than POP range has no effect."""
+        config: dict = {"content_limits": {"max_word_count": 5000}}
+        result = build_content_prompt(crawled_page, "winter boots", config, content_brief_enriched)
+
+        # Original POP range preserved
+        assert "600-1200 words" in result.user_prompt
 
 
 # ---------------------------------------------------------------------------

@@ -31,6 +31,29 @@ TRIPLET_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Tier 1: Universal banned AI words (never use)
+TIER1_AI_WORDS = [
+    "delve", "delving", "unpack", "uncover",
+    "unlock", "unleash", "harness", "leverage", "tap into",
+    "embark", "navigate", "landscape", "realm", "at the forefront",
+    "game-changer", "revolutionary", "transformative", "cutting-edge",
+    "groundbreaking", "unprecedented",
+    "crucial", "essential", "vital", "pivotal", "critical",
+]
+
+# Tier 2: AI words allowed max 1 per piece
+TIER2_AI_WORDS = [
+    "indeed", "furthermore", "moreover", "therefore", "additionally",
+    "consequently", "subsequently", "accordingly", "notably", "significantly",
+    "robust", "seamless", "comprehensive", "streamline", "enhance",
+    "optimize", "elevate", "curated", "tailored", "bespoke", "nuanced", "intricate",
+]
+
+# Negation/contrast pattern: "It's not (just) X, it's Y"
+NEGATION_PATTERN = re.compile(
+    r"[Ii]t'?s\s+not\s+(?:just\s+)?[^,]+,\s+it'?s\s+",
+)
+
 
 @dataclass
 class QualityIssue:
@@ -75,6 +98,9 @@ def run_quality_checks(content: PageContent, brand_config: dict[str, Any]) -> Qu
     3. AI opener patterns
     4. Excessive triplet lists (>2 instances)
     5. Excessive rhetorical questions outside FAQ (>1)
+    6. Tier 1 AI words (universal banned list)
+    7. Tier 2 AI words (max 1 per piece)
+    8. Negation/contrast pattern (max 1 per piece)
 
     Args:
         content: PageContent with generated fields.
@@ -103,6 +129,15 @@ def run_quality_checks(content: PageContent, brand_config: dict[str, Any]) -> Qu
 
     # Check 5: Excessive rhetorical questions
     issues.extend(_check_rhetorical_questions(fields))
+
+    # Check 6: Tier 1 AI words
+    issues.extend(_check_tier1_ai_words(fields))
+
+    # Check 7: Tier 2 AI words (max 1 per piece)
+    issues.extend(_check_tier2_ai_words(fields))
+
+    # Check 8: Negation/contrast pattern (max 1 per piece)
+    issues.extend(_check_negation_contrast(fields))
 
     result = QualityResult(
         passed=len(issues) == 0,
@@ -281,3 +316,75 @@ def _strip_faq_section(html: str) -> str:
         # Return everything before the FAQ section
         return html[: match.start()]
     return html
+
+
+def _check_tier1_ai_words(fields: dict[str, str]) -> list[QualityIssue]:
+    """Check 6: Flag any Tier 1 AI words (universal banned list)."""
+    issues: list[QualityIssue] = []
+
+    for field_name, text in fields.items():
+        for word in TIER1_AI_WORDS:
+            pattern = re.compile(r"\b" + re.escape(word) + r"\b", re.IGNORECASE)
+            for match in pattern.finditer(text):
+                start = max(0, match.start() - 30)
+                end = min(len(text), match.end() + 30)
+                context = text[start:end].strip()
+                issues.append(
+                    QualityIssue(
+                        type="tier1_ai_word",
+                        field=field_name,
+                        description=f'Tier 1 AI word "{word}" detected',
+                        context=f"...{context}...",
+                    )
+                )
+
+    return issues
+
+
+def _check_tier2_ai_words(fields: dict[str, str]) -> list[QualityIssue]:
+    """Check 7: Flag if more than 1 Tier 2 AI word across all fields."""
+    issues: list[QualityIssue] = []
+    found_words: list[tuple[str, str]] = []  # (field_name, word)
+
+    for field_name, text in fields.items():
+        for word in TIER2_AI_WORDS:
+            pattern = re.compile(r"\b" + re.escape(word) + r"\b", re.IGNORECASE)
+            if pattern.search(text):
+                found_words.append((field_name, word))
+
+    if len(found_words) > 1:
+        word_list = ", ".join(f'"{w}"' for _, w in found_words)
+        fields_list = ", ".join(sorted({f for f, _ in found_words}))
+        issues.append(
+            QualityIssue(
+                type="tier2_ai_excess",
+                field=fields_list,
+                description=f"Tier 2 AI words exceed limit: {len(found_words)} found (max 1 per piece)",
+                context=f"Words found: {word_list}",
+            )
+        )
+
+    return issues
+
+
+def _check_negation_contrast(fields: dict[str, str]) -> list[QualityIssue]:
+    """Check 8: Flag if more than 1 negation/contrast pattern across all fields."""
+    issues: list[QualityIssue] = []
+    all_matches: list[tuple[str, str]] = []  # (field_name, matched_text)
+
+    for field_name, text in fields.items():
+        for match in NEGATION_PATTERN.finditer(text):
+            all_matches.append((field_name, match.group().strip()))
+
+    if len(all_matches) > 1:
+        examples = [f'{fname}: "{matched}"' for fname, matched in all_matches[:3]]
+        issues.append(
+            QualityIssue(
+                type="negation_contrast",
+                field="multiple",
+                description=f"Excessive negation/contrast patterns: {len(all_matches)} found (max 1)",
+                context="; ".join(examples),
+            )
+        )
+
+    return issues

@@ -66,6 +66,7 @@ class PipelineResult:
 async def run_content_pipeline(
     project_id: str,
     force_refresh: bool = False,
+    refresh_briefs: bool = False,
 ) -> PipelineResult:
     """Run the content generation pipeline for all approved pages in a project.
 
@@ -79,6 +80,8 @@ async def run_content_pipeline(
         project_id: UUID of the project to generate content for.
         force_refresh: If True, regenerate content even for pages with
             status='complete'.
+        refresh_briefs: If True, also re-fetch POP briefs (costs API credits).
+            Only used when force_refresh is True.
 
     Returns:
         PipelineResult with per-page results and aggregate counts.
@@ -134,6 +137,7 @@ async def run_content_pipeline(
                 page_data=page_data,
                 brand_config=brand_config,
                 force_refresh=force_refresh,
+                refresh_briefs=refresh_briefs,
             )
 
     tasks = [_process_with_semaphore(pd) for pd in pages_data]
@@ -238,6 +242,7 @@ async def _process_single_page(
     page_data: dict[str, Any],
     brand_config: dict[str, Any],
     force_refresh: bool,
+    refresh_briefs: bool = False,
 ) -> PipelinePageResult:
     """Process a single page through the brief → write → check pipeline.
 
@@ -295,12 +300,15 @@ async def _process_single_page(
             page_content.generation_started_at = datetime.now(UTC)
             await db.flush()
 
+            # By default, use cached POP brief — force_refresh only controls
+            # whether we re-run the Claude writing step. Re-fetching from POP
+            # (which costs API credits) requires explicit refresh_briefs=True.
             brief_result = await fetch_content_brief(
                 db=db,
                 crawled_page=crawled_page,
                 keyword=keyword,
                 target_url=url,
-                force_refresh=force_refresh,
+                force_refresh=refresh_briefs,
             )
 
             content_brief = brief_result.content_brief

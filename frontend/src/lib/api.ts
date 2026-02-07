@@ -325,10 +325,15 @@ export interface PromptLogResponse {
  * Returns 202 on success. Background task runs the pipeline.
  */
 export function triggerContentGeneration(
-  projectId: string
+  projectId: string,
+  options?: { forceRefresh?: boolean; refreshBriefs?: boolean }
 ): Promise<ContentGenerationTriggerResponse> {
+  const searchParams = new URLSearchParams();
+  if (options?.forceRefresh) searchParams.set('force_refresh', 'true');
+  if (options?.refreshBriefs) searchParams.set('refresh_briefs', 'true');
+  const qs = searchParams.toString();
   return apiClient.post<ContentGenerationTriggerResponse>(
-    `/projects/${projectId}/generate-content`
+    `/projects/${projectId}/generate-content${qs ? `?${qs}` : ''}`
   );
 }
 

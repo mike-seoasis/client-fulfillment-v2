@@ -27,10 +27,24 @@ logger = get_logger(__name__)
 CONTENT_WRITING_MODEL = "claude-sonnet-4-5-20250929"
 CONTENT_WRITING_MAX_TOKENS = 4096
 CONTENT_WRITING_TEMPERATURE = 0.7
+CONTENT_WRITING_TIMEOUT = 120.0  # Longer timeout for content generation (600-1200 word output)
 
 # Default word count target when ContentBrief is missing
 DEFAULT_WORD_COUNT_MIN = 300
 DEFAULT_WORD_COUNT_MAX = 400
+
+
+def _get_word_count_override(brand_config: dict[str, Any]) -> int | None:
+    """Extract max_word_count from brand_config.content_limits if set.
+
+    Returns None if not configured (POP data drives the target).
+    """
+    limits = brand_config.get("content_limits")
+    if isinstance(limits, dict):
+        val = limits.get("max_word_count")
+        if isinstance(val, (int, float)) and val > 0:
+            return int(val)
+    return None
 
 
 @dataclass
@@ -71,6 +85,9 @@ def build_content_prompt(
 def _build_system_prompt(brand_config: dict[str, Any]) -> str:
     """Build the system prompt using ai_prompt_snippet from brand config.
 
+    Includes copywriting craft guidelines, AI trope avoidance rules, and
+    formatting standards from the skill bible.
+
     Args:
         brand_config: The BrandConfig.v2_schema dict.
 
@@ -82,16 +99,52 @@ def _build_system_prompt(brand_config: dict[str, Any]) -> str:
     if isinstance(ai_snippet, dict):
         full_prompt = ai_snippet.get("full_prompt", "")
 
-    base = (
-        "You are an expert SEO copywriter generating collection page content. "
+    parts = [
+        "You are an expert e-commerce SEO copywriter generating collection page content. "
         "You write compelling, search-optimized content that drives organic traffic "
-        "and converts visitors into customers."
-    )
+        "and converts visitors into customers.",
+        "",
+        "## Writing Rules",
+        "- Benefits over features (apply the \"So What?\" test)",
+        "- Be specific, not vague (\"Ships in 2-3 days\" not \"Fast shipping\")",
+        "- One idea per sentence",
+        "- Write like you talk — read it aloud, if it sounds stiff, rewrite",
+        "- Every word earns its place — cut filler ruthlessly",
+        "- Use \"you\" and \"your\" — make it about the reader",
+        "- Use contractions (you'll, we're, don't)",
+        "- Active voice, not passive",
+        "- Show, don't tell (\"Double-stitched seams\" not \"High quality\")",
+        "",
+        "## AI Writing Avoidance (Critical)",
+        "NEVER use these words: delve, unlock, unleash, harness, leverage, embark, "
+        "navigate, landscape, realm, game-changer, revolutionary, transformative, "
+        "cutting-edge, groundbreaking, unprecedented, crucial, essential, vital, pivotal",
+        "",
+        "Limit to MAX 1 per piece: indeed, furthermore, moreover, robust, seamless, "
+        "comprehensive, streamline, enhance, optimize, elevate, curated, tailored, bespoke",
+        "",
+        "NEVER use these phrases: \"In today's...\", \"Whether you're...\", "
+        "\"It's no secret...\", \"When it comes to...\", \"In order to...\", "
+        "\"It's important to note...\", \"At the end of the day...\"",
+        "",
+        "Avoid these patterns:",
+        "- \"It's not just X, it's Y\" (max 1 per piece)",
+        "- Three parallel items in a row (\"Fast. Simple. Powerful.\")",
+        "- Rhetorical question then answer (\"The result? ...\")",
+        "- Em dashes (—) — use commas or periods instead",
+        "",
+        "## Formatting",
+        "- NO em dashes (—)",
+        "- Headers: Title Case, max 7 words",
+        "- Paragraphs: 2-4 sentences max",
+        "- Bold key phrases (not keywords)",
+    ]
 
     if full_prompt:
-        return f"{base}\n\n## Brand Guidelines\n{full_prompt}"
+        parts.append("")
+        parts.append(f"## Brand Guidelines\n{full_prompt}")
 
-    return base
+    return "\n".join(parts)
 
 
 def _build_user_prompt(
@@ -121,7 +174,7 @@ def _build_user_prompt(
     sections.append(_build_page_context_section(page))
 
     # ## SEO Targets
-    sections.append(_build_seo_targets_section(keyword, content_brief))
+    sections.append(_build_seo_targets_section(keyword, content_brief, brand_config))
 
     # ## Brand Voice
     brand_voice = _build_brand_voice_section(brand_config)
@@ -129,7 +182,7 @@ def _build_user_prompt(
         sections.append(brand_voice)
 
     # ## Output Format
-    sections.append(_build_output_format_section())
+    sections.append(_build_output_format_section(content_brief, brand_config))
 
     return "\n\n".join(sections)
 
@@ -166,23 +219,33 @@ def _build_page_context_section(page: CrawledPage) -> str:
 def _build_seo_targets_section(
     keyword: str,
     content_brief: ContentBrief | None,
+    brand_config: dict[str, Any] | None = None,
 ) -> str:
     """Build the ## SEO Targets section from POP's cleanedContentBrief.
 
     Uses the per-location, per-term targets from POP directly rather than
     our own reconstructed version. Falls back to parsed ContentBrief fields
     if cleanedContentBrief is not available (e.g., mock mode).
+
+    Applies brand_config.content_limits.max_word_count cap when set.
     """
+    max_override = _get_word_count_override(brand_config or {})
+
     lines = ["## SEO Targets"]
     lines.append(f"- **Primary Keyword:** {keyword}")
 
     if content_brief is None:
+        wc_min = DEFAULT_WORD_COUNT_MIN
+        wc_max = DEFAULT_WORD_COUNT_MAX
+        if max_override is not None:
+            wc_max = min(wc_max, max_override)
+            wc_min = min(wc_min, wc_max)
         lines.append(
             "- **LSI Terms:** not available (generate naturally relevant content)"
         )
         lines.append(
             f"- **Word Count Target (bottom_description):** "
-            f"{DEFAULT_WORD_COUNT_MIN}-{DEFAULT_WORD_COUNT_MAX} words"
+            f"{wc_min}-{wc_max} words"
         )
         return "\n".join(lines)
 
@@ -190,10 +253,10 @@ def _build_seo_targets_section(
     cb = raw.get("cleanedContentBrief")
 
     if isinstance(cb, dict) and cb:
-        lines.extend(_build_from_cleaned_brief(cb, keyword, content_brief, raw))
+        lines.extend(_build_from_cleaned_brief(cb, keyword, content_brief, raw, max_override))
     else:
         # Fallback: use parsed ContentBrief fields (mock mode)
-        lines.extend(_build_from_parsed_brief(content_brief))
+        lines.extend(_build_from_parsed_brief(content_brief, max_override))
 
     return "\n".join(lines)
 
@@ -203,6 +266,7 @@ def _build_from_cleaned_brief(
     keyword: str,
     content_brief: ContentBrief,
     raw: dict[str, Any],
+    max_word_count: int | None = None,
 ) -> list[str]:
     """Build SEO targets from POP's cleanedContentBrief data."""
     lines: list[str] = []
@@ -336,17 +400,27 @@ def _build_from_cleaned_brief(
     wc_max = content_brief.word_count_max
     wc_target = content_brief.word_count_target
     if wc_min and wc_max:
+        if max_word_count is not None:
+            wc_max = min(wc_max, max_word_count)
+            wc_min = min(wc_min, wc_max)
         lines.append(
             f"- **Word Count Target (bottom_description):** {wc_min}-{wc_max} words"
         )
     elif wc_target:
+        if max_word_count is not None:
+            wc_target = min(wc_target, max_word_count)
         lines.append(
             f"- **Word Count Target (bottom_description):** ~{wc_target} words"
         )
     else:
+        fallback_min = DEFAULT_WORD_COUNT_MIN
+        fallback_max = DEFAULT_WORD_COUNT_MAX
+        if max_word_count is not None:
+            fallback_max = min(fallback_max, max_word_count)
+            fallback_min = min(fallback_min, fallback_max)
         lines.append(
             f"- **Word Count Target (bottom_description):** "
-            f"{DEFAULT_WORD_COUNT_MIN}-{DEFAULT_WORD_COUNT_MAX} words"
+            f"{fallback_min}-{fallback_max} words"
         )
 
     # --- Competitor context ---
@@ -361,7 +435,10 @@ def _build_from_cleaned_brief(
     return lines
 
 
-def _build_from_parsed_brief(content_brief: ContentBrief) -> list[str]:
+def _build_from_parsed_brief(
+    content_brief: ContentBrief,
+    max_word_count: int | None = None,
+) -> list[str]:
     """Fallback: build SEO targets from parsed ContentBrief fields (mock mode)."""
     lines: list[str] = []
 
@@ -390,17 +467,27 @@ def _build_from_parsed_brief(content_brief: ContentBrief) -> list[str]:
     wc_max = content_brief.word_count_max
     wc_target = content_brief.word_count_target
     if wc_min and wc_max:
+        if max_word_count is not None:
+            wc_max = min(wc_max, max_word_count)
+            wc_min = min(wc_min, wc_max)
         lines.append(
             f"- **Word Count Target (bottom_description):** {wc_min}-{wc_max} words"
         )
     elif wc_target:
+        if max_word_count is not None:
+            wc_target = min(wc_target, max_word_count)
         lines.append(
             f"- **Word Count Target (bottom_description):** ~{wc_target} words"
         )
     else:
+        fallback_min = DEFAULT_WORD_COUNT_MIN
+        fallback_max = DEFAULT_WORD_COUNT_MAX
+        if max_word_count is not None:
+            fallback_max = min(fallback_max, max_word_count)
+            fallback_min = min(fallback_min, fallback_max)
         lines.append(
             f"- **Word Count Target (bottom_description):** "
-            f"{DEFAULT_WORD_COUNT_MIN}-{DEFAULT_WORD_COUNT_MAX} words"
+            f"{fallback_min}-{fallback_max} words"
         )
 
     return lines
@@ -440,29 +527,114 @@ def _build_brand_voice_section(brand_config: dict[str, Any]) -> str | None:
     return f"## Brand Voice\n**Banned Words:** {', '.join(banned_words)}"
 
 
-def _build_output_format_section() -> str:
-    """Build the ## Output Format section specifying JSON structure."""
-    return (
-        "## Output Format\n"
+def _build_output_format_section(
+    content_brief: ContentBrief | None = None,
+    brand_config: dict[str, Any] | None = None,
+) -> str:
+    """Build the ## Output Format section specifying JSON structure.
+
+    Dynamically builds the bottom_description template from POP heading data
+    when a ContentBrief is available. Falls back to a sensible default template.
+
+    Args:
+        content_brief: Optional ContentBrief with heading_targets and word count.
+        brand_config: Optional brand config with content_limits override.
+    """
+    # --- Static parts (always included) ---
+    lines = [
+        "## Output Format",
         "Respond with ONLY a valid JSON object (no markdown fencing, no extra text) "
-        "containing exactly these 4 keys:\n"
-        "\n"
-        "```\n"
-        "{\n"
-        '  "page_title": "...",\n'
-        '  "meta_description": "...",\n'
-        '  "top_description": "...",\n'
-        '  "bottom_description": "..."\n'
-        "}\n"
-        "```\n"
-        "\n"
-        "**Field specifications:**\n"
-        "- **page_title**: SEO-optimized, includes the primary keyword, under 60 characters.\n"
-        "- **meta_description**: Optimized for click-through rate, includes the primary keyword, under 160 characters.\n"
-        "- **top_description**: Plain text, 1-2 sentences describing the collection page. No HTML.\n"
-        "- **bottom_description**: HTML with headings (`<h2>`, `<h3>`) and an FAQ section. "
-        "Target the word count specified above. Use semantic HTML (no inline styles)."
-    )
+        "containing exactly these 4 keys:",
+        "",
+        "```",
+        "{",
+        '  "page_title": "...",',
+        '  "meta_description": "...",',
+        '  "top_description": "...",',
+        '  "bottom_description": "..."',
+        "}",
+        "```",
+        "",
+        "**Field specifications:**",
+        "- **page_title**: Title Case, 5-10 words, include primary keyword, under 60 chars, benefit-driven.",
+        "- **meta_description**: 150-160 chars, include primary keyword, include a CTA. Optimized for click-through rate.",
+        "- **top_description**: Plain text, 1-2 sentences. No HTML. Hook the reader, set expectations.",
+    ]
+
+    # --- Dynamic bottom_description template ---
+    lines.append(_build_bottom_description_spec(content_brief, brand_config))
+
+    # --- Shared formatting rules ---
+    lines.append("")
+    lines.append("Use semantic HTML only (h2, h3, p tags). No inline styles. No div wrappers.")
+
+    return "\n".join(lines)
+
+
+def _build_bottom_description_spec(
+    content_brief: ContentBrief | None,
+    brand_config: dict[str, Any] | None = None,
+) -> str:
+    """Build the bottom_description field spec from POP heading data.
+
+    Parses heading_targets to extract H2/H3 counts and word count range.
+    Falls back to sensible defaults when no brief is available.
+    Applies brand_config.content_limits.max_word_count cap when set.
+    """
+    # Extract heading targets
+    h2_target, h2_min, h2_max = 3, 2, 5
+    h3_target, h3_min, h3_max = 4, 2, 6
+    wc_min = DEFAULT_WORD_COUNT_MIN
+    wc_max = DEFAULT_WORD_COUNT_MAX
+
+    if content_brief is not None:
+        heading_targets = content_brief.heading_targets or []
+        for h in heading_targets:
+            tag = (h.get("tag") or "").lower()
+            if "h2 tag total" in tag:
+                h2_target = h.get("target", h2_target)
+                h2_min = h.get("min", h2_min)
+                h2_max = h.get("max", h2_max)
+            elif "h3 tag total" in tag:
+                h3_target = h.get("target", h3_target)
+                h3_min = h.get("min", h3_min)
+                h3_max = h.get("max", h3_max)
+
+        if content_brief.word_count_min and content_brief.word_count_max:
+            wc_min = content_brief.word_count_min
+            wc_max = content_brief.word_count_max
+        elif content_brief.word_count_target:
+            # Approximate a range from a single target
+            wc_min = int(content_brief.word_count_target * 0.8)
+            wc_max = int(content_brief.word_count_target * 1.2)
+
+    # Apply brand config word count cap if set
+    max_override = _get_word_count_override(brand_config or {})
+    if max_override is not None:
+        wc_max = min(wc_max, max_override)
+        wc_min = min(wc_min, wc_max)
+
+    lines = [
+        f"- **bottom_description** (HTML, {wc_min}-{wc_max} words)",
+        "",
+        "  Structure your content with approximately:",
+        f"  - {h2_target} H2 sections (range: {h2_min}-{h2_max})",
+        f"  - {h3_target} H3 subsections distributed across H2 sections (range: {h3_min}-{h3_max})",
+        "",
+        "  Follow this pattern:",
+        "",
+        "  <h2>[Section Topic, Title Case, Max 7 Words]</h2>",
+        "  <p>[80-100 words. Benefits-focused. Address the reader directly.]</p>",
+        "",
+        "  <h3>[Subtopic, Title Case, Max 7 Words]</h3>",
+        "  <p>[60-80 words. Specific details and differentiators.]</p>",
+        "",
+        "  ...repeat pattern for all sections...",
+        "",
+        "  End with a clear call to action in the final paragraph.",
+    ]
+
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -547,6 +719,7 @@ async def generate_content(
     client = ClaudeClient(
         model=CONTENT_WRITING_MODEL,
         max_tokens=CONTENT_WRITING_MAX_TOKENS,
+        timeout=CONTENT_WRITING_TIMEOUT,
     )
     try:
         start_ms = time.monotonic()
@@ -634,6 +807,7 @@ async def _retry_with_strict_prompt(
     retry_client = ClaudeClient(
         model=CONTENT_WRITING_MODEL,
         max_tokens=CONTENT_WRITING_MAX_TOKENS,
+        timeout=CONTENT_WRITING_TIMEOUT,
     )
     try:
         start_ms = time.monotonic()

@@ -277,6 +277,23 @@ function PipelineIndicator({ status }: { status: string }) {
   );
 }
 
+function EyeIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
 function CodeIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -350,24 +367,29 @@ function PageRow({
         {/* Right side: pipeline indicator + actions */}
         <div className="flex items-center gap-3 shrink-0">
           <PipelineIndicator status={page.status} />
-          {page.status !== 'pending' && (
-            <button
-              type="button"
-              onClick={() => onInspect(page.page_id, page.url)}
-              className="inline-flex items-center gap-1 text-xs text-warm-gray-500 hover:text-lagoon-600 px-2 py-1 rounded-sm hover:bg-cream-100 transition-colors"
-              title="Inspect prompts"
-            >
-              <CodeIcon className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Inspect</span>
-            </button>
-          )}
-          {isComplete && (
-            <Link href={`/projects/${projectId}/onboarding/content/${page.page_id}`}>
-              <Button variant="secondary" className="text-xs px-2.5 py-1">
-                View
-              </Button>
-            </Link>
-          )}
+          <div className="flex items-center gap-1">
+            {isComplete && (
+              <Link
+                href={`/projects/${projectId}/onboarding/content/${page.page_id}`}
+                className="inline-flex items-center gap-1 text-xs text-warm-gray-500 hover:text-palm-600 px-2 py-1 rounded-sm hover:bg-cream-100 transition-colors"
+                title="View generated content"
+              >
+                <EyeIcon className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">View</span>
+              </Link>
+            )}
+            {page.status !== 'pending' && (
+              <button
+                type="button"
+                onClick={() => onInspect(page.page_id, page.url)}
+                className="inline-flex items-center gap-1 text-xs text-warm-gray-500 hover:text-lagoon-600 px-2 py-1 rounded-sm hover:bg-cream-100 transition-colors"
+                title="Inspect prompts"
+              >
+                <CodeIcon className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Inspect</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -383,6 +405,9 @@ export default function ContentGenerationPage() {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastVariant, setToastVariant] = useState<'success' | 'error'>('success');
+
+  // Regeneration options
+  const [refreshBriefs, setRefreshBriefs] = useState(false);
 
   // Prompt inspector state
   const [inspectPageId, setInspectPageId] = useState<string | null>(null);
@@ -429,6 +454,25 @@ export default function ContentGenerationPage() {
       setShowToast(true);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to retry content generation';
+      setToastMessage(message);
+      setToastVariant('error');
+      setShowToast(true);
+    }
+  };
+
+  // Handle regenerate (force refresh — rewrites all content, optionally re-fetches briefs)
+  const handleRegenerate = async () => {
+    try {
+      await contentGen.regenerateAsync({ refreshBriefs });
+      setToastMessage(
+        refreshBriefs
+          ? 'Regenerating all content with fresh POP briefs'
+          : 'Regenerating all content (using cached briefs)'
+      );
+      setToastVariant('success');
+      setShowToast(true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to start regeneration';
       setToastMessage(message);
       setToastVariant('error');
       setShowToast(true);
@@ -520,19 +564,64 @@ export default function ContentGenerationPage() {
             </Button>
           )}
           {isFailed && failedPages.length > 0 && (
-            <Button
-              onClick={handleRetry}
-              disabled={contentGen.isStarting}
-            >
-              {contentGen.isStarting ? (
-                <>
-                  <SpinnerIcon className="w-4 h-4 mr-1.5 animate-spin" />
-                  Retrying...
-                </>
-              ) : (
-                `Retry ${failedPages.length} Failed`
-              )}
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={handleRetry}
+                disabled={contentGen.isStarting}
+              >
+                {contentGen.isStarting ? (
+                  <>
+                    <SpinnerIcon className="w-4 h-4 mr-1.5 animate-spin" />
+                    Retrying...
+                  </>
+                ) : (
+                  `Retry ${failedPages.length} Failed`
+                )}
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={handleRegenerate}
+                disabled={contentGen.isStarting}
+              >
+                Regenerate All
+              </Button>
+              <label className="flex items-center gap-1.5 text-xs text-warm-gray-500 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={refreshBriefs}
+                  onChange={(e) => setRefreshBriefs(e.target.checked)}
+                  className="rounded-sm border-sand-500 text-palm-500 focus:ring-palm-400"
+                />
+                Re-fetch briefs
+              </label>
+            </div>
+          )}
+          {isComplete && (
+            <div className="flex items-center gap-3">
+              <Button
+                variant="secondary"
+                onClick={handleRegenerate}
+                disabled={contentGen.isStarting}
+              >
+                {contentGen.isStarting ? (
+                  <>
+                    <SpinnerIcon className="w-4 h-4 mr-1.5 animate-spin" />
+                    Starting...
+                  </>
+                ) : (
+                  'Regenerate All'
+                )}
+              </Button>
+              <label className="flex items-center gap-1.5 text-xs text-warm-gray-500 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={refreshBriefs}
+                  onChange={(e) => setRefreshBriefs(e.target.checked)}
+                  className="rounded-sm border-sand-500 text-palm-500 focus:ring-palm-400"
+                />
+                Re-fetch briefs
+              </label>
+            </div>
           )}
         </div>
 

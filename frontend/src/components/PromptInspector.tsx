@@ -88,11 +88,12 @@ function CollapsibleSection({
   text: string | null;
   mono?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
 
   if (!text) return null;
 
-  const preview = text.length > 200 ? text.slice(0, 200) + '...' : text;
+  const isLong = text.length > 200;
+  const preview = isLong ? text.slice(0, 200) + '...' : text;
 
   return (
     <div className="border border-cream-400 rounded-sm overflow-hidden">

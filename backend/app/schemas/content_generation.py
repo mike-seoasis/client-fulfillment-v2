@@ -77,6 +77,19 @@ class BriefSummary(BaseModel):
     lsi_terms_count: int = Field(
         ..., ge=0, description="Number of LSI terms in the brief"
     )
+    competitors_count: int = Field(
+        0, ge=0, description="Number of competitors analyzed"
+    )
+    related_questions_count: int = Field(
+        0, ge=0, description="Number of related questions (PAA)"
+    )
+    page_score_target: float | None = Field(
+        None, description="Target page optimization score"
+    )
+    word_count_range: str | None = Field(
+        None,
+        description="Word count range string (e.g., '800-1200')",
+    )
 
 
 # =============================================================================

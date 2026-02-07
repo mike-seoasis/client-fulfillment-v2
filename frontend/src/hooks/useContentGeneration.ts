@@ -94,13 +94,21 @@ export function usePagePrompts(
 export function useTriggerContentGeneration(): UseMutationResult<
   ContentGenerationTriggerResponse,
   Error,
-  string
+  { projectId: string; forceRefresh?: boolean; refreshBriefs?: boolean }
 > {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (projectId: string) => triggerContentGeneration(projectId),
-    onSuccess: (_data, projectId) => {
+    mutationFn: ({
+      projectId,
+      forceRefresh,
+      refreshBriefs,
+    }: {
+      projectId: string;
+      forceRefresh?: boolean;
+      refreshBriefs?: boolean;
+    }) => triggerContentGeneration(projectId, { forceRefresh, refreshBriefs }),
+    onSuccess: (_data, { projectId }) => {
       queryClient.invalidateQueries({
         queryKey: contentGenerationKeys.status(projectId),
       });
@@ -144,8 +152,12 @@ export function useContentGeneration(projectId: string) {
     isFailed: status.data?.overall_status === 'failed',
 
     // Actions
-    startGeneration: () => triggerMutation.mutate(projectId),
-    startGenerationAsync: () => triggerMutation.mutateAsync(projectId),
+    startGeneration: () => triggerMutation.mutate({ projectId }),
+    startGenerationAsync: () => triggerMutation.mutateAsync({ projectId }),
+    regenerate: (opts?: { refreshBriefs?: boolean }) =>
+      triggerMutation.mutate({ projectId, forceRefresh: true, refreshBriefs: opts?.refreshBriefs }),
+    regenerateAsync: (opts?: { refreshBriefs?: boolean }) =>
+      triggerMutation.mutateAsync({ projectId, forceRefresh: true, refreshBriefs: opts?.refreshBriefs }),
     isStarting: triggerMutation.isPending,
     startError: triggerMutation.error,
 
