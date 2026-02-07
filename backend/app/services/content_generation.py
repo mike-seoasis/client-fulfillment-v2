@@ -126,6 +126,27 @@ async def run_content_pipeline(
         },
     )
 
+    # Reset all page statuses to pending upfront when force-refreshing,
+    # so the frontend immediately sees the pipeline indicators reset.
+    if force_refresh:
+        async with db_manager.session_factory() as reset_db:
+            page_ids = [pd["page_id"] for pd in pages_data]
+            reset_stmt = (
+                select(PageContent).where(
+                    PageContent.crawled_page_id.in_(page_ids)
+                )
+            )
+            reset_result = await reset_db.execute(reset_stmt)
+            for pc in reset_result.scalars().all():
+                pc.status = ContentStatus.PENDING.value
+                pc.generation_started_at = None
+                pc.generation_completed_at = None
+            await reset_db.commit()
+            logger.info(
+                "Reset page statuses to pending for regeneration",
+                extra={"project_id": project_id, "pages_reset": len(page_ids)},
+            )
+
     # Process pages with concurrency control
     semaphore = asyncio.Semaphore(concurrency)
 
