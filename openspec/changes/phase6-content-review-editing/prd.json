@@ -338,8 +338,9 @@
         "Clicking a found term scrolls the editor to its first occurrence"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "LSI terms come from brief.lsi_terms in the PageContentResponse. Count occurrences by scanning the bottom_description HTML (strip tags first, case-insensitive match). Reference wireframes/phase6-content-editor.html for the visual spec."
+      "passes": true,
+      "notes": "LSI terms come from brief.lsi_terms in the PageContentResponse. Count occurrences by scanning the bottom_description HTML (strip tags first, case-insensitive match). Reference wireframes/phase6-content-editor.html for the visual spec.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S6-021",
@@ -475,6 +476,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-07T21:27:57.116Z"
+    "updatedAt": "2026-02-07T21:30:51.454Z"
   }
 }

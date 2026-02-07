@@ -279,3 +279,18 @@ after each iteration and it's included in prompts for context.
   - Jump-to uses DOM traversal (querySelectorAll + TreeWalker fallback) rather than Lexical API — simpler for read-only element lookup
   - Pre-existing TS error in GenerationProgress.test.tsx unchanged; pre-existing ESLint CSS parsing error on globals.css (Tailwind directives) unchanged; eslint passes clean on TS files
 ---
+
+## 2026-02-07 - S6-020
+- Enhanced existing `LsiTermsCard` component in content editor sidebar to meet full acceptance criteria
+- Added "N of M terms used" summary text below header
+- Added `lsi-found` CSS class and `cursor-pointer` to found term rows (matching wireframe spec)
+- Fixed occurrence count symbol from `x` to `×` (multiplication sign per wireframe)
+- Added `onClick` handler on found terms that scrolls editor to first occurrence
+- Created `handleJumpToTerm` callback using same DOM traversal pattern as `handleJumpTo` (searches `.hl-lsi` spans first, TreeWalker fallback, smooth scroll + violation-pulse animation)
+- Passed `onJumpToTerm` prop from page component to `LsiTermsCard`
+- Files changed: `frontend/src/app/projects/[id]/onboarding/content/[pageId]/page.tsx` (modified)
+- **Learnings:**
+  - LsiTermsCard was mostly built during S6-018 but missing several AC items (CSS class, click handler, summary text, symbol)
+  - Jump-to-term reuses the same DOM traversal + violation-pulse pattern from S6-019's `handleJumpTo` — searches `.hl-lsi` spans matching the term text, falls back to TreeWalker text search
+  - Pre-existing TS error in GenerationProgress.test.tsx unchanged; eslint passes clean
+---

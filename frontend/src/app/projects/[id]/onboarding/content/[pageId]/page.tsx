@@ -300,9 +300,11 @@ function ContentStatsCard({
 function LsiTermsCard({
   lsiTerms,
   bottomHtml,
+  onJumpToTerm,
 }: {
   lsiTerms: string[];
   bottomHtml: string | null;
+  onJumpToTerm?: (term: string) => void;
 }) {
   const termCounts = useMemo(() => {
     if (!bottomHtml || lsiTerms.length === 0) return [];
@@ -325,16 +327,20 @@ function LsiTermsCard({
           {found.length} / {termCounts.length}
         </span>
       </div>
+      <p className="text-xs text-warm-500 mb-2">
+        {found.length} of {termCounts.length} terms used
+      </p>
       <div className="space-y-1.5">
         {found.map((t) => (
           <div
             key={t.term}
-            className="relative flex items-center justify-between py-1 px-2 rounded-sm hover:bg-sand-50 group"
+            className="relative flex items-center justify-between py-1 px-2 rounded-sm hover:bg-sand-50 cursor-pointer group lsi-found"
+            onClick={() => onJumpToTerm?.(t.term)}
           >
             <div className="absolute left-[-8px] top-1/2 -translate-y-1/2 w-1 h-1 rounded-full bg-palm-500" />
             <span className="text-xs text-warm-800">{t.term}</span>
             <span className="text-xs font-mono text-palm-600 opacity-0 group-hover:opacity-100 transition-opacity">
-              {t.count}x
+              {t.count}×
             </span>
           </div>
         ))}
@@ -472,6 +478,40 @@ export default function ContentEditorPage() {
       let node: Node | null;
       while ((node = walker.nextNode())) {
         if (node.textContent && node.textContent.includes(context.slice(0, 20))) {
+          target = node.parentElement;
+          break;
+        }
+      }
+    }
+
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target.classList.add('violation-pulse');
+      setTimeout(() => target!.classList.remove('violation-pulse'), 1500);
+    }
+  }, []);
+
+  const handleJumpToTerm = useCallback((term: string) => {
+    const container = editorContainerRef.current;
+    if (!container) return;
+
+    // Search for hl-lsi spans whose text matches the term
+    const lsiSpans = Array.from(container.querySelectorAll('.hl-lsi'));
+    let target: HTMLElement | null = null;
+    for (const span of lsiSpans) {
+      if (span.textContent && span.textContent.toLowerCase().includes(term.toLowerCase())) {
+        target = span as HTMLElement;
+        break;
+      }
+    }
+
+    // Fallback: search all text in the editor for the term
+    if (!target) {
+      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+      let node: Node | null;
+      const termLower = term.toLowerCase();
+      while ((node = walker.nextNode())) {
+        if (node.textContent && node.textContent.toLowerCase().includes(termLower)) {
           target = node.parentElement;
           break;
         }
@@ -698,7 +738,7 @@ export default function ContentEditorPage() {
             variations={variations}
             bottomHtml={bottomDescription}
           />
-          <LsiTermsCard lsiTerms={lsiTerms} bottomHtml={bottomDescription} />
+          <LsiTermsCard lsiTerms={lsiTerms} bottomHtml={bottomDescription} onJumpToTerm={handleJumpToTerm} />
           <HeadingOutlineCard html={bottomDescription} />
         </div>
       </div>
