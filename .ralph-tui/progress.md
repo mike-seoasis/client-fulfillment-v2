@@ -60,3 +60,18 @@ after each iteration and it's included in prompts for context.
   - Named content bulk approve `ContentBulkApproveResponse` to avoid collision with existing keyword `BulkApproveResponse`
 ---
 
+## 2026-02-07 - S6-004
+- Added PUT /api/v1/projects/{project_id}/pages/{page_id}/content endpoint for partial content updates
+- Accepts ContentUpdateRequest body; updates only provided fields (exclude_unset=True partial update)
+- Recalculates word_count by stripping HTML tags from all 4 content fields (matches `_apply_parsed_content` pattern in content_writing.py)
+- Clears approval on edit: sets is_approved=False, approved_at=None
+- Returns updated PageContentResponse with brief_summary (same construction as GET endpoint)
+- Returns 404 if page or PageContent not found
+- Files changed: `backend/app/api/v1/content_generation.py`
+- **Learnings:**
+  - Word count pattern: `re.sub(r"<[^>]+>", " ", value)` then `len(text_only.split())` — used in content_writing.py line 824
+  - Partial update via Pydantic: `body.model_dump(exclude_unset=True)` gives only the fields the client sent, so omitted fields stay unchanged
+  - Brief summary construction is duplicated between GET and PUT — could be extracted to a helper in future
+  - Pre-existing mypy errors in content_extraction.py, crawl4ai.py, crawling.py are unrelated; all router endpoints get "untyped decorator" warnings
+  - ruff passes clean
+---

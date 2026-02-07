@@ -1,8 +1,10 @@
 """Content generation API router.
 
 REST endpoints for triggering content generation, polling progress,
-retrieving generated content, and fetching prompt logs.
+retrieving generated content, editing content, and fetching prompt logs.
 """
+
+import re
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import func, select
@@ -19,6 +21,7 @@ from app.schemas.content_generation import (
     BriefSummary,
     ContentGenerationStatus,
     ContentGenerationTriggerResponse,
+    ContentUpdateRequest,
     PageContentResponse,
     PageGenerationStatusItem,
     PromptLogResponse,
@@ -311,6 +314,112 @@ async def get_page_content(
         bottom_description=content.bottom_description,
         word_count=content.word_count,
         status=content.status,
+        qa_results=content.qa_results,
+        brief_summary=brief_summary,
+        generation_started_at=content.generation_started_at,
+        generation_completed_at=content.generation_completed_at,
+    )
+
+
+@router.put(
+    "/{project_id}/pages/{page_id}/content",
+    response_model=PageContentResponse,
+)
+async def update_page_content(
+    project_id: str,
+    page_id: str,
+    body: ContentUpdateRequest,
+    db: AsyncSession = Depends(get_session),
+) -> PageContentResponse:
+    """Update content fields for a specific page.
+
+    Partial update — only provided fields are changed. Recalculates word_count
+    and clears approval status when content changes.
+    Returns 404 if no PageContent exists for the page.
+    """
+    # Verify project exists (raises 404 if not)
+    await ProjectService.get_project(db, project_id)
+
+    # Get page with content and brief
+    stmt = (
+        select(CrawledPage)
+        .where(
+            CrawledPage.id == page_id,
+            CrawledPage.project_id == project_id,
+        )
+        .options(
+            selectinload(CrawledPage.page_content),
+            selectinload(CrawledPage.content_brief),
+        )
+    )
+    result = await db.execute(stmt)
+    page = result.scalar_one_or_none()
+
+    if not page:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Page {page_id} not found in project {project_id}",
+        )
+
+    if not page.page_content:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Content has not been generated yet for this page",
+        )
+
+    content = page.page_content
+
+    # Apply partial updates — only set fields that were provided
+    update_data = body.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(content, field, value)
+
+    # Recalculate word_count from all 4 fields (strip HTML tags, count words)
+    total_words = 0
+    for field_name in ("page_title", "meta_description", "top_description", "bottom_description"):
+        value = getattr(content, field_name)
+        if value:
+            text_only = re.sub(r"<[^>]+>", " ", value)
+            total_words += len(text_only.split())
+    content.word_count = total_words
+
+    # Clear approval on edit
+    content.is_approved = False
+    content.approved_at = None
+
+    await db.commit()
+    await db.refresh(content)
+
+    # Build brief summary (same logic as get_page_content)
+    brief_summary = None
+    if page.content_brief:
+        brief = page.content_brief
+        lsi_terms = brief.lsi_terms or []
+        competitors = brief.competitors or []
+        related_questions = brief.related_questions or []
+
+        word_count_range = None
+        if brief.word_count_min and brief.word_count_max:
+            word_count_range = f"{brief.word_count_min}-{brief.word_count_max}"
+
+        brief_summary = BriefSummary(
+            keyword=brief.keyword,
+            lsi_terms_count=len(lsi_terms),
+            competitors_count=len(competitors),
+            related_questions_count=len(related_questions),
+            page_score_target=brief.page_score_target,
+            word_count_range=word_count_range,
+        )
+
+    return PageContentResponse(
+        page_title=content.page_title,
+        meta_description=content.meta_description,
+        top_description=content.top_description,
+        bottom_description=content.bottom_description,
+        word_count=content.word_count,
+        status=content.status,
+        is_approved=content.is_approved,
+        approved_at=content.approved_at,
         qa_results=content.qa_results,
         brief_summary=brief_summary,
         generation_started_at=content.generation_started_at,
