@@ -14,6 +14,7 @@ import { ListNode, ListItemNode } from '@lexical/list';
 import { $generateNodesFromDOM } from '@lexical/html';
 import { $generateHtmlFromNodes } from '@lexical/html';
 import { $getRoot, $insertNodes, type EditorState, type LexicalEditor as LexicalEditorType } from 'lexical';
+import { HighlightNode } from './HighlightPlugin';
 
 const theme = {
   paragraph: 'mb-3 leading-relaxed text-warm-gray-800',
@@ -95,7 +96,7 @@ export const LexicalEditor = forwardRef<LexicalEditorHandle, LexicalEditorProps>
     const initialConfig = {
       namespace: 'ContentEditor',
       theme,
-      nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode],
+      nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, HighlightNode],
       onError: (error: Error) => {
         console.error('Lexical error:', error);
       },

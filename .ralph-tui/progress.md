@@ -202,3 +202,26 @@ after each iteration and it's included in prompts for context.
   - HtmlLoaderPlugin pattern: internal plugin component using `useLexicalComposerContext` to access editor in LexicalComposer children
   - Pre-existing TS error in GenerationProgress.test.tsx unchanged; eslint passes clean
 ---
+
+## 2026-02-07 - S6-016
+- Created `frontend/src/components/content-editor/HighlightPlugin.tsx` — Lexical highlight plugin with four layers
+- Custom `HighlightNode` extends `ElementNode` to render inline `<span>` elements with CSS classes for each highlight layer
+- Layer 1 (`hl-keyword`): exact primary keyword matches get gold half-underline via linear-gradient
+- Layer 2 (`hl-keyword-var`): keyword variation matches get lighter gold with dashed bottom border
+- Layer 3 (`hl-lsi`): LSI term matches get lagoon/teal background tint and solid bottom border
+- Layer 4 (`hl-trope`): AI trope violations get coral wavy underline (no word boundaries, exact substring match)
+- Plugin accepts `primaryKeyword`, `variations` (Set), `lsiTerms` (string[]), `tropeRanges` ({text}[])
+- Highlight recomputes with 200ms debounce after content changes; skips self-triggered updates via `tag: 'highlight-plugin'`
+- Priority system: keyword > keyword-var > LSI > trope; overlapping lower-priority matches are discarded
+- CSS styles injected dynamically into editor container; cleanup on unmount
+- Registered `HighlightNode` in LexicalEditor's nodes array
+- Files changed: `frontend/src/components/content-editor/HighlightPlugin.tsx` (new), `frontend/src/components/content-editor/LexicalEditor.tsx` (modified)
+- **Learnings:**
+  - `@lexical/mark` MarkNode does NOT store IDs as DOM attributes — `createDOM` returns a bare `<mark>` element with only theme CSS classes, no data attributes for IDs. Custom ElementNode is needed for class-based styling.
+  - Custom inline ElementNode pattern: `isInline()` must return `true`, `canBeEmpty()` returns `false`, `canInsertTextBefore/After()` return `false` — prevents Lexical from merging/editing into the highlight wrapper
+  - `editor.update()` with `{ tag: 'highlight-plugin' }` prevents infinite loops — the `registerUpdateListener` callback checks `tags.has('highlight-plugin')` to skip self-triggered updates
+  - `excludeFromCopy()` returns `true` on HighlightNode so highlights don't contaminate clipboard
+  - Trope regex uses no word boundaries (exact substring match) unlike keyword/LSI regexes which use `\b` word boundaries
+  - `Spread` type utility imported from `lexical` for serialized node type definitions
+  - Pre-existing TS error in GenerationProgress.test.tsx unchanged; eslint passes clean
+---
