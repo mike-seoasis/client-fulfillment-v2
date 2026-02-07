@@ -1,0 +1,463 @@
+{
+  "name": "Phase 6: Content Review + Editing",
+  "description": "Add content editing page with Lexical rich editor, four-layer keyword highlighting, live stats sidebar, approval workflow, and content review list. Closes the loop between AI content generation and export.",
+  "branchName": "v2-rebuild",
+  "userStories": [
+    {
+      "id": "S6-001",
+      "title": "Add approval fields to PageContent model",
+      "description": "As a developer, I need is_approved and approved_at fields on the PageContent model so that the approval workflow can be persisted.",
+      "acceptanceCriteria": [
+        "Add is_approved (Boolean, default=False, server_default='false', indexed) to PageContent model in backend/app/models/page_content.py",
+        "Add approved_at (DateTime(timezone=True), nullable=True) to PageContent model",
+        "Fields follow the exact same pattern as PageKeywords.is_approved in backend/app/models/page_keywords.py"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Reference backend/app/models/page_keywords.py for the is_approved pattern. Keep the existing fields untouched — only add two new ones.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S6-002",
+      "title": "Create Alembic migration for approval columns",
+      "description": "As a developer, I need a database migration so that the new approval columns are created in the page_contents table.",
+      "acceptanceCriteria": [
+        "Create migration file in backend/alembic/versions/ adding is_approved and approved_at to page_contents",
+        "is_approved has server_default=text('false') and is NOT NULL",
+        "approved_at is nullable DateTime(timezone=True)",
+        "Index created on is_approved column",
+        "Migration runs successfully: cd backend && alembic upgrade head",
+        "Downgrade drops both columns"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Reference backend/alembic/versions/0020_add_page_keywords_approval_fields.py for the exact pattern used in Phase 4."
+    },
+    {
+      "id": "S6-003",
+      "title": "Create ContentUpdateRequest schema and update PageContentResponse",
+      "description": "As a developer, I need request/response schemas for the new content editing and approval endpoints.",
+      "acceptanceCriteria": [
+        "Create ContentUpdateRequest Pydantic schema with optional fields: page_title (str|None), meta_description (str|None), top_description (str|None), bottom_description (str|None) — all optional so partial updates work",
+        "Update PageContentResponse in backend/app/schemas/content_generation.py to include is_approved (bool) and approved_at (datetime|None)",
+        "Add ContentBriefData schema with keyword (str), lsi_terms (list), heading_targets (list), keyword_targets (list)",
+        "Add brief field (ContentBriefData|None) to PageContentResponse",
+        "Update ContentGenerationStatus to include pages_approved (int) count",
+        "Create BulkApproveResponse schema with approved_count (int) field",
+        "All schemas use Pydantic v2 conventions (model_config, Field)"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Reference existing schemas in backend/app/schemas/content_generation.py. The ContentBriefData schema exposes lsi_terms, heading_targets, keyword_targets from the ContentBrief model."
+    },
+    {
+      "id": "S6-004",
+      "title": "Create PUT endpoint for content updates",
+      "description": "As a developer, I need an endpoint to save edited content fields so the frontend editor can persist changes.",
+      "acceptanceCriteria": [
+        "PUT /api/v1/projects/{project_id}/pages/{page_id}/content accepts ContentUpdateRequest body",
+        "Updates only the provided fields (partial update — omitted fields are unchanged)",
+        "Recalculates word_count by stripping HTML tags from all 4 fields and counting words",
+        "Clears approval on edit: sets is_approved=False, approved_at=None when content changes",
+        "Returns updated PageContentResponse",
+        "Returns 404 if no PageContent exists for the page"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Add to backend/app/api/v1/content_generation.py alongside existing endpoints. Word count calculation should match the existing pattern in content_writing.py (_count_words_in_html function)."
+    },
+    {
+      "id": "S6-005",
+      "title": "Create POST endpoint for content approval",
+      "description": "As a developer, I need an endpoint to approve/unapprove content so the approval workflow works.",
+      "acceptanceCriteria": [
+        "POST /api/v1/projects/{project_id}/pages/{page_id}/approve-content with optional query param value=true (default)",
+        "When value=true: sets is_approved=True, approved_at=now()",
+        "When value=false: sets is_approved=False, approved_at=None",
+        "Returns 400 if content status is not 'complete'",
+        "Returns updated PageContentResponse",
+        "Returns 404 if no PageContent exists"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Follow the exact same pattern as the approve-keyword endpoint in backend/app/api/v1/keywords.py."
+    },
+    {
+      "id": "S6-006",
+      "title": "Create POST endpoint for re-running quality checks",
+      "description": "As a developer, I need an endpoint to re-run AI trope quality checks after the user edits content.",
+      "acceptanceCriteria": [
+        "POST /api/v1/projects/{project_id}/pages/{page_id}/recheck-content",
+        "Calls run_quality_checks() from content_quality.py with current content field values and the project's brand config",
+        "Stores updated results in PageContent.qa_results",
+        "Returns updated PageContentResponse with fresh qa_results",
+        "Returns 404 if no PageContent exists"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reference backend/app/services/content_quality.py for run_quality_checks(). Need to load brand config from project.brand_config JSONB field."
+    },
+    {
+      "id": "S6-007",
+      "title": "Create POST endpoint for bulk approve",
+      "description": "As a developer, I need an endpoint to bulk-approve all eligible content pages at once.",
+      "acceptanceCriteria": [
+        "POST /api/v1/projects/{project_id}/bulk-approve-content",
+        "Finds all PageContent records for project where status='complete' AND qa_results->>'passed'='true' AND is_approved=False",
+        "Sets each to is_approved=True with approved_at=now()",
+        "Returns BulkApproveResponse with approved_count",
+        "Returns 200 with approved_count=0 if no pages are eligible"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Join through CrawledPage to filter by project_id. Use JSONB operator for qa_results.passed check."
+    },
+    {
+      "id": "S6-008",
+      "title": "Update GET content endpoint to include brief data",
+      "description": "As a developer, I need the content GET endpoint to return ContentBrief data so the editor sidebar can show LSI terms, heading targets, and keyword targets.",
+      "acceptanceCriteria": [
+        "GET /api/v1/projects/{project_id}/pages/{page_id}/content now includes brief field",
+        "Brief data comes from ContentBrief model joined through CrawledPage (crawled_page.content_brief)",
+        "Brief object contains: keyword, lsi_terms (full array), heading_targets (full array), keyword_targets (full array)",
+        "If no ContentBrief exists, brief field is null",
+        "Existing response fields are unchanged"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "ContentBrief is related to CrawledPage via page_id FK. Access through the relationship: crawled_page.content_brief. The lsi_terms are stored as JSONB array of objects."
+    },
+    {
+      "id": "S6-009",
+      "title": "Update content generation status to include approval counts",
+      "description": "As a developer, I need the generation status endpoint to report how many pages are approved.",
+      "acceptanceCriteria": [
+        "GET /api/v1/projects/{project_id}/content-generation-status now includes pages_approved count",
+        "pages_approved counts PageContent records where is_approved=True for the project",
+        "Existing response fields are unchanged"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Add to the existing status query in backend/app/api/v1/content_generation.py."
+    },
+    {
+      "id": "S6-010",
+      "title": "Write backend tests for content editing endpoints",
+      "description": "As a developer, I need tests covering all the new content editing, approval, and recheck endpoints.",
+      "acceptanceCriteria": [
+        "Test PUT content update: partial update works, word count recalculated, approval cleared on edit, 404 for missing content",
+        "Test POST approve: approve sets is_approved=True and approved_at, unapprove clears both, 400 when status not complete, 404 for missing",
+        "Test POST recheck: re-runs quality checks, stores updated qa_results, 404 for missing content",
+        "Test POST bulk approve: approves eligible pages, skips already approved, returns count, handles zero eligible",
+        "Test GET content with brief: brief data included when ContentBrief exists, null when missing",
+        "Test GET status with approval count: pages_approved reflects actual approved count",
+        "Integration test: edit → recheck → approve flow in sequence",
+        "All tests pass: cd backend && python -m pytest tests/ -x"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Reference backend/tests/api/test_content_generation.py for existing content test patterns. Use factory_boy for test data. Reference backend/tests/conftest.py for fixtures."
+    },
+    {
+      "id": "S6-011",
+      "title": "Install Lexical packages and add frontend TypeScript types",
+      "description": "As a developer, I need Lexical installed and TypeScript types updated so the editor can be built.",
+      "acceptanceCriteria": [
+        "Install: lexical, @lexical/react, @lexical/html, @lexical/rich-text, @lexical/list via npm",
+        "Update PageContentResponse type in frontend/src/lib/api.ts to include is_approved (boolean), approved_at (string|null), and brief (object with keyword, lsi_terms, heading_targets, keyword_targets) or null",
+        "Update ContentGenerationStatus type to include pages_approved (number)",
+        "Add BulkApproveResponse type with approved_count (number)",
+        "Add ContentUpdateRequest type with optional page_title, meta_description, top_description, bottom_description"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Run npm install from frontend/ directory. Types should match the backend Pydantic schemas exactly."
+    },
+    {
+      "id": "S6-012",
+      "title": "Add frontend API functions and TanStack Query hooks for editing",
+      "description": "As a developer, I need API client functions and React Query hooks for content editing, approval, and rechecking.",
+      "acceptanceCriteria": [
+        "Add API functions in frontend/src/lib/api.ts: updatePageContent(projectId, pageId, data), approvePageContent(projectId, pageId, value), recheckPageContent(projectId, pageId), bulkApproveContent(projectId)",
+        "Create useUpdatePageContent() mutation hook — invalidates page content query on success",
+        "Create useApprovePageContent() mutation hook — invalidates page content and generation status queries on success",
+        "Create useRecheckPageContent() mutation hook — invalidates page content query on success",
+        "Create useBulkApproveContent() mutation hook — invalidates generation status query on success",
+        "All hooks are in frontend/src/hooks/useContentGeneration.ts (extend existing file)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Follow the existing pattern in frontend/src/hooks/useContentGeneration.ts. Use queryClient.invalidateQueries() in onSuccess callbacks. Reference useKeywordMutations for the approve pattern."
+    },
+    {
+      "id": "S6-013",
+      "title": "Create Lexical editor wrapper component",
+      "description": "As a developer, I need a Lexical editor component that loads HTML content, supports editing, and serializes back to HTML.",
+      "acceptanceCriteria": [
+        "Create frontend/src/components/content-editor/LexicalEditor.tsx wrapping LexicalComposer with RichTextPlugin",
+        "Component accepts initialHtml (string) prop and renders it in the editor",
+        "Component has onChange callback that provides serialized HTML string when content changes",
+        "Editor supports: headings (H2, H3), paragraphs, bold, italic, lists (ordered, unordered)",
+        "HTML → Lexical state conversion on mount using $generateNodesFromDOM",
+        "Lexical state → HTML conversion using $generateHtmlFromNodes",
+        "Editor theme config uses the project's warm typography styles (Plus Jakarta Sans)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Use @lexical/react LexicalComposer, RichTextPlugin, ContentEditable. Use @lexical/html for serialization. Keep the editor minimal — no toolbar for now, editing is via keyboard shortcuts and the existing HTML structure."
+    },
+    {
+      "id": "S6-014",
+      "title": "Create Rendered/HTML Source tab toggle",
+      "description": "As a developer, I need a tab toggle that switches between the Lexical rendered view and a raw HTML textarea.",
+      "acceptanceCriteria": [
+        "Two tabs above the bottom description: 'Rendered' (default active) and 'HTML Source'",
+        "Rendered tab shows the LexicalEditor component with formatted content",
+        "HTML Source tab shows a monospace textarea with the raw HTML string",
+        "Switching from Rendered → HTML Source: serializes Lexical state to HTML and populates textarea",
+        "Switching from HTML Source → Rendered: parses textarea HTML into Lexical state",
+        "Tab styling matches wireframe: active tab has palm-500 bottom border, inactive is warm-500 text"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reference wireframes/phase6-content-editor.html for the visual design. The HTML source view uses a dark background (warm-900) with light text (sand-200) in monospace."
+    },
+    {
+      "id": "S6-015",
+      "title": "Create keyword variation generator utility",
+      "description": "As a developer, I need a utility that generates keyword variations from the primary keyword for highlighting.",
+      "acceptanceCriteria": [
+        "Create frontend/src/lib/keyword-variations.ts with generateVariations(keyword: string): Set<string>",
+        "Splits primary keyword into individual words (e.g., 'best running shoes' → ['best', 'running', 'shoes'])",
+        "For each word, generates common English variations: +s, +es, +ing, +er, +ers, -s, -es, -ing, -er (removal where applicable)",
+        "Returns a Set of all variation strings (lowercase), excluding the exact primary keyword and its sub-phrases",
+        "Handles edge cases: single-word keywords, hyphenated words, empty input",
+        "All matching is case-insensitive"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "This is a simple utility — no NLP libraries needed. Just word splitting + common English suffix rules. Design decision #3 in design.md."
+    },
+    {
+      "id": "S6-016",
+      "title": "Create Lexical highlight plugin with four layers",
+      "description": "As a developer, I need a Lexical plugin that highlights primary keywords, variations, LSI terms, and AI trope violations inline in the editor.",
+      "acceptanceCriteria": [
+        "Create frontend/src/components/content-editor/HighlightPlugin.tsx as a Lexical plugin",
+        "Plugin scans text nodes and wraps matched ranges with styled spans",
+        "Layer 1 — hl-keyword: exact primary keyword matches get solid gold underline (linear-gradient lower half, rgba(238,200,70,0.35))",
+        "Layer 2 — hl-keyword-var: keyword variation matches get lighter gold with dashed bottom border",
+        "Layer 3 — hl-lsi: LSI term matches get lagoon/teal background tint (rgba(42,157,143,0.14)) and bottom border",
+        "Layer 4 — hl-trope: AI trope violation text ranges from qa_results get coral wavy underline (text-decoration: underline wavy #E07A5F)",
+        "Plugin accepts: primaryKeyword (string), variations (Set<string>), lsiTerms (string[]), tropeRanges (array of {text: string} from qa_results.issues)",
+        "Highlighting recomputes with 200ms debounce after content changes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Use Lexical's registerNodeTransform or registerUpdateListener to scan text nodes. For trope violations, match the 'context' field text from qa_results.issues. Reference wireframes/phase6-content-editor.html for exact CSS values."
+    },
+    {
+      "id": "S6-017",
+      "title": "Create highlight toggle controls",
+      "description": "As a developer, I need toggle buttons in the page header that show/hide each highlight layer.",
+      "acceptanceCriteria": [
+        "Three toggle buttons in page header area: 'Keywords + Vars', 'LSI Terms', 'Issues'",
+        "Keywords + Vars button toggles both hl-keyword and hl-keyword-var classes together",
+        "LSI Terms button toggles hl-lsi class",
+        "Issues button toggles hl-trope class",
+        "Active state: full opacity with colored background. Inactive: reduced opacity (0.4)",
+        "Each button has a colored dot indicator matching its highlight color",
+        "Toggle state is local (useState), no persistence needed"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reference wireframes/phase6-content-editor.html for the exact button styling. Toggling works by adding/removing a CSS class on the editor container that hides the relevant highlight spans."
+    },
+    {
+      "id": "S6-018",
+      "title": "Build content editor page layout with all four fields",
+      "description": "As a user, I need the content editor page with all four editable fields so I can review and edit AI-generated content.",
+      "acceptanceCriteria": [
+        "Replace existing read-only frontend/src/app/projects/[id]/onboarding/content/[pageId]/page.tsx with full editor",
+        "Two-column layout: left ~65% editor, right ~35% sidebar",
+        "Header: breadcrumb (Project › Onboarding › Content › Page), page URL, primary keyword badge, highlight toggle buttons",
+        "Field 1 — Page Title: text input with live character counter 'N / 70' (palm-600 under, coral-600 over)",
+        "Field 2 — Meta Description: textarea with live character counter 'N / 160'",
+        "Field 3 — Top Description: textarea with live word counter",
+        "Field 4 — Bottom Description: Lexical editor with Rendered/HTML tabs, word count + heading count footer ('N H2 · N H3')",
+        "Page fetches data using usePageContent hook",
+        "Page loads keyword and brief data for highlighting from the brief field in content response"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reference wireframes/phase6-content-editor.html for the complete visual spec. Use the tropical oasis design system colors (palm, sand, coral, lagoon, warm). All borders use border-sand-400/60. Cards use bg-white rounded-sm."
+    },
+    {
+      "id": "S6-019",
+      "title": "Build stats sidebar with quality panel and content stats",
+      "description": "As a user, I need a sidebar showing quality checks, content stats, and keyword metrics so I can quickly assess content quality.",
+      "acceptanceCriteria": [
+        "Sidebar is sticky (top: 72px) with independent scroll and max-height: calc(100vh - 140px)",
+        "Quality status card: coral banner when issues found, palm/green when all pass. Lists all 8 checks with pass/fail per row",
+        "Flagged passages section: each violation has red dot, description, context quote, and 'Jump to' button",
+        "Content stats section: word count, heading count vs brief targets (e.g., 'Target: 3–8 H2, 4–12 H3'), exact keyword match count with density progress bar, variation count with listed words",
+        "Jump-to scrolls the Lexical editor to the flagged text and adds a pulse animation",
+        "All sections use the card style: bg-white rounded-sm border border-sand-400/60 p-4"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reference wireframes/phase6-content-editor.html for layout and styling. Quality check types from content_quality.py: banned_word, em_dash, ai_pattern, triplet_excess, rhetorical_excess, tier1_ai_word, tier2_ai_excess, negation_contrast."
+    },
+    {
+      "id": "S6-020",
+      "title": "Build LSI term checklist in sidebar",
+      "description": "As a user, I need an LSI term checklist so I can see which POP terms are used in the content and which are missing.",
+      "acceptanceCriteria": [
+        "Section header: 'LSI Terms' with 'N / M' count (palm-600 font-mono)",
+        "Found terms: green dot indicator (lsi-found CSS class), term text in warm-800, hover reveals occurrence count (e.g., '2×')",
+        "Missing terms: no dot, term text in warm-600 (readable but subdued), italic 'not found' label on right. No strikethrough, no heavy opacity reduction",
+        "Divider line between found and missing groups",
+        "Summary at top: 'N of M terms used'",
+        "Clicking a found term scrolls the editor to its first occurrence"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "LSI terms come from brief.lsi_terms in the PageContentResponse. Count occurrences by scanning the bottom_description HTML (strip tags first, case-insensitive match). Reference wireframes/phase6-content-editor.html for the visual spec."
+    },
+    {
+      "id": "S6-021",
+      "title": "Build heading outline in sidebar",
+      "description": "As a user, I need a heading outline so I can quickly see the structure of the bottom description.",
+      "acceptanceCriteria": [
+        "Section header: 'Structure'",
+        "Parses H2 and H3 headings from bottom_description HTML",
+        "Displays as a compact outline: H2 at root level (font-medium, warm-700), H3 indented 16px (warm-500)",
+        "Updates live as the user edits the bottom description",
+        "Headings are clickable — clicking scrolls the editor to that heading"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Parse headings using regex on the HTML string: /<h([23])[^>]*>(.*?)<\\/h[23]>/g. Reference wireframes/phase6-content-editor.html for the outline styling."
+    },
+    {
+      "id": "S6-022",
+      "title": "Implement auto-save on blur with indicator",
+      "description": "As a user, I need content to auto-save when I move to another field so I don't lose work.",
+      "acceptanceCriteria": [
+        "Track dirty state per field: compare current value against last saved value",
+        "On field blur, if dirty, call PUT /content endpoint with changed fields only",
+        "Bottom bar shows 'Saving...' during API call",
+        "On success: shows green dot + 'Auto-saved just now', updates to relative time (e.g., '2 min ago')",
+        "On failure: shows coral warning 'Save failed — click to retry', does NOT overwrite local edits",
+        "Manual 'Save Draft' button saves all current field values regardless of dirty state"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Use the useUpdatePageContent mutation hook. Track dirty state with useRef comparing against last saved values. The Lexical editor's onChange fires frequently — only check dirty on blur."
+    },
+    {
+      "id": "S6-023",
+      "title": "Build bottom action bar with save, re-check, and approve",
+      "description": "As a user, I need action buttons to save, re-run checks, and approve content.",
+      "acceptanceCriteria": [
+        "Sticky bottom bar (fixed, z-30) with white background and top shadow",
+        "Left side: auto-save indicator (from S6-022)",
+        "Right side buttons: 'Re-run Checks' (secondary, bg-sand-200), 'Save Draft' (secondary, border-sand-400), 'Approve' (primary, bg-palm-500 text-white with checkmark icon)",
+        "Re-run Checks: calls recheck endpoint, shows spinner on button, updates sidebar quality panel on completion",
+        "Approve: calls approve endpoint, toggles to 'Approved' state (checkmark + text change)",
+        "Approved state: clicking again calls unapprove (value=false), reverts to 'Approve' state",
+        "Approve button disabled if content status is not 'complete'"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reference wireframes/phase6-content-editor.html for button styling. Use the mutation hooks from S6-012."
+    },
+    {
+      "id": "S6-024",
+      "title": "Update content list page with review columns and bulk approve",
+      "description": "As a user, I need the content list page to show approval status and quality results so I can manage reviews across all pages.",
+      "acceptanceCriteria": [
+        "After generation complete, list shows table with columns: Page URL, Primary Keyword, QA Status, Approval Status, Action",
+        "QA Status: green checkmark if qa_results.passed is true, coral warning icon with issue count if false",
+        "Approval Status: green 'Approved' badge if is_approved=true, neutral 'Pending' badge if false",
+        "Action column: 'Review' link navigating to editor page",
+        "Summary line: 'Approved: N of M' showing approved count vs total complete",
+        "'Approve All Ready' button: calls bulk-approve endpoint, shows toast with count, disabled when no eligible pages",
+        "'Continue to Export' button: enabled when at least 1 page approved, disabled otherwise with helpful text"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Update the existing frontend/src/app/projects/[id]/onboarding/content/page.tsx. The generation progress view stays for when generation is running — add the review view for when generation is complete."
+    },
+    {
+      "id": "S6-025",
+      "title": "Write frontend component tests",
+      "description": "As a developer, I need tests for the editor page and sidebar components.",
+      "acceptanceCriteria": [
+        "Test editor page renders all 4 fields with content from API response",
+        "Test character counters update on input and change color when over limit",
+        "Test Rendered/HTML tab switching works",
+        "Test sidebar renders quality check results correctly (pass and fail states)",
+        "Test LSI term checklist shows found vs missing terms",
+        "Test approval button toggles state",
+        "All tests pass: cd frontend && npm test"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Reference frontend/src/__tests__/ for existing test patterns. Mock the API hooks with vi.mock. Lexical editor testing may need @lexical/react testing utilities."
+    },
+    {
+      "id": "S6-026",
+      "title": "Manual verification: edit → recheck → approve flow",
+      "description": "As a developer, I need to verify the complete Phase 6 workflow works end-to-end.",
+      "acceptanceCriteria": [
+        "Navigate to content list for a project with generated content",
+        "Click Review on a page — editor loads with all 4 fields populated, sidebar shows quality results and LSI terms",
+        "Edit the page title — character count updates live",
+        "Edit the bottom description in Lexical editor — highlights visible for keywords, LSI terms, and trope violations",
+        "Switch to HTML Source and back — content syncs correctly",
+        "Toggle highlight layers on/off",
+        "Click Re-run Checks — sidebar updates with fresh quality results",
+        "Click Approve — button changes to Approved state",
+        "Go back to list — page shows as Approved",
+        "Click Approve All Ready — bulk approval works"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "This is the critical end-to-end verification. Test with a project that has real generated content from Phase 5."
+    },
+    {
+      "id": "S6-098",
+      "title": "Update V2_REBUILD_PLAN.md",
+      "description": "As a developer, I need to update the plan status so that progress is tracked.",
+      "acceptanceCriteria": [
+        "Mark Phase 6 checkboxes as [x] complete in V2_REBUILD_PLAN.md",
+        "Update Current Status table: Phase=6 Content Review + Editing (Complete), Next=Phase 7: Export",
+        "Add new row to Session Log table with date, completed items, next up"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "This task maintains our planning discipline."
+    },
+    {
+      "id": "S6-099",
+      "title": "Verify Phase 6 completion",
+      "description": "As a developer, I need to verify all Phase 6 criteria are met before moving on.",
+      "acceptanceCriteria": [
+        "All backend tests pass: cd backend && python -m pytest tests/ -x",
+        "All frontend tests pass: cd frontend && npm test",
+        "Manual verification: can review, edit, re-check, and approve content (S6-026 criteria met)",
+        "Content list shows approval status per row",
+        "Keyword highlighting works with all 4 layers",
+        "Git commit created with message: feat(phase-6): Add content review and editing",
+        "No uncommitted changes remain"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Do not proceed to Phase 7 until this passes."
+    }
+  ],
+  "metadata": {
+    "updatedAt": "2026-02-07T20:47:40.832Z"
+  }
+}

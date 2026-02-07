@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Content Editor — Running Shoes Collection</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        palm: {
+          50: '#f0f5f0', 100: '#dce8dc', 200: '#b8d4b8',
+          300: '#8dba8d', 400: '#6a9f6a', 500: '#5B8C5A',
+          600: '#4A7549', 700: '#3A5E3A', 800: '#2B472B', 900: '#1C301C',
+        },
+        sand: {
+          50: '#FDFBF7', 100: '#FAF7F2', 200: '#F5F0E8',
+          300: '#EDE7DB', 400: '#E0D6C6', 500: '#C9BDA8',
+          600: '#A99D88', 700: '#897D68', 800: '#695D48', 900: '#493D28',
+        },
+        coral: {
+          50: '#FEF3EF', 100: '#FDE4DB', 200: '#FACBB8',
+          300: '#F5A98A', 400: '#EE8B66', 500: '#E07A5F',
+          600: '#D4654A', 700: '#B24E36', 800: '#8F3E2B', 900: '#6D2F20',
+        },
+        lagoon: {
+          50: '#EFFAF8', 100: '#D4F2EE', 200: '#AAE5DD',
+          300: '#75D3C7', 400: '#4BBFB1', 500: '#2A9D8F',
+          600: '#228076', 700: '#1A635B', 800: '#134740', 900: '#0C2B26',
+        },
+        warm: {
+          50: '#F8F7F5', 100: '#EEEDEA', 200: '#DDDBD6',
+          300: '#C4C0B8', 400: '#A9A498', 500: '#8E8878',
+          600: '#736D5E', 700: '#5C5549', 800: '#453F35', 900: '#3D3831',
+        },
+      },
+      fontFamily: {
+        sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'monospace'],
+      },
+      borderRadius: {
+        sm: '0.25rem',
+      },
+    },
+  },
+}
+</script>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
+
+  /* Highlight styles */
+  .hl-keyword {
+    background: linear-gradient(to bottom, rgba(238, 200, 70, 0.0) 50%, rgba(238, 200, 70, 0.35) 50%);
+    padding: 0 1px;
+  }
+  .hl-keyword-var {
+    background: linear-gradient(to bottom, rgba(238, 200, 70, 0.0) 50%, rgba(238, 200, 70, 0.2) 50%);
+    padding: 0 1px;
+    border-bottom: 1px dashed rgba(180, 155, 50, 0.4);
+  }
+  .hl-lsi {
+    background: rgba(42, 157, 143, 0.14);
+    border-bottom: 2px solid rgba(42, 157, 143, 0.45);
+    padding: 0 1px;
+  }
+  .hl-trope {
+    text-decoration: underline wavy #E07A5F;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 3px;
+  }
+
+  /* Scrollbar styling */
+  .sidebar-scroll::-webkit-scrollbar { width: 4px; }
+  .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+  .sidebar-scroll::-webkit-scrollbar-thumb { background: #C9BDA8; border-radius: 4px; }
+  .sidebar-scroll::-webkit-scrollbar-thumb:hover { background: #A99D88; }
+
+  /* Tab styles */
+  .tab-active {
+    color: #5B8C5A;
+    border-bottom: 2px solid #5B8C5A;
+    font-weight: 600;
+  }
+  .tab-inactive {
+    color: #8E8878;
+    border-bottom: 2px solid transparent;
+  }
+  .tab-inactive:hover { color: #5C5549; }
+
+  /* Highlight toggle */
+  .hl-toggle { transition: all 0.15s ease; }
+  .hl-toggle.active { opacity: 1; }
+  .hl-toggle:not(.active) { opacity: 0.4; }
+
+  /* Content area editable styling */
+  [contenteditable]:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(91, 140, 90, 0.3);
+  }
+
+  /* Smooth section transitions */
+  .field-section { transition: box-shadow 0.2s ease; }
+  .field-section:focus-within {
+    box-shadow: 0 0 0 1px rgba(91, 140, 90, 0.2), 0 2px 8px rgba(91, 140, 90, 0.06);
+  }
+
+  /* Violation jump pulse */
+  @keyframes pulse-highlight {
+    0%, 100% { background-color: transparent; }
+    50% { background-color: rgba(224, 122, 95, 0.12); }
+  }
+  .violation-pulse { animation: pulse-highlight 1.5s ease-in-out; }
+
+  /* LSI found indicator */
+  .lsi-found { position: relative; }
+  .lsi-found::before {
+    content: '';
+    position: absolute;
+    left: -12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: #5B8C5A;
+  }
+
+  /* Bottom bar shadow */
+  .bottom-bar {
+    box-shadow: 0 -1px 0 rgba(201, 189, 168, 0.4), 0 -4px 16px rgba(0, 0, 0, 0.04);
+  }
+
+  /* Heading outline hover */
+  .outline-item {
+    transition: color 0.1s ease;
+    cursor: pointer;
+  }
+  .outline-item:hover { color: #5B8C5A; }
+</style>
+</head>
+
+<body class="bg-sand-100 text-warm-800 antialiased">
+
+<!-- Top Navigation Bar -->
+<header class="bg-sand-50 border-b border-sand-400/50 sticky top-0 z-30">
+  <div class="max-w-[1600px] mx-auto px-6 h-14 flex items-center justify-between">
+    <!-- Breadcrumb -->
+    <nav class="flex items-center gap-1.5 text-sm">
+      <a href="#" class="text-lagoon-600 hover:text-lagoon-700 font-medium">Acme Running Co.</a>
+      <span class="text-warm-400">›</span>
+      <a href="#" class="text-lagoon-600 hover:text-lagoon-700">Onboarding</a>
+      <span class="text-warm-400">›</span>
+      <a href="#" class="text-lagoon-600 hover:text-lagoon-700">Content</a>
+      <span class="text-warm-400">›</span>
+      <span class="text-warm-700 font-medium">Running Shoes</span>
+    </nav>
+
+    <!-- Right side -->
+    <div class="flex items-center gap-4">
+      <span class="text-xs text-warm-500 tracking-wide">Step 4 of 5</span>
+      <div class="flex gap-1">
+        <div class="w-6 h-1 rounded-full bg-palm-500"></div>
+        <div class="w-6 h-1 rounded-full bg-palm-500"></div>
+        <div class="w-6 h-1 rounded-full bg-palm-500"></div>
+        <div class="w-6 h-1 rounded-full bg-palm-400"></div>
+        <div class="w-6 h-1 rounded-full bg-sand-300"></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- Page Header -->
+<div class="max-w-[1600px] mx-auto px-6 pt-5 pb-4">
+  <div class="flex items-start justify-between">
+    <div>
+      <a href="#" class="inline-flex items-center gap-1.5 text-sm text-warm-500 hover:text-warm-700 mb-3 group">
+        <svg class="w-4 h-4 transition-transform group-hover:-translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-7-7 7-7"/></svg>
+        Back to content list
+      </a>
+      <div class="flex items-center gap-3">
+        <h1 class="text-lg font-semibold text-warm-900">/collections/running-shoes</h1>
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-medium bg-palm-100 text-palm-700 border border-palm-200">
+          best running shoes
+        </span>
+      </div>
+    </div>
+
+    <!-- Highlight Controls -->
+    <div class="flex items-center gap-2 mt-6">
+      <span class="text-xs text-warm-500 mr-1">Highlights</span>
+      <button onclick="toggleHighlight('keyword')" class="hl-toggle active inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-xs font-medium border transition-all" style="background: rgba(238, 200, 70, 0.15); border-color: rgba(238, 200, 70, 0.4); color: #8B7520;" id="hl-btn-keyword">
+        <span class="w-2 h-2 rounded-full" style="background: #EEC846;"></span>
+        Keywords + Vars
+      </button>
+      <button onclick="toggleHighlight('lsi')" class="hl-toggle active inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-xs font-medium border transition-all" style="background: rgba(42, 157, 143, 0.1); border-color: rgba(42, 157, 143, 0.3); color: #1A635B;" id="hl-btn-lsi">
+        <span class="w-2 h-2 rounded-full bg-lagoon-500"></span>
+        LSI Terms
+      </button>
+      <button onclick="toggleHighlight('trope')" class="hl-toggle active inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-xs font-medium border transition-all" style="background: rgba(224, 122, 95, 0.1); border-color: rgba(224, 122, 95, 0.3); color: #B24E36;" id="hl-btn-trope">
+        <span class="w-2 h-2 rounded-full bg-coral-500"></span>
+        Issues
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Main Content Area -->
+<div class="max-w-[1600px] mx-auto px-6 pb-24">
+  <div class="flex gap-6 items-start">
+
+    <!-- Left Column: Editor -->
+    <div class="flex-1 min-w-0 space-y-4">
+
+      <!-- Page Title -->
+      <div class="field-section bg-white rounded-sm border border-sand-400/60 p-5">
+        <div class="flex items-center justify-between mb-2.5">
+          <label class="text-sm font-semibold text-warm-800">Page Title</label>
+          <span id="title-count" class="text-xs font-mono text-palm-600">52 / 70</span>
+        </div>
+        <input
+          type="text"
+          value="Best Running Shoes for Every Runner | Acme Running Co."
+          class="w-full px-3 py-2.5 text-sm bg-sand-50 border border-sand-300 rounded-sm text-warm-900 placeholder-warm-400 focus:outline-none focus:ring-2 focus:ring-palm-400/30 focus:border-palm-400 transition-all"
+          oninput="updateCount(this, 'title-count', 70)"
+        >
+      </div>
+
+      <!-- Meta Description -->
+      <div class="field-section bg-white rounded-sm border border-sand-400/60 p-5">
+        <div class="flex items-center justify-between mb-2.5">
+          <label class="text-sm font-semibold text-warm-800">Meta Description</label>
+          <span id="meta-count" class="text-xs font-mono text-palm-600">142 / 160</span>
+        </div>
+        <textarea
+          rows="2"
+          class="w-full px-3 py-2.5 text-sm bg-sand-50 border border-sand-300 rounded-sm text-warm-900 placeholder-warm-400 focus:outline-none focus:ring-2 focus:ring-palm-400/30 focus:border-palm-400 transition-all resize-none"
+          oninput="updateCount(this, 'meta-count', 160)"
+        >Shop our curated collection of the best running shoes for men and women. From lightweight trainers to long-distance stability shoes, find your perfect pair.</textarea>
+      </div>
+
+      <!-- Top Description -->
+      <div class="field-section bg-white rounded-sm border border-sand-400/60 p-5">
+        <div class="flex items-center justify-between mb-2.5">
+          <label class="text-sm font-semibold text-warm-800">Top Description</label>
+          <span class="text-xs font-mono text-warm-500">38 words</span>
+        </div>
+        <textarea
+          rows="3"
+          class="w-full px-3 py-2.5 text-sm bg-sand-50 border border-sand-300 rounded-sm text-warm-900 placeholder-warm-400 focus:outline-none focus:ring-2 focus:ring-palm-400/30 focus:border-palm-400 transition-all resize-none leading-relaxed"
+        >Find your perfect pair from our curated selection of premium running shoes. Whether you're training for your first 5K or chasing a marathon PR, we carry trusted brands built for every stride and surface.</textarea>
+      </div>
+
+      <!-- Bottom Description (Main Content) -->
+      <div class="field-section bg-white rounded-sm border border-sand-400/60">
+        <!-- Toolbar -->
+        <div class="flex items-center justify-between px-5 pt-4 pb-0">
+          <label class="text-sm font-semibold text-warm-800">Bottom Description</label>
+          <div class="flex items-center">
+            <button onclick="switchView('rendered')" id="tab-rendered" class="tab-active px-3 py-2 text-xs font-medium transition-all">
+              Rendered
+            </button>
+            <button onclick="switchView('html')" id="tab-html" class="tab-inactive px-3 py-2 text-xs font-medium transition-all">
+              HTML Source
+            </button>
+          </div>
+        </div>
+
+        <!-- Rendered Content View -->
+        <div id="view-rendered" class="px-5 py-4">
+          <div contenteditable="true" class="prose prose-sm max-w-none text-warm-800 leading-relaxed rounded-sm p-4 bg-sand-50 border border-sand-300 min-h-[420px] focus:ring-2 focus:ring-palm-400/30 focus:border-palm-400 transition-all" id="editor-content">
+
+            <h2 class="text-base font-semibold text-warm-900 mt-0 mb-3">How to Choose the <span class="hl-keyword">Best Running Shoes</span></h2>
+
+            <p class="mb-4 text-sm">Picking the right <span class="hl-keyword">running shoes</span> starts with understanding your gait, the surfaces you run on, and what your feet need after mile ten. A <span class="hl-keyword-var">shoe</span> that works on a treadmill may feel completely different on a gravel trail, so it helps to narrow down where you'll spend most of your time.</p>
+
+            <p class="mb-4 text-sm"><span class="hl-trope" id="violation-1">In today's competitive running shoe market,</span> brands are pushing boundaries with new <span class="hl-lsi">foam technology</span> and <span class="hl-lsi">carbon plate</span> construction. At Acme Running Co., we test every shoe we carry so you don't have to guess about quality.</p>
+
+            <h3 class="text-sm font-semibold text-warm-900 mt-6 mb-2"><span class="hl-lsi">Cushioning</span> and Support for Long Runs</h3>
+
+            <p class="mb-4 text-sm">Long-distance <span class="hl-keyword-var">runners</span> need <span class="hl-lsi">cushioning</span> that holds up past the halfway mark. Look for <span class="hl-lsi">midsole</span> materials like nitrogen-infused foam or dual-density setups that balance softness with energy return. Our top picks for half-marathon and beyond include <span class="hl-keyword-var">shoes</span> from ASICS, Brooks, and New Balance that earned high marks for sustained comfort.</p>
+
+            <h3 class="text-sm font-semibold text-warm-900 mt-6 mb-2"><span class="hl-lsi">Lightweight</span> Options for Speed Work</h3>
+
+            <p class="mb-4 text-sm">When you're running intervals or racing a 5K, every gram counts. <span class="hl-lsi">Lightweight</span> <span class="hl-keyword">running shoes</span> strip away excess material while keeping enough <span class="hl-lsi">stability</span> to protect your joints. Look for shoes under 8 ounces with responsive <span class="hl-lsi">foam technology</span> and a lower <span class="hl-lsi">heel drop</span>.</p>
+
+            <h2 class="text-base font-semibold text-warm-900 mt-8 mb-3"><span class="hl-lsi">Trail Running</span> vs. Road <span class="hl-keyword">Running Shoes</span></h2>
+
+            <p class="mb-4 text-sm">The outsole makes all the difference. <span class="hl-lsi">Trail running</span> <span class="hl-keyword-var">shoes</span> use aggressive lug patterns and reinforced toe caps to handle rocks and roots. Road <span class="hl-keyword-var">shoes</span> prioritize smooth transitions and <span class="hl-lsi">breathability</span>. Some <span class="hl-keyword-var">runners</span> keep a pair of each — that way the right <span class="hl-keyword-var">shoe</span> is always ready by the door.</p>
+
+            <h3 class="text-sm font-semibold text-warm-900 mt-6 mb-2">Finding Your <span class="hl-lsi">Pronation</span> Type</h3>
+
+            <p class="mb-4 text-sm">Your <span class="hl-lsi">pronation</span> pattern — whether your foot rolls inward, outward, or stays neutral — determines which <span class="hl-lsi">stability</span> features you need. Neutral runners have the widest selection, while <span class="hl-lsi">overpronation</span> runners benefit from structured support around the arch. Visit any running store for a free gait analysis, or check the wear pattern on your old shoes for a quick self-assessment.</p>
+
+            <h2 class="text-base font-semibold text-warm-900 mt-8 mb-3">Our Recommendation Process</h2>
+
+            <p class="mb-4 text-sm">Every shoe on this page passed our internal testing: fit check, durability review, and real-mile feedback from our staff runners. <span class="hl-trope" id="violation-2">We don't just sell shoes; we run in them</span>. That means we can give specific guidance on sizing quirks, break-in periods, and which models run narrow or wide.</p>
+
+            <h3 class="text-sm font-semibold text-warm-900 mt-6 mb-2">When to Replace Your <span class="hl-keyword">Running Shoes</span></h3>
+
+            <p class="mb-0 text-sm">Most <span class="hl-keyword">running shoes</span> last 300 to 500 miles, depending on your weight, surface, and <span class="hl-keyword-var">running</span> style. If the <span class="hl-lsi">midsole</span> feels flat or you're noticing new aches in your knees or hips, it's time for a fresh pair. We track your purchase history so we can remind you when a replacement is due.</p>
+
+          </div>
+        </div>
+
+        <!-- HTML Source View (hidden by default) -->
+        <div id="view-html" class="px-5 py-4 hidden">
+          <textarea
+            rows="20"
+            class="w-full px-4 py-3 text-xs font-mono bg-warm-900 text-sand-200 border border-warm-700 rounded-sm focus:outline-none focus:ring-2 focus:ring-palm-400/30 transition-all resize-none leading-relaxed"
+          ><h2>How to Choose the Best Running Shoes</h2>
+
+<p>Picking the right running shoes starts with understanding your gait, the surfaces you run on, and what your feet need after mile ten. A shoe that works on a treadmill may feel completely different on a gravel trail, so it helps to narrow down where you'll spend most of your time.</p>
+
+<p>In today's competitive running shoe market, brands are pushing boundaries with new foam technology and carbon plate construction. At Acme Running Co., we test every shoe we carry so you don't have to guess about quality.</p>
+
+<h3>Cushioning and Support for Long Runs</h3>
+
+<p>Long-distance runners need cushioning that holds up past the halfway mark. Look for midsole materials like nitrogen-infused foam or dual-density setups that balance softness with energy return.</p>
+
+<!-- ... more HTML ... --></textarea>
+        </div>
+
+        <!-- Word count bar -->
+        <div class="flex items-center justify-between px-5 py-3 border-t border-sand-200 bg-sand-50/50">
+          <span class="text-xs font-mono text-warm-500">487 words</span>
+          <div class="flex items-center gap-4 text-xs text-warm-400">
+            <span>4 H2</span>
+            <span class="text-warm-300">·</span>
+            <span>4 H3</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Sidebar -->
+    <div class="w-[340px] flex-shrink-0 space-y-4 sidebar-scroll sticky top-[72px] max-h-[calc(100vh-140px)] overflow-y-auto pb-4">
+
+      <!-- Quality Status -->
+      <div class="bg-white rounded-sm border border-sand-400/60 overflow-hidden">
+        <div class="px-4 py-3 bg-coral-50 border-b border-coral-100">
+          <div class="flex items-center gap-2">
+            <div class="w-5 h-5 rounded-full bg-coral-100 flex items-center justify-center">
+              <svg class="w-3 h-3 text-coral-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+            </div>
+            <span class="text-sm font-semibold text-coral-800">2 Issues Found</span>
+          </div>
+        </div>
+
+        <div class="p-4 space-y-3">
+          <!-- Check Results -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-warm-600">Banned Words</span>
+              <span class="text-palm-600 font-medium">Pass</span>
+            </div>
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-warm-600">Em Dashes</span>
+              <span class="text-palm-600 font-medium">Pass</span>
+            </div>
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-warm-600">AI Openers</span>
+              <span class="text-coral-600 font-medium">1 found</span>
+            </div>
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-warm-600">Triplet Lists</span>
+              <span class="text-palm-600 font-medium">Pass</span>
+            </div>
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-warm-600">Rhetorical Questions</span>
+              <span class="text-palm-600 font-medium">Pass</span>
+            </div>
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-warm-600">Tier 1 AI Words</span>
+              <span class="text-palm-600 font-medium">Pass</span>
+            </div>
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-warm-600">Tier 2 AI Words</span>
+              <span class="text-palm-600 font-medium">Pass</span>
+            </div>
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-warm-600">Negation Contrast</span>
+              <span class="text-coral-600 font-medium">1 found</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Violations Detail -->
+      <div class="bg-white rounded-sm border border-sand-400/60 p-4">
+        <h3 class="text-xs font-semibold text-warm-700 uppercase tracking-wider mb-3">Flagged Passages</h3>
+
+        <div class="space-y-3">
+          <!-- Violation 1 -->
+          <div class="group">
+            <div class="flex items-start gap-2.5">
+              <div class="w-1.5 h-1.5 rounded-full bg-coral-500 mt-1.5 flex-shrink-0"></div>
+              <div class="min-w-0">
+                <p class="text-xs font-medium text-warm-800">AI opener pattern</p>
+                <p class="text-xs text-warm-500 mt-0.5 leading-relaxed">"In today's competitive running shoe market…"</p>
+                <button onclick="jumpTo('violation-1')" class="text-xs text-lagoon-600 hover:text-lagoon-700 mt-1 font-medium">
+                  Jump to ↓
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Violation 2 -->
+          <div class="group">
+            <div class="flex items-start gap-2.5">
+              <div class="w-1.5 h-1.5 rounded-full bg-coral-500 mt-1.5 flex-shrink-0"></div>
+              <div class="min-w-0">
+                <p class="text-xs font-medium text-warm-800">Negation/contrast pattern</p>
+                <p class="text-xs text-warm-500 mt-0.5 leading-relaxed">"We don't just sell shoes; we run in them"</p>
+                <button onclick="jumpTo('violation-2')" class="text-xs text-lagoon-600 hover:text-lagoon-700 mt-1 font-medium">
+                  Jump to ↓
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Word & Term Stats -->
+      <div class="bg-white rounded-sm border border-sand-400/60 p-4">
+        <h3 class="text-xs font-semibold text-warm-700 uppercase tracking-wider mb-3">Content Stats</h3>
+
+        <div class="space-y-3">
+          <!-- Word Count -->
+          <div>
+            <div class="flex items-center justify-between text-xs mb-1">
+              <span class="text-warm-600">Word Count</span>
+              <span class="font-mono font-medium text-warm-800">487</span>
+            </div>
+          </div>
+
+          <!-- Headings -->
+          <div>
+            <div class="flex items-center justify-between text-xs mb-1">
+              <span class="text-warm-600">Headings</span>
+              <span class="font-mono font-medium text-warm-800">4 H2 · 4 H3</span>
+            </div>
+            <div class="flex items-center gap-2 text-xs text-warm-400">
+              <span>Target: 3–8 H2, 4–12 H3</span>
+            </div>
+          </div>
+
+          <div class="h-px bg-sand-200"></div>
+
+          <!-- Keyword Stats -->
+          <div>
+            <div class="flex items-center justify-between text-xs mb-1">
+              <span class="text-warm-600">Exact match</span>
+              <span class="font-mono font-medium text-warm-800">6 uses</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="flex-1 h-1.5 bg-sand-200 rounded-full overflow-hidden">
+                <div class="h-full bg-palm-400 rounded-full" style="width: 55%"></div>
+              </div>
+              <span class="text-xs font-mono text-warm-500">1.2%</span>
+            </div>
+          </div>
+          <div>
+            <div class="flex items-center justify-between text-xs mb-1">
+              <span class="text-warm-600">Variations</span>
+              <span class="font-mono font-medium text-warm-800">8 uses</span>
+            </div>
+            <div class="text-xs text-warm-400">shoes, runners, running, shoe</div>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-warm-600">Paragraphs</span>
+              <span class="font-mono font-medium text-warm-800">8</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LSI Term Checklist -->
+      <div class="bg-white rounded-sm border border-sand-400/60 p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-xs font-semibold text-warm-700 uppercase tracking-wider">LSI Terms</h3>
+          <span class="text-xs font-mono text-palm-600 font-medium">10 / 14</span>
+        </div>
+
+        <div class="space-y-1.5">
+          <!-- Found terms -->
+          <div class="flex items-center justify-between py-1 px-2 rounded-sm hover:bg-sand-50 cursor-pointer group lsi-found" onclick="highlightTerm('foam technology')">
+            <span class="text-xs text-warm-800">foam technology</span>
+            <span class="text-xs font-mono text-palm-600 opacity-0 group-hover:opacity-100 transition-opacity">2×</span>
+          </div>
+          <div class="flex items-center justify-between py-1 px-2 rounded-sm hover:bg-sand-50 cursor-pointer group lsi-found" onclick="highlightTerm('carbon plate')">
+            <span class="text-xs text-warm-800">carbon plate</span>
+            <span class="text-xs font-mono text-palm-600 opacity-0 group-hover:opacity-100 transition-opacity">1×</span>
+          </div>
+          <div class="flex items-center justify-between py-1 px-2 rounded-sm hover:bg-sand-50 cursor-pointer group lsi-found">
+            <span class="text-xs text-warm-800">cushioning</span>
+            <span class="text-xs font-mono text-palm-600 opacity-0 group-hover:opacity-100 transition-opacity">2×</span>
+          </div>
+          <div class="flex items-center justify-between py-1 px-2 rounded-sm hover:bg-sand-50 cursor-pointer group lsi-found">
+            <span class="text-xs text-warm-800">midsole</span>
+            <span class="text-xs font-mono text-palm-600 opacity-0 group-hover:opacity-100 transition-opacity">2×</span>
+          </div>
+          <div class="flex items-center justify-between py-1 px-2 rounded-sm hover:bg-sand-50 cursor-pointer group lsi-found">
+            <span class="text-xs text-warm-800">stability</span>
+            <span class="text-xs font-mono text-palm-600 opacity-0 group-hover:opacity-100 transition-opacity">2×</span>
+          </div>
+          <div class="flex items-center justify-between py-1 px-2 rounded-sm hover:bg-sand-50 cursor-pointer group lsi-found">
+            <span class="text-xs text-warm-800">lightweight</span>
+            <span class="text-xs font-mono text-palm-600 opacity-0 group-hover:opacity-100 transition-opacity">2×</span>
+          </div>
+          <div class="flex items-center justify-between py-1 px-2 rounded-sm hover:bg-sand-50 cursor-pointer group lsi-found">
+            <span class="text-xs text-warm-800">trail running</span>
+            <span class="text-xs font-mono text-palm-600 opacity-0 group-hover:opacity-100 transition-opacity">2×</span>
+          </div>
+          <div class="flex items-center justify-between py-1 px-2 rounded-sm hover:bg-sand-50 cursor-pointer group lsi-found">
+            <span class="text-xs text-warm-800">pronation</span>
+            <span class="text-xs font-mono text-palm-600 opacity-0 group-hover:opacity-100 transition-opacity">2×</span>
+          </div>
+          <div class="flex items-center justify-between py-1 px-2 rounded-sm hover:bg-sand-50 cursor-pointer group lsi-found">
+            <span class="text-xs text-warm-800">heel drop</span>
+            <span class="text-xs font-mono text-palm-600 opacity-0 group-hover:opacity-100 transition-opacity">1×</span>
+          </div>
+          <div class="flex items-center justify-between py-1 px-2 rounded-sm hover:bg-sand-50 cursor-pointer group lsi-found">
+            <span class="text-xs text-warm-800">breathability</span>
+            <span class="text-xs font-mono text-palm-600 opacity-0 group-hover:opacity-100 transition-opacity">1×</span>
+          </div>
+
+          <div class="h-px bg-sand-200 my-1"></div>
+
+          <!-- Missing terms -->
+          <div class="flex items-center justify-between py-1 px-2 rounded-sm">
+            <span class="text-xs text-warm-600">overpronation</span>
+            <span class="text-xs text-warm-400 italic">not found</span>
+          </div>
+          <div class="flex items-center justify-between py-1 px-2 rounded-sm">
+            <span class="text-xs text-warm-600">arch support</span>
+            <span class="text-xs text-warm-400 italic">not found</span>
+          </div>
+          <div class="flex items-center justify-between py-1 px-2 rounded-sm">
+            <span class="text-xs text-warm-600">motion control</span>
+            <span class="text-xs text-warm-400 italic">not found</span>
+          </div>
+          <div class="flex items-center justify-between py-1 px-2 rounded-sm">
+            <span class="text-xs text-warm-600">stack height</span>
+            <span class="text-xs text-warm-400 italic">not found</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Heading Outline -->
+      <div class="bg-white rounded-sm border border-sand-400/60 p-4">
+        <h3 class="text-xs font-semibold text-warm-700 uppercase tracking-wider mb-3">Structure</h3>
+
+        <div class="space-y-1">
+          <div class="outline-item text-xs text-warm-700 font-medium py-0.5">
+            H2 — How to Choose the Best Running Shoes
+          </div>
+          <div class="outline-item text-xs text-warm-500 py-0.5 pl-4">
+            H3 — Cushioning and Support for Long Runs
+          </div>
+          <div class="outline-item text-xs text-warm-500 py-0.5 pl-4">
+            H3 — Lightweight Options for Speed Work
+          </div>
+          <div class="outline-item text-xs text-warm-700 font-medium py-0.5 mt-1">
+            H2 — Trail Running vs. Road Running Shoes
+          </div>
+          <div class="outline-item text-xs text-warm-500 py-0.5 pl-4">
+            H3 — Finding Your Pronation Type
+          </div>
+          <div class="outline-item text-xs text-warm-700 font-medium py-0.5 mt-1">
+            H2 — Our Recommendation Process
+          </div>
+          <div class="outline-item text-xs text-warm-500 py-0.5 pl-4">
+            H3 — When to Replace Your Running Shoes
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bottom Action Bar -->
+<div class="bottom-bar fixed bottom-0 left-0 right-0 bg-white border-t border-sand-300 z-30">
+  <div class="max-w-[1600px] mx-auto px-6 h-16 flex items-center justify-between">
+    <!-- Left: Auto-save -->
+    <div class="flex items-center gap-2 text-xs text-warm-400">
+      <div class="w-1.5 h-1.5 rounded-full bg-palm-400"></div>
+      Auto-saved 2 min ago
+    </div>
+
+    <!-- Right: Actions -->
+    <div class="flex items-center gap-3">
+      <button class="px-4 py-2 text-sm font-medium text-warm-600 bg-sand-200 hover:bg-sand-300 rounded-sm transition-colors">
+        Re-run Checks
+      </button>
+      <button class="px-4 py-2 text-sm font-medium text-warm-700 bg-white border border-sand-400 hover:bg-sand-50 rounded-sm transition-colors">
+        Save Draft
+      </button>
+      <button class="px-5 py-2 text-sm font-semibold text-white bg-palm-500 hover:bg-palm-600 rounded-sm transition-colors flex items-center gap-2 shadow-sm">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        Approve
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Tab switching
+function switchView(view) {
+  const rendered = document.getElementById('view-rendered');
+  const html = document.getElementById('view-html');
+  const tabRendered = document.getElementById('tab-rendered');
+  const tabHtml = document.getElementById('tab-html');
+
+  if (view === 'rendered') {
+    rendered.classList.remove('hidden');
+    html.classList.add('hidden');
+    tabRendered.className = 'tab-active px-3 py-2 text-xs font-medium transition-all';
+    tabHtml.className = 'tab-inactive px-3 py-2 text-xs font-medium transition-all';
+  } else {
+    rendered.classList.add('hidden');
+    html.classList.remove('hidden');
+    tabRendered.className = 'tab-inactive px-3 py-2 text-xs font-medium transition-all';
+    tabHtml.className = 'tab-active px-3 py-2 text-xs font-medium transition-all';
+  }
+}
+
+// Character count
+function updateCount(el, countId, max) {
+  const len = el.value.length;
+  const countEl = document.getElementById(countId);
+  countEl.textContent = `${len} / ${max}`;
+  if (len > max) {
+    countEl.classList.remove('text-palm-600');
+    countEl.classList.add('text-coral-600');
+  } else {
+    countEl.classList.remove('text-coral-600');
+    countEl.classList.add('text-palm-600');
+  }
+}
+
+// Highlight toggles
+const highlightState = { keyword: true, lsi: true, trope: true };
+
+function toggleHighlight(type) {
+  highlightState[type] = !highlightState[type];
+  const btn = document.getElementById(`hl-btn-${type}`);
+  btn.classList.toggle('active');
+
+  const classMap = { keyword: 'hl-keyword', lsi: 'hl-lsi', trope: 'hl-trope' };
+  const classes = type === 'keyword' ? ['hl-keyword', 'hl-keyword-var'] : [classMap[type]];
+  classes.forEach(cls => {
+    document.querySelectorAll(`.${cls}`).forEach(el => {
+      if (highlightState[type]) {
+        el.style.textDecoration = '';
+        el.style.background = '';
+        el.style.borderBottom = '';
+      } else {
+        if (type === 'keyword') {
+          el.style.background = 'none';
+          el.style.borderBottom = 'none';
+        } else if (type === 'lsi') {
+          el.style.background = 'none';
+          el.style.borderBottom = 'none';
+        } else if (type === 'trope') {
+          el.style.textDecoration = 'none';
+        }
+      }
+    });
+  });
+}
+
+// Jump to violation
+function jumpTo(id) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('violation-pulse');
+    setTimeout(() => el.classList.remove('violation-pulse'), 1500);
+  }
+}
+
+// LSI term highlight (placeholder)
+function highlightTerm(term) {
+  // In real implementation, would scroll to first occurrence
+  console.log('Jump to term:', term);
+}
+</script>
+
+</body>
+</html>
