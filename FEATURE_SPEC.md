@@ -261,52 +261,56 @@ Project
 **System does (for each page, in parallel where possible):**
 
 ```
-Phase 1: Get POP Content Brief
-├── Send approved primary keyword + target URL to POP API
+Phase 1: Get POP Content Brief (3-step API flow)
+├── Step 1: get-terms — send keyword, get LSI terms + variations + prepareId
+├── Step 2: create-report — send prepareId + target URL, get competitors + structure
+├── Step 3: get-custom-recommendations — get heading targets, keyword placement, word count
 ├── POP returns comprehensive brief:
+│   ├── cleanedContentBrief (per-location term targets: title, subheadings, paragraphs)
 │   ├── lsi_terms (replaces secondary keywords - better quality)
 │   ├── related_questions (replaces PAA - direct from Google)
-│   ├── word_count_target, word_count_min, word_count_max
-│   ├── heading_targets (H1, H2, H3 counts)
-│   ├── keyword_targets (placement recommendations)
+│   ├── heading_targets (H2, H3 counts — we use min of range, capped at 8/12)
+│   ├── keyword_targets (exact placement recommendations)
 │   └── competitors (top ranking pages analysis)
-├── Load brand config
-├── Load internal link recommendations for this page
-└── Store Content Brief in database
+├── Load brand config (copywriting skill bible baked into system prompt)
+├── **Word count targets intentionally omitted** — content length driven by
+│   heading structure + term targets, not arbitrary SERP competitor numbers
+│   (SERP may be full of scientific articles or Wikipedia, not e-commerce pages)
+└── Store Content Brief in database (cached, re-fetchable with refresh_briefs flag)
 
-Phase 2: Write
-├── Generate content using Claude
-│   ├── Meta description
-│   ├── Page title
-│   ├── Top description (short intro)
-│   ├── Bottom description (longer copy, with FAQ from related_questions)
-├── Follow brand voice
-├── Hit POP brief targets
-├── Include LSI terms naturally
-├── Answer related questions (FAQ section)
-├── **Insert internal links using link map:**
-│   ├── Use recommended anchor text from link map
-│   ├── Place links naturally within content
-│   ├── Distribute across content (not clustered)
-│   └── Include 3-6 internal links per page
-└── Verify all recommended links are included
+Phase 2: Write (Claude Sonnet with skill bible)
+├── System prompt includes:
+│   ├── Writing rules (benefits over features, specificity, active voice)
+│   ├── AI trope avoidance (Tier 1 banned words, Tier 2 max-1-per-piece)
+│   ├── Formatting standards (Title Case headers, max 7 words, no em dashes)
+│   └── Brand guidelines (from brand config ai_prompt_snippet)
+├── User prompt includes:
+│   ├── Page context (URL, title, product count, labels)
+│   ├── SEO targets from cleanedContentBrief (min term frequencies, floor of 1)
+│   ├── Heading structure (POP min counts, not targets)
+│   ├── Related questions for FAQ section
+│   └── Output format template (120-word max per paragraph, brevity encouraged)
+├── Generate 4 content fields as JSON:
+│   ├── page_title (Title Case, 5-10 words, under 60 chars)
+│   ├── meta_description (150-160 chars, include CTA)
+│   ├── top_description (plain text, 1-2 sentences)
+│   └── bottom_description (HTML with h2/h3/p structure)
+├── **Internal links deferred** — saved for internal linking phase
+└── Retry with strict JSON prompt if first attempt fails
 
 Phase 3: Check
-├── AI trope detection
-│   ├── Banned words/phrases
-│   ├── Em dashes
-│   ├── Triplet patterns
-│   ├── Rhetorical questions
-│   └── Score (must pass threshold)
-├── **Internal link verification**
-│   ├── All recommended links present?
-│   ├── Anchor text matches recommendations?
-│   └── Links properly formatted?
-├── POP scoring API call
-│   ├── Send content URL + keyword to POP
-│   ├── Get page_score and recommendations
-│   └── Iterate until score meets threshold (default 70)
-└── Flag any issues
+├── AI trope detection (5 rules):
+│   ├── Banned words/phrases (brand-specific from vocabulary config)
+│   ├── Em dashes (—)
+│   ├── Triplet patterns ("Fast. Simple. Powerful.")
+│   ├── Rhetorical questions followed by answers
+│   └── "Whether you're..." pattern
+├── Quality checks (Tier 1/2 from skill bible):
+│   ├── Tier 1 banned AI words (delve, unlock, unleash, etc.) — zero tolerance
+│   ├── Tier 2 AI words (indeed, furthermore, robust, etc.) — max 1 per piece
+│   └── Negation/contrast pattern ("It's not X, it's Y") — max 1 per piece
+├── **POP scoring API deferred** — saved for Phase 6 content review
+└── Results stored in qa_results JSON field
 ```
 
 **User sees:**
