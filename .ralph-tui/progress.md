@@ -30,3 +30,16 @@ after each iteration and it's included in prompts for context.
   - ruff and mypy pass clean
 ---
 
+## 2026-02-07 - S6-003
+- Added content review/editing schemas to `backend/app/schemas/content_generation.py`
+- New schemas: `ContentUpdateRequest` (partial update with optional page_title, meta_description, top_description, bottom_description), `ContentBriefData` (keyword, lsi_terms, heading_targets, keyword_targets), `BulkApproveResponse` (approved_count)
+- Updated `PageContentResponse` with `is_approved` (bool), `approved_at` (datetime|None), and `brief` (ContentBriefData|None)
+- Updated `ContentGenerationStatus` with `pages_approved` (int, default 0)
+- Files changed: `backend/app/schemas/content_generation.py`
+- **Learnings:**
+  - All schemas follow Pydantic v2 conventions (BaseModel, Field, ConfigDict)
+  - ContentBriefData uses `list[Any]` for JSONB fields (lsi_terms, heading_targets, keyword_targets) to match the model's flexible JSON structure
+  - Pre-existing mypy errors in brand_config.py and config.py are unrelated to this change
+  - ruff passes clean
+---
+

@@ -1,4 +1,4 @@
-"""Pydantic schemas for Phase 5 content generation API endpoints.
+"""Pydantic schemas for content generation and review API endpoints.
 
 Schemas for the content generation pipeline:
 - ContentGenerationTriggerResponse: Accepted response when pipeline is triggered
@@ -6,12 +6,46 @@ Schemas for the content generation pipeline:
 - PageContentResponse: Generated content for a single page (from ORM)
 - PromptLogResponse: Single prompt/response exchange record (from ORM)
 - BriefSummary: Lightweight summary of the content brief used during generation
+- ContentBriefData: Full brief data for review (keyword, LSI terms, heading/keyword targets)
+- ContentUpdateRequest: Partial update request for editing content fields
+- BulkApproveResponse: Response for bulk approval endpoint
 """
 
 from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
+
+# =============================================================================
+# CONTENT UPDATE REQUEST
+# =============================================================================
+
+
+class ContentUpdateRequest(BaseModel):
+    """Request schema for partial content updates during review/editing."""
+
+    page_title: str | None = Field(None, description="Updated SEO page title")
+    meta_description: str | None = Field(None, description="Updated meta description")
+    top_description: str | None = Field(
+        None, description="Updated above-the-fold content (plain text)"
+    )
+    bottom_description: str | None = Field(
+        None, description="Updated below-the-fold content (HTML)"
+    )
+
+
+# =============================================================================
+# BULK APPROVE RESPONSE
+# =============================================================================
+
+
+class BulkApproveResponse(BaseModel):
+    """Response schema for bulk content approval endpoint."""
+
+    approved_count: int = Field(
+        ..., ge=0, description="Number of pages approved in this request"
+    )
+
 
 # =============================================================================
 # TRIGGER RESPONSE
@@ -59,6 +93,7 @@ class ContentGenerationStatus(BaseModel):
     pages_total: int = Field(..., ge=0, description="Total pages to generate")
     pages_completed: int = Field(..., ge=0, description="Pages completed successfully")
     pages_failed: int = Field(..., ge=0, description="Pages that failed generation")
+    pages_approved: int = Field(0, ge=0, description="Pages approved for publishing")
     pages: list[PageGenerationStatusItem] = Field(
         default_factory=list,
         description="Per-page status breakdown",
@@ -93,6 +128,26 @@ class BriefSummary(BaseModel):
 
 
 # =============================================================================
+# CONTENT BRIEF DATA (full brief for review)
+# =============================================================================
+
+
+class ContentBriefData(BaseModel):
+    """Full content brief data exposed for the review/editing UI."""
+
+    keyword: str = Field(..., description="Target keyword from the brief")
+    lsi_terms: list[Any] = Field(
+        default_factory=list, description="LSI terms for content optimization"
+    )
+    heading_targets: list[Any] = Field(
+        default_factory=list, description="Recommended headings with level and priority"
+    )
+    keyword_targets: list[Any] = Field(
+        default_factory=list, description="Keyword usage targets with min/max counts"
+    )
+
+
+# =============================================================================
 # PAGE CONTENT RESPONSE (from ORM)
 # =============================================================================
 
@@ -117,11 +172,18 @@ class PageContentResponse(BaseModel):
         ...,
         description="Content status (pending, generating_brief, writing, checking, complete, failed)",
     )
+    is_approved: bool = Field(False, description="Whether content has been approved")
+    approved_at: datetime | None = Field(
+        None, description="When content was approved"
+    )
     qa_results: dict[str, Any] | None = Field(
         None, description="Quality check results"
     )
     brief_summary: BriefSummary | None = Field(
         None, description="Summary of the content brief used"
+    )
+    brief: ContentBriefData | None = Field(
+        None, description="Full content brief data for review"
     )
     generation_started_at: datetime | None = Field(
         None, description="When content generation started"
