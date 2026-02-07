@@ -23,6 +23,7 @@ from app.models.prompt_log import PromptLog
 from app.schemas.content_generation import (
     BriefSummary,
     BulkApproveResponse,
+    ContentBriefData,
     ContentGenerationStatus,
     ContentGenerationTriggerResponse,
     ContentUpdateRequest,
@@ -311,6 +312,16 @@ async def get_page_content(
             word_count_range=word_count_range,
         )
 
+    # Build full brief data for review sidebar
+    brief_data = None
+    if page.content_brief:
+        brief_data = ContentBriefData(
+            keyword=page.content_brief.keyword,
+            lsi_terms=page.content_brief.lsi_terms or [],
+            heading_targets=page.content_brief.heading_targets or [],
+            keyword_targets=page.content_brief.keyword_targets or [],
+        )
+
     content = page.page_content
     return PageContentResponse(
         page_title=content.page_title,
@@ -321,6 +332,7 @@ async def get_page_content(
         status=content.status,
         qa_results=content.qa_results,
         brief_summary=brief_summary,
+        brief=brief_data,
         generation_started_at=content.generation_started_at,
         generation_completed_at=content.generation_completed_at,
     )

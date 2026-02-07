@@ -115,3 +115,16 @@ after each iteration and it's included in prompts for context.
   - Bulk update pattern: fetch all eligible records, loop to set fields, single commit — simpler than a bulk UPDATE statement and consistent with ORM usage elsewhere
   - Pre-existing mypy errors unchanged; ruff passes clean
 ---
+
+## 2026-02-07 - S6-008
+- Updated GET /api/v1/projects/{project_id}/pages/{page_id}/content to include `brief` field
+- Brief data populated from ContentBrief model via `selectinload(CrawledPage.content_brief)` (already loaded)
+- Returns ContentBriefData with keyword, lsi_terms (full array), heading_targets (full array), keyword_targets (full array)
+- Returns null if no ContentBrief exists for the page
+- Existing response fields (brief_summary, qa_results, etc.) unchanged
+- Files changed: `backend/app/api/v1/content_generation.py`
+- **Learnings:**
+  - ContentBriefData schema was already defined in S6-003 and the `brief` field already existed on PageContentResponse — just needed to populate it in the GET endpoint
+  - The `selectinload(CrawledPage.content_brief)` was already present in the GET query from previous work, so no query changes needed
+  - Pre-existing mypy errors unchanged; ruff passes clean
+---
