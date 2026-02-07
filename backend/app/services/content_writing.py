@@ -25,9 +25,9 @@ logger = get_logger(__name__)
 
 # Model to use for content writing (Sonnet for quality)
 CONTENT_WRITING_MODEL = "claude-sonnet-4-5-20250929"
-CONTENT_WRITING_MAX_TOKENS = 4096
+CONTENT_WRITING_MAX_TOKENS = 8192
 CONTENT_WRITING_TEMPERATURE = 0.7
-CONTENT_WRITING_TIMEOUT = 120.0  # Longer timeout for content generation (600-1200 word output)
+CONTENT_WRITING_TIMEOUT = 180.0  # Longer timeout for content generation (POP targets can be 1500+ words)
 
 # Default word count target when ContentBrief is missing
 DEFAULT_WORD_COUNT_MIN = 300
