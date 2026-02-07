@@ -114,8 +114,9 @@
         "Returns 200 with approved_count=0 if no pages are eligible"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Join through CrawledPage to filter by project_id. Use JSONB operator for qa_results.passed check."
+      "passes": true,
+      "notes": "Join through CrawledPage to filter by project_id. Use JSONB operator for qa_results.passed check.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S6-008",
@@ -464,6 +465,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-07T20:59:08.119Z"
+    "updatedAt": "2026-02-07T21:00:49.369Z"
   }
 }

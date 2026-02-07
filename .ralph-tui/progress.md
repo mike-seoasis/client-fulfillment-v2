@@ -102,3 +102,16 @@ after each iteration and it's included in prompts for context.
   - BrandConfig loading pattern: `select(BrandConfig).where(BrandConfig.project_id == project_id)` then `.v2_schema` — same as `_load_brand_config` in content_generation service
   - Pre-existing mypy errors unchanged; ruff passes clean
 ---
+
+## 2026-02-07 - S6-007
+- Added POST /api/v1/projects/{project_id}/bulk-approve-content endpoint
+- Finds all PageContent records for project where status='complete', qa_results.passed=true, and is_approved=False
+- Sets each to is_approved=True with approved_at=now(UTC)
+- Returns BulkApproveResponse with approved_count (returns 0 if no eligible pages)
+- Files changed: `backend/app/api/v1/content_generation.py`
+- **Learnings:**
+  - JSONB boolean query pattern: `PageContent.qa_results["passed"].as_boolean().is_(True)` — SQLAlchemy's JSONB subscript + as_boolean() cast for querying nested JSON boolean values
+  - Join through CrawledPage to filter by project_id: `select(PageContent).join(CrawledPage, PageContent.crawled_page_id == CrawledPage.id).where(CrawledPage.project_id == project_id)`
+  - Bulk update pattern: fetch all eligible records, loop to set fields, single commit — simpler than a bulk UPDATE statement and consistent with ORM usage elsewhere
+  - Pre-existing mypy errors unchanged; ruff passes clean
+---

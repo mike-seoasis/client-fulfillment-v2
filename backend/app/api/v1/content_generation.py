@@ -22,6 +22,7 @@ from app.models.page_keywords import PageKeywords
 from app.models.prompt_log import PromptLog
 from app.schemas.content_generation import (
     BriefSummary,
+    BulkApproveResponse,
     ContentGenerationStatus,
     ContentGenerationTriggerResponse,
     ContentUpdateRequest,
@@ -538,6 +539,60 @@ async def approve_content(
         generation_started_at=content.generation_started_at,
         generation_completed_at=content.generation_completed_at,
     )
+
+
+@router.post(
+    "/{project_id}/bulk-approve-content",
+    response_model=BulkApproveResponse,
+)
+async def bulk_approve_content(
+    project_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> BulkApproveResponse:
+    """Bulk-approve all eligible content pages for a project.
+
+    Finds all PageContent records where status='complete', qa_results.passed=true,
+    and is_approved=False. Sets each to is_approved=True with approved_at=now().
+
+    Returns 200 with approved_count=0 if no pages are eligible.
+    """
+    # Verify project exists (raises 404 if not)
+    await ProjectService.get_project(db, project_id)
+
+    now = datetime.now(UTC)
+
+    # Find all eligible PageContent records: complete, QA passed, not yet approved
+    stmt = (
+        select(PageContent)
+        .join(CrawledPage, PageContent.crawled_page_id == CrawledPage.id)
+        .where(
+            CrawledPage.project_id == project_id,
+            PageContent.status == ContentStatus.COMPLETE.value,
+            PageContent.qa_results["passed"].as_boolean().is_(True),
+            PageContent.is_approved.is_(False),
+        )
+    )
+    result = await db.execute(stmt)
+    eligible = result.scalars().all()
+
+    # Approve each
+    for content in eligible:
+        content.is_approved = True
+        content.approved_at = now
+
+    await db.commit()
+
+    approved_count = len(eligible)
+
+    logger.info(
+        "Bulk content approval completed",
+        extra={
+            "project_id": project_id,
+            "approved_count": approved_count,
+        },
+    )
+
+    return BulkApproveResponse(approved_count=approved_count)
 
 
 @router.post(
