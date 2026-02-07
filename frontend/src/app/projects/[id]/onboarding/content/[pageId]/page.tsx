@@ -915,9 +915,15 @@ export default function ContentEditorPage() {
               type="button"
               onClick={handleRecheck}
               disabled={recheckContent.isPending || saveStatus.state === 'saving'}
-              className="px-4 py-2 text-sm font-medium text-warm-600 bg-sand-200 hover:bg-sand-300 rounded-sm transition-colors disabled:opacity-50"
+              className="px-4 py-2 text-sm font-medium text-warm-600 bg-sand-200 hover:bg-sand-300 rounded-sm transition-colors disabled:opacity-50 flex items-center gap-2"
             >
-              {recheckContent.isPending ? 'Checking...' : 'Re-run Checks'}
+              {recheckContent.isPending && (
+                <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              )}
+              {recheckContent.isPending ? 'Checking…' : 'Re-run Checks'}
             </button>
             <button
               type="button"
@@ -930,23 +936,17 @@ export default function ContentEditorPage() {
             <button
               type="button"
               onClick={handleApprove}
-              disabled={approveContent.isPending}
+              disabled={approveContent.isPending || content.status !== 'complete'}
               className={`px-5 py-2 text-sm font-semibold rounded-sm transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50 ${
                 content.is_approved
-                  ? 'text-warm-700 bg-sand-200 hover:bg-sand-300'
+                  ? 'text-palm-700 bg-palm-100 hover:bg-palm-200 border border-palm-200'
                   : 'text-white bg-palm-500 hover:bg-palm-600'
               }`}
             >
-              {content.is_approved ? (
-                'Unapprove'
-              ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                  </svg>
-                  Approve
-                </>
-              )}
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+              </svg>
+              {content.is_approved ? 'Approved' : 'Approve'}
             </button>
           </div>
         </div>

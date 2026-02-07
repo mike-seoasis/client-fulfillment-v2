@@ -325,3 +325,16 @@ after each iteration and it's included in prompts for context.
   - `useEffect` with `setInterval` for relative time label — re-runs when `saveStatus` changes (dependency), cleans up interval on unmount/change
   - Pre-existing TS error in GenerationProgress.test.tsx unchanged; eslint passes clean
 ---
+
+## 2026-02-07 - S6-023
+- Bottom action bar was mostly implemented in S6-018/S6-022; this story finalized remaining AC gaps
+- Fixed Approve button: now disabled when `content.status !== 'complete'` (was only checking isPending)
+- Fixed Approve button text: approved state now shows checkmark + "Approved" (was showing plain "Unapprove" text without checkmark)
+- Approved state styling: palm-tinted background (`bg-palm-100 text-palm-700 border-palm-200`) visually distinguishes from default state
+- Added spinner SVG to Re-run Checks button when pending (was text-only "Checking...")
+- Files changed: `frontend/src/app/projects/[id]/onboarding/content/[pageId]/page.tsx`
+- **Learnings:**
+  - Most bottom bar functionality was built incrementally across S6-018 (layout + buttons), S6-022 (auto-save indicator), and finalized here
+  - `content.status` field on `PageContentResponse` is the right field to check for 'complete' guard on approve
+  - Pre-existing TS error in GenerationProgress.test.tsx unchanged; eslint passes clean
+---
