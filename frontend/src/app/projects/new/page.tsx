@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ProjectForm, type ProjectFormData } from '@/components/ProjectForm';
@@ -17,6 +17,25 @@ import { Button } from '@/components/ui';
 type WizardStep = 1 | 2;
 
 export default function CreateProjectPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="max-w-xl mx-auto">
+          <div className="bg-white rounded-sm border border-cream-500 p-8 shadow-sm">
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin w-6 h-6 border-2 border-palm-500 border-t-transparent rounded-full" />
+              <span className="ml-3 text-warm-gray-600">Loading...</span>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <CreateProjectPageContent />
+    </Suspense>
+  );
+}
+
+function CreateProjectPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const createProject = useCreateProject();
