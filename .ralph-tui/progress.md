@@ -75,3 +75,18 @@ after each iteration and it's included in prompts for context.
   - Pre-existing mypy errors in content_extraction.py, crawl4ai.py, crawling.py are unrelated; all router endpoints get "untyped decorator" warnings
   - ruff passes clean
 ---
+
+## 2026-02-07 - S6-005
+- Added POST /api/v1/projects/{project_id}/pages/{page_id}/approve-content endpoint
+- When value=true (default): sets is_approved=True, approved_at=now(UTC)
+- When value=false: sets is_approved=False, approved_at=None
+- Returns 400 if content status is not 'complete'
+- Returns 404 if page or PageContent not found
+- Returns updated PageContentResponse with brief_summary
+- Files changed: `backend/app/api/v1/content_generation.py`
+- **Learnings:**
+  - Ruff enforces `datetime.UTC` alias over `timezone.utc` (rule UP017)
+  - Followed exact same pattern as approve-keyword in projects.py but adapted for content (added status check for 'complete', set approved_at timestamp)
+  - Brief summary construction is duplicated across GET, PUT, and POST approve endpoints — candidate for helper extraction
+  - Pre-existing mypy errors unchanged; ruff passes clean
+---

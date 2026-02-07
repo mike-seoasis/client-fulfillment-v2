@@ -1,10 +1,12 @@
 """Content generation API router.
 
 REST endpoints for triggering content generation, polling progress,
-retrieving generated content, editing content, and fetching prompt logs.
+retrieving generated content, editing content, approving content,
+and fetching prompt logs.
 """
 
 import re
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import func, select
@@ -389,6 +391,115 @@ async def update_page_content(
 
     await db.commit()
     await db.refresh(content)
+
+    # Build brief summary (same logic as get_page_content)
+    brief_summary = None
+    if page.content_brief:
+        brief = page.content_brief
+        lsi_terms = brief.lsi_terms or []
+        competitors = brief.competitors or []
+        related_questions = brief.related_questions or []
+
+        word_count_range = None
+        if brief.word_count_min and brief.word_count_max:
+            word_count_range = f"{brief.word_count_min}-{brief.word_count_max}"
+
+        brief_summary = BriefSummary(
+            keyword=brief.keyword,
+            lsi_terms_count=len(lsi_terms),
+            competitors_count=len(competitors),
+            related_questions_count=len(related_questions),
+            page_score_target=brief.page_score_target,
+            word_count_range=word_count_range,
+        )
+
+    return PageContentResponse(
+        page_title=content.page_title,
+        meta_description=content.meta_description,
+        top_description=content.top_description,
+        bottom_description=content.bottom_description,
+        word_count=content.word_count,
+        status=content.status,
+        is_approved=content.is_approved,
+        approved_at=content.approved_at,
+        qa_results=content.qa_results,
+        brief_summary=brief_summary,
+        generation_started_at=content.generation_started_at,
+        generation_completed_at=content.generation_completed_at,
+    )
+
+
+@router.post(
+    "/{project_id}/pages/{page_id}/approve-content",
+    response_model=PageContentResponse,
+)
+async def approve_content(
+    project_id: str,
+    page_id: str,
+    db: AsyncSession = Depends(get_session),
+    value: bool = True,
+) -> PageContentResponse:
+    """Approve or unapprove generated content for a page.
+
+    By default, sets is_approved=true. Pass value=false to unapprove.
+
+    Returns 400 if content status is not 'complete'.
+    Returns 404 if page or PageContent not found.
+    """
+    # Verify project exists (raises 404 if not)
+    await ProjectService.get_project(db, project_id)
+
+    # Get page with content and brief
+    stmt = (
+        select(CrawledPage)
+        .where(
+            CrawledPage.id == page_id,
+            CrawledPage.project_id == project_id,
+        )
+        .options(
+            selectinload(CrawledPage.page_content),
+            selectinload(CrawledPage.content_brief),
+        )
+    )
+    result = await db.execute(stmt)
+    page = result.scalar_one_or_none()
+
+    if not page:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Page {page_id} not found in project {project_id}",
+        )
+
+    if not page.page_content:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Content has not been generated yet for this page",
+        )
+
+    content = page.page_content
+
+    # Only allow approval of completed content
+    if content.status != ContentStatus.COMPLETE.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot approve content with status '{content.status}'. Content must be 'complete'.",
+        )
+
+    # Set approval state
+    content.is_approved = value
+    content.approved_at = datetime.now(UTC) if value else None
+
+    await db.commit()
+    await db.refresh(content)
+
+    logger.info(
+        "Content approval updated",
+        extra={
+            "project_id": project_id,
+            "page_id": page_id,
+            "is_approved": value,
+        },
+    )
 
     # Build brief summary (same logic as get_page_content)
     brief_summary = None
