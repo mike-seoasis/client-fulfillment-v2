@@ -7,6 +7,7 @@ after each iteration and it's included in prompts for context.
 
 - **Approval fields pattern:** `is_approved` uses `Boolean, nullable=False, default=False, server_default=text("false"), index=True`. `approved_at` uses `DateTime(timezone=True), nullable=True`. See `PageKeywords` and `PageContent` models for reference. Import `Boolean` from sqlalchemy.
 - **Approval migration pattern:** Reference `0020_add_page_keywords_approval_fields.py` and `0022_add_page_contents_approval_fields.py` for adding approval columns to existing tables. Pattern: `add_column` for each field + `create_index` on `is_approved`. Downgrade drops index first, then columns.
+- **Quality check type names:** Backend uses `banned_word`, `em_dash`, `ai_pattern`, `triplet_excess`, `rhetorical_excess`, `tier1_ai_word`, `tier2_ai_excess`, `negation_contrast`. Frontend labels map these for display (e.g., `ai_pattern` → "AI Openers").
 
 ---
 
@@ -261,4 +262,20 @@ after each iteration and it's included in prompts for context.
   - Highlight toggle visibility classes (hide-hl-keyword etc.) need to be applied on the editor's outer container, not directly on the Lexical root
   - HighlightPlugin is a Lexical plugin that must render inside LexicalComposer — passed through ContentEditorWithSource → LexicalEditor as optional props
   - Pre-existing TS error in GenerationProgress.test.tsx unchanged; eslint passes clean
+---
+
+## 2026-02-07 - S6-019
+- Enhanced stats sidebar with complete quality panel and content stats
+- Fixed quality check types to match backend: `ai_pattern`, `triplet_excess`, `rhetorical_excess`, `tier2_ai_excess` (was using incorrect names: ai_opener, triplet_list, rhetorical_question, tier2_ai_word)
+- ContentStatsCard now includes: heading targets from brief (e.g., "Target: 3–8 H2, 4–12 H3"), keyword variation count with listed words, paragraph count
+- FlaggedPassagesCard now has "Jump to" button per violation
+- Jump-to implementation: searches editor DOM for `.hl-trope` spans matching violation context, scrolls to view with smooth behavior, applies `violation-pulse` CSS animation (1.5s coral background pulse)
+- Added `violation-pulse` keyframe animation and `sidebar-scroll` custom scrollbar styles to `globals.css`
+- Files changed: `frontend/src/app/projects/[id]/onboarding/content/[pageId]/page.tsx` (modified), `frontend/src/app/globals.css` (modified)
+- **Learnings:**
+  - Backend quality check types differ from wireframe labels: `ai_pattern` (not ai_opener), `triplet_excess` (not triplet_list), `rhetorical_excess` (not rhetorical_question), `tier2_ai_excess` (not tier2_ai_word)
+  - `heading_targets` from brief is `{level, text, min_count, max_count, priority}[]` — use min_count/max_count for target range display
+  - TypeScript target doesn't support `for...of` on `Set` or `NodeListOf` without `--downlevelIteration` — use `Array.from()` to convert first
+  - Jump-to uses DOM traversal (querySelectorAll + TreeWalker fallback) rather than Lexical API — simpler for read-only element lookup
+  - Pre-existing TS error in GenerationProgress.test.tsx unchanged; pre-existing ESLint CSS parsing error on globals.css (Tailwind directives) unchanged; eslint passes clean on TS files
 ---

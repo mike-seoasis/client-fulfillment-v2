@@ -19,3 +19,18 @@ body {
     text-wrap: balance;
   }
 }
+
+/* Violation jump pulse animation */
+@keyframes pulse-highlight {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: rgba(224, 122, 95, 0.12); }
+}
+.violation-pulse {
+  animation: pulse-highlight 1.5s ease-in-out;
+}
+
+/* Sidebar custom scrollbar */
+.sidebar-scroll::-webkit-scrollbar { width: 4px; }
+.sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+.sidebar-scroll::-webkit-scrollbar-thumb { background: #C9BDA8; border-radius: 4px; }
+.sidebar-scroll::-webkit-scrollbar-thumb:hover { background: #A99D88; }

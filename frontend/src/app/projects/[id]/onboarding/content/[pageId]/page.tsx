@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
@@ -76,21 +76,21 @@ function QualityStatusCard({ qaResults }: { qaResults: QaResults | null }) {
   const checkTypes = [
     'banned_word',
     'em_dash',
-    'ai_opener',
-    'triplet_list',
-    'rhetorical_question',
+    'ai_pattern',
+    'triplet_excess',
+    'rhetorical_excess',
     'tier1_ai_word',
-    'tier2_ai_word',
+    'tier2_ai_excess',
     'negation_contrast',
   ];
   const checkLabels: Record<string, string> = {
     banned_word: 'Banned Words',
     em_dash: 'Em Dashes',
-    ai_opener: 'AI Openers',
-    triplet_list: 'Triplet Lists',
-    rhetorical_question: 'Rhetorical Questions',
+    ai_pattern: 'AI Openers',
+    triplet_excess: 'Triplet Lists',
+    rhetorical_excess: 'Rhetorical Questions',
     tier1_ai_word: 'Tier 1 AI Words',
-    tier2_ai_word: 'Tier 2 AI Words',
+    tier2_ai_excess: 'Tier 2 AI Words',
     negation_contrast: 'Negation Contrast',
   };
 
@@ -139,7 +139,13 @@ function QualityStatusCard({ qaResults }: { qaResults: QaResults | null }) {
   );
 }
 
-function FlaggedPassagesCard({ issues }: { issues: QaIssue[] }) {
+function FlaggedPassagesCard({
+  issues,
+  onJumpTo,
+}: {
+  issues: QaIssue[];
+  onJumpTo?: (context: string) => void;
+}) {
   if (!issues || issues.length === 0) return null;
 
   return (
@@ -154,6 +160,15 @@ function FlaggedPassagesCard({ issues }: { issues: QaIssue[] }) {
               <p className="text-xs text-warm-500 mt-0.5 leading-relaxed">
                 &ldquo;{issue.context}&rdquo;
               </p>
+              {onJumpTo && (
+                <button
+                  type="button"
+                  onClick={() => onJumpTo(issue.context)}
+                  className="text-xs text-lagoon-600 hover:text-lagoon-700 mt-1 font-medium"
+                >
+                  Jump to &darr;
+                </button>
+              )}
             </div>
           </div>
         ))}
@@ -162,32 +177,72 @@ function FlaggedPassagesCard({ issues }: { issues: QaIssue[] }) {
   );
 }
 
+function countParagraphs(html: string | null | undefined): number {
+  if (!html) return 0;
+  return (html.match(/<p[\s>]/gi) || []).length;
+}
+
 function ContentStatsCard({
   wordCount,
   headings,
+  headingTargets,
   primaryKeyword,
+  variations,
   bottomHtml,
 }: {
   wordCount: number;
   headings: { h2: number; h3: number };
+  headingTargets: unknown[];
   primaryKeyword: string;
+  variations: Set<string>;
   bottomHtml: string | null;
 }) {
+  // Derive heading target ranges from brief
+  const headingTargetDisplay = useMemo(() => {
+    const targets = headingTargets as { level?: string; min_count?: number; max_count?: number }[];
+    const h2Target = targets.find((t) => t.level === 'h2');
+    const h3Target = targets.find((t) => t.level === 'h3');
+    const h2 = h2Target ? `${h2Target.min_count ?? 0}–${h2Target.max_count ?? '?'}` : null;
+    const h3 = h3Target ? `${h3Target.min_count ?? 0}–${h3Target.max_count ?? '?'}` : null;
+    if (!h2 && !h3) return null;
+    const parts: string[] = [];
+    if (h2) parts.push(`${h2} H2`);
+    if (h3) parts.push(`${h3} H3`);
+    return `Target: ${parts.join(', ')}`;
+  }, [headingTargets]);
+
   // Count exact keyword matches in bottom description
   const keywordStats = useMemo(() => {
     if (!bottomHtml || !primaryKeyword) return { exact: 0, density: '0' };
-    const text = bottomHtml.replace(/<[^>]+>/g, ' ').toLowerCase();
     const kw = primaryKeyword.toLowerCase();
-    const words = text.split(/\s+/).filter(Boolean);
-    let exact = 0;
-    // Count occurrences of the full keyword phrase
     const regex = new RegExp(`\\b${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
     const stripped = bottomHtml.replace(/<[^>]+>/g, ' ');
     const matches = stripped.match(regex);
-    exact = matches?.length ?? 0;
+    const exact = matches?.length ?? 0;
+    const words = stripped.split(/\s+/).filter(Boolean);
     const density = words.length > 0 ? ((exact * kw.split(/\s+/).length / words.length) * 100).toFixed(1) : '0';
     return { exact, density };
   }, [bottomHtml, primaryKeyword]);
+
+  // Count variation matches in bottom description
+  const variationStats = useMemo(() => {
+    if (!bottomHtml || variations.size === 0) return { count: 0, words: [] as string[] };
+    const stripped = bottomHtml.replace(/<[^>]+>/g, ' ');
+    const found: { word: string; count: number }[] = [];
+    for (const v of Array.from(variations)) {
+      const regex = new RegExp(`\\b${v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+      const matches = stripped.match(regex);
+      if (matches && matches.length > 0) {
+        found.push({ word: v, count: matches.length });
+      }
+    }
+    return {
+      count: found.reduce((sum, f) => sum + f.count, 0),
+      words: found.map((f) => f.word),
+    };
+  }, [bottomHtml, variations]);
+
+  const paragraphCount = countParagraphs(bottomHtml);
 
   return (
     <div className="bg-white rounded-sm border border-sand-400/60 p-4">
@@ -202,6 +257,9 @@ function ContentStatsCard({
             <span className="text-warm-600">Headings</span>
             <span className="font-mono font-medium text-warm-800">{headings.h2} H2 · {headings.h3} H3</span>
           </div>
+          {headingTargetDisplay && (
+            <div className="text-xs text-warm-400">{headingTargetDisplay}</div>
+          )}
         </div>
         <div className="h-px bg-sand-200" />
         <div>
@@ -217,6 +275,21 @@ function ContentStatsCard({
               />
             </div>
             <span className="text-xs font-mono text-warm-500">{keywordStats.density}%</span>
+          </div>
+        </div>
+        <div>
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span className="text-warm-600">Variations</span>
+            <span className="font-mono font-medium text-warm-800">{variationStats.count} uses</span>
+          </div>
+          {variationStats.words.length > 0 && (
+            <div className="text-xs text-warm-400">{variationStats.words.join(', ')}</div>
+          )}
+        </div>
+        <div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-warm-600">Paragraphs</span>
+            <span className="font-mono font-medium text-warm-800">{paragraphCount}</span>
           </div>
         </div>
       </div>
@@ -374,6 +447,43 @@ export default function ContentEditorPage() {
     if (!qa?.issues) return [];
     return qa.issues.map((issue) => ({ text: issue.context }));
   }, [content?.qa_results]);
+
+  // Ref to the bottom description editor container for jump-to
+  const editorContainerRef = useRef<HTMLDivElement>(null);
+
+  // Jump to flagged passage in the Lexical editor
+  const handleJumpTo = useCallback((context: string) => {
+    const container = editorContainerRef.current;
+    if (!container) return;
+
+    // Search for hl-trope spans whose text includes the context
+    const tropeSpans = Array.from(container.querySelectorAll('.hl-trope'));
+    let target: HTMLElement | null = null;
+    for (const span of tropeSpans) {
+      if (span.textContent && span.textContent.includes(context.slice(0, 20))) {
+        target = span as HTMLElement;
+        break;
+      }
+    }
+
+    // Fallback: search all text in the editor for context substring
+    if (!target) {
+      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+      let node: Node | null;
+      while ((node = walker.nextNode())) {
+        if (node.textContent && node.textContent.includes(context.slice(0, 20))) {
+          target = node.parentElement;
+          break;
+        }
+      }
+    }
+
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target.classList.add('violation-pulse');
+      setTimeout(() => target!.classList.remove('violation-pulse'), 1500);
+    }
+  }, []);
 
   // Computed counts
   const titleLen = pageTitle?.length ?? 0;
@@ -550,7 +660,7 @@ export default function ContentEditorPage() {
           </div>
 
           {/* Field 4: Bottom Description (Lexical Editor) */}
-          <div className={`field-section bg-white rounded-sm border border-sand-400/60 ${hlClasses}`}>
+          <div ref={editorContainerRef} className={`field-section bg-white rounded-sm border border-sand-400/60 ${hlClasses}`}>
             <div className="flex items-center justify-between px-5 pt-4 pb-0">
               <label className="text-sm font-semibold text-warm-800">Bottom Description</label>
             </div>
@@ -579,11 +689,13 @@ export default function ContentEditorPage() {
         {/* Right Sidebar (~35%) */}
         <div className="w-[340px] flex-shrink-0 space-y-4 sticky top-[72px] max-h-[calc(100vh-140px)] overflow-y-auto pb-4 sidebar-scroll">
           <QualityStatusCard qaResults={qaResults} />
-          <FlaggedPassagesCard issues={qaResults?.issues ?? []} />
+          <FlaggedPassagesCard issues={qaResults?.issues ?? []} onJumpTo={handleJumpTo} />
           <ContentStatsCard
             wordCount={totalWordCount}
             headings={headings}
+            headingTargets={content?.brief?.heading_targets ?? []}
             primaryKeyword={primaryKeyword}
+            variations={variations}
             bottomHtml={bottomDescription}
           />
           <LsiTermsCard lsiTerms={lsiTerms} bottomHtml={bottomDescription} />
