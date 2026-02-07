@@ -273,7 +273,13 @@ async def _run_real_3step_flow(
     if not prepare_id:
         logger.warning(
             "No prepareId in get-terms response, skipping steps 2+3",
-            extra={"keyword": keyword[:50]},
+            extra={
+                "keyword": keyword[:50],
+                "response_keys": list(response_data.keys()),
+                "status": response_data.get("status"),
+                "has_lsa": len(lsa_phrases) > 0,
+                "has_variations": len(variations) > 0,
+            },
         )
         return response_data, pop_task_id
 

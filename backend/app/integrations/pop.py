@@ -1180,6 +1180,8 @@ class POPClient:
                         "elapsed_seconds": round(elapsed, 2),
                         "poll_attempt": poll_count,
                         "total_polls": poll_count,
+                        "response_keys": list((result.data or {}).keys())[:20],
+                        "has_prepareId": "prepareId" in (result.data or {}),
                     },
                 )
                 return result
