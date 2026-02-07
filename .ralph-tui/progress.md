@@ -169,6 +169,21 @@ after each iteration and it's included in prompts for context.
   - Pre-existing TS error in GenerationProgress.test.tsx unchanged; eslint passes clean
 ---
 
+## 2026-02-07 - S6-015
+- Created `frontend/src/lib/keyword-variations.ts` — keyword variation generator utility for highlighting
+- `generateVariations(keyword)` splits primary keyword into words, generates suffix variations (+s, +es, +ing, +er, +ers) and removal variations (-s, -es, -ing, -er) for each word
+- Consonant doubling for CVC words (run → running, runner)
+- Silent-e handling (bake → baking, baker)
+- Returns Set<string> of all lowercase variations, excluding exact primary keyword and sub-phrases
+- Handles edge cases: empty input, single-word keywords, hyphenated words
+- Files changed: `frontend/src/lib/keyword-variations.ts` (new)
+- **Learnings:**
+  - No NLP needed — simple suffix rules cover 90%+ of SEO keyword variations per design decision #3
+  - Hyphens treated as word separators (split on `/[\s-]+/`) so "long-tail" generates variations for "long" and "tail" individually
+  - Sub-phrase exclusion uses nested loops for all contiguous multi-word subsets of the original keyword
+  - Pre-existing TS error in GenerationProgress.test.tsx unchanged; eslint passes clean
+---
+
 ## 2026-02-07 - S6-013
 - Created `frontend/src/components/content-editor/LexicalEditor.tsx` — Lexical editor wrapper component
 - LexicalComposer with RichTextPlugin, HistoryPlugin, ListPlugin, OnChangePlugin
