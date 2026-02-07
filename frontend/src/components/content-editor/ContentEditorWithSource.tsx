@@ -9,6 +9,7 @@ type ViewMode = 'rendered' | 'html';
 interface ContentEditorWithSourceProps {
   initialHtml: string;
   onChange?: (html: string) => void;
+  onBlur?: () => void;
   className?: string;
   primaryKeyword?: string;
   variations?: Set<string>;
@@ -19,6 +20,7 @@ interface ContentEditorWithSourceProps {
 export function ContentEditorWithSource({
   initialHtml,
   onChange,
+  onBlur,
   className = '',
   primaryKeyword,
   variations,
@@ -89,7 +91,15 @@ export function ContentEditorWithSource({
 
       {/* Rendered view */}
       {activeTab === 'rendered' && (
-        <div className="px-5 py-4">
+        <div
+          className="px-5 py-4"
+          onBlur={(e) => {
+            // Only fire onBlur when focus leaves this container entirely
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+              onBlur?.();
+            }
+          }}
+        >
           <div className="bg-sand-50 border border-sand-300 rounded-sm">
             <LexicalEditor
               key={editorKey}
@@ -111,6 +121,7 @@ export function ContentEditorWithSource({
           <textarea
             value={htmlSource}
             onChange={handleHtmlSourceChange}
+            onBlur={onBlur}
             rows={20}
             className="w-full px-4 py-3 text-xs font-mono bg-warm-900 text-sand-200 border border-warm-700 rounded-sm focus:outline-none focus:ring-2 focus:ring-palm-400/30 transition-all resize-none leading-relaxed"
           />

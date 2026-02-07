@@ -3,10 +3,10 @@
   "sessionId": "a83b2ece-941a-4969-bdb9-b8474880c045",
   "status": "running",
   "startedAt": "2026-02-07T20:46:35.549Z",
-  "updatedAt": "2026-02-07T21:32:45.229Z",
-  "currentIteration": 19,
+  "updatedAt": "2026-02-07T21:36:55.677Z",
+  "currentIteration": 20,
   "maxIterations": 10,
-  "tasksCompleted": 19,
+  "tasksCompleted": 20,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -137,8 +137,8 @@
       {
         "id": "S6-021",
         "title": "Build heading outline in sidebar",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "S6-022",
@@ -374,6 +374,16 @@
       "durationMs": 173203,
       "startedAt": "2026-02-07T21:27:58.250Z",
       "endedAt": "2026-02-07T21:30:51.453Z"
+    },
+    {
+      "iteration": 20,
+      "status": "completed",
+      "taskId": "S6-021",
+      "taskTitle": "Build heading outline in sidebar",
+      "taskCompleted": true,
+      "durationMs": 112631,
+      "startedAt": "2026-02-07T21:30:52.595Z",
+      "endedAt": "2026-02-07T21:32:45.226Z"
     }
   ],
   "skippedTaskIds": [],

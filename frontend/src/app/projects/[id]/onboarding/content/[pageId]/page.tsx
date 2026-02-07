@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
@@ -430,14 +430,53 @@ export default function ContentEditorPage() {
   const [bottomDescription, setBottomDescription] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
 
+  // Auto-save: track last-saved values to detect dirty fields
+  const lastSavedRef = useRef<{
+    page_title: string | null;
+    meta_description: string | null;
+    top_description: string | null;
+    bottom_description: string | null;
+  }>({ page_title: null, meta_description: null, top_description: null, bottom_description: null });
+
+  // Auto-save: status indicator state
+  const [saveStatus, setSaveStatus] = useState<
+    | { state: 'idle' }
+    | { state: 'saving' }
+    | { state: 'saved'; at: number }
+    | { state: 'failed'; error: string }
+  >({ state: 'idle' });
+
+  // Relative time label for "Auto-saved X ago"
+  const [savedTimeLabel, setSavedTimeLabel] = useState('just now');
+
   // Initialize local state when content loads
   if (content && !initialized) {
     setPageTitle(content.page_title);
     setMetaDescription(content.meta_description);
     setTopDescription(content.top_description);
     setBottomDescription(content.bottom_description);
+    lastSavedRef.current = {
+      page_title: content.page_title,
+      meta_description: content.meta_description,
+      top_description: content.top_description,
+      bottom_description: content.bottom_description,
+    };
     setInitialized(true);
   }
+
+  // Update the relative time label periodically
+  useEffect(() => {
+    if (saveStatus.state !== 'saved') return;
+    const update = () => {
+      const elapsed = Math.floor((Date.now() - (saveStatus as { state: 'saved'; at: number }).at) / 1000);
+      if (elapsed < 5) setSavedTimeLabel('just now');
+      else if (elapsed < 60) setSavedTimeLabel(`${elapsed}s ago`);
+      else setSavedTimeLabel(`${Math.floor(elapsed / 60)} min ago`);
+    };
+    update();
+    const interval = setInterval(update, 10_000);
+    return () => clearInterval(interval);
+  }, [saveStatus]);
 
   // Highlight visibility
   const [hlVisibility, setHlVisibility] = useState<HighlightVisibility>({
@@ -564,19 +603,68 @@ export default function ContentEditorPage() {
   const totalWordCount = countWords(pageTitle) + countWords(metaDescription) + topWordCount + bottomWordCount;
   const headings = countHeadings(bottomDescription);
 
-  // Save handler
+  // Auto-save on blur: saves only dirty fields
+  const handleBlurSave = useCallback(() => {
+    if (!content) return;
+    const last = lastSavedRef.current;
+    const dirty: Record<string, string | null> = {};
+    if (pageTitle !== last.page_title) dirty.page_title = pageTitle;
+    if (metaDescription !== last.meta_description) dirty.meta_description = metaDescription;
+    if (topDescription !== last.top_description) dirty.top_description = topDescription;
+    if (bottomDescription !== last.bottom_description) dirty.bottom_description = bottomDescription;
+
+    if (Object.keys(dirty).length === 0) return;
+
+    setSaveStatus({ state: 'saving' });
+    updateContent.mutate(
+      { projectId, pageId, data: dirty },
+      {
+        onSuccess: () => {
+          lastSavedRef.current = {
+            page_title: pageTitle,
+            meta_description: metaDescription,
+            top_description: topDescription,
+            bottom_description: bottomDescription,
+          };
+          setSaveStatus({ state: 'saved', at: Date.now() });
+        },
+        onError: () => {
+          setSaveStatus({ state: 'failed', error: 'Save failed — click to retry' });
+        },
+      },
+    );
+  }, [projectId, pageId, pageTitle, metaDescription, topDescription, bottomDescription, content, updateContent]);
+
+  // Manual save: saves all fields regardless of dirty state
   const handleSave = useCallback(() => {
     if (!content) return;
-    updateContent.mutate({
-      projectId,
-      pageId,
-      data: {
-        page_title: pageTitle,
-        meta_description: metaDescription,
-        top_description: topDescription,
-        bottom_description: bottomDescription,
+    setSaveStatus({ state: 'saving' });
+    updateContent.mutate(
+      {
+        projectId,
+        pageId,
+        data: {
+          page_title: pageTitle,
+          meta_description: metaDescription,
+          top_description: topDescription,
+          bottom_description: bottomDescription,
+        },
       },
-    });
+      {
+        onSuccess: () => {
+          lastSavedRef.current = {
+            page_title: pageTitle,
+            meta_description: metaDescription,
+            top_description: topDescription,
+            bottom_description: bottomDescription,
+          };
+          setSaveStatus({ state: 'saved', at: Date.now() });
+        },
+        onError: () => {
+          setSaveStatus({ state: 'failed', error: 'Save failed — click to retry' });
+        },
+      },
+    );
   }, [projectId, pageId, pageTitle, metaDescription, topDescription, bottomDescription, content, updateContent]);
 
   // Approve handler
@@ -591,6 +679,7 @@ export default function ContentEditorPage() {
   // Recheck handler
   const handleRecheck = useCallback(() => {
     // Save first, then recheck
+    setSaveStatus({ state: 'saving' });
     updateContent.mutate(
       {
         projectId,
@@ -604,7 +693,17 @@ export default function ContentEditorPage() {
       },
       {
         onSuccess: () => {
+          lastSavedRef.current = {
+            page_title: pageTitle,
+            meta_description: metaDescription,
+            top_description: topDescription,
+            bottom_description: bottomDescription,
+          };
+          setSaveStatus({ state: 'saved', at: Date.now() });
           recheckContent.mutate({ projectId, pageId });
+        },
+        onError: () => {
+          setSaveStatus({ state: 'failed', error: 'Save failed — click to retry' });
         },
       },
     );
@@ -698,6 +797,7 @@ export default function ContentEditorPage() {
               type="text"
               value={pageTitle ?? ''}
               onChange={(e) => setPageTitle(e.target.value)}
+              onBlur={handleBlurSave}
               className="w-full px-3 py-2.5 text-sm bg-sand-50 border border-sand-300 rounded-sm text-warm-900 placeholder-warm-400 focus:outline-none focus:ring-2 focus:ring-palm-400/30 focus:border-palm-400 transition-all"
             />
           </div>
@@ -712,6 +812,7 @@ export default function ContentEditorPage() {
               rows={2}
               value={metaDescription ?? ''}
               onChange={(e) => setMetaDescription(e.target.value)}
+              onBlur={handleBlurSave}
               className="w-full px-3 py-2.5 text-sm bg-sand-50 border border-sand-300 rounded-sm text-warm-900 placeholder-warm-400 focus:outline-none focus:ring-2 focus:ring-palm-400/30 focus:border-palm-400 transition-all resize-none"
             />
           </div>
@@ -726,6 +827,7 @@ export default function ContentEditorPage() {
               rows={3}
               value={topDescription ?? ''}
               onChange={(e) => setTopDescription(e.target.value)}
+              onBlur={handleBlurSave}
               className="w-full px-3 py-2.5 text-sm bg-sand-50 border border-sand-300 rounded-sm text-warm-900 placeholder-warm-400 focus:outline-none focus:ring-2 focus:ring-palm-400/30 focus:border-palm-400 transition-all resize-none leading-relaxed"
             />
           </div>
@@ -739,6 +841,7 @@ export default function ContentEditorPage() {
             <ContentEditorWithSource
               initialHtml={bottomDescription ?? ''}
               onChange={setBottomDescription}
+              onBlur={handleBlurSave}
               primaryKeyword={primaryKeyword}
               variations={variations}
               lsiTerms={lsiTerms}
@@ -779,16 +882,25 @@ export default function ContentEditorPage() {
         <div className="max-w-[1600px] mx-auto px-6 h-16 flex items-center justify-between">
           {/* Left: save status */}
           <div className="flex items-center gap-2 text-xs text-warm-400">
-            {updateContent.isPending ? (
+            {saveStatus.state === 'saving' ? (
               <>
                 <div className="w-1.5 h-1.5 rounded-full bg-lagoon-400 animate-pulse" />
-                Saving...
+                Saving&hellip;
               </>
-            ) : updateContent.isSuccess ? (
+            ) : saveStatus.state === 'saved' ? (
               <>
                 <div className="w-1.5 h-1.5 rounded-full bg-palm-400" />
-                Saved
+                <span className="text-palm-600">Auto-saved {savedTimeLabel}</span>
               </>
+            ) : saveStatus.state === 'failed' ? (
+              <button
+                type="button"
+                onClick={handleSave}
+                className="flex items-center gap-2 text-coral-600 hover:text-coral-700 transition-colors"
+              >
+                <div className="w-1.5 h-1.5 rounded-full bg-coral-400" />
+                {saveStatus.error}
+              </button>
             ) : (
               <>
                 <div className="w-1.5 h-1.5 rounded-full bg-warm-300" />
@@ -802,7 +914,7 @@ export default function ContentEditorPage() {
             <button
               type="button"
               onClick={handleRecheck}
-              disabled={recheckContent.isPending || updateContent.isPending}
+              disabled={recheckContent.isPending || saveStatus.state === 'saving'}
               className="px-4 py-2 text-sm font-medium text-warm-600 bg-sand-200 hover:bg-sand-300 rounded-sm transition-colors disabled:opacity-50"
             >
               {recheckContent.isPending ? 'Checking...' : 'Re-run Checks'}
@@ -810,10 +922,10 @@ export default function ContentEditorPage() {
             <button
               type="button"
               onClick={handleSave}
-              disabled={updateContent.isPending}
+              disabled={saveStatus.state === 'saving'}
               className="px-4 py-2 text-sm font-medium text-warm-700 bg-white border border-sand-400 hover:bg-sand-50 rounded-sm transition-colors disabled:opacity-50"
             >
-              {updateContent.isPending ? 'Saving...' : 'Save Draft'}
+              {saveStatus.state === 'saving' ? 'Saving...' : 'Save Draft'}
             </button>
             <button
               type="button"

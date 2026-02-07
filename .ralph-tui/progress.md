@@ -8,6 +8,7 @@ after each iteration and it's included in prompts for context.
 - **Approval fields pattern:** `is_approved` uses `Boolean, nullable=False, default=False, server_default=text("false"), index=True`. `approved_at` uses `DateTime(timezone=True), nullable=True`. See `PageKeywords` and `PageContent` models for reference. Import `Boolean` from sqlalchemy.
 - **Approval migration pattern:** Reference `0020_add_page_keywords_approval_fields.py` and `0022_add_page_contents_approval_fields.py` for adding approval columns to existing tables. Pattern: `add_column` for each field + `create_index` on `is_approved`. Downgrade drops index first, then columns.
 - **Quality check type names:** Backend uses `banned_word`, `em_dash`, `ai_pattern`, `triplet_excess`, `rhetorical_excess`, `tier1_ai_word`, `tier2_ai_excess`, `negation_contrast`. Frontend labels map these for display (e.g., `ai_pattern` → "AI Openers").
+- **Auto-save on blur pattern:** Use `useRef` to track last-saved values, compare on blur to detect dirty fields, send only changed fields via partial update. Use discriminated union for save status state: `{ state: 'idle' | 'saving' | 'saved' | 'failed'; at?: number; error?: string }`. For Lexical editor blur, wrap in container div with `onBlur` that checks `e.currentTarget.contains(e.relatedTarget)` to avoid firing on internal focus moves.
 
 ---
 
@@ -306,5 +307,21 @@ after each iteration and it's included in prompts for context.
   - HeadingOutlineCard was mostly built during S6-018 with parsing, display, and live updates — only missing click-to-scroll
   - Heading scroll uses direct DOM query (`container.querySelectorAll(tag)`) matching by `textContent` — simpler than TreeWalker approach since headings are top-level elements
   - Reuses the same `violation-pulse` animation pattern from S6-019/S6-020 for visual feedback on scroll target
+  - Pre-existing TS error in GenerationProgress.test.tsx unchanged; eslint passes clean
+---
+
+## 2026-02-07 - S6-022
+- Implemented auto-save on blur with dirty tracking and status indicator
+- Added `useRef` to track last-saved values per field; on blur, compares current vs saved and sends only dirty fields via `useUpdatePageContent`
+- Save status uses discriminated union: `idle` → `saving` → `saved` (with timestamp) or `failed` (with retry)
+- Bottom bar indicator: pulsing lagoon dot + "Saving..." during API call, green dot + "Auto-saved just now" on success (updates to relative time), coral "Save failed — click to retry" on failure
+- Manual "Save Draft" button saves all fields regardless of dirty state
+- Added `onBlur` prop to `ContentEditorWithSource` — uses `e.currentTarget.contains(e.relatedTarget)` check to avoid firing on internal Lexical focus moves
+- Files changed: `frontend/src/app/projects/[id]/onboarding/content/[pageId]/page.tsx` (modified), `frontend/src/components/content-editor/ContentEditorWithSource.tsx` (modified)
+- **Learnings:**
+  - React's `onBlur` bubbles from children — for a container with multiple focusable elements (like Lexical), need `e.currentTarget.contains(e.relatedTarget)` guard to only fire when focus leaves the container entirely
+  - `useMutation` `onSuccess`/`onError` callbacks passed to `.mutate()` override the hook-level ones — used this to manage save status state without interfering with query invalidation in the hook
+  - Discriminated union `{ state: 'idle' | 'saving' | 'saved' | 'failed' }` with optional fields per variant is cleaner than multiple boolean flags for status tracking
+  - `useEffect` with `setInterval` for relative time label — re-runs when `saveStatus` changes (dependency), cleans up interval on unmount/change
   - Pre-existing TS error in GenerationProgress.test.tsx unchanged; eslint passes clean
 ---

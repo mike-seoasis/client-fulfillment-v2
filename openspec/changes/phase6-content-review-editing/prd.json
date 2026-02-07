@@ -371,8 +371,9 @@
         "Manual 'Save Draft' button saves all current field values regardless of dirty state"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Use the useUpdatePageContent mutation hook. Track dirty state with useRef comparing against last saved values. The Lexical editor's onChange fires frequently — only check dirty on blur."
+      "passes": true,
+      "notes": "Use the useUpdatePageContent mutation hook. Track dirty state with useRef comparing against last saved values. The Lexical editor's onChange fires frequently — only check dirty on blur.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S6-023",
@@ -477,6 +478,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-07T21:32:45.227Z"
+    "updatedAt": "2026-02-07T21:36:55.675Z"
   }
 }
