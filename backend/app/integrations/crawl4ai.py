@@ -63,6 +63,11 @@ class CrawlOptions:
     word_count_threshold: int = 10
     excluded_tags: list[str] | None = None
     include_raw_html: bool = False
+    css_selector: str | None = None  # CSS selector to limit content area
+
+    # Content filtering - auto-extract main body content
+    use_pruning_filter: bool = True  # Use PruningContentFilter for fit_markdown
+    pruning_threshold: float = 0.45  # How aggressively to prune (0-1)
 
     # Browser behavior
     wait_for: str | None = None  # CSS selector to wait for
@@ -84,36 +89,78 @@ class CrawlOptions:
     # Session management
     session_id: str | None = None
 
+    # Default excluded tags to strip boilerplate
+    _default_excluded_tags: list[str] = field(
+        default_factory=lambda: ["nav", "header", "footer", "aside", "script", "style"]
+    )
+
+    def to_crawler_config(self) -> dict[str, Any]:
+        """Convert options to Crawl4AI REST API crawler_config format."""
+        params: dict[str, Any] = {
+            "word_count_threshold": self.word_count_threshold,
+        }
+
+        # Merge default and custom excluded tags
+        tags = list(self._default_excluded_tags)
+        if self.excluded_tags:
+            tags = list(set(tags + self.excluded_tags))
+        params["excluded_tags"] = tags
+
+        if self.css_selector:
+            params["css_selector"] = self.css_selector
+        if self.include_raw_html:
+            params["include_raw_html"] = self.include_raw_html
+        if self.bypass_cache:
+            params["cache_mode"] = "bypass"
+        elif self.cache_mode:
+            params["cache_mode"] = self.cache_mode
+        if self.wait_for:
+            params["wait_for"] = self.wait_for
+        if self.delay_before_return_html > 0:
+            params["delay_before_return_html"] = self.delay_before_return_html
+        if self.js_code:
+            params["js_code"] = self.js_code
+        if self.screenshot:
+            params["screenshot"] = self.screenshot
+            if self.screenshot_wait_for:
+                params["screenshot_wait_for"] = self.screenshot_wait_for
+        if self.magic:
+            params["magic"] = self.magic
+        if self.simulate_user:
+            params["simulate_user"] = self.simulate_user
+        if self.session_id:
+            params["session_id"] = self.session_id
+
+        # Add PruningContentFilter for automatic main content extraction
+        if self.use_pruning_filter:
+            params["markdown_generator"] = {
+                "type": "DefaultMarkdownGenerator",
+                "params": {
+                    "content_filter": {
+                        "type": "PruningContentFilter",
+                        "params": {
+                            "threshold": self.pruning_threshold,
+                            "threshold_type": "fixed",
+                            "min_word_threshold": 20,
+                        },
+                    }
+                },
+            }
+
+        return {
+            "type": "CrawlerRunConfig",
+            "params": params,
+        }
+
     def to_dict(self) -> dict[str, Any]:
-        """Convert options to API request format."""
-        result: dict[str, Any] = {
+        """Convert options to flat dict for logging."""
+        return {
             "word_count_threshold": self.word_count_threshold,
             "include_raw_html": self.include_raw_html,
             "bypass_cache": self.bypass_cache,
+            "css_selector": self.css_selector,
+            "use_pruning_filter": self.use_pruning_filter,
         }
-
-        if self.excluded_tags:
-            result["excluded_tags"] = self.excluded_tags
-        if self.wait_for:
-            result["wait_for"] = self.wait_for
-        if self.delay_before_return_html > 0:
-            result["delay_before_return_html"] = self.delay_before_return_html
-        if self.js_code:
-            result["js_code"] = self.js_code
-        if self.cache_mode:
-            result["cache_mode"] = self.cache_mode
-        if self.screenshot:
-            result["screenshot"] = self.screenshot
-            if self.screenshot_wait_for:
-                result["screenshot_wait_for"] = self.screenshot_wait_for
-        if self.magic:
-            result["magic"] = self.magic
-        if self.simulate_user:
-            result["simulate_user"] = self.simulate_user
-        if self.session_id:
-            result["session_id"] = self.session_id
-
-        return result
 
 
 def _extract_markdown(markdown_data: str | dict | None) -> str | None:
@@ -124,7 +171,7 @@ def _extract_markdown(markdown_data: str | dict | None) -> str | None:
     - A dict with 'raw_markdown', 'fit_markdown', etc. (new format)
     - None
 
-    This function normalizes all formats to a string or None.
+    Prefers fit_markdown (filtered main content) over raw_markdown (full page).
     """
     if markdown_data is None:
         return None
@@ -133,10 +180,12 @@ def _extract_markdown(markdown_data: str | dict | None) -> str | None:
         return markdown_data
 
     if isinstance(markdown_data, dict):
-        # Try common keys in the new response format
-        for key in ("raw_markdown", "fit_markdown", "markdown_with_citations", "content"):
+        # Prefer fit_markdown (main body content) over raw_markdown (full page)
+        for key in ("fit_markdown", "raw_markdown", "markdown_with_citations", "content"):
             if key in markdown_data and isinstance(markdown_data[key], str):
-                return markdown_data[key]
+                chosen = markdown_data[key]
+                if chosen.strip():
+                    return chosen
         # If it's a dict but we can't find a string, log and return None
         logger.warning(
             "Unexpected markdown format in Crawl4AI response",
@@ -607,9 +656,9 @@ class Crawl4AIClient:
         crawl4ai_logger.crawl_start(url, options.to_dict())
 
         try:
-            request_body = {
-                "urls": [url],  # Crawl4AI expects a list even for single URL
-                **options.to_dict(),
+            request_body: dict[str, Any] = {
+                "urls": [url],
+                "crawler_config": options.to_crawler_config(),
             }
 
             response = await self._request(
@@ -678,9 +727,9 @@ class Crawl4AIClient:
         )
 
         try:
-            request_body = {
+            request_body: dict[str, Any] = {
                 "urls": urls,
-                **options.to_dict(),
+                "crawler_config": options.to_crawler_config(),
             }
 
             response = await self._request(
