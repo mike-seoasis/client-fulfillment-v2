@@ -375,3 +375,28 @@ after each iteration and it's included in prompts for context.
   - Pre-existing test failure in `test_brand_config.py::TestStartGeneration::test_start_generation_returns_202` (`assert 9 == 10`) is unrelated
   - ruff passes clean after auto-fix of import sorting
 ---
+
+## 2026-02-07 - S6-025
+- Created comprehensive frontend test suite for the content editor page and all sidebar components
+- 49 new tests across 11 describe blocks covering all acceptance criteria:
+  - `renders all 4 fields with content` (7 tests): page title input, meta description textarea, top description textarea, bottom description via ContentEditorWithSource, 4 field labels, loading skeleton, error state
+  - `character counters` (6 tests): correct initial values for title (N/70) and meta (N/160), palm color when under limit, coral color when over limit, live update on title input, live update on meta input
+  - `sidebar quality checks` (6 tests): "All Checks Passed" when passed, 8 "Pass" indicators, issue count when failed, per-type issue counts, all 8 check type labels, null qa_results handling
+  - `flagged passages` (2 tests): renders when issues exist, hidden when no issues
+  - `LSI terms checklist` (5 tests): heading, all terms rendered, "not found" for missing terms, found terms with count, summary "N of M terms used"
+  - `approval button` (6 tests): "Approve" when unapproved, "Approved" when approved, mutation call with value=true, mutation call with value=false, disabled when status != complete, palm-tinted styling when approved
+  - `rendered/HTML tab switching` (1 test): both tab buttons rendered via ContentEditorWithSource mock
+  - `header` (4 tests): page URL, keyword badge, back link, highlight toggle controls
+  - `bottom action bar` (4 tests): Save Draft, Re-run Checks, save trigger, recheck trigger
+  - `content stats` (4 tests): heading, word count, heading counts, heading targets from brief
+  - `heading outline` (3 tests): Structure heading, H2/H3 from HTML, keyboard accessibility
+  - `bottom description footer` (2 tests): word count display, heading counts in footer
+- Files changed: `frontend/src/app/projects/[id]/onboarding/content/[pageId]/__tests__/page.test.tsx` (new)
+- **Learnings:**
+  - Mocking Lexical editor: mock the entire `ContentEditorWithSource` module with a simple textarea + test buttons — avoids complex Lexical DOM setup while still testing data flow
+  - Mock hooks pattern: define `vi.fn()` at module scope, then `vi.mock('@/hooks/...')` returns a wrapper that calls the fn — allows per-test mock overrides via `mockReturnValue`
+  - `useParams` mock must match the route parameter names exactly (`id` and `pageId` for `[id]` and `[pageId]` dynamic segments)
+  - Character counter color testing: use `toHaveClass('text-palm-600')` / `toHaveClass('text-coral-600')` on the counter span to verify color state
+  - `getAllByText(/\d+ words$/)` pattern avoids ambiguity when multiple elements contain "words" text
+  - Pre-existing test failures in GenerationProgress.test.tsx (tuple index), KeywordPageRow.test.tsx, BrandConfigPage.test.tsx are unrelated; eslint and TS pass clean
+---
