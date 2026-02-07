@@ -6,6 +6,7 @@ app/main.py
 app/api/__init__.py
 app/api/v1/__init__.py
 app/api/v1/brand_config.py
+app/api/v1/content_generation.py
 app/api/v1/files.py
 app/api/v1/projects.py
 app/core/__init__.py
@@ -41,10 +42,12 @@ app/models/crawled_page.py
 app/models/generated_content.py
 app/models/nlp_analysis_cache.py
 app/models/notification.py
+app/models/page_content.py
 app/models/page_keywords.py
 app/models/page_paa.py
 app/models/project.py
 app/models/project_file.py
+app/models/prompt_log.py
 app/schemas/__init__.py
 app/schemas/amazon_reviews.py
 app/schemas/brand_config.py
@@ -77,8 +80,14 @@ app/schemas/schedule.py
 app/services/__init__.py
 app/services/brand_config.py
 app/services/content_extraction.py
+app/services/content_generation.py
+app/services/content_quality.py
+app/services/content_writing.py
 app/services/crawling.py
 app/services/file.py
+app/services/label_taxonomy.py
+app/services/pop_content_brief.py
+app/services/primary_keyword.py
 app/services/project.py
 app/utils/__init__.py
 app/utils/text_extraction.py

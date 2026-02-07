@@ -3,10 +3,10 @@
   "sessionId": "a83b2ece-941a-4969-bdb9-b8474880c045",
   "status": "running",
   "startedAt": "2026-02-07T20:46:35.549Z",
-  "updatedAt": "2026-02-07T21:55:23.669Z",
-  "currentIteration": 24,
+  "updatedAt": "2026-02-07T21:57:25.231Z",
+  "currentIteration": 25,
   "maxIterations": 10,
-  "tasksCompleted": 24,
+  "tasksCompleted": 25,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -161,8 +161,8 @@
       {
         "id": "S6-025",
         "title": "Write frontend component tests",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "S6-026",
@@ -424,6 +424,16 @@
       "durationMs": 412907,
       "startedAt": "2026-02-07T21:43:13.910Z",
       "endedAt": "2026-02-07T21:50:06.817Z"
+    },
+    {
+      "iteration": 25,
+      "status": "completed",
+      "taskId": "S6-025",
+      "taskTitle": "Write frontend component tests",
+      "taskCompleted": true,
+      "durationMs": 315726,
+      "startedAt": "2026-02-07T21:50:07.939Z",
+      "endedAt": "2026-02-07T21:55:23.665Z"
     }
   ],
   "skippedTaskIds": [],
