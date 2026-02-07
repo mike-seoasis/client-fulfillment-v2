@@ -272,6 +272,117 @@ function groupByStep(prompts: PromptLogResponse[]): { step: string; entries: Pro
 }
 
 // ---------------------------------------------------------------------------
+// Group prompts into runs (by time gap), then by step within each run
+// ---------------------------------------------------------------------------
+
+interface Run {
+  index: number; // 1-based run number
+  startedAt: Date;
+  entries: PromptLogResponse[];
+  steps: { step: string; entries: PromptLogResponse[] }[];
+}
+
+/** Gap threshold in ms — entries more than 60s apart are treated as separate runs */
+const RUN_GAP_MS = 60_000;
+
+function groupIntoRuns(prompts: PromptLogResponse[]): Run[] {
+  if (prompts.length === 0) return [];
+
+  // Sort by created_at ascending
+  const sorted = [...prompts].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+
+  const runs: Run[] = [];
+  let currentEntries: PromptLogResponse[] = [sorted[0]];
+
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = new Date(sorted[i - 1].created_at).getTime();
+    const curr = new Date(sorted[i].created_at).getTime();
+
+    if (curr - prev > RUN_GAP_MS) {
+      // Start a new run
+      runs.push({
+        index: runs.length + 1,
+        startedAt: new Date(currentEntries[0].created_at),
+        entries: currentEntries,
+        steps: groupByStep(currentEntries),
+      });
+      currentEntries = [sorted[i]];
+    } else {
+      currentEntries.push(sorted[i]);
+    }
+  }
+
+  // Push last run
+  runs.push({
+    index: runs.length + 1,
+    startedAt: new Date(currentEntries[0].created_at),
+    entries: currentEntries,
+    steps: groupByStep(currentEntries),
+  });
+
+  return runs;
+}
+
+// ---------------------------------------------------------------------------
+// Run group component
+// ---------------------------------------------------------------------------
+
+const RUN_COLORS = [
+  { border: 'border-l-lagoon-400', badge: 'bg-lagoon-100 text-lagoon-700' },
+  { border: 'border-l-palm-400', badge: 'bg-palm-100 text-palm-700' },
+  { border: 'border-l-coral-400', badge: 'bg-coral-100 text-coral-700' },
+  { border: 'border-l-warm-gray-400', badge: 'bg-warm-gray-100 text-warm-gray-700' },
+];
+
+function formatRunTime(date: Date): string {
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+function RunGroup({ run, totalRuns }: { run: Run; totalRuns: number }) {
+  const colors = RUN_COLORS[run.index % RUN_COLORS.length];
+  const totalIn = run.entries.reduce((a, e) => a + (e.input_tokens ?? 0), 0);
+  const totalOut = run.entries.reduce((a, e) => a + (e.output_tokens ?? 0), 0);
+  const isLatest = run.index === totalRuns;
+
+  return (
+    <div className={`border-l-[3px] ${colors.border} pl-4`}>
+      {/* Run header */}
+      <div className="flex items-center gap-2 mb-3">
+        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-sm ${colors.badge}`}>
+          Run {run.index}
+        </span>
+        {isLatest && totalRuns > 1 && (
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-sm bg-palm-500 text-white">
+            Latest
+          </span>
+        )}
+        <span className="text-[10px] text-warm-gray-400 font-mono">
+          {formatRunTime(run.startedAt)}
+        </span>
+        <span className="text-[10px] text-warm-gray-400 font-mono ml-auto">
+          {totalIn.toLocaleString()} in / {totalOut.toLocaleString()} out
+        </span>
+      </div>
+
+      {/* Steps within this run */}
+      <div className="space-y-5">
+        {run.steps.map((group) => (
+          <StepGroup key={`${run.index}-${group.step}`} step={group.step} entries={group.entries} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main PromptInspector panel
 // ---------------------------------------------------------------------------
 
@@ -304,7 +415,7 @@ export function PromptInspector({
 
   if (!isOpen) return null;
 
-  const groups = groupByStep(prompts ?? []);
+  const runs = groupIntoRuns(prompts ?? []);
 
   // Display path from URL
   let displayPath = pageUrl;
@@ -387,7 +498,7 @@ export function PromptInspector({
             </div>
           )}
 
-          {!isLoading && groups.length === 0 && (
+          {!isLoading && runs.length === 0 && (
             <div className="text-center py-12">
               <p className="text-sm text-warm-gray-500">
                 {isGenerating
@@ -397,10 +508,10 @@ export function PromptInspector({
             </div>
           )}
 
-          {!isLoading && groups.length > 0 && (
-            <div className="space-y-6">
-              {groups.map((group) => (
-                <StepGroup key={group.step} step={group.step} entries={group.entries} />
+          {!isLoading && runs.length > 0 && (
+            <div className="space-y-8">
+              {runs.map((run) => (
+                <RunGroup key={run.index} run={run} totalRuns={runs.length} />
               ))}
             </div>
           )}
