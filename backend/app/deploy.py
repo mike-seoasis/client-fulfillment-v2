@@ -267,33 +267,46 @@ def run_migrations() -> bool:
         return False
 
 
-async def verify_database_connection() -> bool:
-    """Verify database connection during deployment."""
+async def verify_database_connection(max_retries: int = 5, retry_delay: float = 3.0) -> bool:
+    """Verify database connection during deployment with retries.
+
+    Railway's internal networking may not be ready immediately when the
+    container starts. Retry a few times before giving up.
+    """
     logger.info("Verifying database connection")
 
-    try:
-        from app.core.database import db_manager
+    for attempt in range(1, max_retries + 1):
+        try:
+            from app.core.database import db_manager
 
-        db_manager.init_db()
-        is_connected = await db_manager.check_connection()
+            db_manager.init_db()
+            is_connected = await db_manager.check_connection()
 
-        if is_connected:
-            logger.info("Database connection verified successfully")
-        else:
-            logger.error("Database connection verification failed")
+            if is_connected:
+                logger.info("Database connection verified successfully")
+                await db_manager.close()
+                return True
+            else:
+                logger.warning(
+                    f"Database connection attempt {attempt}/{max_retries} failed",
+                )
+                await db_manager.close()
 
-        await db_manager.close()
-        return is_connected
+        except Exception as e:
+            logger.warning(
+                f"Database connection attempt {attempt}/{max_retries} error",
+                extra={
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                },
+            )
 
-    except Exception as e:
-        logger.error(
-            "Database connection verification error",
-            extra={
-                "error_type": type(e).__name__,
-                "error_message": str(e),
-            },
-        )
-        return False
+        if attempt < max_retries:
+            logger.info(f"Retrying in {retry_delay}s...")
+            await asyncio.sleep(retry_delay)
+
+    logger.error("Database connection verification failed after all retries")
+    return False
 
 
 async def verify_redis_connection() -> bool:
