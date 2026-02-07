@@ -198,6 +198,7 @@ async def get_content_generation_status(
     page_items: list[PageGenerationStatusItem] = []
     pages_completed = 0
     pages_failed = 0
+    pages_approved = 0
 
     for page in pages:
         keyword = page.keywords.primary_keyword if page.keywords else ""
@@ -213,6 +214,8 @@ async def get_content_generation_status(
                     error = qa["error"]
             elif page_status == ContentStatus.COMPLETE.value:
                 pages_completed += 1
+            if page.page_content.is_approved:
+                pages_approved += 1
 
         page_items.append(
             PageGenerationStatusItem(
@@ -242,6 +245,7 @@ async def get_content_generation_status(
         pages_total=pages_total,
         pages_completed=pages_completed,
         pages_failed=pages_failed,
+        pages_approved=pages_approved,
         pages=page_items,
     )
 

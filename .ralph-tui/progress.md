@@ -128,3 +128,15 @@ after each iteration and it's included in prompts for context.
   - The `selectinload(CrawledPage.content_brief)` was already present in the GET query from previous work, so no query changes needed
   - Pre-existing mypy errors unchanged; ruff passes clean
 ---
+
+## 2026-02-07 - S6-009
+- Updated GET /api/v1/projects/{project_id}/content-generation-status to include `pages_approved` count
+- Added `pages_approved` counter in the page iteration loop, increments when `page.page_content.is_approved` is True
+- Passed `pages_approved` to the `ContentGenerationStatus` response (schema field already existed from S6-003)
+- Existing response fields (overall_status, pages_total, pages_completed, pages_failed, pages) unchanged
+- Files changed: `backend/app/api/v1/content_generation.py`
+- **Learnings:**
+  - The `pages_approved` count is independent of status — a page could theoretically be approved regardless of status, so the approval check is outside the status if/elif block
+  - Schema field `pages_approved` was already added in S6-003 with `default=0`, so no schema changes needed
+  - Pre-existing mypy errors unchanged; ruff passes clean
+---
