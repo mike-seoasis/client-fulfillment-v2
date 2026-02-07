@@ -14,21 +14,15 @@
 # See RAILWAY_ENV.md for complete environment variable documentation.
 
 [build]
-# Use Python 3.11 runtime with Nixpacks
-builder = "NIXPACKS"
-
-[build.nixpacksPlan]
-# Python version for Railway
-nixPkgs = ["python311"]
+# Use Dockerfile for build
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
 
 [deploy]
 # Health check configuration
 # Railway pings this endpoint to verify deployment health
 healthcheckPath = "/health"
 healthcheckTimeout = 120
-
-# Start command handled by Dockerfile CMD (entrypoint.sh)
-# entrypoint.sh runs: deploy script (migrations) → uvicorn
 
 # Restart policy for resilience
 restartPolicyType = "ON_FAILURE"
