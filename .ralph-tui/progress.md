@@ -152,3 +152,22 @@ after each iteration and it's included in prompts for context.
   - `useBulkApproveContent` takes a plain `string` (projectId) like `useApproveAllKeywords`, not an object
   - Pre-existing TS error in GenerationProgress.test.tsx (tuple index out of bounds) is unrelated; eslint passes clean
 ---
+
+## 2026-02-07 - S6-013
+- Created `frontend/src/components/content-editor/LexicalEditor.tsx` — Lexical editor wrapper component
+- LexicalComposer with RichTextPlugin, HistoryPlugin, ListPlugin, OnChangePlugin
+- Accepts `initialHtml` prop, converts to Lexical state on mount via `$generateNodesFromDOM` (DOMParser)
+- `onChange` callback serializes Lexical state back to HTML via `$generateHtmlFromNodes`
+- Supports: headings (H2, H3), paragraphs, bold, italic, ordered/unordered lists
+- Editor theme uses project's warm typography styles (warm-gray text, relaxed leading)
+- No toolbar — editing via keyboard shortcuts and existing HTML structure
+- Files changed: `frontend/src/components/content-editor/LexicalEditor.tsx` (new)
+- **Learnings:**
+  - Lexical 0.40.0 requires registering node types explicitly: HeadingNode, QuoteNode, ListNode, ListItemNode
+  - `$generateNodesFromDOM` needs a browser DOMParser document — use `new DOMParser().parseFromString(html, 'text/html')`
+  - `$generateHtmlFromNodes(editor, null)` serializes full content (pass null for selection to get everything)
+  - RichTextPlugin requires ErrorBoundary prop (LexicalErrorBoundary from @lexical/react)
+  - OnChangePlugin `ignoreSelectionChange` prevents firing onChange on every cursor move
+  - HtmlLoaderPlugin pattern: internal plugin component using `useLexicalComposerContext` to access editor in LexicalComposer children
+  - Pre-existing TS error in GenerationProgress.test.tsx unchanged; eslint passes clean
+---
