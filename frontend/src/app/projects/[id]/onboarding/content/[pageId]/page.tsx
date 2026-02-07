@@ -356,7 +356,13 @@ function LsiTermsCard({
   );
 }
 
-function HeadingOutlineCard({ html }: { html: string | null }) {
+function HeadingOutlineCard({
+  html,
+  onJumpToHeading,
+}: {
+  html: string | null;
+  onJumpToHeading?: (text: string, level: string) => void;
+}) {
   const headings = useMemo(() => {
     if (!html) return [];
     const regex = /<(h[23])[^>]*>(.*?)<\/\1>/gi;
@@ -378,7 +384,11 @@ function HeadingOutlineCard({ html }: { html: string | null }) {
         {headings.map((h, idx) => (
           <div
             key={idx}
-            className={`text-xs py-0.5 ${
+            role="button"
+            tabIndex={0}
+            onClick={() => onJumpToHeading?.(h.text, h.level)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onJumpToHeading?.(h.text, h.level); }}
+            className={`text-xs py-0.5 cursor-pointer transition-colors hover:text-palm-600 ${
               h.level === 'H2'
                 ? 'text-warm-700 font-medium'
                 : 'text-warm-500 pl-4'
@@ -515,6 +525,27 @@ export default function ContentEditorPage() {
           target = node.parentElement;
           break;
         }
+      }
+    }
+
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target.classList.add('violation-pulse');
+      setTimeout(() => target!.classList.remove('violation-pulse'), 1500);
+    }
+  }, []);
+
+  const handleJumpToHeading = useCallback((text: string, level: string) => {
+    const container = editorContainerRef.current;
+    if (!container) return;
+
+    const tag = level.toLowerCase();
+    const headingEls = Array.from(container.querySelectorAll(tag));
+    let target: HTMLElement | null = null;
+    for (const el of headingEls) {
+      if (el.textContent?.trim() === text.trim()) {
+        target = el as HTMLElement;
+        break;
       }
     }
 
@@ -739,7 +770,7 @@ export default function ContentEditorPage() {
             bottomHtml={bottomDescription}
           />
           <LsiTermsCard lsiTerms={lsiTerms} bottomHtml={bottomDescription} onJumpToTerm={handleJumpToTerm} />
-          <HeadingOutlineCard html={bottomDescription} />
+          <HeadingOutlineCard html={bottomDescription} onJumpToHeading={handleJumpToHeading} />
         </div>
       </div>
 

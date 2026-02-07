@@ -294,3 +294,17 @@ after each iteration and it's included in prompts for context.
   - Jump-to-term reuses the same DOM traversal + violation-pulse pattern from S6-019's `handleJumpTo` — searches `.hl-lsi` spans matching the term text, falls back to TreeWalker text search
   - Pre-existing TS error in GenerationProgress.test.tsx unchanged; eslint passes clean
 ---
+
+## 2026-02-07 - S6-021
+- Enhanced `HeadingOutlineCard` with click-to-scroll functionality for heading outline items
+- Added `onJumpToHeading` callback prop that receives heading text and level (H2/H3)
+- Added `handleJumpToHeading` in main page component: searches editor DOM for matching heading elements by tag name and text content, scrolls to view with smooth behavior and violation-pulse animation
+- Added keyboard accessibility: `role="button"`, `tabIndex={0}`, Enter/Space key handlers
+- Added hover styling: `cursor-pointer`, `hover:text-palm-600` transition matching wireframe `.outline-item:hover` spec
+- Files changed: `frontend/src/app/projects/[id]/onboarding/content/[pageId]/page.tsx`
+- **Learnings:**
+  - HeadingOutlineCard was mostly built during S6-018 with parsing, display, and live updates — only missing click-to-scroll
+  - Heading scroll uses direct DOM query (`container.querySelectorAll(tag)`) matching by `textContent` — simpler than TreeWalker approach since headings are top-level elements
+  - Reuses the same `violation-pulse` animation pattern from S6-019/S6-020 for visual feedback on scroll target
+  - Pre-existing TS error in GenerationProgress.test.tsx unchanged; eslint passes clean
+---

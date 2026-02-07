@@ -354,8 +354,9 @@
         "Headings are clickable — clicking scrolls the editor to that heading"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Parse headings using regex on the HTML string: /<h([23])[^>]*>(.*?)<\\/h[23]>/g. Reference wireframes/phase6-content-editor.html for the outline styling."
+      "passes": true,
+      "notes": "Parse headings using regex on the HTML string: /<h([23])[^>]*>(.*?)<\\/h[23]>/g. Reference wireframes/phase6-content-editor.html for the outline styling.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S6-022",
@@ -476,6 +477,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-07T21:30:51.454Z"
+    "updatedAt": "2026-02-07T21:32:45.227Z"
   }
 }
