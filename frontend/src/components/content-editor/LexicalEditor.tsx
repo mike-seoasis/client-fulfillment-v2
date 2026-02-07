@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useImperativeHandle, forwardRef, useRef, type MutableRefObject } from 'react';
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
 import { ContentEditable } from '@lexical/react/LexicalContentEditable';
@@ -55,48 +55,80 @@ function HtmlLoaderPlugin({ initialHtml }: HtmlLoaderProps) {
   return null;
 }
 
+export interface LexicalEditorHandle {
+  getHtml: () => string;
+}
+
+function EditorRefPlugin({ editorRef }: { editorRef: MutableRefObject<LexicalEditorType | null> }) {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    editorRef.current = editor;
+  }, [editor, editorRef]);
+
+  return null;
+}
+
 interface LexicalEditorProps {
   initialHtml: string;
   onChange?: (html: string) => void;
   className?: string;
 }
 
-export function LexicalEditor({ initialHtml, onChange, className = '' }: LexicalEditorProps) {
-  const initialConfig = {
-    namespace: 'ContentEditor',
-    theme,
-    nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode],
-    onError: (error: Error) => {
-      console.error('Lexical error:', error);
-    },
-  };
+export const LexicalEditor = forwardRef<LexicalEditorHandle, LexicalEditorProps>(
+  function LexicalEditor({ initialHtml, onChange, className = '' }, ref) {
+    const editorRef = useRef<LexicalEditorType | null>(null);
 
-  const handleChange = useCallback(
-    (_editorState: EditorState, editor: LexicalEditorType) => {
-      if (!onChange) return;
-      editor.read(() => {
-        const html = $generateHtmlFromNodes(editor, null);
-        onChange(html);
-      });
-    },
-    [onChange],
-  );
+    useImperativeHandle(ref, () => ({
+      getHtml: () => {
+        let html = '';
+        const editor = editorRef.current;
+        if (editor) {
+          editor.read(() => {
+            html = $generateHtmlFromNodes(editor, null);
+          });
+        }
+        return html;
+      },
+    }));
 
-  return (
-    <LexicalComposer initialConfig={initialConfig}>
-      <div className={`relative ${className}`}>
-        <RichTextPlugin
-          contentEditable={
-            <ContentEditable className="min-h-[200px] outline-none px-4 py-3 text-warm-gray-800 leading-relaxed" />
-          }
-          placeholder={null}
-          ErrorBoundary={LexicalErrorBoundary}
-        />
-        <HistoryPlugin />
-        <ListPlugin />
-        <OnChangePlugin onChange={handleChange} ignoreSelectionChange />
-        <HtmlLoaderPlugin initialHtml={initialHtml} />
-      </div>
-    </LexicalComposer>
-  );
-}
+    const initialConfig = {
+      namespace: 'ContentEditor',
+      theme,
+      nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode],
+      onError: (error: Error) => {
+        console.error('Lexical error:', error);
+      },
+    };
+
+    const handleChange = useCallback(
+      (_editorState: EditorState, editor: LexicalEditorType) => {
+        if (!onChange) return;
+        editor.read(() => {
+          const html = $generateHtmlFromNodes(editor, null);
+          onChange(html);
+        });
+      },
+      [onChange],
+    );
+
+    return (
+      <LexicalComposer initialConfig={initialConfig}>
+        <div className={`relative ${className}`}>
+          <RichTextPlugin
+            contentEditable={
+              <ContentEditable className="min-h-[200px] outline-none px-4 py-3 text-warm-gray-800 leading-relaxed" />
+            }
+            placeholder={null}
+            ErrorBoundary={LexicalErrorBoundary}
+          />
+          <HistoryPlugin />
+          <ListPlugin />
+          <OnChangePlugin onChange={handleChange} ignoreSelectionChange />
+          <HtmlLoaderPlugin initialHtml={initialHtml} />
+          <EditorRefPlugin editorRef={editorRef} />
+        </div>
+      </LexicalComposer>
+    );
+  },
+);

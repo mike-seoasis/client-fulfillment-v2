@@ -153,6 +153,22 @@ after each iteration and it's included in prompts for context.
   - Pre-existing TS error in GenerationProgress.test.tsx (tuple index out of bounds) is unrelated; eslint passes clean
 ---
 
+## 2026-02-07 - S6-014
+- Created `ContentEditorWithSource` tab toggle component for switching between Lexical rendered view and raw HTML textarea
+- Modified `LexicalEditor` to use `forwardRef` + `useImperativeHandle` exposing `getHtml()` method via `LexicalEditorHandle` interface
+- Added internal `EditorRefPlugin` to capture Lexical editor instance inside LexicalComposer children
+- Tab switching: Rendered→HTML serializes Lexical state via `getHtml()`; HTML→Rendered remounts LexicalEditor with incremented `key` so `HtmlLoaderPlugin` re-parses the textarea content
+- Tab styling matches wireframe: active tab has `text-palm-500 border-b-2 border-palm-500 font-semibold`, inactive has `text-warm-500 border-transparent`
+- HTML source textarea uses dark theme: `bg-warm-900 text-sand-200 font-mono` matching wireframe spec
+- Files changed: `frontend/src/components/content-editor/LexicalEditor.tsx` (modified), `frontend/src/components/content-editor/ContentEditorWithSource.tsx` (new)
+- **Learnings:**
+  - Lexical editor state is encapsulated inside `LexicalComposer` — to read it externally, use an internal plugin (`EditorRefPlugin`) that captures the editor instance via `useLexicalComposerContext`, then expose methods through `useImperativeHandle`
+  - `editor.read()` is synchronous — `$generateHtmlFromNodes` assigns to a local variable inside the callback and it's available immediately after the `read()` call returns
+  - Remounting LexicalEditor via React `key` prop is the cleanest way to reload new HTML content, since `HtmlLoaderPlugin` only loads on mount/`initialHtml` change
+  - `MutableRefObject` type import needed from React for the `EditorRefPlugin` prop typing
+  - Pre-existing TS error in GenerationProgress.test.tsx unchanged; eslint passes clean
+---
+
 ## 2026-02-07 - S6-013
 - Created `frontend/src/components/content-editor/LexicalEditor.tsx` — Lexical editor wrapper component
 - LexicalComposer with RichTextPlugin, HistoryPlugin, ListPlugin, OnChangePlugin
