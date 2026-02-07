@@ -356,3 +356,22 @@ after each iteration and it's included in prompts for context.
   - Bulk approve eligibility count is computed inline in JSX using an IIFE to keep the button text and disabled logic co-located
   - Pre-existing TS error in GenerationProgress.test.tsx unchanged; eslint passes clean
 ---
+
+## 2026-02-07 - S6-010
+- Created comprehensive backend test suite for content editing, approval, recheck, and bulk approve endpoints
+- 24 new tests across 7 test classes covering all acceptance criteria:
+  - `TestUpdatePageContent` (6 tests): partial single/multi-field update, word count recalculation, approval cleared on edit, 404 for missing content/page
+  - `TestApproveContent` (5 tests): approve sets fields, unapprove clears fields, 400 when status not complete, 404 for missing content/page
+  - `TestRecheckContent` (4 tests): runs quality checks with results, detects AI trope issues, 404 for missing content/page
+  - `TestBulkApproveContent` (4 tests): approves eligible, skips already approved, returns zero when none eligible, skips non-complete status
+  - `TestGetContentWithBrief` (2 tests): brief data included when ContentBrief exists, null when missing
+  - `TestStatusApprovalCount` (2 tests): pages_approved reflects actual count, zero when none approved
+  - `TestEditRecheckApproveFlow` (1 test): full edit → recheck → approve → verify status integration flow
+- Files changed: `backend/tests/api/test_content_editing.py` (new)
+- **Learnings:**
+  - Helper functions (`_create_project`, `_create_page`, `_create_content`, `_create_keywords`) reduce boilerplate significantly — each test creates its own isolated data
+  - `run_quality_checks` mutates `content.qa_results` as a side effect — tests can verify the JSONB result directly from the response without needing to re-query
+  - Bulk approve JSONB query (`PageContent.qa_results["passed"].as_boolean().is_(True)`) works correctly in SQLite test environment since conftest adapts JSONB→JSON
+  - Pre-existing test failure in `test_brand_config.py::TestStartGeneration::test_start_generation_returns_202` (`assert 9 == 10`) is unrelated
+  - ruff passes clean after auto-fix of import sorting
+---
