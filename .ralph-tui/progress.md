@@ -90,3 +90,15 @@ after each iteration and it's included in prompts for context.
   - Brief summary construction is duplicated across GET, PUT, and POST approve endpoints — candidate for helper extraction
   - Pre-existing mypy errors unchanged; ruff passes clean
 ---
+
+## 2026-02-07 - S6-006
+- Added POST /api/v1/projects/{project_id}/pages/{page_id}/recheck-content endpoint
+- Loads BrandConfig.v2_schema for the project, calls run_quality_checks() with current content fields
+- Stores updated qa_results in PageContent, returns full PageContentResponse
+- Returns 404 if page or PageContent not found
+- Files changed: `backend/app/api/v1/content_generation.py`
+- **Learnings:**
+  - run_quality_checks() mutates content.qa_results directly (side effect), so just need db.commit() after calling it
+  - BrandConfig loading pattern: `select(BrandConfig).where(BrandConfig.project_id == project_id)` then `.v2_schema` — same as `_load_brand_config` in content_generation service
+  - Pre-existing mypy errors unchanged; ruff passes clean
+---
