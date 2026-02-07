@@ -20,6 +20,9 @@ COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini ./
 
+# Copy entrypoint script
+COPY entrypoint.sh ./
+
 # Production stage
 FROM python:3.12-slim AS production
 
@@ -38,6 +41,10 @@ COPY --from=build /app/app ./app
 COPY --from=build /app/alembic ./alembic
 COPY --from=build /app/alembic.ini ./
 
+# Copy entrypoint script
+COPY --from=build /app/entrypoint.sh ./
+RUN chmod +x /app/entrypoint.sh
+
 # Set ownership to appuser
 RUN chown -R appuser:appuser /app
 
@@ -54,4 +61,4 @@ ENV PORT=8000
 EXPOSE 8000
 
 # Run deploy script (migrations + validation) then start uvicorn
-CMD python -u -m app.deploy && uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+CMD ["/app/entrypoint.sh"]
