@@ -197,14 +197,6 @@ class TestBuildContentPromptWithBrief:
         assert "mens winter boots" in result.user_prompt
         assert "warm boots for women" in result.user_prompt
 
-    def test_includes_word_count_target(
-        self, crawled_page: CrawledPage, brand_config: dict, content_brief_with_lsi: ContentBrief
-    ) -> None:
-        """User prompt includes word count target from brief."""
-        result = build_content_prompt(crawled_page, "winter boots", brand_config, content_brief_with_lsi)
-
-        assert "~500 words" in result.user_prompt
-
 
 # ---------------------------------------------------------------------------
 # Prompt Builder: with enriched brief (3-step data)
@@ -262,12 +254,17 @@ class TestBuildContentPromptWithEnrichedBrief:
         assert "H2 Tag Total: 5" in result.user_prompt
         assert "H3 Tag Total: 8" in result.user_prompt
 
-    def test_includes_word_count_range(
+    def test_subheading_and_paragraph_targets_use_min(
         self, crawled_page: CrawledPage, brand_config: dict, content_brief_enriched: ContentBrief
     ) -> None:
-        """User prompt uses word count range when min/max available."""
+        """Subheading and paragraph targets use min counts (floor of 1) for leaner content."""
         result = build_content_prompt(crawled_page, "winter boots", brand_config, content_brief_enriched)
-        assert "600-1200 words" in result.user_prompt
+
+        # Subheading targets should use "at least N" format (from targetMin)
+        assert "at least 1 time" in result.user_prompt
+        # Paragraph targets: "winter boots" has target=3 (title format), but
+        # "snow boots" has targetMin=2, "waterproof boots" has targetMin=1
+        assert "at least 2 times" in result.user_prompt
 
     def test_includes_competitor_context(
         self, crawled_page: CrawledPage, brand_config: dict, content_brief_enriched: ContentBrief
@@ -294,14 +291,6 @@ class TestBuildContentPromptWithoutBrief:
 
         assert "not available" in result.user_prompt.lower()
         assert "snow boots" not in result.user_prompt
-
-    def test_fallback_default_word_count(
-        self, crawled_page: CrawledPage, brand_config: dict
-    ) -> None:
-        """Without brief, prompt uses default 300-400 word count target."""
-        result = build_content_prompt(crawled_page, "winter boots", brand_config, None)
-
-        assert "300-400 words" in result.user_prompt
 
 
 # ---------------------------------------------------------------------------
@@ -374,16 +363,18 @@ class TestBuildContentPromptOutputFormat:
     def test_output_format_has_dynamic_template(
         self, crawled_page: CrawledPage, brand_config: dict, content_brief_enriched: ContentBrief
     ) -> None:
-        """With enriched brief, output format uses POP heading and word count data."""
+        """With enriched brief, output format uses POP heading min counts."""
         result = build_content_prompt(crawled_page, "winter boots", brand_config, content_brief_enriched)
 
-        # H2/H3 section counts from heading_targets
-        assert "5 H2 sections" in result.user_prompt
-        assert "range: 3-8" in result.user_prompt
-        assert "8 H3 subsections" in result.user_prompt
-        assert "range: 4-12" in result.user_prompt
-        # Word count range from POP
-        assert "600-1200 words" in result.user_prompt
+        # Uses min heading counts from POP (min=3 for H2, min=4 for H3)
+        assert "3 H2 sections" in result.user_prompt
+        assert "4 H3 subsections" in result.user_prompt
+        # No word count target — length is driven by structure
+        assert "words)" not in result.user_prompt
+        # 120-word max per paragraph
+        assert "120 words max" in result.user_prompt
+        # Brevity instruction
+        assert "Brevity is valued" in result.user_prompt
         # Formatting rules from bible
         assert "Title Case" in result.user_prompt
         assert "Max 7 Words" in result.user_prompt
@@ -397,8 +388,8 @@ class TestBuildContentPromptOutputFormat:
         # Default heading counts
         assert "3 H2 sections" in result.user_prompt
         assert "4 H3 subsections" in result.user_prompt
-        # Default word count
-        assert "300-400 words" in result.user_prompt
+        # No word count target
+        assert "words)" not in result.user_prompt
         # Formatting rules always present
         assert "Title Case" in result.user_prompt
         assert "Max 7 Words" in result.user_prompt
@@ -431,59 +422,6 @@ class TestBuildContentPromptOutputFormat:
         assert "No inline styles" in result.user_prompt
         assert "No div wrappers" in result.user_prompt
 
-
-# ---------------------------------------------------------------------------
-# Prompt Builder: content_limits word count override
-# ---------------------------------------------------------------------------
-
-
-class TestBuildContentPromptWordCountOverride:
-    """Tests for brand_config.content_limits.max_word_count capping."""
-
-    def test_caps_word_count_without_brief(
-        self, crawled_page: CrawledPage
-    ) -> None:
-        """max_word_count caps the default 300-400 range."""
-        config: dict = {"content_limits": {"max_word_count": 250}}
-        result = build_content_prompt(crawled_page, "winter boots", config, None)
-
-        # Both SEO targets and output format should show capped range
-        assert "250 words" in result.user_prompt
-        assert "300-400" not in result.user_prompt
-
-    def test_caps_word_count_with_brief(
-        self, crawled_page: CrawledPage, content_brief_enriched: ContentBrief
-    ) -> None:
-        """max_word_count caps POP's word count range (600-1200 → capped at 500)."""
-        config: dict = {
-            "ai_prompt_snippet": {"full_prompt": "Be concise."},
-            "content_limits": {"max_word_count": 500},
-        }
-        result = build_content_prompt(crawled_page, "winter boots", config, content_brief_enriched)
-
-        # SEO targets should show 500 as max
-        assert "500 words" in result.user_prompt
-        # Should NOT show the original 1200 max
-        assert "1200" not in result.user_prompt
-
-    def test_no_cap_when_not_set(
-        self, crawled_page: CrawledPage, content_brief_enriched: ContentBrief
-    ) -> None:
-        """Without content_limits, POP word count is used as-is."""
-        config: dict = {"ai_prompt_snippet": {"full_prompt": "Normal tone."}}
-        result = build_content_prompt(crawled_page, "winter boots", config, content_brief_enriched)
-
-        assert "600-1200 words" in result.user_prompt
-
-    def test_cap_higher_than_pop_is_noop(
-        self, crawled_page: CrawledPage, content_brief_enriched: ContentBrief
-    ) -> None:
-        """max_word_count higher than POP range has no effect."""
-        config: dict = {"content_limits": {"max_word_count": 5000}}
-        result = build_content_prompt(crawled_page, "winter boots", config, content_brief_enriched)
-
-        # Original POP range preserved
-        assert "600-1200 words" in result.user_prompt
 
 
 # ---------------------------------------------------------------------------

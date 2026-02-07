@@ -229,23 +229,12 @@ def _build_seo_targets_section(
 
     Applies brand_config.content_limits.max_word_count cap when set.
     """
-    max_override = _get_word_count_override(brand_config or {})
-
     lines = ["## SEO Targets"]
     lines.append(f"- **Primary Keyword:** {keyword}")
 
     if content_brief is None:
-        wc_min = DEFAULT_WORD_COUNT_MIN
-        wc_max = DEFAULT_WORD_COUNT_MAX
-        if max_override is not None:
-            wc_max = min(wc_max, max_override)
-            wc_min = min(wc_min, wc_max)
         lines.append(
             "- **LSI Terms:** not available (generate naturally relevant content)"
-        )
-        lines.append(
-            f"- **Word Count Target (bottom_description):** "
-            f"{wc_min}-{wc_max} words"
         )
         return "\n".join(lines)
 
@@ -253,10 +242,10 @@ def _build_seo_targets_section(
     cb = raw.get("cleanedContentBrief")
 
     if isinstance(cb, dict) and cb:
-        lines.extend(_build_from_cleaned_brief(cb, keyword, content_brief, raw, max_override))
+        lines.extend(_build_from_cleaned_brief(cb, keyword, content_brief, raw))
     else:
         # Fallback: use parsed ContentBrief fields (mock mode)
-        lines.extend(_build_from_parsed_brief(content_brief, max_override))
+        lines.extend(_build_from_parsed_brief(content_brief))
 
     return "\n".join(lines)
 
@@ -266,7 +255,6 @@ def _build_from_cleaned_brief(
     keyword: str,
     content_brief: ContentBrief,
     raw: dict[str, Any],
-    max_word_count: int | None = None,
 ) -> list[str]:
     """Build SEO targets from POP's cleanedContentBrief data."""
     lines: list[str] = []
@@ -292,7 +280,7 @@ def _build_from_cleaned_brief(
                 f"  - **Total term count:** {title_total.get('min', 0)}-{title_total.get('max', 0)}"
             )
 
-    # --- Subheading term targets ---
+    # --- Subheading term targets (use min to keep content lean) ---
     sub_terms = cb.get("subHeadings", [])
     if sub_terms:
         lines.append("")
@@ -302,10 +290,8 @@ def _build_from_cleaned_brief(
             brief = item.get("contentBrief", {})
             phrase = term.get("phrase", "")
             term_type = term.get("type", "")
-            target = brief.get("target")
             t_min = brief.get("targetMin")
-            t_max = brief.get("targetMax")
-            count_str = _format_target_count(target, t_min, t_max)
+            count_str = _format_min_target_count(t_min)
             lines.append(f"  - \"{phrase}\" ({term_type}): {count_str}")
         sub_total = cb.get("subHeadingsTotal", {})
         if isinstance(sub_total, dict) and sub_total:
@@ -313,7 +299,7 @@ def _build_from_cleaned_brief(
                 f"  - **Total term count:** {sub_total.get('min', 0)}-{sub_total.get('max', 0)}"
             )
 
-    # --- Paragraph text term targets ---
+    # --- Paragraph text term targets (use min to keep content lean) ---
     p_terms = cb.get("p", [])
     if p_terms:
         lines.append("")
@@ -323,10 +309,8 @@ def _build_from_cleaned_brief(
             brief = item.get("contentBrief", {})
             phrase = term.get("phrase", "")
             term_type = term.get("type", "")
-            target = brief.get("target")
             t_min = brief.get("targetMin")
-            t_max = brief.get("targetMax")
-            count_str = _format_target_count(target, t_min, t_max)
+            count_str = _format_min_target_count(t_min)
             lines.append(f"  - \"{phrase}\" ({term_type}): {count_str}")
         p_total = cb.get("pTotal", {})
         if isinstance(p_total, dict) and p_total:
@@ -394,35 +378,6 @@ def _build_from_cleaned_brief(
         lines.append(f"### Keyword Variations")
         lines.append(f"{', '.join(variations)}")
 
-    # --- Word count ---
-    lines.append("")
-    wc_min = content_brief.word_count_min
-    wc_max = content_brief.word_count_max
-    wc_target = content_brief.word_count_target
-    if wc_min and wc_max:
-        if max_word_count is not None:
-            wc_max = min(wc_max, max_word_count)
-            wc_min = min(wc_min, wc_max)
-        lines.append(
-            f"- **Word Count Target (bottom_description):** {wc_min}-{wc_max} words"
-        )
-    elif wc_target:
-        if max_word_count is not None:
-            wc_target = min(wc_target, max_word_count)
-        lines.append(
-            f"- **Word Count Target (bottom_description):** ~{wc_target} words"
-        )
-    else:
-        fallback_min = DEFAULT_WORD_COUNT_MIN
-        fallback_max = DEFAULT_WORD_COUNT_MAX
-        if max_word_count is not None:
-            fallback_max = min(fallback_max, max_word_count)
-            fallback_min = min(fallback_min, fallback_max)
-        lines.append(
-            f"- **Word Count Target (bottom_description):** "
-            f"{fallback_min}-{fallback_max} words"
-        )
-
     # --- Competitor context ---
     competitors: list[dict[str, Any]] = content_brief.competitors or []
     if competitors:
@@ -437,7 +392,6 @@ def _build_from_cleaned_brief(
 
 def _build_from_parsed_brief(
     content_brief: ContentBrief,
-    max_word_count: int | None = None,
 ) -> list[str]:
     """Fallback: build SEO targets from parsed ContentBrief fields (mock mode)."""
     lines: list[str] = []
@@ -463,33 +417,6 @@ def _build_from_parsed_brief(
         for q in related_questions[:8]:
             lines.append(f"  - {q}")
 
-    wc_min = content_brief.word_count_min
-    wc_max = content_brief.word_count_max
-    wc_target = content_brief.word_count_target
-    if wc_min and wc_max:
-        if max_word_count is not None:
-            wc_max = min(wc_max, max_word_count)
-            wc_min = min(wc_min, wc_max)
-        lines.append(
-            f"- **Word Count Target (bottom_description):** {wc_min}-{wc_max} words"
-        )
-    elif wc_target:
-        if max_word_count is not None:
-            wc_target = min(wc_target, max_word_count)
-        lines.append(
-            f"- **Word Count Target (bottom_description):** ~{wc_target} words"
-        )
-    else:
-        fallback_min = DEFAULT_WORD_COUNT_MIN
-        fallback_max = DEFAULT_WORD_COUNT_MAX
-        if max_word_count is not None:
-            fallback_max = min(fallback_max, max_word_count)
-            fallback_min = min(fallback_min, fallback_max)
-        lines.append(
-            f"- **Word Count Target (bottom_description):** "
-            f"{fallback_min}-{fallback_max} words"
-        )
-
     return lines
 
 
@@ -506,6 +433,18 @@ def _format_target_count(
             return f"{target_min} time(s)"
         return f"{target_min}-{target_max} times"
     return "include naturally"
+
+
+def _format_min_target_count(target_min: int | None) -> str:
+    """Format a term target using the minimum count with a floor of 1.
+
+    Used for subheading and paragraph targets where we want the leaner end
+    of the range to avoid verbose content stuffing.
+    """
+    count = max(1, target_min or 0)
+    if count == 1:
+        return "at least 1 time"
+    return f"at least {count} times"
 
 
 def _build_brand_voice_section(brand_config: dict[str, Any]) -> str | None:
@@ -573,65 +512,53 @@ def _build_output_format_section(
 
 def _build_bottom_description_spec(
     content_brief: ContentBrief | None,
-    brand_config: dict[str, Any] | None = None,
+    brand_config: dict[str, Any] | None = None,  # noqa: ARG001
 ) -> str:
     """Build the bottom_description field spec from POP heading data.
 
-    Parses heading_targets to extract H2/H3 counts and word count range.
-    Falls back to sensible defaults when no brief is available.
-    Applies brand_config.content_limits.max_word_count cap when set.
+    Uses the *minimum* heading counts from POP (capped at reasonable maxima)
+    so the content stays lean. Word count is intentionally omitted — content
+    length should be a natural consequence of the heading structure and term
+    targets, not an arbitrary number driven by SERP competitors.
     """
-    # Extract heading targets
-    h2_target, h2_min, h2_max = 3, 2, 5
-    h3_target, h3_min, h3_max = 4, 2, 6
-    wc_min = DEFAULT_WORD_COUNT_MIN
-    wc_max = DEFAULT_WORD_COUNT_MAX
+    # Reasonable caps to prevent bloated pages
+    H2_CAP = 8
+    H3_CAP = 12
+
+    # Defaults when no brief available
+    h2_count = 3
+    h3_count = 4
 
     if content_brief is not None:
         heading_targets = content_brief.heading_targets or []
         for h in heading_targets:
             tag = (h.get("tag") or "").lower()
             if "h2 tag total" in tag:
-                h2_target = h.get("target", h2_target)
-                h2_min = h.get("min", h2_min)
-                h2_max = h.get("max", h2_max)
+                # Use min of range, floor of 1, capped
+                h2_count = min(max(1, h.get("min", 3)), H2_CAP)
             elif "h3 tag total" in tag:
-                h3_target = h.get("target", h3_target)
-                h3_min = h.get("min", h3_min)
-                h3_max = h.get("max", h3_max)
-
-        if content_brief.word_count_min and content_brief.word_count_max:
-            wc_min = content_brief.word_count_min
-            wc_max = content_brief.word_count_max
-        elif content_brief.word_count_target:
-            # Approximate a range from a single target
-            wc_min = int(content_brief.word_count_target * 0.8)
-            wc_max = int(content_brief.word_count_target * 1.2)
-
-    # Apply brand config word count cap if set
-    max_override = _get_word_count_override(brand_config or {})
-    if max_override is not None:
-        wc_max = min(wc_max, max_override)
-        wc_min = min(wc_min, wc_max)
+                h3_count = min(max(1, h.get("min", 4)), H3_CAP)
 
     lines = [
-        f"- **bottom_description** (HTML, {wc_min}-{wc_max} words)",
+        "- **bottom_description** (HTML)",
         "",
         "  Structure your content with approximately:",
-        f"  - {h2_target} H2 sections (range: {h2_min}-{h2_max})",
-        f"  - {h3_target} H3 subsections distributed across H2 sections (range: {h3_min}-{h3_max})",
+        f"  - {h2_count} H2 sections",
+        f"  - {h3_count} H3 subsections distributed across H2 sections",
         "",
         "  Follow this pattern:",
         "",
         "  <h2>[Section Topic, Title Case, Max 7 Words]</h2>",
-        "  <p>[80-100 words. Benefits-focused. Address the reader directly.]</p>",
+        "  <p>[Benefits-focused. Address the reader directly. 120 words max.]</p>",
         "",
         "  <h3>[Subtopic, Title Case, Max 7 Words]</h3>",
-        "  <p>[60-80 words. Specific details and differentiators.]</p>",
+        "  <p>[Specific details and differentiators. 120 words max.]</p>",
         "",
         "  ...repeat pattern for all sections...",
         "",
         "  End with a clear call to action in the final paragraph.",
+        "  Brevity is valued. Not every paragraph needs the full 120 words.",
+        "  Write just enough to cover each topic and incorporate the target terms.",
     ]
 
     return "\n".join(lines)
