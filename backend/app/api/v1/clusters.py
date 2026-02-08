@@ -1,6 +1,6 @@
 """Clusters API router.
 
-REST endpoints for creating and listing keyword clusters.
+REST endpoints for creating, listing, updating, approving, and deleting keyword clusters.
 """
 
 import asyncio
@@ -15,8 +15,14 @@ from app.core.logging import get_logger
 from app.integrations.claude import ClaudeClient, get_claude
 from app.integrations.dataforseo import DataForSEOClient, get_dataforseo
 from app.models.brand_config import BrandConfig
-from app.models.keyword_cluster import ClusterPage, KeywordCluster
-from app.schemas.cluster import ClusterCreate, ClusterListResponse, ClusterResponse
+from app.models.keyword_cluster import ClusterPage, ClusterStatus, KeywordCluster
+from app.schemas.cluster import (
+    ClusterCreate,
+    ClusterListResponse,
+    ClusterPageResponse,
+    ClusterPageUpdate,
+    ClusterResponse,
+)
 from app.services.cluster_keyword import ClusterKeywordService
 from app.services.project import ProjectService
 
@@ -164,3 +170,244 @@ async def list_clusters(
         )
         for cluster, page_count, approved_count in rows
     ]
+
+
+@router.get(
+    "/{project_id}/clusters/{cluster_id}",
+    response_model=ClusterResponse,
+)
+async def get_cluster(
+    project_id: str,
+    cluster_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> ClusterResponse:
+    """Get a single cluster with all its pages.
+
+    Args:
+        project_id: UUID of the project.
+        cluster_id: UUID of the cluster.
+        db: AsyncSession for database operations.
+
+    Returns:
+        ClusterResponse with nested ClusterPageResponse records.
+
+    Raises:
+        HTTPException: 404 if project or cluster not found.
+    """
+    await ProjectService.get_project(db, project_id)
+
+    stmt = (
+        select(KeywordCluster)
+        .options(selectinload(KeywordCluster.pages))
+        .where(
+            KeywordCluster.id == cluster_id,
+            KeywordCluster.project_id == project_id,
+        )
+    )
+    result = await db.execute(stmt)
+    cluster = result.scalar_one_or_none()
+
+    if cluster is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Cluster {cluster_id} not found",
+        )
+
+    return ClusterResponse.model_validate(cluster)
+
+
+@router.patch(
+    "/{project_id}/clusters/{cluster_id}/pages/{page_id}",
+    response_model=ClusterPageResponse,
+)
+async def update_cluster_page(
+    project_id: str,
+    cluster_id: str,
+    page_id: str,
+    data: ClusterPageUpdate,
+    db: AsyncSession = Depends(get_session),
+) -> ClusterPageResponse:
+    """Update editable fields on a cluster page.
+
+    When setting role='parent', the current parent in the same cluster
+    is automatically reassigned to 'child' (only one parent per cluster).
+
+    Args:
+        project_id: UUID of the project.
+        cluster_id: UUID of the cluster.
+        page_id: UUID of the cluster page.
+        data: ClusterPageUpdate with optional fields to update.
+        db: AsyncSession for database operations.
+
+    Returns:
+        Updated ClusterPageResponse.
+
+    Raises:
+        HTTPException: 404 if project, cluster, or page not found.
+    """
+    await ProjectService.get_project(db, project_id)
+
+    # Verify cluster belongs to project
+    cluster_stmt = select(KeywordCluster).where(
+        KeywordCluster.id == cluster_id,
+        KeywordCluster.project_id == project_id,
+    )
+    cluster_result = await db.execute(cluster_stmt)
+    cluster = cluster_result.scalar_one_or_none()
+    if cluster is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Cluster {cluster_id} not found",
+        )
+
+    # Load the target page
+    page_stmt = select(ClusterPage).where(
+        ClusterPage.id == page_id,
+        ClusterPage.cluster_id == cluster_id,
+    )
+    page_result = await db.execute(page_stmt)
+    page = page_result.scalar_one_or_none()
+    if page is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Cluster page {page_id} not found",
+        )
+
+    # Handle parent reassignment
+    if data.role == "parent" and page.role != "parent":
+        current_parent_stmt = select(ClusterPage).where(
+            ClusterPage.cluster_id == cluster_id,
+            ClusterPage.role == "parent",
+        )
+        current_parent_result = await db.execute(current_parent_stmt)
+        current_parent = current_parent_result.scalar_one_or_none()
+        if current_parent is not None:
+            current_parent.role = "child"
+
+    # Apply updates
+    update_data = data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(page, field, value)
+
+    await db.commit()
+    await db.refresh(page)
+
+    return ClusterPageResponse.model_validate(page)
+
+
+@router.post(
+    "/{project_id}/clusters/{cluster_id}/approve",
+    status_code=status.HTTP_200_OK,
+)
+async def approve_cluster(
+    project_id: str,
+    cluster_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """Bulk-approve a cluster, bridging approved pages into the content pipeline.
+
+    Calls ClusterKeywordService.bulk_approve_cluster() which creates
+    CrawledPage and PageKeywords records for each approved ClusterPage.
+
+    Args:
+        project_id: UUID of the project.
+        cluster_id: UUID of the cluster.
+        db: AsyncSession for database operations.
+
+    Returns:
+        Dict with bridged_count.
+
+    Raises:
+        HTTPException: 404 if project or cluster not found.
+        HTTPException: 400 if no approved pages.
+        HTTPException: 409 if cluster already approved.
+    """
+    await ProjectService.get_project(db, project_id)
+
+    # Verify cluster belongs to project
+    cluster_stmt = select(KeywordCluster).where(
+        KeywordCluster.id == cluster_id,
+        KeywordCluster.project_id == project_id,
+    )
+    cluster_result = await db.execute(cluster_stmt)
+    cluster = cluster_result.scalar_one_or_none()
+    if cluster is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Cluster {cluster_id} not found",
+        )
+
+    try:
+        result = await ClusterKeywordService.bulk_approve_cluster(cluster_id, db)
+    except ValueError as e:
+        error_msg = str(e)
+        if "cannot re-approve" in error_msg:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=error_msg,
+            )
+        if "No approved pages" in error_msg:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg,
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_msg,
+        )
+
+    return {"bridged_count": result["bridged_count"]}
+
+
+@router.delete(
+    "/{project_id}/clusters/{cluster_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_cluster(
+    project_id: str,
+    cluster_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> None:
+    """Delete a cluster if its status is before 'approved'.
+
+    Only clusters with status 'generating' or 'suggestions_ready' can be
+    deleted. Approved or later clusters return 409.
+
+    Args:
+        project_id: UUID of the project.
+        cluster_id: UUID of the cluster.
+        db: AsyncSession for database operations.
+
+    Raises:
+        HTTPException: 404 if project or cluster not found.
+        HTTPException: 409 if cluster status >= 'approved'.
+    """
+    await ProjectService.get_project(db, project_id)
+
+    stmt = select(KeywordCluster).where(
+        KeywordCluster.id == cluster_id,
+        KeywordCluster.project_id == project_id,
+    )
+    result = await db.execute(stmt)
+    cluster = result.scalar_one_or_none()
+
+    if cluster is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Cluster {cluster_id} not found",
+        )
+
+    # Block deletion if status >= approved
+    approved_or_later = {
+        ClusterStatus.APPROVED.value,
+        ClusterStatus.CONTENT_GENERATING.value,
+        ClusterStatus.COMPLETE.value,
+    }
+    if cluster.status in approved_or_later:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot delete cluster with status '{cluster.status}'",
+        )
+
+    await db.delete(cluster)
+    await db.commit()

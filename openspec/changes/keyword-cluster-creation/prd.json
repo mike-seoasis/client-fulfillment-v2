@@ -254,11 +254,12 @@
         "DELETE /api/v1/projects/{project_id}/clusters/{cluster_id} — deletes cluster if status < 'approved', returns 204. Returns 409 if status >= 'approved'."
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "S8-012"
       ],
-      "notes": "The PATCH endpoint handles parent reassignment: when setting role='parent' on a child, find the current parent in the same cluster and set it to 'child'. Only one parent per cluster."
+      "notes": "The PATCH endpoint handles parent reassignment: when setting role='parent' on a child, find the current parent in the same cluster and set it to 'child'. Only one parent per cluster.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S8-014",
@@ -478,6 +479,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-08T20:27:34.123Z"
+    "updatedAt": "2026-02-08T20:29:48.609Z"
   }
 }

@@ -215,3 +215,20 @@ after each iteration and it's included in prompts for context.
   - `selectinload(KeywordCluster.pages)` for eager loading relationship after creation
   - All quality checks (mypy, ruff) pass clean
 ---
+
+## 2026-02-08 - S8-013
+- Added 4 new endpoints to `backend/app/api/v1/clusters.py`:
+  - `GET /{project_id}/clusters/{cluster_id}` — returns full ClusterResponse with all ClusterPage records via `selectinload`, 404 if not found
+  - `PATCH /{project_id}/clusters/{cluster_id}/pages/{page_id}` — updates is_approved, keyword, url_slug, and/or role fields using `model_dump(exclude_unset=True)`. Parent reassignment: when setting role='parent', finds current parent in same cluster and demotes to 'child'. 404 if not found.
+  - `POST /{project_id}/clusters/{cluster_id}/approve` — calls `bulk_approve_cluster()`, returns `{"bridged_count": N}`. Maps ValueError messages to 400 (no approved pages) or 409 (already approved).
+  - `DELETE /{project_id}/clusters/{cluster_id}` — deletes cluster if status < 'approved' (generating or suggestions_ready), returns 204. Returns 409 if status >= 'approved'. Uses `db.delete()` with cascade from model relationship.
+- Added imports: `ClusterStatus`, `ClusterPageResponse`, `ClusterPageUpdate`
+- **Files changed:**
+  - `backend/app/api/v1/clusters.py` (added 4 endpoints + updated imports)
+- **Learnings:**
+  - Parent reassignment pattern: query for existing parent first, demote to child, then apply the update — all in one transaction before `db.commit()`
+  - `model_dump(exclude_unset=True)` correctly handles partial PATCH updates — only fields explicitly sent in the request body are applied
+  - `bulk_approve_cluster` raises ValueError with distinct messages for 400 vs 409 cases — router maps these via substring matching on error message
+  - Delete uses `db.delete(cluster)` which cascades to ClusterPages via model's `cascade="all, delete-orphan"`
+  - All quality checks (mypy, ruff) pass clean
+---
