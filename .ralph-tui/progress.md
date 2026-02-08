@@ -197,3 +197,21 @@ after each iteration and it's included in prompts for context.
   - Pattern for status guards: set of valid statuses from enum values, check membership
   - All quality checks (mypy, ruff) pass clean
 ---
+
+## 2026-02-08 - S8-012
+- Created `backend/app/api/v1/clusters.py` with two endpoints:
+  - `POST /api/v1/projects/{project_id}/clusters` — validates project, fetches BrandConfig, runs `generate_cluster()` with 30s timeout, returns `ClusterResponse`
+  - `GET /api/v1/projects/{project_id}/clusters` — returns `list[ClusterListResponse]` with `page_count` and `approved_count` computed via SQL aggregation
+- Registered clusters router in `backend/app/api/v1/__init__.py`
+- POST endpoint uses `asyncio.wait_for()` for 30s timeout, returns 504 on timeout
+- GET endpoint uses `outerjoin` + `func.count` + `func.nullif` to compute page_count/approved_count in a single query
+- **Files changed:**
+  - `backend/app/api/v1/clusters.py` (new)
+  - `backend/app/api/v1/__init__.py` (added clusters router import + include)
+- **Learnings:**
+  - Ruff UP041: use builtin `TimeoutError` instead of `asyncio.TimeoutError` (alias deprecated)
+  - `func.nullif(ClusterPage.is_approved, False)` makes `func.count` skip non-approved rows (count only non-NULL values)
+  - Dependency injection pattern: `get_claude` and `get_dataforseo` from integrations for request-scoped clients
+  - `selectinload(KeywordCluster.pages)` for eager loading relationship after creation
+  - All quality checks (mypy, ruff) pass clean
+---

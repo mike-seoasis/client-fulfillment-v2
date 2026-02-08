@@ -236,11 +236,12 @@
         "422 for invalid request body on POST (empty seed_keyword, etc.)"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "S8-011"
       ],
-      "notes": "Reference backend/app/api/v1/projects.py for router patterns. The POST endpoint is synchronous (not a background task) because Stages 1-3 complete in ~5-10 seconds."
+      "notes": "Reference backend/app/api/v1/projects.py for router patterns. The POST endpoint is synchronous (not a background task) because Stages 1-3 complete in ~5-10 seconds.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S8-013",
@@ -477,6 +478,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-08T20:25:19.004Z"
+    "updatedAt": "2026-02-08T20:27:34.123Z"
   }
 }
