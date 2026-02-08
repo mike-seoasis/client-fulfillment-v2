@@ -6,7 +6,7 @@ REST endpoints for managing projects with CRUD operations.
 from datetime import datetime
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -1739,3 +1739,62 @@ async def update_page_labels(
     )
 
     return CrawledPageResponse.model_validate(page)
+
+
+@router.get("/{project_id}/export")
+async def export_csv(
+    project_id: str,
+    page_ids: str | None = None,
+    db: AsyncSession = Depends(get_session),
+) -> Response:
+    """Export approved content as a Matrixify-format CSV file.
+
+    Args:
+        project_id: UUID of the project.
+        page_ids: Optional comma-separated list of CrawledPage UUIDs to filter.
+        db: AsyncSession for database operations.
+
+    Returns:
+        CSV file download with Content-Disposition header.
+
+    Raises:
+        HTTPException: 404 if project not found.
+        HTTPException: 400 if no approved pages available for export.
+    """
+    from app.services.export import ExportService
+
+    # Get project (raises 404 if not found)
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Project {project_id} not found",
+        )
+
+    # Parse optional page_ids filter
+    parsed_page_ids: list[str] | None = None
+    if page_ids:
+        parsed_page_ids = [pid.strip() for pid in page_ids.split(",") if pid.strip()]
+
+    # Generate CSV
+    csv_string, row_count = await ExportService.generate_csv(
+        db, project_id, parsed_page_ids
+    )
+
+    if row_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No approved pages available for export",
+        )
+
+    # Build filename from project name
+    safe_name = ExportService.sanitize_filename(project.name)
+    filename = f"{safe_name}-matrixify-export.csv"
+
+    return Response(
+        content=csv_string,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )

@@ -51,8 +51,9 @@
         "Add endpoint to router in backend/app/api/v1/projects.py or new export.py route file"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Use FastAPI StreamingResponse or Response with media_type='text/csv'. Reference existing endpoint patterns in backend/app/api/v1/projects.py."
+      "passes": true,
+      "notes": "Use FastAPI StreamingResponse or Response with media_type='text/csv'. Reference existing endpoint patterns in backend/app/api/v1/projects.py.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S7-004",
@@ -198,6 +199,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-08T15:44:53.015Z"
+    "updatedAt": "2026-02-08T15:46:29.494Z"
   }
 }

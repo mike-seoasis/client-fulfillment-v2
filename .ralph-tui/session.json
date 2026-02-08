@@ -3,10 +3,10 @@
   "sessionId": "f4d497ef-8a55-4e4b-90bb-1bf29ef08d0f",
   "status": "running",
   "startedAt": "2026-02-08T15:41:19.846Z",
-  "updatedAt": "2026-02-08T15:44:53.016Z",
-  "currentIteration": 1,
+  "updatedAt": "2026-02-08T15:46:29.496Z",
+  "currentIteration": 2,
   "maxIterations": 10,
-  "tasksCompleted": 1,
+  "tasksCompleted": 2,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -23,8 +23,8 @@
       {
         "id": "S7-002",
         "title": "Add CSV generation to export service",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "S7-003",
@@ -98,6 +98,16 @@
       "durationMs": 79523,
       "startedAt": "2026-02-08T15:41:24.497Z",
       "endedAt": "2026-02-08T15:42:44.020Z"
+    },
+    {
+      "iteration": 2,
+      "status": "completed",
+      "taskId": "S7-002",
+      "taskTitle": "Add CSV generation to export service",
+      "taskCompleted": true,
+      "durationMs": 127858,
+      "startedAt": "2026-02-08T15:42:45.156Z",
+      "endedAt": "2026-02-08T15:44:53.014Z"
     }
   ],
   "skippedTaskIds": [],

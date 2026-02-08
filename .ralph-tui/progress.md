@@ -37,3 +37,16 @@ after each iteration and it's included in prompts for context.
   - Pre-existing mypy errors in other service files (content_extraction, crawling, content_writing, content_quality) — not related to export service
 ---
 
+## 2026-02-08 - S7-003
+- Added `GET /api/v1/projects/{project_id}/export` endpoint to `backend/app/api/v1/projects.py`
+- Accepts optional `page_ids` query parameter (comma-separated UUIDs)
+- Returns CSV with `Content-Type: text/csv; charset=utf-8` and `Content-Disposition: attachment; filename="{sanitized}-matrixify-export.csv"`
+- Returns HTTP 400 if no approved pages available, HTTP 404 if project not found
+- Uses `ExportService.generate_csv()` from S7-002 and `ExportService.sanitize_filename()` from S7-001
+- Files changed: `backend/app/api/v1/projects.py` (modified — added `Response` import + export endpoint)
+- **Learnings:**
+  - FastAPI `Response` with `media_type` and `headers` dict is the simplest way to return file downloads (no need for `StreamingResponse` for small CSV payloads)
+  - Inline imports for service classes work well in endpoint functions (follows existing pattern in the codebase, e.g. `regenerate_taxonomy`)
+  - `page_ids` as comma-separated string query param is simpler than using FastAPI's `Query(...)` list parsing for optional UUID lists
+---
+
