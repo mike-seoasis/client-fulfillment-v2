@@ -460,6 +460,152 @@ export function bulkApproveContent(
 }
 
 // =============================================================================
+// KEYWORD CLUSTER API TYPES
+// =============================================================================
+
+/** Request to create a new keyword cluster. */
+export interface ClusterCreate {
+  seed_keyword: string;
+  name?: string | null;
+}
+
+/** A single page within a keyword cluster. */
+export interface ClusterPage {
+  id: string;
+  keyword: string;
+  role: string;
+  url_slug: string;
+  expansion_strategy: string | null;
+  reasoning: string | null;
+  search_volume: number | null;
+  cpc: number | null;
+  competition: number | null;
+  competition_level: string | null;
+  composite_score: number | null;
+  is_approved: boolean;
+  crawled_page_id: string | null;
+}
+
+/** Full cluster with nested pages. */
+export interface Cluster {
+  id: string;
+  project_id: string;
+  seed_keyword: string;
+  name: string;
+  status: string;
+  generation_metadata: Record<string, unknown> | null;
+  pages: ClusterPage[];
+  created_at: string;
+  updated_at: string;
+}
+
+/** Summary cluster for list views. */
+export interface ClusterListItem {
+  id: string;
+  seed_keyword: string;
+  name: string;
+  status: string;
+  page_count: number;
+  approved_count: number;
+  created_at: string;
+}
+
+/** Request to update editable fields on a cluster page. */
+export interface ClusterPageUpdate {
+  is_approved?: boolean;
+  keyword?: string;
+  url_slug?: string;
+  role?: string;
+}
+
+/** Response for bulk cluster approval. */
+export interface ClusterBulkApproveResponse {
+  bridged_count: number;
+}
+
+// =============================================================================
+// KEYWORD CLUSTER API FUNCTIONS
+// =============================================================================
+
+/**
+ * Create a new keyword cluster from a seed keyword.
+ * Runs the 3-stage generation pipeline (~5-10s).
+ */
+export function createCluster(
+  projectId: string,
+  data: ClusterCreate
+): Promise<Cluster> {
+  return apiClient.post<Cluster>(
+    `/projects/${projectId}/clusters`,
+    data
+  );
+}
+
+/**
+ * List all keyword clusters for a project.
+ * Returns summary data with page counts.
+ */
+export function getClusters(
+  projectId: string
+): Promise<ClusterListItem[]> {
+  return apiClient.get<ClusterListItem[]>(
+    `/projects/${projectId}/clusters`
+  );
+}
+
+/**
+ * Get a single cluster with all its pages.
+ */
+export function getCluster(
+  projectId: string,
+  clusterId: string
+): Promise<Cluster> {
+  return apiClient.get<Cluster>(
+    `/projects/${projectId}/clusters/${clusterId}`
+  );
+}
+
+/**
+ * Update editable fields on a cluster page.
+ * Only provided fields are updated.
+ */
+export function updateClusterPage(
+  projectId: string,
+  clusterId: string,
+  pageId: string,
+  data: ClusterPageUpdate
+): Promise<ClusterPage> {
+  return apiClient.patch<ClusterPage>(
+    `/projects/${projectId}/clusters/${clusterId}/pages/${pageId}`,
+    data
+  );
+}
+
+/**
+ * Bulk-approve a cluster, bridging approved pages into the content pipeline.
+ */
+export function bulkApproveCluster(
+  projectId: string,
+  clusterId: string
+): Promise<ClusterBulkApproveResponse> {
+  return apiClient.post<ClusterBulkApproveResponse>(
+    `/projects/${projectId}/clusters/${clusterId}/approve`
+  );
+}
+
+/**
+ * Delete a cluster. Only allowed if status is before 'approved'.
+ */
+export function deleteCluster(
+  projectId: string,
+  clusterId: string
+): Promise<void> {
+  return apiClient.delete<void>(
+    `/projects/${projectId}/clusters/${clusterId}`
+  );
+}
+
+// =============================================================================
 // EXPORT API FUNCTIONS
 // =============================================================================
 

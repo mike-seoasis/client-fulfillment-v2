@@ -244,3 +244,18 @@ after each iteration and it's included in prompts for context.
   - Always check progress.md first — previous stories may have already covered the work
   - All quality checks (ruff) pass clean
 ---
+
+## 2026-02-08 - S8-017
+- Added 6 TypeScript interfaces to `frontend/src/lib/api.ts`: ClusterCreate, ClusterPage, Cluster, ClusterListItem, ClusterPageUpdate, ClusterBulkApproveResponse
+- Added 6 API client functions: createCluster, getClusters, getCluster, updateClusterPage, bulkApproveCluster, deleteCluster
+- All functions follow existing apiClient pattern (get/post/patch/delete with typed generics)
+- Types match backend Pydantic schemas exactly (ClusterResponse → Cluster, ClusterListResponse → ClusterListItem, ClusterPageResponse → ClusterPage)
+- **Files changed:**
+  - `frontend/src/lib/api.ts` (added cluster types + API functions)
+- **Learnings:**
+  - Frontend has no separate types.ts file — all types and API functions colocate in `frontend/src/lib/api.ts`
+  - Pattern: types section with `// ===` banner, then functions section with same banner
+  - DateTime fields from backend map to `string` in TS (ISO format), dict/JSONB maps to `Record<string, unknown> | null`
+  - Pre-existing TS error in GenerationProgress.test.tsx (tuple index out of bounds) — unrelated to this change
+  - All quality checks (tsc, eslint) pass clean
+---
