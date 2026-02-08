@@ -6,11 +6,14 @@ This service orchestrates keyword cluster generation by:
 3. Using DataForSEO for search volume enrichment
 """
 
+import json
 from typing import Any
 
 from app.core.logging import get_logger
 from app.integrations.claude import ClaudeClient
 from app.integrations.dataforseo import DataForSEOClient
+
+HAIKU_MODEL = "claude-haiku-4-5-20251001"
 
 logger = get_logger(__name__)
 
@@ -134,3 +137,144 @@ class ClusterKeywordService:
                     parts.append("## Competitors\n" + ", ".join(names))
 
         return "\n\n".join(parts)
+
+    async def _generate_candidates(
+        self,
+        seed_keyword: str,
+        brand_context: str,
+    ) -> list[dict[str, Any]]:
+        """Stage 1: Expand a seed keyword into 15-20 collection page candidates.
+
+        Uses Claude Haiku with an 11-strategy expansion prompt to generate
+        keyword candidates suitable as standalone Shopify collection pages.
+
+        The seed keyword is always included as the first candidate with
+        role hint 'parent'.
+
+        Args:
+            seed_keyword: The seed keyword to expand.
+            brand_context: Brand context string from _build_brand_context().
+
+        Returns:
+            List of dicts with keys: keyword, expansion_strategy, rationale,
+            estimated_intent. The seed keyword is first with role='parent'.
+
+        Raises:
+            ValueError: If Claude returns too few candidates or unparseable JSON.
+        """
+        brand_section = ""
+        if brand_context:
+            brand_section = f"""
+## Brand Context
+{brand_context}
+"""
+
+        prompt = f"""You are an e-commerce SEO strategist. Given a seed keyword, generate 15-20 collection page keyword ideas using the expansion strategies below.
+
+## Seed Keyword
+"{seed_keyword}"
+{brand_section}
+## Expansion Strategies (use as many as relevant)
+1. **Demographic** — Target a specific audience segment (e.g., "women's hiking boots")
+2. **Attribute** — Add a product attribute (e.g., "waterproof hiking boots")
+3. **Price/Value** — Add price or value modifier (e.g., "affordable hiking boots")
+4. **Use-Case** — Target a specific use case (e.g., "hiking boots for backpacking")
+5. **Comparison/Intent** — Add buying or comparison intent (e.g., "best hiking boots")
+6. **Seasonal/Occasion** — Target a season or occasion (e.g., "winter hiking boots")
+7. **Material/Type** — Specify material or type (e.g., "leather hiking boots")
+8. **Experience Level** — Target skill level (e.g., "beginner hiking boots")
+9. **Problem/Solution** — Address a pain point (e.g., "wide-feet hiking boots")
+10. **Terrain/Environment** — Specify terrain or environment (e.g., "mountain hiking boots")
+11. **Values/Lifestyle** — Align with values (e.g., "vegan hiking boots")
+
+## Rules
+- Each keyword must be viable as a standalone Shopify collection page (NOT a blog post)
+- Focus on commercial/transactional intent
+- Order results by estimated commercial value (highest first)
+- Do NOT include the seed keyword itself — it will be added separately
+
+## Output Format
+Return ONLY a JSON array of objects. No explanations, no markdown code blocks.
+Each object must have:
+- "keyword": the collection page keyword
+- "expansion_strategy": which strategy was used (one of the 11 above)
+- "rationale": brief reason why this is a good collection page
+- "estimated_intent": one of "transactional", "commercial", "informational"
+
+Example:
+[{{"keyword": "women's hiking boots", "expansion_strategy": "demographic", "rationale": "Large audience segment with distinct needs", "estimated_intent": "commercial"}}]"""
+
+        result = await self._claude.complete(
+            user_prompt=prompt,
+            max_tokens=1500,
+            temperature=0.4,
+            model=HAIKU_MODEL,
+        )
+
+        if not result.success or not result.text:
+            raise ValueError(
+                f"Claude candidate generation failed: {result.error or 'Empty response'}"
+            )
+
+        # Parse JSON response — strip markdown code blocks if present
+        response_text = result.text.strip()
+        if "```json" in response_text:
+            response_text = response_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in response_text:
+            response_text = response_text.split("```")[1].split("```")[0].strip()
+
+        candidates = json.loads(response_text)
+
+        if not isinstance(candidates, list):
+            raise ValueError("LLM response is not a list")
+
+        # Validate each candidate has required fields
+        valid_candidates: list[dict[str, Any]] = []
+        for item in candidates:
+            if not isinstance(item, dict):
+                continue
+            keyword = item.get("keyword")
+            if not keyword or not isinstance(keyword, str):
+                continue
+            valid_candidates.append(
+                {
+                    "keyword": keyword.strip().lower(),
+                    "expansion_strategy": item.get("expansion_strategy", "unknown"),
+                    "rationale": item.get("rationale", ""),
+                    "estimated_intent": item.get("estimated_intent", "commercial"),
+                }
+            )
+
+        if len(valid_candidates) < 5:
+            raise ValueError(
+                f"Too few valid candidates: {len(valid_candidates)} (expected 15-20)"
+            )
+
+        # Prepend seed keyword as parent
+        seed_candidate: dict[str, Any] = {
+            "keyword": seed_keyword.strip().lower(),
+            "expansion_strategy": "seed",
+            "rationale": "Original seed keyword — parent of this cluster",
+            "estimated_intent": "commercial",
+            "role_hint": "parent",
+        }
+
+        # Deduplicate: remove seed from generated list if Claude included it
+        seed_normalized = seed_keyword.strip().lower()
+        valid_candidates = [
+            c for c in valid_candidates if c["keyword"] != seed_normalized
+        ]
+
+        result_list = [seed_candidate] + valid_candidates
+
+        logger.info(
+            "Generated cluster candidates",
+            extra={
+                "seed_keyword": seed_keyword,
+                "candidate_count": len(result_list),
+                "input_tokens": result.input_tokens,
+                "output_tokens": result.output_tokens,
+            },
+        )
+
+        return result_list

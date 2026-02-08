@@ -275,6 +275,7 @@ class ClaudeClient:
         system_prompt: str | None = None,
         max_tokens: int | None = None,
         temperature: float = 0.0,
+        model: str | None = None,
     ) -> CompletionResult:
         """Send a completion request to Claude.
 
@@ -283,6 +284,7 @@ class ClaudeClient:
             system_prompt: Optional system prompt
             max_tokens: Maximum response tokens (overrides default)
             temperature: Sampling temperature (0.0 = deterministic)
+            model: Optional model override for this request
 
         Returns:
             CompletionResult with response text and metadata
@@ -306,8 +308,9 @@ class ClaudeClient:
         request_id: str | None = None
 
         # Build request body
+        effective_model = model or self._model
         request_body: dict[str, Any] = {
-            "model": self._model,
+            "model": effective_model,
             "max_tokens": max_tokens or self._max_tokens,
             "temperature": temperature,
             "messages": [{"role": "user", "content": user_prompt}],

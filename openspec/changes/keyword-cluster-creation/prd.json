@@ -129,11 +129,12 @@
         "Returns 15-20 candidates on success, raises on failure"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "S8-006"
       ],
-      "notes": "Use the 11-strategy prompt structure discussed in research. The prompt should ask for 15-20 suggestions ordered by estimated commercial value. Reference backend/app/services/primary_keyword.py:generate_candidates() for Claude call patterns and JSON parsing."
+      "notes": "Use the 11-strategy prompt structure discussed in research. The prompt should ask for 15-20 suggestions ordered by estimated commercial value. Reference backend/app/services/primary_keyword.py:generate_candidates() for Claude call patterns and JSON parsing.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S8-008",
@@ -472,6 +473,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-08T20:14:06.558Z"
+    "updatedAt": "2026-02-08T20:16:36.735Z"
   }
 }

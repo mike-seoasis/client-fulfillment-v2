@@ -11,6 +11,7 @@ after each iteration and it's included in prompts for context.
 - **Python env**: Use `.venv/bin/python` (not bare `python`) for running tools in backend.
 - **Alembic env.py imports**: When adding new models, also add imports to `backend/alembic/env.py` so autogenerate can detect schema changes.
 - **Migration naming**: Sequential `0NNN_description.py` with revision ID `"0NNN"`, `down_revision` pointing to previous. Named FK constraints: `fk_{table}_{column}`.
+- **ClaudeClient per-call model override**: `complete()` accepts optional `model` param to override `self._model` for a single call (e.g., `model="claude-haiku-4-5-20251001"`). Uses `effective_model = model or self._model`.
 
 ---
 
@@ -103,5 +104,26 @@ after each iteration and it's included in prompts for context.
   - Brand config v2_schema structure: `brand_foundation.company_overview.company_name`, `brand_foundation.what_they_sell.primary_products_services`, etc.
   - Target audience primary persona is always `personas[0]` in the array
   - Competitor names live at `competitor_context.direct_competitors[].name`
+  - All quality checks (mypy, ruff) pass clean
+---
+
+## 2026-02-08 - S8-007
+- Implemented `_generate_candidates(seed_keyword, brand_context) -> list[dict]` on `ClusterKeywordService`
+- 11-strategy expansion prompt: demographic, attribute, price/value, use-case, comparison/intent, seasonal/occasion, material/type, experience level, problem/solution, terrain/environment, values/lifestyle
+- Prompt includes brand context section (from `_build_brand_context()`) when available
+- Constrains output to collection-level keywords (not blog posts), each viable as standalone collection page
+- Seed keyword always prepended as first candidate with `role_hint='parent'`
+- Uses Claude Haiku (`claude-haiku-4-5-20251001`) via model override, `temperature=0.4`, `max_tokens=1500`
+- Returns structured JSON: list of `{keyword, expansion_strategy, rationale, estimated_intent}`
+- JSON parsing with markdown code block stripping (same pattern as `primary_keyword.py`)
+- Validates minimum 5 candidates, deduplicates seed keyword from LLM output
+- Added optional `model` parameter to `ClaudeClient.complete()` for per-call model override
+- **Files changed:**
+  - `backend/app/services/cluster_keyword.py` (added `_generate_candidates` method + `json` import + `HAIKU_MODEL` constant)
+  - `backend/app/integrations/claude.py` (added optional `model` param to `complete()` + `effective_model` in request body)
+- **Learnings:**
+  - `ClaudeClient.complete()` didn't support per-call model override — added optional `model` parameter with backward-compatible default
+  - The `complete()` method builds request body with `self._model` — needed to introduce `effective_model = model or self._model`
+  - Prompt instructs "no markdown code blocks" but JSON parsing still handles them defensively (LLMs don't always follow instructions)
   - All quality checks (mypy, ruff) pass clean
 ---
