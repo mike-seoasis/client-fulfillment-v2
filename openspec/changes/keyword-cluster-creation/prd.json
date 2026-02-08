@@ -63,13 +63,14 @@
         "Migration runs successfully: alembic upgrade head"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "S8-001",
         "S8-002",
         "S8-003"
       ],
-      "notes": "Run: cd backend && alembic revision --autogenerate -m 'add keyword clusters and cluster pages'. Verify the generated migration includes the source column backfill."
+      "notes": "Run: cd backend && alembic revision --autogenerate -m 'add keyword clusters and cluster pages'. Verify the generated migration includes the source column backfill.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S8-005",
@@ -469,6 +470,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-08T20:07:16.370Z"
+    "updatedAt": "2026-02-08T20:10:16.400Z"
   }
 }

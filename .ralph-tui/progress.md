@@ -9,6 +9,8 @@ after each iteration and it's included in prompts for context.
 - **Model registration**: Add import to `backend/app/models/__init__.py` and include in `__all__` list (alphabetically sorted).
 - **Relationships with back_populates**: Always define both sides. Use `TYPE_CHECKING` guard for imports to avoid circular deps. Parent side uses `cascade="all, delete-orphan"` with list type. Child FK uses `ondelete="CASCADE"` or `ondelete="SET NULL"` as appropriate.
 - **Python env**: Use `.venv/bin/python` (not bare `python`) for running tools in backend.
+- **Alembic env.py imports**: When adding new models, also add imports to `backend/alembic/env.py` so autogenerate can detect schema changes.
+- **Migration naming**: Sequential `0NNN_description.py` with revision ID `"0NNN"`, `down_revision` pointing to previous. Named FK constraints: `fk_{table}_{column}`.
 
 ---
 
@@ -48,5 +50,23 @@ after each iteration and it's included in prompts for context.
 - **Learnings:**
   - S8-001 proactively completed S8-003's scope (model registration + relationship)
   - Always check progress.md first — previous stories may have already covered the work
+  - All quality checks (mypy, ruff) pass clean
+---
+
+## 2026-02-08 - S8-004
+- Created Alembic migration `0023_add_keyword_clusters_and_cluster_pages.py`
+- Migration creates `keyword_clusters` table with all columns (id, project_id, seed_keyword, name, status, generation_metadata, created_at, updated_at) plus FK and indexes
+- Migration creates `cluster_pages` table with all columns (id, cluster_id, keyword, role, url_slug, expansion_strategy, reasoning, search_volume, cpc, competition, competition_level, composite_score, is_approved, crawled_page_id, created_at, updated_at) plus FKs and indexes
+- Migration adds `source` column to `crawled_pages` with server_default `'onboarding'` and backfills existing rows
+- Migration is fully reversible (downgrade drops column/index, then both tables)
+- Added `KeywordCluster` and `ClusterPage` imports to `alembic/env.py` for autogenerate support
+- **Files changed:**
+  - `backend/alembic/versions/0023_add_keyword_clusters_and_cluster_pages.py` (new)
+  - `backend/alembic/env.py` (added model imports)
+- **Learnings:**
+  - `alembic upgrade head` cannot run locally due to space in project path (`Projects (1)`) — `version_locations = %(here)s/alembic/versions` splits on the space, producing two invalid paths. This is an environment-specific issue, not a migration issue.
+  - Migration file loads and type-checks cleanly via direct Python import
+  - Follow existing migration patterns: `postgresql.UUID(as_uuid=False)`, named FK constraints (`fk_{table}_{column}`), `op.f()` for index names
+  - Always add new model imports to `alembic/env.py` so autogenerate can detect schema changes
   - All quality checks (mypy, ruff) pass clean
 ---

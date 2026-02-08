@@ -25,6 +25,7 @@ from app.models.crawl_history import CrawlHistory  # noqa: F401
 from app.models.crawl_schedule import CrawlSchedule  # noqa: F401
 from app.models.crawled_page import CrawledPage  # noqa: F401
 from app.models.generated_content import GeneratedContent  # noqa: F401
+from app.models.keyword_cluster import ClusterPage, KeywordCluster  # noqa: F401
 from app.models.nlp_analysis_cache import NLPAnalysisCache  # noqa: F401
 from app.models.page_keywords import PageKeywords  # noqa: F401
 from app.models.page_paa import PagePAA  # noqa: F401
