@@ -96,3 +96,20 @@ after each iteration and it's included in prompts for context.
   - Cannot use `apiClient` wrapper for blob downloads since `handleResponse` calls `response.json()` — need raw fetch for binary/blob responses
   - `Content-Disposition` filename regex `filename="?([^";\n]+)"?` handles both quoted and unquoted filenames
 ---
+
+## 2026-02-08 - S7-007
+- Created export page at `frontend/src/app/projects/[id]/onboarding/export/page.tsx`
+- Page shows onboarding stepper with Export as active Step 5 (uses same `ONBOARDING_STEPS` config)
+- Fetches project info via `useProject` and pages with approval status via `useContentGenerationStatus`
+- Filters to approved+complete pages, shows checkboxes for page selection (all selected by default)
+- "Export includes" info box listing Matrixify columns (Handle, Title, Body HTML, Meta description)
+- Download button calls `exportProject()` from api.ts with selected page IDs
+- Select all / deselect all with indeterminate checkbox state
+- Navigation: Back to Content, Finish Onboarding
+- Matches tropical oasis design system (palm, sand, coral palette, rounded-sm corners)
+- Files changed: `frontend/src/app/projects/[id]/onboarding/export/page.tsx` (new)
+- **Learnings:**
+  - `useContentGenerationStatus` hook (not `useContentGeneration`) is the right hook for read-only page status — it's a simpler query-only hook without generation mutation logic
+  - Checkbox indeterminate state requires a ref callback: `ref={(el) => { if (el) el.indeterminate = someSelected; }}` since React doesn't support `indeterminate` as a JSX prop
+  - Initializing selection state from async data uses a `!initialized` guard pattern to set defaults once on first data load without re-triggering on re-renders
+---
