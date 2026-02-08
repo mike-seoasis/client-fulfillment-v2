@@ -381,3 +381,21 @@ after each iteration and it's included in prompts for context.
   - Pre-existing mypy errors in `crawl4ai.py` — unrelated to this change
   - All quality checks (ruff, mypy, pytest) pass clean — 20/20 tests pass
 ---
+
+## 2026-02-08 - S8-022
+- Created 3 frontend test files with 71 total tests using Vitest + React Testing Library
+- **NewClusterPage tests** (22 tests): form rendering (seed keyword input, cluster name input, buttons, breadcrumb), validation (empty/short keyword disabled, 2+ chars enabled), loading state (skeleton, progress indicator, form hidden during pending), submission (mutate called with correct args, includes optional name), navigation (success redirects to cluster detail, cancel links back), error state (error message, Try Again/Cancel buttons), not found state (fetch failure, null project)
+- **ClusterDetailPage tests** (33 tests): suggestion list rendering (all pages displayed, cluster name, seed keyword label, summary stats, search volume/CPC/composite score/expansion strategy), parent badge display (Parent/Child badges, Make Parent only on children), approval toggle (renders per page, toggle calls updateClusterPage for approve/reject), inline editing (editable buttons, click opens input, save on blur with changed value), Approve All (renders, calls update for unapproved pages, disabled when all approved), Generate Content button (renders, disabled/enabled based on approved count, calls bulkApproveCluster, disabled with correct label), step indicator (Keywords as step 1 of 4, all labels), volume unavailable warning (shows/hides based on metadata), loading/not found states, back navigation
+- **ProjectDetailPage cluster section tests** (16 tests): empty state (no clusters message, New Cluster button with correct link), cluster cards rendering (names, page counts singular/plural, seed_keyword fallback, all 5 status badges), click navigation (cards link to cluster detail), New Cluster button in header (present when clusters exist, correct link), section header (New Content title, Keyword Clusters badge)
+- **Files changed:**
+  - `frontend/src/app/projects/[id]/clusters/new/__tests__/page.test.tsx` (new)
+  - `frontend/src/app/projects/[id]/clusters/[clusterId]/__tests__/page.test.tsx` (new)
+  - `frontend/src/app/projects/[id]/__tests__/clusters.test.tsx` (new)
+- **Learnings:**
+  - When a keyword appears both in seed keyword display and editable row, use `getAllByText` instead of `getByText` to avoid "found multiple elements" error
+  - `userEvent.hover()` does not trigger `onMouseEnter` on disabled buttons in jsdom (browsers prevent pointer events on disabled elements) — use `fireEvent.mouseEnter` or test disabled state instead
+  - Mocking multiple hooks from the same module (e.g., `useClusters`, `useUpdateClusterPage`, `useBulkApproveCluster`) works with a single `vi.mock` that returns all exports
+  - For project detail page tests, 5 hooks need mocking: `use-projects`, `useBrandConfigGeneration`, `use-crawl-status`, `useClusters` — each with sensible defaults in `beforeEach`
+  - Pre-existing test failures in GenerationProgress.test.tsx, KeywordPageRow.test.tsx, brand-config/page.test.tsx, content editor page.test.tsx — unrelated to this change
+  - All quality checks (tsc, eslint, vitest) pass clean — 71/71 new tests pass
+---
