@@ -246,11 +246,48 @@
 - [ ] Update Railway environment variables (staging + production)
 - [ ] **Verify:** Full auth flow works (sign in → use app → sign out → redirected to login)
 
-### Phase 11: Polish
+### Phase 11: Polish & UX Foundations
+
+#### 11a: Quick Wins (< 30 min each, no new deps)
+- [ ] Relative timestamps everywhere (`date-fns` `formatDistanceToNow` — already installed)
+- [ ] Disable submit buttons during mutations (`isPending` from TanStack Query)
+- [ ] Pluralization helper (simple `pluralize(count, word)` util)
+- [ ] Inline form validation on blur (`mode: "onBlur"` in react-hook-form — already installed)
+- [ ] Active nav states (highlight current page in sidebar/header via `usePathname`)
+
+#### 11b: Small Additions (30 min – 1 hr each, minimal deps)
+- [ ] Toast notifications — install **sonner**, add `<Toaster />` to layout, replace alerts/console
+- [ ] Debounced search hook — install **use-debounce**, wire into list pages
+- [ ] Retry error pattern — reusable `<ErrorWithRetry>` component using TanStack Query `refetch()`
+- [ ] Empty states — friendly message + CTA on every list page (projects, pages, keywords, content, clusters)
+- [ ] Text truncation + tooltips — Tailwind `truncate` + **Radix Tooltip** for overflow text
+- [ ] Confirmation dialogs — reusable `<ConfirmDialog>` via **Radix AlertDialog** (replace window.confirm)
+- [ ] Breadcrumbs component (reads Next.js route segments, no library needed)
+
+#### 11c: Medium Effort (1–2 hrs each)
+- [ ] 404 and 500 error pages (`app/not-found.tsx`, `app/error.tsx` — Next.js built-in)
+- [ ] Unsaved changes warning (`beforeunload` + route change interception hook)
+- [ ] Offline awareness banner (`navigator.onLine` + event listeners, TanStack Query pauses automatically)
+- [ ] Skeleton loaders — reusable `<Skeleton>` components with Tailwind `animate-pulse`
+- [ ] Hover/active states audit — pass through all interactive elements (`hover:`, `active:`, `transition-colors`)
+- [ ] Focus management — Radix primitives for modals/dialogs, `useRef` + `focus()` for custom flows
 - [ ] Dashboard metrics (clusters pending, content pending, blogs pending)
-- [ ] Progress indicators
-- [ ] Error handling
-- [ ] Edge cases
+
+#### 11d: Larger Investments (2–4 hrs each)
+- [ ] Accessibility audit — install **Radix UI Primitives** for accessible Dialog/Dropdown/Tabs, run Lighthouse + axe DevTools
+- [ ] Search on list pages — client-side filter + `?search=` query param on FastAPI endpoints with `ilike`
+- [ ] TanStack Table — headless table for sortable/filterable/paginated lists (keywords, content, clusters)
+- [ ] Deep linking — persist filters/tabs/sort in URL query params via `useSearchParams`
+
+#### New deps for Phase 11
+| Package | Size | Purpose |
+|---------|------|---------|
+| `sonner` | ~5kb | Toast notifications |
+| `use-debounce` | ~2kb | Debounced search/input |
+| `@radix-ui/react-tooltip` | ~8kb | Accessible tooltips |
+| `@radix-ui/react-alert-dialog` | ~8kb | Confirmation dialogs |
+| `@radix-ui/react-dialog` | ~8kb | Accessible modals (if not already using) |
+| `@tanstack/react-table` | ~14kb | Headless table (sorting, filtering, pagination) |
 
 ---
 
