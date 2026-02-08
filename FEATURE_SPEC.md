@@ -39,16 +39,94 @@
 
 ---
 
-## Feature 1: Authentication (NOT MVP)
+## Feature 1: Authentication (WorkOS AuthKit) — Phase 10
 
-**Priority:** Low (defer until core features work)
+**Priority:** Post-MVP (implement after core workflows are complete)
+**Decision:** WorkOS AuthKit free tier (1M MAU, $0/mo). No SSO needed.
+**Docs:** https://workos.com/docs/authkit | https://github.com/workos/authkit-nextjs
 
-**User can:**
-- Sign in with Google OAuth
-- Create account with username/password
-- Log in with username/password
+### What WorkOS Provides (Free Tier)
+- Email/password authentication
+- Social login (Google, GitHub, etc.)
+- Magic link / passwordless login
+- MFA (TOTP, SMS)
+- Hosted login UI (AuthKit) — no custom login forms to build
+- User management dashboard in WorkOS console
+- Session management with encrypted cookies
+- 1M MAU included free
 
-**For MVP:** Use basic auth or hardcoded credentials, or skip entirely (local dev mode).
+### Integration Architecture
+
+```
+User → Next.js middleware (authkitMiddleware)
+         ↓ (unauthenticated)
+       Redirect to WorkOS AuthKit (hosted login UI)
+         ↓ (user authenticates)
+       Redirect to /auth/callback (OAuth code exchange)
+         ↓ (session cookie set)
+       Access app normally
+         ↓ (API requests)
+       FastAPI validates accessToken JWT
+```
+
+### Frontend Changes
+
+**Package:** `@workos-inc/authkit-nextjs`
+
+**Files to create/modify:**
+1. `middleware.ts` — `authkitMiddleware()` protects all routes, redirects unauthenticated users
+2. `/app/auth/callback/route.ts` — OAuth callback, exchanges code for session via `handleAuth()`
+3. `layout.tsx` — Wrap with `AuthKitProvider` (alongside `QueryProvider`)
+4. `Header` component — Add user display + sign-out button via `useAuth()` hook
+
+**Key patterns:**
+```typescript
+// Server components — get user via withAuth
+import { withAuth } from '@workos-inc/authkit-nextjs';
+export default withAuth(async function Page({ user }) { ... });
+
+// Client components — get user via useAuth hook
+import { useAuth } from '@workos-inc/authkit-nextjs/client';
+const { user, signIn, signOut } = useAuth();
+```
+
+### Backend Changes
+
+**Minimal.** Add a FastAPI middleware that:
+1. Extracts the `accessToken` JWT from the `Authorization: Bearer <token>` header
+2. Verifies the JWT signature against WorkOS's JWKS endpoint
+3. Rejects unauthenticated requests to protected API routes
+4. Passes through requests to any health/public endpoints
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `WORKOS_CLIENT_ID` | Yes | From WorkOS dashboard |
+| `WORKOS_API_KEY` | Yes | From WorkOS dashboard (use test key for dev) |
+| `WORKOS_COOKIE_PASSWORD` | Yes | 32+ char secret for encrypting session cookies |
+| `NEXT_PUBLIC_WORKOS_REDIRECT_URI` | Yes | `http://localhost:3000/auth/callback` (dev) |
+
+### WorkOS Dashboard Configuration
+- Set redirect URI: `http://localhost:3000/auth/callback` (dev), production URL (prod)
+- Set sign-in endpoint
+- Set sign-out redirect: `http://localhost:3000` (dev), production URL (prod)
+- Enable desired auth methods (email/password + Google OAuth at minimum)
+
+### User Object (from session)
+```typescript
+{
+  id: string;           // WorkOS user ID
+  email: string;
+  firstName: string;
+  lastName: string;
+  // + accessToken, refreshToken, organizationId (if applicable)
+}
+```
+
+### Scope Boundaries
+- **In scope:** Sign in, sign out, session management, route protection, user display in header
+- **Out of scope:** User roles/permissions (single-team internal tool), organizations, SSO/SAML, user registration management (handled via WorkOS dashboard)
 
 ---
 

@@ -340,3 +340,24 @@ after each iteration and it's included in prompts for context.
   - Pre-existing TS error in GenerationProgress.test.tsx continues — unrelated to this change
   - All quality checks (tsc, eslint) pass clean
 ---
+
+## 2026-02-08 - S8-015
+- Created `backend/tests/test_cluster_keyword_service.py` with 52 unit tests across 8 test classes
+- **TestBuildBrandContext** (6 tests): full config, partial config, empty config, malformed data, empty personas, empty competitors
+- **TestGenerateCandidates** (7 tests): success with brand context, 11 strategies in prompt, JSON markdown code block parsing, seed keyword first, seed deduplication, Claude failure, too few candidates
+- **TestEnrichWithVolume** (5 tests): success with volume data, DataForSEO unavailable, API failure returns unchanged, unexpected exception, keyword not found in results
+- **TestFilterAndAssignRoles** (6 tests): parent/child assignment, URL slug format, composite score calculation + sorting, seed role enforced in code, duplicate filtering, Claude failure
+- **TestKeywordToSlug** (12 tests): basic conversion, special chars stripped, spaces collapsed, leading/trailing hyphens, long keyword truncation, no trailing hyphen after truncation, numbers preserved, mixed special chars, already clean slug, unicode stripped, empty result
+- **TestCalculateCompositeScore** (5 tests): all values, null volume, null competition, competition normalization (0-100 vs 0-1), zero volume
+- **TestGenerateCluster** (5 tests): full pipeline success, partial failure (DataForSEO down), total failure (Claude down Stage 1), Stage 3 failure, name defaults to seed
+- **TestBulkApproveCluster** (6 tests): CrawledPage creation with source='cluster', PageKeywords with is_priority for parent, crawled_page_id backref, no approved pages error, already approved error, status update to 'approved'
+- **Files changed:**
+  - `backend/tests/test_cluster_keyword_service.py` (new)
+- **Learnings:**
+  - Mock pattern for ClaudeClient: `MagicMock()` with `available` property + `AsyncMock()` for `complete()`, return `CompletionResult` dataclass
+  - Mock pattern for DataForSEOClient: `MagicMock()` with `available` property + `AsyncMock()` for `get_keyword_volume_batch()`, return `KeywordVolumeResult` with `KeywordVolumeData` list
+  - Session-scoped SQLite DB persists data across tests — queries in bulk_approve tests need scoping (e.g., `crawled_page_id.in_(cp_ids)`) to avoid stale data from prior test runs
+  - `claude.complete.side_effect = [result1, result2]` for mocking sequential calls (Stage 1 then Stage 3)
+  - Project model uses `site_url` field, not `website_url`
+  - All quality checks (ruff, mypy, pytest) pass clean — 52/52 tests pass
+---

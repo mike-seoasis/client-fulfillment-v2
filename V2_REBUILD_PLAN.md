@@ -12,6 +12,7 @@
 | **Slice** | Phase 7 complete: Matrixify CSV export with page selection, download, tests |
 | **Last Session** | 2026-02-08 |
 | **Next Action** | Phase 8: Keyword Cluster Creation |
+| **Auth Decision** | WorkOS AuthKit (free tier, 1M MAU) — see Phase 10 |
 
 ### Session Log
 
@@ -132,7 +133,7 @@
 - Bottom description
 
 ### Later (Not MVP)
-- Authentication (Google OAuth, username/password)
+- Authentication — **Moved to Phase 10** (WorkOS AuthKit, free tier)
 - SEMrush integration (auto-import keywords, tag by cluster)
 - Schema markup generation
 - Template code updates
@@ -229,7 +230,22 @@
 - [ ] Blog export (HTML + copy to clipboard)
 - [ ] **Verify:** Full blog flow works (campaign → keywords → generate → edit → export)
 
-### Phase 10: Polish
+### Phase 10: Authentication (WorkOS AuthKit)
+- [ ] Install `@workos-inc/authkit-nextjs` package
+- [ ] Configure WorkOS environment variables (`WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `WORKOS_COOKIE_PASSWORD`, `NEXT_PUBLIC_WORKOS_REDIRECT_URI`)
+- [ ] Create WorkOS account and configure AuthKit in dashboard (redirect URIs, sign-out redirect)
+- [ ] Create `/app/auth/callback/route.ts` (OAuth callback handler via `handleAuth()`)
+- [ ] Add `authkitMiddleware()` in `middleware.ts` (protect all app routes)
+- [ ] Wrap root layout with `AuthKitProvider` (alongside existing `QueryProvider`)
+- [ ] Add sign-in/sign-out to Header component (via `useAuth()` hook)
+- [ ] Display current user name/email in Header
+- [ ] Create login landing page (unauthenticated users see sign-in prompt)
+- [ ] Pass `accessToken` JWT in API requests to FastAPI backend
+- [ ] Add FastAPI middleware to verify WorkOS JWT on protected endpoints
+- [ ] Update Railway environment variables (staging + production)
+- [ ] **Verify:** Full auth flow works (sign in → use app → sign out → redirected to login)
+
+### Phase 11: Polish
 - [ ] Dashboard metrics (clusters pending, content pending, blogs pending)
 - [ ] Progress indicators
 - [ ] Error handling
