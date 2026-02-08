@@ -279,6 +279,30 @@ after each iteration and it's included in prompts for context.
   - All quality checks (tsc, eslint) pass clean
 ---
 
+## 2026-02-08 - S8-020
+- Created `frontend/src/app/projects/[id]/clusters/[clusterId]/page.tsx` — cluster suggestions and approval page
+- Header shows cluster name, seed keyword, and 4-step stepper (Keywords → Content → Review → Export) with Keywords active
+- Displays all ClusterPage suggestions in a sorted list (parent pinned to top, then by composite_score descending)
+- Each row shows: editable keyword (click to edit), role badge (Parent in palm-500 green / Child in neutral), search volume, CPC, competition level, composite score, editable URL slug (click to edit), expansion strategy tag
+- Parent page visually distinguished with `bg-palm-50/40` background and left border accent
+- Approve/reject toggle per suggestion (checkbox) using `useUpdateClusterPage`
+- Inline editing for keyword and URL slug — saves on blur or Enter key, cancels on Escape
+- 'Make Parent' action on child rows — reassigns parent role via PATCH (backend handles demoting old parent)
+- 'Approve All' button approves all unapproved suggestions
+- 'Generate Content' button calls `useBulkApproveCluster`, navigates to content generation page on success. Disabled with tooltip when no pages approved.
+- Warning banner when `volume_unavailable` flag is set in `generation_metadata`
+- Back button navigates to project detail page
+- **Files changed:**
+  - `frontend/src/app/projects/[id]/clusters/[clusterId]/page.tsx` (new)
+- **Learnings:**
+  - `sortedPages` computed in render needs `useMemo` when used in `useCallback` dependencies, otherwise `react-hooks/exhaustive-deps` warns about conditional references creating new arrays each render
+  - Stepper pattern from onboarding keywords page is reusable — just swap `ONBOARDING_STEPS` for `CLUSTER_STEPS` with different labels
+  - InlineEditableCell component pattern: use `setTimeout` to focus input after state change (React batches updates), save on blur/Enter, cancel on Escape
+  - `generation_metadata` is typed as `Record<string, unknown> | null` in frontend — needs cast when checking specific fields like `volume_unavailable`
+  - Pre-existing TS error in GenerationProgress.test.tsx continues — unrelated to this change
+  - All quality checks (tsc, eslint) pass clean
+---
+
 ## 2026-02-08 - S8-019
 - Created `frontend/src/app/projects/[id]/clusters/new/page.tsx` — seed keyword input page
 - Form with Seed Keyword (required, min 2 chars) and Cluster Name (optional) fields

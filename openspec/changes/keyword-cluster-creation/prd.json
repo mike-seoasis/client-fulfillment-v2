@@ -400,11 +400,12 @@
         "Back button navigates to project detail"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "S8-018"
       ],
-      "notes": "Reference WIREFRAMES.md section 13 for layout. Reference the onboarding keywords page at frontend/src/app/projects/[id]/onboarding/keywords/page.tsx for approval UI patterns. The stepper should match the onboarding stepper style but with cluster-specific steps."
+      "notes": "Reference WIREFRAMES.md section 13 for layout. Reference the onboarding keywords page at frontend/src/app/projects/[id]/onboarding/keywords/page.tsx for approval UI patterns. The stepper should match the onboarding stepper style but with cluster-specific steps.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S8-021",
@@ -483,6 +484,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-08T20:35:30.218Z"
+    "updatedAt": "2026-02-08T20:41:42.927Z"
   }
 }
