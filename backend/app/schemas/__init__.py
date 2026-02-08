@@ -29,6 +29,13 @@ from app.schemas.categorize import (
     UpdateCategoryRequest,
     UpdateCategoryResponse,
 )
+from app.schemas.cluster import (
+    ClusterCreate,
+    ClusterListResponse,
+    ClusterPageResponse,
+    ClusterPageUpdate,
+    ClusterResponse,
+)
 from app.schemas.content_brief import (
     CompetitorSchema,
     ContentBriefBatchItemResponse,
@@ -193,6 +200,12 @@ __all__ = [
     "CrawledPageListResponse",
     "CrawlProgressResponse",
     "CrawlStopResponse",
+    # Cluster schemas
+    "ClusterCreate",
+    "ClusterPageResponse",
+    "ClusterResponse",
+    "ClusterListResponse",
+    "ClusterPageUpdate",
     # Categorize schemas
     "CategorizeRequest",
     "BatchPageRequest",

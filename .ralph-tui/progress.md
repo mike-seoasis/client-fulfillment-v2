@@ -70,3 +70,21 @@ after each iteration and it's included in prompts for context.
   - Always add new model imports to `alembic/env.py` so autogenerate can detect schema changes
   - All quality checks (mypy, ruff) pass clean
 ---
+
+## 2026-02-08 - S8-005
+- Created `backend/app/schemas/cluster.py` with 5 Pydantic v2 schemas: ClusterCreate, ClusterPageResponse, ClusterResponse, ClusterListResponse, ClusterPageUpdate
+- Registered all schemas in `backend/app/schemas/__init__.py` with imports and `__all__` entries
+- All response schemas use `model_config = ConfigDict(from_attributes=True)`
+- ClusterCreate: seed_keyword (str, min_length=2), name (str | None = None)
+- ClusterPageResponse: all ClusterPage model fields with proper types
+- ClusterResponse: full cluster with nested list[ClusterPageResponse] pages
+- ClusterListResponse: summary with page_count (int) and approved_count (int) for list views
+- ClusterPageUpdate: all optional fields (is_approved, keyword, url_slug, role)
+- **Files changed:**
+  - `backend/app/schemas/cluster.py` (new)
+  - `backend/app/schemas/__init__.py` (added imports + __all__ entries)
+- **Learnings:**
+  - Import order in `__init__.py` matters — ruff enforces alphabetical sorting of import blocks (I001)
+  - `cluster` sorts after `categorize` but before `content_brief`
+  - All quality checks (mypy, ruff) pass clean
+---
