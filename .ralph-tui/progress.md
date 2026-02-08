@@ -81,3 +81,18 @@ after each iteration and it's included in prompts for context.
   - `_parse_csv()` helper with BOM stripping keeps test assertions clean and DRY
   - Project model requires `phase_status={}` and `brand_wizard_state={}` explicitly in test fixtures (non-nullable JSONB columns)
 ---
+
+## 2026-02-08 - S7-006
+- Added `exportProject(projectId, pageIds?)` function to `frontend/src/lib/api.ts`
+- Uses raw `fetch()` (not apiClient) to get blob response from `GET /api/v1/projects/{projectId}/export`
+- Optional `page_ids` query param as comma-separated string
+- Extracts filename from `Content-Disposition` header with regex fallback to `"export.csv"`
+- Triggers browser download via hidden anchor element + blob URL pattern
+- Cleans up: removes anchor from DOM, revokes blob URL after download
+- Error handling reuses `ApiError` class from existing api.ts for consistency
+- Files changed: `frontend/src/lib/api.ts` (modified)
+- **Learnings:**
+  - Browser file download pattern: `fetch → response.blob() → URL.createObjectURL → anchor.click() → URL.revokeObjectURL` is the standard approach
+  - Cannot use `apiClient` wrapper for blob downloads since `handleResponse` calls `response.json()` — need raw fetch for binary/blob responses
+  - `Content-Disposition` filename regex `filename="?([^";\n]+)"?` handles both quoted and unquoted filenames
+---

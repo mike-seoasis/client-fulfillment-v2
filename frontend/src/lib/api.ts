@@ -458,3 +458,56 @@ export function bulkApproveContent(
     `/projects/${projectId}/bulk-approve-content`
   );
 }
+
+// =============================================================================
+// EXPORT API FUNCTIONS
+// =============================================================================
+
+/**
+ * Export approved pages as a Matrixify-compatible CSV and trigger browser download.
+ * Uses fetch directly (not apiClient) to handle blob response.
+ */
+export async function exportProject(
+  projectId: string,
+  pageIds?: string[]
+): Promise<void> {
+  let url = `${API_BASE_URL}/projects/${projectId}/export`;
+  if (pageIds && pageIds.length > 0) {
+    url += `?page_ids=${pageIds.join(",")}`;
+  }
+
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    let message: string | undefined;
+    try {
+      const data = await response.json();
+      message = data.error || data.detail || data.message;
+    } catch {
+      // Response body is not JSON
+    }
+    throw new ApiError(response.status, response.statusText, message);
+  }
+
+  const blob = await response.blob();
+
+  // Extract filename from Content-Disposition header
+  const disposition = response.headers.get("Content-Disposition");
+  let filename = "export.csv";
+  if (disposition) {
+    const match = disposition.match(/filename="?([^";\n]+)"?/);
+    if (match) {
+      filename = match[1];
+    }
+  }
+
+  // Trigger browser download via hidden anchor
+  const blobUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = blobUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(blobUrl);
+}
