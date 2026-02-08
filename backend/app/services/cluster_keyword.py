@@ -12,12 +12,15 @@ import re
 import time
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
 from app.integrations.claude import ClaudeClient
 from app.integrations.dataforseo import DataForSEOClient
+from app.models.crawled_page import CrawledPage, CrawlStatus
 from app.models.keyword_cluster import ClusterPage, ClusterStatus, KeywordCluster
+from app.models.page_keywords import PageKeywords
 
 HAIKU_MODEL = "claude-haiku-4-5-20251001"
 
@@ -812,3 +815,118 @@ Example:
                 exc_info=True,
             )
             raise ValueError(f"Cluster generation failed during persistence: {e}") from e
+
+    @staticmethod
+    async def bulk_approve_cluster(
+        cluster_id: str,
+        db: AsyncSession,
+    ) -> dict[str, Any]:
+        """Bridge approved cluster pages into the content pipeline.
+
+        For each approved ClusterPage, creates a CrawledPage (source='cluster',
+        status='completed') and a PageKeywords record so the standard content
+        generation pipeline can process them.
+
+        Args:
+            cluster_id: UUID of the KeywordCluster to approve.
+            db: AsyncSession for database operations.
+
+        Returns:
+            Dict with bridged_count (int) and crawled_page_ids (list[str]).
+
+        Raises:
+            ValueError: If no approved pages exist (400-equivalent) or cluster
+                status is already 'approved' or later (409-equivalent).
+        """
+        # Load the cluster
+        result = await db.execute(
+            select(KeywordCluster).where(KeywordCluster.id == cluster_id)
+        )
+        cluster = result.scalar_one_or_none()
+        if cluster is None:
+            raise ValueError(f"Cluster {cluster_id} not found")
+
+        # 409-equivalent: cluster already approved or later
+        approved_or_later = {
+            ClusterStatus.APPROVED.value,
+            ClusterStatus.CONTENT_GENERATING.value,
+            ClusterStatus.COMPLETE.value,
+        }
+        if cluster.status in approved_or_later:
+            raise ValueError(
+                f"Cluster already has status '{cluster.status}' — cannot re-approve"
+            )
+
+        # Load approved ClusterPage records
+        pages_result = await db.execute(
+            select(ClusterPage).where(
+                ClusterPage.cluster_id == cluster_id,
+                ClusterPage.is_approved == True,  # noqa: E712
+            )
+        )
+        approved_pages = list(pages_result.scalars().all())
+
+        # 400-equivalent: no approved pages
+        if not approved_pages:
+            raise ValueError("No approved pages found for this cluster")
+
+        crawled_page_ids: list[str] = []
+
+        try:
+            for cp in approved_pages:
+                # Create CrawledPage for the content pipeline
+                crawled_page = CrawledPage(
+                    project_id=cluster.project_id,
+                    normalized_url=cp.url_slug,
+                    source="cluster",
+                    status=CrawlStatus.COMPLETED.value,
+                    category="collection",
+                    title=cp.keyword,
+                )
+                db.add(crawled_page)
+                await db.flush()  # Get crawled_page.id
+
+                # Create PageKeywords for the content pipeline
+                page_keywords = PageKeywords(
+                    crawled_page_id=crawled_page.id,
+                    primary_keyword=cp.keyword,
+                    is_approved=True,
+                    is_priority=cp.role == "parent",
+                    search_volume=cp.search_volume,
+                    composite_score=cp.composite_score,
+                )
+                db.add(page_keywords)
+
+                # Link ClusterPage back to the new CrawledPage
+                cp.crawled_page_id = crawled_page.id
+
+                crawled_page_ids.append(crawled_page.id)
+
+            # Update cluster status
+            cluster.status = ClusterStatus.APPROVED.value
+
+            await db.commit()
+
+            logger.info(
+                "Cluster bulk approve complete",
+                extra={
+                    "cluster_id": cluster_id,
+                    "bridged_count": len(crawled_page_ids),
+                },
+            )
+
+            return {
+                "bridged_count": len(crawled_page_ids),
+                "crawled_page_ids": crawled_page_ids,
+            }
+
+        except Exception as e:
+            await db.rollback()
+            logger.error(
+                "Failed to bridge cluster pages to content pipeline",
+                extra={"cluster_id": cluster_id, "error": str(e)},
+                exc_info=True,
+            )
+            raise ValueError(
+                f"Cluster approval failed during persistence: {e}"
+            ) from e

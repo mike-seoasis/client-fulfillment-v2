@@ -179,3 +179,21 @@ after each iteration and it's included in prompts for context.
   - Pattern for orchestrators: timing with `time.perf_counter()`, try/except per stage, metadata dict for observability
   - All quality checks (mypy, ruff) pass clean
 ---
+
+## 2026-02-08 - S8-011
+- Implemented `bulk_approve_cluster(cluster_id, db)` static method on `ClusterKeywordService`
+- Bridges approved ClusterPage records into the content pipeline by creating CrawledPage + PageKeywords records
+- Validation: 409 if cluster status already 'approved' or later; 400 if no approved pages
+- For each approved ClusterPage: creates CrawledPage (source='cluster', status='completed', category='collection'), PageKeywords (is_approved=True, is_priority=True for parent role), and links ClusterPage.crawled_page_id
+- Updates KeywordCluster.status to 'approved' on success
+- Returns dict with bridged_count and crawled_page_ids
+- Added imports: `select` from sqlalchemy, `CrawledPage`/`CrawlStatus`, `PageKeywords`
+- **Files changed:**
+  - `backend/app/services/cluster_keyword.py` (added `bulk_approve_cluster` method + new imports)
+- **Learnings:**
+  - Method is `@staticmethod` since it only needs db session, no ClaudeClient/DataForSEO — keeps it callable without service instantiation
+  - SQLAlchemy Boolean comparison needs `== True` with `# noqa: E712` to suppress ruff's "use `is`" warning (SA doesn't support `is True`)
+  - `db.flush()` inside the loop to get each CrawledPage.id before creating the dependent PageKeywords and updating ClusterPage.crawled_page_id
+  - Pattern for status guards: set of valid statuses from enum values, check membership
+  - All quality checks (mypy, ruff) pass clean
+---
