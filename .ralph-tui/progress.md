@@ -126,3 +126,13 @@ after each iteration and it's included in prompts for context.
   - Using `opacity-50` on the row container plus `disabled` prop on checkbox provides clean visual distinction without extra CSS
   - The `allPages` vs `approvedPages` split keeps selection logic clean — `toggleAll` and `togglePage` only operate on approved page IDs while the list renders everything
 ---
+
+## 2026-02-08 - S7-009
+- Export summary and download section was already ~95% implemented by S7-007/S7-008
+- Added missing "SEO Description" and "Top Description (Metafield)" to the "Export includes" field list to match backend CSV columns and acceptance criteria
+- Changed "Meta description" label to "SEO Description" to match the actual CSV column name from the backend export service
+- Files changed: `frontend/src/app/projects/[id]/onboarding/export/page.tsx` (modified — updated export includes list)
+- **Learnings:**
+  - S7-007 built the full export page including summary count, field list, format indicator, download button with loading/disabled states — S7-009's scope was mostly already covered
+  - Field names in the UI "Export includes" list should match the backend CSV column names for consistency (e.g. "SEO Description" not "Meta description")
+---

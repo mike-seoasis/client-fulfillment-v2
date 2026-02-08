@@ -158,8 +158,9 @@
         "Button re-enables after download completes or fails"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Reference WIREFRAMES.md section 11 for the export summary layout."
+      "passes": true,
+      "notes": "Reference WIREFRAMES.md section 11 for the export summary layout.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S7-010",
@@ -204,6 +205,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-08T15:59:20.387Z"
+    "updatedAt": "2026-02-08T16:00:34.946Z"
   }
 }

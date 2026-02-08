@@ -366,7 +366,8 @@ export default function ExportPage() {
                 <li>Handle (URL slug)</li>
                 <li>Title</li>
                 <li>Body HTML</li>
-                <li>Meta description</li>
+                <li>SEO Description</li>
+                <li>Top Description (Metafield)</li>
               </ul>
             </div>
 
