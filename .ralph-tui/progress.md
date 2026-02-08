@@ -161,3 +161,21 @@ after each iteration and it's included in prompts for context.
   - URL slug generation: regex `[^a-z0-9\s-]` strips special chars, then `[\s-]+` collapses whitespace/hyphens, truncate at 60 chars with trailing hyphen strip
   - All quality checks (mypy, ruff) pass clean
 ---
+
+## 2026-02-08 - S8-010
+- Implemented `generate_cluster()` orchestrator method on `ClusterKeywordService`
+- Runs Stage 1 → Stage 2 → Stage 3 sequentially with `time.perf_counter()` timing
+- Creates `KeywordCluster` record with `status='suggestions_ready'` and `ClusterPage` records for each filtered candidate
+- Stores `generation_metadata` JSONB with all timing and count fields (stage1/2/3_time_ms, total_time_ms, candidates_generated/enriched/filtered, volume_unavailable)
+- Returns dict with `cluster_id`, `suggestions`, `generation_metadata`, `warnings`
+- Partial failure handling: Stage 2 (DataForSEO) failure adds warning and continues to Stage 3
+- Total failure handling: Stage 1 or Stage 3 failure raises `ValueError`, DB rollback on persistence failure
+- **Files changed:**
+  - `backend/app/services/cluster_keyword.py` (added `generate_cluster` method + `time`, `AsyncSession`, model imports)
+- **Learnings:**
+  - `_enrich_with_volume` already handles its own failure gracefully (sets `volume_unavailable` flag on candidates), so the orchestrator's Stage 2 error handling wraps the outer exception path plus checks the flag
+  - `db.flush()` after adding the cluster gets the `cluster.id` for FK references in `ClusterPage` records
+  - `db.rollback()` in the persistence except block ensures no partial cluster data is saved
+  - Pattern for orchestrators: timing with `time.perf_counter()`, try/except per stage, metadata dict for observability
+  - All quality checks (mypy, ruff) pass clean
+---

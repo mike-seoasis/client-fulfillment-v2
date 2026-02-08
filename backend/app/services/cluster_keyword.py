@@ -9,11 +9,15 @@ This service orchestrates keyword cluster generation by:
 import json
 import math
 import re
+import time
 from typing import Any
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
 from app.integrations.claude import ClaudeClient
 from app.integrations.dataforseo import DataForSEOClient
+from app.models.keyword_cluster import ClusterPage, ClusterStatus, KeywordCluster
 
 HAIKU_MODEL = "claude-haiku-4-5-20251001"
 
@@ -645,3 +649,166 @@ Example:
         )
 
         return results
+
+    async def generate_cluster(
+        self,
+        seed_keyword: str,
+        project_id: str,
+        brand_config: dict[str, Any],
+        db: AsyncSession,
+        name: str | None = None,
+    ) -> dict[str, Any]:
+        """Orchestrate cluster generation: Stage 1 → 2 → 3, then persist.
+
+        Runs the three pipeline stages sequentially:
+        1. LLM candidate generation (Claude Haiku)
+        2. DataForSEO volume enrichment (graceful degradation on failure)
+        3. LLM filtering and role assignment (Claude Haiku)
+
+        On success, creates a KeywordCluster record with status='suggestions_ready'
+        and ClusterPage records for each filtered candidate.
+
+        Args:
+            seed_keyword: The seed keyword to build the cluster around.
+            project_id: UUID of the parent project.
+            brand_config: The v2_schema dict from BrandConfig model.
+            db: AsyncSession for database operations.
+            name: Optional display name for the cluster. Defaults to
+                the seed keyword if not provided.
+
+        Returns:
+            Dict with keys: cluster_id, suggestions (list), generation_metadata,
+            warnings (list of strings).
+
+        Raises:
+            ValueError: If Stage 1 or Stage 3 fails (total failure).
+        """
+        warnings: list[str] = []
+        cluster_name = name or seed_keyword.strip()
+
+        # Build brand context
+        brand_context = self._build_brand_context(brand_config)
+
+        # --- Stage 1: Generate candidates ---
+        t1_start = time.perf_counter()
+        try:
+            candidates = await self._generate_candidates(seed_keyword, brand_context)
+        except Exception as e:
+            logger.error(
+                "Stage 1 (candidate generation) failed",
+                extra={"seed_keyword": seed_keyword, "error": str(e)},
+                exc_info=True,
+            )
+            raise ValueError(f"Cluster generation failed at Stage 1: {e}") from e
+        t1_ms = round((time.perf_counter() - t1_start) * 1000)
+
+        candidates_generated = len(candidates)
+
+        # --- Stage 2: Enrich with volume data ---
+        t2_start = time.perf_counter()
+        volume_unavailable = False
+        try:
+            candidates = await self._enrich_with_volume(candidates)
+            # Check if volume was unavailable (flag set by _enrich_with_volume)
+            if candidates and candidates[0].get("volume_unavailable"):
+                volume_unavailable = True
+                warnings.append(
+                    "Search volume data unavailable — DataForSEO lookup failed or not configured. "
+                    "Filtering proceeded without volume data."
+                )
+        except Exception as e:
+            logger.warning(
+                "Stage 2 (volume enrichment) failed, continuing without volume",
+                extra={"seed_keyword": seed_keyword, "error": str(e)},
+                exc_info=True,
+            )
+            volume_unavailable = True
+            warnings.append(
+                f"Search volume enrichment failed: {e}. "
+                "Filtering proceeded without volume data."
+                )
+        t2_ms = round((time.perf_counter() - t2_start) * 1000)
+
+        candidates_enriched = 0 if volume_unavailable else len(candidates)
+
+        # --- Stage 3: Filter and assign roles ---
+        t3_start = time.perf_counter()
+        try:
+            filtered = await self._filter_and_assign_roles(candidates, seed_keyword)
+        except Exception as e:
+            logger.error(
+                "Stage 3 (filtering) failed",
+                extra={"seed_keyword": seed_keyword, "error": str(e)},
+                exc_info=True,
+            )
+            raise ValueError(f"Cluster generation failed at Stage 3: {e}") from e
+        t3_ms = round((time.perf_counter() - t3_start) * 1000)
+
+        total_ms = t1_ms + t2_ms + t3_ms
+
+        generation_metadata: dict[str, Any] = {
+            "stage1_time_ms": t1_ms,
+            "stage2_time_ms": t2_ms,
+            "stage3_time_ms": t3_ms,
+            "total_time_ms": total_ms,
+            "candidates_generated": candidates_generated,
+            "candidates_enriched": candidates_enriched,
+            "candidates_filtered": len(filtered),
+            "volume_unavailable": volume_unavailable,
+        }
+
+        # --- Persist to database ---
+        try:
+            cluster = KeywordCluster(
+                project_id=project_id,
+                seed_keyword=seed_keyword.strip().lower(),
+                name=cluster_name,
+                status=ClusterStatus.SUGGESTIONS_READY.value,
+                generation_metadata=generation_metadata,
+            )
+            db.add(cluster)
+            await db.flush()  # Get cluster.id
+
+            for page_data in filtered:
+                cluster_page = ClusterPage(
+                    cluster_id=cluster.id,
+                    keyword=page_data["keyword"],
+                    role=page_data["role"],
+                    url_slug=page_data["url_slug"],
+                    expansion_strategy=page_data.get("expansion_strategy"),
+                    reasoning=page_data.get("reasoning"),
+                    search_volume=page_data.get("search_volume"),
+                    cpc=page_data.get("cpc"),
+                    competition=page_data.get("competition"),
+                    competition_level=page_data.get("competition_level"),
+                    composite_score=page_data.get("composite_score"),
+                )
+                db.add(cluster_page)
+
+            await db.commit()
+
+            logger.info(
+                "Cluster generation complete",
+                extra={
+                    "cluster_id": cluster.id,
+                    "seed_keyword": seed_keyword,
+                    "pages_created": len(filtered),
+                    "total_time_ms": total_ms,
+                },
+            )
+
+            return {
+                "cluster_id": cluster.id,
+                "suggestions": filtered,
+                "generation_metadata": generation_metadata,
+                "warnings": warnings,
+            }
+
+        except Exception as e:
+            await db.rollback()
+            logger.error(
+                "Failed to persist cluster to database",
+                extra={"seed_keyword": seed_keyword, "error": str(e)},
+                exc_info=True,
+            )
+            raise ValueError(f"Cluster generation failed during persistence: {e}") from e
