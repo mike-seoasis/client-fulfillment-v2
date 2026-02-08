@@ -4,6 +4,36 @@ import { useState, useRef, useCallback } from 'react';
 import { LexicalEditor, type LexicalEditorHandle } from './LexicalEditor';
 import type { TropeRange } from './HighlightPlugin';
 
+/**
+ * Pretty-print HTML with line breaks between block-level elements.
+ * Simple approach: split on `><` boundaries for block tags.
+ */
+function formatHtml(raw: string): string {
+  let html = raw.trim();
+
+  // Add newline after closing block tags followed by opening tags
+  // e.g. </p><h2 → </p>\n<h2
+  html = html.replace(
+    /(<\/(?:h[1-6]|p|div|ul|ol|li|section|article|blockquote)>)\s*(<)/gi,
+    '$1\n$2',
+  );
+
+  // Add newline before opening block tags if preceded by >
+  // e.g. >text</p><p → already handled above, but catch >< without closing tag
+  html = html.replace(
+    /(>)\s*(<(?:h[1-6]|p|div|ul|ol|li|section|article|blockquote|hr|br)[\s>])/gi,
+    '$1\n$2',
+  );
+
+  // Add blank line before headings for visual separation
+  html = html.replace(/\n(<h[1-6][\s>])/gi, '\n\n$1');
+
+  // Indent list items
+  html = html.replace(/\n(<li[\s>])/gi, '\n  $1');
+
+  return html;
+}
+
 type ViewMode = 'rendered' | 'html';
 
 interface ContentEditorWithSourceProps {
@@ -43,15 +73,20 @@ export function ContentEditorWithSource({
   const switchToHtmlSource = useCallback(() => {
     if (editorRef.current) {
       const currentHtml = editorRef.current.getHtml();
-      setHtmlSource(currentHtml);
+      setHtmlSource(formatHtml(currentHtml));
+    } else {
+      setHtmlSource((prev) => formatHtml(prev));
     }
     setActiveTab('html');
   }, []);
 
   const switchToRendered = useCallback(() => {
+    // Strip formatting whitespace before feeding back to Lexical
+    const compact = htmlSource.split('\n').map((l) => l.trim()).join('');
+    setHtmlSource(compact);
     setEditorKey((k) => k + 1);
     setActiveTab('rendered');
-    onChange?.(htmlSource);
+    onChange?.(compact);
   }, [htmlSource, onChange]);
 
   const handleHtmlSourceChange = useCallback(
@@ -123,7 +158,7 @@ export function ContentEditorWithSource({
             onChange={handleHtmlSourceChange}
             onBlur={onBlur}
             rows={20}
-            className="w-full px-4 py-3 text-xs font-mono bg-warm-900 text-sand-200 border border-warm-700 rounded-sm focus:outline-none focus:ring-2 focus:ring-palm-400/30 transition-all resize-none leading-relaxed"
+            className="w-full px-4 py-3 text-sm font-mono bg-warm-50 text-warm-800 border border-sand-400 rounded-sm focus:outline-none focus:ring-2 focus:ring-palm-400/30 transition-all resize-y leading-loose"
           />
         </div>
       )}

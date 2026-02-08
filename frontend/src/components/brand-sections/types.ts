@@ -150,6 +150,7 @@ export interface VocabularyData {
   power_words?: string[];
   word_substitutions?: WordSubstitution[];
   banned_words?: string[];
+  competitors?: string[];
   industry_terms?: IndustryTerm[];
   signature_phrases?: string[];
 }

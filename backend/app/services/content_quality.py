@@ -101,6 +101,7 @@ def run_quality_checks(content: PageContent, brand_config: dict[str, Any]) -> Qu
     6. Tier 1 AI words (universal banned list)
     7. Tier 2 AI words (max 1 per piece)
     8. Negation/contrast pattern (max 1 per piece)
+    9. Competitor brand names from vocabulary.competitors
 
     Args:
         content: PageContent with generated fields.
@@ -139,6 +140,9 @@ def run_quality_checks(content: PageContent, brand_config: dict[str, Any]) -> Qu
     # Check 8: Negation/contrast pattern (max 1 per piece)
     issues.extend(_check_negation_contrast(fields))
 
+    # Check 9: Competitor brand names
+    issues.extend(_check_competitor_names(fields, brand_config))
+
     result = QualityResult(
         passed=len(issues) == 0,
         issues=issues,
@@ -161,6 +165,19 @@ def _get_content_fields(content: PageContent) -> dict[str, str]:
     return result
 
 
+def _strip_html_tags(text: str) -> str:
+    """Strip HTML tags from text for clean context strings."""
+    return re.sub(r"<[^>]+>", " ", text).replace("  ", " ").strip()
+
+
+def _extract_context(text: str, start: int, end: int, pad: int = 30) -> str:
+    """Extract context around a match, stripping HTML and adding ellipsis."""
+    ctx_start = max(0, start - pad)
+    ctx_end = min(len(text), end + pad)
+    raw = text[ctx_start:ctx_end].strip()
+    return f"...{_strip_html_tags(raw)}..."
+
+
 def _check_banned_words(
     fields: dict[str, str],
     brand_config: dict[str, Any],
@@ -177,26 +194,17 @@ def _check_banned_words(
         return issues
 
     for field_name, text in fields.items():
-        text_lower = text.lower()
         for word in banned_words:
-            word_lower = word.lower()
-            # Use word boundary matching for accurate detection
-            pattern = re.compile(r"\b" + re.escape(word_lower) + r"\b", re.IGNORECASE)
-            if pattern.search(text_lower):
-                # Find surrounding context
-                match = pattern.search(text)
-                if match:
-                    start = max(0, match.start() - 30)
-                    end = min(len(text), match.end() + 30)
-                    context = text[start:end].strip()
-                    issues.append(
-                        QualityIssue(
-                            type="banned_word",
-                            field=field_name,
-                            description=f'Banned word "{word}" detected',
-                            context=f"...{context}...",
-                        )
+            pattern = re.compile(r"\b" + re.escape(word) + r"\b", re.IGNORECASE)
+            for match in pattern.finditer(text):
+                issues.append(
+                    QualityIssue(
+                        type="banned_word",
+                        field=field_name,
+                        description=f'Banned word "{word}" detected',
+                        context=_extract_context(text, match.start(), match.end()),
                     )
+                )
 
     return issues
 
@@ -207,15 +215,12 @@ def _check_em_dashes(fields: dict[str, str]) -> list[QualityIssue]:
 
     for field_name, text in fields.items():
         for match in re.finditer("—", text):
-            start = max(0, match.start() - 30)
-            end = min(len(text), match.end() + 30)
-            context = text[start:end].strip()
             issues.append(
                 QualityIssue(
                     type="em_dash",
                     field=field_name,
                     description="Em dash character detected",
-                    context=f"...{context}...",
+                    context=_extract_context(text, match.start(), match.end()),
                 )
             )
 
@@ -230,15 +235,12 @@ def _check_ai_openers(fields: dict[str, str]) -> list[QualityIssue]:
         for pattern_str in AI_OPENER_PATTERNS:
             pattern = re.compile(pattern_str, re.IGNORECASE)
             for match in pattern.finditer(text):
-                start = max(0, match.start() - 10)
-                end = min(len(text), match.end() + 40)
-                context = text[start:end].strip()
                 issues.append(
                     QualityIssue(
                         type="ai_pattern",
                         field=field_name,
-                        description=f'AI opener pattern detected: "{match.group()}"',
-                        context=f"...{context}...",
+                        description=f'AI opener pattern detected: "{_strip_html_tags(match.group())}"',
+                        context=_extract_context(text, match.start(), match.end(), pad=40),
                     )
                 )
 
@@ -246,55 +248,57 @@ def _check_ai_openers(fields: dict[str, str]) -> list[QualityIssue]:
 
 
 def _check_triplet_lists(fields: dict[str, str]) -> list[QualityIssue]:
-    """Check 4: Flag if more than 2 'X, Y, and Z' pattern instances across all fields."""
+    """Check 4: Flag each 'X, Y, and Z' pattern instance if total exceeds 2."""
     issues: list[QualityIssue] = []
-    all_matches: list[tuple[str, str]] = []  # (field_name, matched_text)
+    all_matches: list[tuple[str, re.Match]] = []
 
     for field_name, text in fields.items():
         for match in TRIPLET_PATTERN.finditer(text):
-            all_matches.append((field_name, match.group().strip()))
+            all_matches.append((field_name, match))
 
     if len(all_matches) > 2:
-        examples = [f"{fname}: \"{matched}\"" for fname, matched in all_matches[:3]]
-        issues.append(
-            QualityIssue(
-                type="triplet_excess",
-                field="multiple",
-                description=f"Excessive triplet lists: {len(all_matches)} instances (max 2)",
-                context="; ".join(examples),
+        for field_name, match in all_matches:
+            text = fields[field_name]
+            issues.append(
+                QualityIssue(
+                    type="triplet_excess",
+                    field=field_name,
+                    description=f"Triplet list ({len(all_matches)} total, max 2)",
+                    context=_extract_context(text, match.start(), match.end()),
+                )
             )
-        )
 
     return issues
 
 
 def _check_rhetorical_questions(fields: dict[str, str]) -> list[QualityIssue]:
-    """Check 5: Flag if more than 1 rhetorical question outside FAQ section."""
+    """Check 5: Flag each rhetorical question outside FAQ if total exceeds 1."""
     issues: list[QualityIssue] = []
-    all_questions: list[tuple[str, str]] = []  # (field_name, question_text)
+    all_questions: list[tuple[str, re.Match]] = []
 
     for field_name, text in fields.items():
-        # Strip FAQ section from bottom_description before checking
         check_text = text
         if field_name == "bottom_description":
             check_text = _strip_faq_section(text)
 
-        # Find sentences ending with ? that are not in FAQ context
         for match in re.finditer(r"[^.!?\n]*\?", check_text):
             question = match.group().strip()
-            if len(question) > 5:  # Skip trivially short matches
-                all_questions.append((field_name, question))
+            if len(question) > 5:
+                all_questions.append((field_name, match))
 
     if len(all_questions) > 1:
-        examples = [f"{fname}: \"{q}\"" for fname, q in all_questions[:3]]
-        issues.append(
-            QualityIssue(
-                type="rhetorical_excess",
-                field="multiple",
-                description=f"Excessive rhetorical questions: {len(all_questions)} found outside FAQ (max 1)",
-                context="; ".join(examples),
+        for field_name, match in all_questions:
+            text = fields[field_name]
+            if field_name == "bottom_description":
+                text = _strip_faq_section(text)
+            issues.append(
+                QualityIssue(
+                    type="rhetorical_excess",
+                    field=field_name,
+                    description=f"Rhetorical question ({len(all_questions)} total, max 1)",
+                    context=_extract_context(text, match.start(), match.end()),
+                )
             )
-        )
 
     return issues
 
@@ -326,15 +330,12 @@ def _check_tier1_ai_words(fields: dict[str, str]) -> list[QualityIssue]:
         for word in TIER1_AI_WORDS:
             pattern = re.compile(r"\b" + re.escape(word) + r"\b", re.IGNORECASE)
             for match in pattern.finditer(text):
-                start = max(0, match.start() - 30)
-                end = min(len(text), match.end() + 30)
-                context = text[start:end].strip()
                 issues.append(
                     QualityIssue(
                         type="tier1_ai_word",
                         field=field_name,
                         description=f'Tier 1 AI word "{word}" detected',
-                        context=f"...{context}...",
+                        context=_extract_context(text, match.start(), match.end()),
                     )
                 )
 
@@ -342,49 +343,82 @@ def _check_tier1_ai_words(fields: dict[str, str]) -> list[QualityIssue]:
 
 
 def _check_tier2_ai_words(fields: dict[str, str]) -> list[QualityIssue]:
-    """Check 7: Flag if more than 1 Tier 2 AI word across all fields."""
+    """Check 7: Flag each Tier 2 AI word if total exceeds 1."""
     issues: list[QualityIssue] = []
-    found_words: list[tuple[str, str]] = []  # (field_name, word)
+    found: list[tuple[str, str, re.Match]] = []
 
     for field_name, text in fields.items():
         for word in TIER2_AI_WORDS:
             pattern = re.compile(r"\b" + re.escape(word) + r"\b", re.IGNORECASE)
-            if pattern.search(text):
-                found_words.append((field_name, word))
+            match = pattern.search(text)
+            if match:
+                found.append((field_name, word, match))
 
-    if len(found_words) > 1:
-        word_list = ", ".join(f'"{w}"' for _, w in found_words)
-        fields_list = ", ".join(sorted({f for f, _ in found_words}))
-        issues.append(
-            QualityIssue(
-                type="tier2_ai_excess",
-                field=fields_list,
-                description=f"Tier 2 AI words exceed limit: {len(found_words)} found (max 1 per piece)",
-                context=f"Words found: {word_list}",
+    if len(found) > 1:
+        for field_name, word, match in found:
+            text = fields[field_name]
+            issues.append(
+                QualityIssue(
+                    type="tier2_ai_excess",
+                    field=field_name,
+                    description=f'Tier 2 AI word "{word}" ({len(found)} total, max 1)',
+                    context=_extract_context(text, match.start(), match.end()),
+                )
             )
-        )
 
     return issues
 
 
 def _check_negation_contrast(fields: dict[str, str]) -> list[QualityIssue]:
-    """Check 8: Flag if more than 1 negation/contrast pattern across all fields."""
+    """Check 8: Flag each negation/contrast pattern if total exceeds 1."""
     issues: list[QualityIssue] = []
-    all_matches: list[tuple[str, str]] = []  # (field_name, matched_text)
+    all_matches: list[tuple[str, re.Match]] = []
 
     for field_name, text in fields.items():
         for match in NEGATION_PATTERN.finditer(text):
-            all_matches.append((field_name, match.group().strip()))
+            all_matches.append((field_name, match))
 
     if len(all_matches) > 1:
-        examples = [f'{fname}: "{matched}"' for fname, matched in all_matches[:3]]
-        issues.append(
-            QualityIssue(
-                type="negation_contrast",
-                field="multiple",
-                description=f"Excessive negation/contrast patterns: {len(all_matches)} found (max 1)",
-                context="; ".join(examples),
+        for field_name, match in all_matches:
+            text = fields[field_name]
+            issues.append(
+                QualityIssue(
+                    type="negation_contrast",
+                    field=field_name,
+                    description=f"Negation/contrast pattern ({len(all_matches)} total, max 1)",
+                    context=_extract_context(text, match.start(), match.end()),
+                )
             )
-        )
+
+    return issues
+
+
+def _check_competitor_names(
+    fields: dict[str, str],
+    brand_config: dict[str, Any],
+) -> list[QualityIssue]:
+    """Check 9: Flag any competitor brand names found in content."""
+    issues: list[QualityIssue] = []
+
+    vocabulary = brand_config.get("vocabulary", {})
+    if not isinstance(vocabulary, dict):
+        return issues
+
+    competitors: list[str] = vocabulary.get("competitors", [])
+    if not competitors:
+        return issues
+
+    for field_name, text in fields.items():
+        for name in competitors:
+            pattern = re.compile(r"\b" + re.escape(name) + r"\b", re.IGNORECASE)
+            for match in pattern.finditer(text):
+                issues.append(
+                    QualityIssue(
+                        type="competitor_name",
+                        field=field_name,
+                        description=f'Competitor name "{name}" detected',
+                        context=_extract_context(text, match.start(), match.end()),
+                    )
+                )
 
     return issues

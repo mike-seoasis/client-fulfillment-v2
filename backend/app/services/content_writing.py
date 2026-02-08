@@ -15,7 +15,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
-from app.integrations.claude import ClaudeClient, CompletionResult
+from app.integrations.claude import ClaudeClient, CompletionResult, get_api_key
 from app.models.content_brief import ContentBrief
 from app.models.crawled_page import CrawledPage
 from app.models.page_content import ContentStatus, PageContent
@@ -32,6 +32,83 @@ CONTENT_WRITING_TIMEOUT = 180.0  # Longer timeout for content generation (POP ta
 # Default word count target when ContentBrief is missing
 DEFAULT_WORD_COUNT_MIN = 300
 DEFAULT_WORD_COUNT_MAX = 400
+
+
+# Marketplace domains to skip when extracting competitor brand names from URLs
+_MARKETPLACE_DOMAINS = frozenset({
+    "amazon", "ebay", "walmart", "target", "etsy", "alibaba",
+    "aliexpress", "wish", "wayfair", "overstock", "bestbuy",
+    "homedepot", "lowes", "costco", "samsclub", "kohls",
+    "macys", "nordstrom", "zappos", "chewy", "google",
+    "youtube", "facebook", "instagram", "pinterest", "tiktok",
+    "reddit", "twitter", "linkedin", "yelp", "bbb",
+})
+
+
+def extract_competitor_brands(competitors: list[dict]) -> list[str]:
+    """Extract brand names from POP competitor URLs.
+
+    Parses domains, strips 'www.', takes the second-level domain,
+    and skips known marketplaces.
+
+    Args:
+        competitors: List of competitor dicts with 'url' keys.
+
+    Returns:
+        List of brand name strings extracted from domains.
+    """
+    from urllib.parse import urlparse
+
+    brands: list[str] = []
+    seen: set[str] = set()
+
+    for comp in competitors:
+        url = comp.get("url", "")
+        if not url:
+            continue
+
+        try:
+            parsed = urlparse(url if "://" in url else f"https://{url}")
+            host = parsed.hostname or ""
+        except Exception:
+            continue
+
+        # Strip www. and extract second-level domain
+        host = host.lower().removeprefix("www.")
+        sld = host.split(".")[0] if "." in host else host
+        if not sld:
+            continue
+
+        # Skip marketplaces and social platforms
+        if sld in _MARKETPLACE_DOMAINS:
+            continue
+
+        # Deduplicate
+        if sld in seen:
+            continue
+        seen.add(sld)
+        brands.append(sld)
+
+    return brands
+
+
+def is_competitor_term(phrase: str, competitor_names: list[str]) -> bool:
+    """Check if a phrase contains a competitor brand name.
+
+    Case-insensitive substring match against each competitor name.
+
+    Args:
+        phrase: The LSI term or phrase to check.
+        competitor_names: List of competitor brand names.
+
+    Returns:
+        True if phrase contains any competitor name.
+    """
+    phrase_lower = phrase.lower()
+    for name in competitor_names:
+        if name.lower() in phrase_lower:
+            return True
+    return False
 
 
 def _get_word_count_override(brand_config: dict[str, Any]) -> int | None:
@@ -129,6 +206,8 @@ def _build_system_prompt(brand_config: dict[str, Any]) -> str:
         "",
         "Avoid these patterns:",
         "- \"It's not just X, it's Y\" (max 1 per piece)",
+        "- Triplet lists: \"X, Y, and Z\" — max 2 per piece. Vary your list structures: "
+        "use pairs, use \"including\", use \"such as\", or restructure as separate sentences",
         "- Three parallel items in a row (\"Fast. Simple. Powerful.\")",
         "- Rhetorical question then answer (\"The result? ...\")",
         "- Em dashes (—) — use commas or periods instead",
@@ -227,8 +306,16 @@ def _build_seo_targets_section(
     our own reconstructed version. Falls back to parsed ContentBrief fields
     if cleanedContentBrief is not available (e.g., mock mode).
 
+    Filters out terms that match competitor brand names from vocabulary.competitors.
     Applies brand_config.content_limits.max_word_count cap when set.
     """
+    # Load competitor names for filtering
+    competitor_names: list[str] = []
+    if brand_config:
+        vocabulary = brand_config.get("vocabulary", {})
+        if isinstance(vocabulary, dict):
+            competitor_names = vocabulary.get("competitors", []) or []
+
     lines = ["## SEO Targets"]
     lines.append(f"- **Primary Keyword:** {keyword}")
 
@@ -242,10 +329,10 @@ def _build_seo_targets_section(
     cb = raw.get("cleanedContentBrief")
 
     if isinstance(cb, dict) and cb:
-        lines.extend(_build_from_cleaned_brief(cb, keyword, content_brief, raw))
+        lines.extend(_build_from_cleaned_brief(cb, keyword, content_brief, raw, competitor_names))
     else:
         # Fallback: use parsed ContentBrief fields (mock mode)
-        lines.extend(_build_from_parsed_brief(content_brief))
+        lines.extend(_build_from_parsed_brief(content_brief, competitor_names))
 
     return "\n".join(lines)
 
@@ -255,9 +342,11 @@ def _build_from_cleaned_brief(
     keyword: str,
     content_brief: ContentBrief,
     raw: dict[str, Any],
+    competitor_names: list[str] | None = None,
 ) -> list[str]:
     """Build SEO targets from POP's cleanedContentBrief data."""
     lines: list[str] = []
+    _competitors = competitor_names or []
 
     # --- Title tag term targets ---
     title_terms = cb.get("title") or cb.get("pageTitle") or []
@@ -268,6 +357,8 @@ def _build_from_cleaned_brief(
             term = item.get("term", {})
             brief = item.get("contentBrief", {})
             phrase = term.get("phrase", "")
+            if _competitors and is_competitor_term(phrase, _competitors):
+                continue
             term_type = term.get("type", "")
             target = brief.get("target")
             t_min = brief.get("targetMin")
@@ -289,6 +380,8 @@ def _build_from_cleaned_brief(
             term = item.get("term", {})
             brief = item.get("contentBrief", {})
             phrase = term.get("phrase", "")
+            if _competitors and is_competitor_term(phrase, _competitors):
+                continue
             term_type = term.get("type", "")
             t_min = brief.get("targetMin")
             count_str = _format_min_target_count(t_min)
@@ -308,6 +401,8 @@ def _build_from_cleaned_brief(
             term = item.get("term", {})
             brief = item.get("contentBrief", {})
             phrase = term.get("phrase", "")
+            if _competitors and is_competitor_term(phrase, _competitors):
+                continue
             term_type = term.get("type", "")
             t_min = brief.get("targetMin")
             count_str = _format_min_target_count(t_min)
@@ -392,15 +487,19 @@ def _build_from_cleaned_brief(
 
 def _build_from_parsed_brief(
     content_brief: ContentBrief,
+    competitor_names: list[str] | None = None,
 ) -> list[str]:
     """Fallback: build SEO targets from parsed ContentBrief fields (mock mode)."""
     lines: list[str] = []
+    _competitors = competitor_names or []
 
     lsi_terms: list[dict[str, Any]] = content_brief.lsi_terms or []
     if lsi_terms:
         lines.append("- **LSI Terms:**")
         for term in lsi_terms:
             phrase = term.get("phrase", "")
+            if _competitors and is_competitor_term(phrase, _competitors):
+                continue
             weight = term.get("weight", 0)
             avg_count = term.get("averageCount", 0)
             lines.append(
@@ -448,22 +547,33 @@ def _format_min_target_count(target_min: int | None) -> str:
 
 
 def _build_brand_voice_section(brand_config: dict[str, Any]) -> str | None:
-    """Build the ## Brand Voice section with banned words only.
+    """Build the ## Brand Voice section with banned words and competitor exclusions.
 
     The full brand guidelines (ai_prompt_snippet) are already included in the
     system prompt, so we only add vocabulary constraints here to avoid duplication.
 
-    Returns None if no banned words are configured.
+    Returns None if no banned words or competitor names are configured.
     """
     vocabulary = brand_config.get("vocabulary", {})
     if not isinstance(vocabulary, dict):
         return None
 
+    parts: list[str] = []
+
     banned_words: list[str] = vocabulary.get("banned_words", [])
-    if not banned_words:
+    if banned_words:
+        parts.append(f"**Banned Words:** {', '.join(banned_words)}")
+
+    competitors: list[str] = vocabulary.get("competitors", [])
+    if competitors:
+        parts.append(
+            f"**Competitor Brands (never mention):** {', '.join(competitors)}"
+        )
+
+    if not parts:
         return None
 
-    return f"## Brand Voice\n**Banned Words:** {', '.join(banned_words)}"
+    return "## Brand Voice\n" + "\n".join(parts)
 
 
 def _build_output_format_section(
@@ -642,8 +752,9 @@ async def generate_content(
     db.add(user_log)
     await db.flush()
 
-    # Call Claude Sonnet
+    # Call Claude Sonnet — explicit api_key for background task context
     client = ClaudeClient(
+        api_key=get_api_key(),
         model=CONTENT_WRITING_MODEL,
         max_tokens=CONTENT_WRITING_MAX_TOKENS,
         timeout=CONTENT_WRITING_TIMEOUT,
@@ -732,6 +843,7 @@ async def _retry_with_strict_prompt(
     await db.flush()
 
     retry_client = ClaudeClient(
+        api_key=get_api_key(),
         model=CONTENT_WRITING_MODEL,
         max_tokens=CONTENT_WRITING_MAX_TOKENS,
         timeout=CONTENT_WRITING_TIMEOUT,

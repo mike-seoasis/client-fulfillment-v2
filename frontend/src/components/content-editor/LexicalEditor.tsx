@@ -5,16 +5,18 @@ import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
 import { ContentEditable } from '@lexical/react/LexicalContentEditable';
 import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
-import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { ListPlugin } from '@lexical/react/LexicalListPlugin';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { ListNode, ListItemNode } from '@lexical/list';
+import { LinkNode } from '@lexical/link';
+import { LinkPlugin } from '@lexical/react/LexicalLinkPlugin';
 import { $generateNodesFromDOM } from '@lexical/html';
 import { $generateHtmlFromNodes } from '@lexical/html';
 import { $getRoot, $insertNodes, type EditorState, type LexicalEditor as LexicalEditorType } from 'lexical';
 import { HighlightNode, HighlightPlugin, type TropeRange } from './HighlightPlugin';
+import { ToolbarPlugin } from './ToolbarPlugin';
 
 const theme = {
   paragraph: 'mb-3 leading-relaxed text-warm-gray-800',
@@ -31,6 +33,7 @@ const theme = {
     ol: 'list-decimal ml-6 mb-3 text-warm-gray-800',
     listitem: 'mb-1 leading-relaxed',
   },
+  link: 'text-lagoon-600 underline hover:text-lagoon-800 cursor-pointer',
 };
 
 interface HtmlLoaderProps {
@@ -39,19 +42,60 @@ interface HtmlLoaderProps {
 
 function HtmlLoaderPlugin({ initialHtml }: HtmlLoaderProps) {
   const [editor] = useLexicalComposerContext();
+  // Capture initial value in a ref so we only load HTML once per mount.
+  // The component is re-keyed when switching back from HTML source view,
+  // so a fresh mount always picks up the latest HTML.
+  const initialHtmlRef = useRef(initialHtml);
 
   useEffect(() => {
-    if (!initialHtml) return;
+    const html = initialHtmlRef.current;
+    if (!html) return;
 
     editor.update(() => {
       const parser = new DOMParser();
-      const dom = parser.parseFromString(initialHtml, 'text/html');
+      const dom = parser.parseFromString(html, 'text/html');
       const nodes = $generateNodesFromDOM(editor, dom);
       const root = $getRoot();
       root.clear();
       $insertNodes(nodes);
     });
-  }, [editor, initialHtml]);
+  }, [editor]);
+
+  return null;
+}
+
+// Strip highlight wrapper spans so exported HTML stays clean
+function stripHighlightSpans(html: string): string {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const hlSpans = doc.querySelectorAll('.hl-keyword, .hl-keyword-var, .hl-lsi, .hl-trope');
+  hlSpans.forEach((span) => {
+    const parent = span.parentNode;
+    if (!parent) return;
+    while (span.firstChild) {
+      parent.insertBefore(span.firstChild, span);
+    }
+    parent.removeChild(span);
+  });
+  return doc.body.innerHTML;
+}
+
+// Custom OnChangePlugin that skips highlight-plugin tagged updates
+function FilteredOnChangePlugin({
+  onChange,
+  ignoreSelectionChange,
+}: {
+  onChange: (editorState: EditorState, editor: LexicalEditorType) => void;
+  ignoreSelectionChange?: boolean;
+}) {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    return editor.registerUpdateListener(({ editorState, tags, dirtyElements, dirtyLeaves }) => {
+      if (tags.has('highlight-plugin')) return;
+      if (ignoreSelectionChange && dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
+      onChange(editorState, editor);
+    });
+  }, [editor, onChange, ignoreSelectionChange]);
 
   return null;
 }
@@ -90,7 +134,7 @@ export const LexicalEditor = forwardRef<LexicalEditorHandle, LexicalEditorProps>
         const editor = editorRef.current;
         if (editor) {
           editor.read(() => {
-            html = $generateHtmlFromNodes(editor, null);
+            html = stripHighlightSpans($generateHtmlFromNodes(editor, null));
           });
         }
         return html;
@@ -100,7 +144,7 @@ export const LexicalEditor = forwardRef<LexicalEditorHandle, LexicalEditorProps>
     const initialConfig = {
       namespace: 'ContentEditor',
       theme,
-      nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, HighlightNode],
+      nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, HighlightNode],
       onError: (error: Error) => {
         console.error('Lexical error:', error);
       },
@@ -110,8 +154,8 @@ export const LexicalEditor = forwardRef<LexicalEditorHandle, LexicalEditorProps>
       (_editorState: EditorState, editor: LexicalEditorType) => {
         if (!onChange) return;
         editor.read(() => {
-          const html = $generateHtmlFromNodes(editor, null);
-          onChange(html);
+          const raw = $generateHtmlFromNodes(editor, null);
+          onChange(stripHighlightSpans(raw));
         });
       },
       [onChange],
@@ -120,6 +164,7 @@ export const LexicalEditor = forwardRef<LexicalEditorHandle, LexicalEditorProps>
     return (
       <LexicalComposer initialConfig={initialConfig}>
         <div className={`relative ${className}`}>
+          <ToolbarPlugin />
           <RichTextPlugin
             contentEditable={
               <ContentEditable className="min-h-[200px] outline-none px-4 py-3 text-warm-gray-800 leading-relaxed" />
@@ -129,7 +174,8 @@ export const LexicalEditor = forwardRef<LexicalEditorHandle, LexicalEditorProps>
           />
           <HistoryPlugin />
           <ListPlugin />
-          <OnChangePlugin onChange={handleChange} ignoreSelectionChange />
+          <LinkPlugin />
+          <FilteredOnChangePlugin onChange={handleChange} ignoreSelectionChange />
           <HtmlLoaderPlugin initialHtml={initialHtml} />
           <EditorRefPlugin editorRef={editorRef} />
           {primaryKeyword && variations && lsiTerms && tropeRanges && (

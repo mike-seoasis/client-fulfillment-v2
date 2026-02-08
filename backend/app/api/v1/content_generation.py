@@ -511,13 +511,6 @@ async def approve_content(
 
     content = page.page_content
 
-    # Only allow approval of completed content
-    if content.status != ContentStatus.COMPLETE.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot approve content with status '{content.status}'. Content must be 'complete'.",
-        )
-
     # Set approval state
     content.is_approved = value
     content.approved_at = datetime.now(UTC) if value else None

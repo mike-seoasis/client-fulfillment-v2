@@ -318,9 +318,11 @@ Example: ["keyword one", "keyword two", "keyword three"]"""
             return keywords
 
         except Exception as e:
-            # Log error
-            logger.warning(
-                "Keyword generation failed, using fallback",
+            # Log error — do NOT fall back to page title, as that creates
+            # confusing fake keywords. Return empty list so the pipeline
+            # fails cleanly and the user sees a clear error.
+            logger.error(
+                "Keyword generation failed",
                 extra={
                     "url": url[:100],
                     "error": str(e),
@@ -337,23 +339,7 @@ Example: ["keyword one", "keyword two", "keyword three"]"""
                 }
             )
 
-            # Fallback: extract keywords from title and H1
-            fallback_keywords: list[str] = []
-            if title:
-                fallback_keywords.append(title.strip().lower())
-            if h1 and (not title or h1.strip().lower() != title.strip().lower()):
-                fallback_keywords.append(h1.strip().lower())
-
-            logger.info(
-                "Using fallback keywords from title/H1",
-                extra={
-                    "url": url[:100],
-                    "fallback_count": len(fallback_keywords),
-                },
-            )
-
-            self._stats.keywords_generated += len(fallback_keywords)
-            return fallback_keywords
+            return []
 
     async def enrich_with_volume(
         self,

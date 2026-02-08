@@ -1330,6 +1330,9 @@ class BrandConfigService:
                 errors.append(error_msg)
                 continue
 
+        # Post-processing: seed vocabulary.competitors from competitor_context
+        _seed_competitors_from_context(generated_sections, project_id)
+
         # Log completion
         logger.info(
             "Synthesis phase completed",
@@ -1811,3 +1814,62 @@ class BrandConfigService:
         )
 
         return brand_config
+
+
+def _seed_competitors_from_context(
+    generated_sections: dict[str, Any],
+    project_id: str,
+) -> None:
+    """Back-fill vocabulary.competitors from competitor_context.direct_competitors.
+
+    After all sections are generated, extracts competitor names from the
+    competitor_context section and stores them in vocabulary.competitors.
+    This gives users a solid starting list of competitor brands from day one.
+
+    Mutates generated_sections in place.
+    """
+    competitor_context = generated_sections.get("competitor_context")
+    if not isinstance(competitor_context, dict):
+        return
+
+    direct_competitors = competitor_context.get("direct_competitors", [])
+    if not isinstance(direct_competitors, list) or not direct_competitors:
+        return
+
+    # Extract competitor names
+    competitor_names: list[str] = []
+    for comp in direct_competitors:
+        if isinstance(comp, dict):
+            name = comp.get("name", "").strip()
+            if name:
+                competitor_names.append(name)
+
+    if not competitor_names:
+        return
+
+    # Ensure vocabulary section exists
+    vocabulary = generated_sections.get("vocabulary")
+    if not isinstance(vocabulary, dict):
+        vocabulary = {}
+        generated_sections["vocabulary"] = vocabulary
+
+    # Merge with any existing competitors (case-insensitive dedup)
+    existing = vocabulary.get("competitors", [])
+    if not isinstance(existing, list):
+        existing = []
+
+    existing_lower = {name.lower() for name in existing}
+    for name in competitor_names:
+        if name.lower() not in existing_lower:
+            existing.append(name)
+            existing_lower.add(name.lower())
+
+    vocabulary["competitors"] = existing
+
+    logger.info(
+        "Seeded vocabulary.competitors from competitor_context",
+        extra={
+            "project_id": project_id,
+            "competitor_count": len(existing),
+        },
+    )

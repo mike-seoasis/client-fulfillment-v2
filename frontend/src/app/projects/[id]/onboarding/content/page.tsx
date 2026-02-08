@@ -418,9 +418,11 @@ function WarningIcon({ className }: { className?: string }) {
 function ReviewTable({
   pages,
   projectId,
+  onInspect,
 }: {
   pages: PageGenerationStatusItem[];
   projectId: string;
+  onInspect: (pageId: string, pageUrl: string) => void;
 }) {
   // Only show completed pages in the review table
   const completedPages = pages.filter((p) => p.status === 'complete');
@@ -428,12 +430,13 @@ function ReviewTable({
   return (
     <div className="border border-cream-500 rounded-sm overflow-hidden">
       {/* Table header */}
-      <div className="grid grid-cols-[1fr_1fr_100px_120px_80px] gap-4 px-4 py-2.5 bg-cream-100 border-b border-cream-500 text-xs font-medium text-warm-gray-600 uppercase tracking-wide">
+      <div className="grid grid-cols-[1fr_1fr_100px_120px_80px_60px] gap-4 px-4 py-2.5 bg-cream-100 border-b border-cream-500 text-xs font-medium text-warm-gray-600 uppercase tracking-wide">
         <div>Page URL</div>
         <div>Primary Keyword</div>
         <div className="text-center">QA Status</div>
         <div className="text-center">Approval</div>
         <div className="text-center">Action</div>
+        <div className="text-center"></div>
       </div>
       {/* Table body */}
       <div className="max-h-[28rem] overflow-y-auto divide-y divide-cream-300">
@@ -450,7 +453,7 @@ function ReviewTable({
           return (
             <div
               key={page.page_id}
-              className="grid grid-cols-[1fr_1fr_100px_120px_80px] gap-4 px-4 py-3 items-center hover:bg-cream-50 transition-colors"
+              className="grid grid-cols-[1fr_1fr_100px_120px_80px_60px] gap-4 px-4 py-3 items-center hover:bg-cream-50 transition-colors"
             >
               {/* Page URL */}
               <p className="text-sm text-warm-gray-900 truncate" title={page.url}>
@@ -500,6 +503,18 @@ function ReviewTable({
                 >
                   Review
                 </Link>
+              </div>
+
+              {/* Inspect */}
+              <div className="flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => onInspect(page.page_id, page.url)}
+                  className="inline-flex items-center text-xs text-warm-gray-500 hover:text-lagoon-600 px-1.5 py-1 rounded-sm hover:bg-cream-100 transition-colors"
+                  title="Inspect prompts"
+                >
+                  <CodeIcon className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
           );
@@ -838,7 +853,7 @@ export default function ContentGenerationPage() {
 
         {/* Review table - shown after generation complete/failed */}
         {hasPages && !isGenerating && (isComplete || isFailed) && (
-          <ReviewTable pages={contentGen.pages} projectId={projectId} />
+          <ReviewTable pages={contentGen.pages} projectId={projectId} onInspect={handleInspect} />
         )}
 
         {/* Start error */}

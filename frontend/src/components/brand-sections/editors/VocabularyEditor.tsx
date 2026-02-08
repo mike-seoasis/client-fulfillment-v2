@@ -48,6 +48,7 @@ export function VocabularyEditor({
   // State for each field
   const [powerWords, setPowerWords] = useState<string[]>(toArray(data?.power_words));
   const [bannedWords, setBannedWords] = useState<string[]>(toArray(data?.banned_words));
+  const [competitors, setCompetitors] = useState<string[]>(toArray(data?.competitors));
   const [wordSubstitutions, setWordSubstitutions] = useState<Record<string, string>[]>(
     toArray(data?.word_substitutions).map((sub) => ({
       instead_of: sub.instead_of,
@@ -81,13 +82,14 @@ export function VocabularyEditor({
     const updatedData: VocabularyData = {
       power_words: powerWords.length > 0 ? powerWords : undefined,
       banned_words: bannedWords.length > 0 ? bannedWords : undefined,
+      competitors: competitors.length > 0 ? competitors : undefined,
       word_substitutions: cleanedSubstitutions.length > 0 ? cleanedSubstitutions : undefined,
       industry_terms: cleanedTerms.length > 0 ? cleanedTerms : undefined,
       signature_phrases: signaturePhrases.length > 0 ? signaturePhrases : undefined,
     };
 
     onSave(updatedData);
-  }, [powerWords, bannedWords, wordSubstitutions, industryTerms, signaturePhrases, onSave]);
+  }, [powerWords, bannedWords, competitors, wordSubstitutions, industryTerms, signaturePhrases, onSave]);
 
   // Use document-level keyboard shortcuts for consistent behavior
   useEditorKeyboardShortcuts({
@@ -133,6 +135,23 @@ export function VocabularyEditor({
           onChange={setBannedWords}
           variant="danger"
           placeholder="Type a banned word and press Enter..."
+          disabled={isSaving}
+        />
+      </section>
+
+      {/* Competitor Brands */}
+      <section className="bg-cream-50 border border-cream-300 rounded-sm p-4">
+        <h3 className="text-sm font-semibold text-warm-gray-800 mb-3 uppercase tracking-wide">
+          Competitor Brands (Never Mention)
+        </h3>
+        <p className="text-xs text-warm-gray-500 mb-3">
+          Competitor names are auto-populated from brand research and POP analysis. Add or remove as needed.
+        </p>
+        <TagInput
+          value={competitors}
+          onChange={setCompetitors}
+          variant="danger"
+          placeholder="Type a competitor name and press Enter..."
           disabled={isSaving}
         />
       </section>

@@ -32,7 +32,7 @@ from app.models.page_content import ContentStatus, PageContent
 from app.models.page_keywords import PageKeywords
 from app.models.prompt_log import PromptLog
 from app.services.content_quality import run_quality_checks
-from app.services.content_writing import generate_content
+from app.services.content_writing import extract_competitor_brands, generate_content
 from app.services.pop_content_brief import fetch_content_brief
 
 logger = get_logger(__name__)
@@ -347,6 +347,12 @@ async def _process_single_page(
                 db, page_content, keyword, content_brief, brief_result
             )
 
+            # Auto-enrich vocabulary.competitors from POP competitor URLs
+            if content_brief and content_brief.competitors:
+                brand_config = await _enrich_competitors_from_pop(
+                    db, brand_config, content_brief.competitors, crawled_page.project_id
+                )
+
             # --- Step 2: Write content ---
             # generate_content sets status to WRITING internally
             writing_result = await generate_content(
@@ -565,3 +571,80 @@ async def _log_content_brief(
     )
     db.add(log)
     await db.flush()
+
+
+async def _enrich_competitors_from_pop(
+    db: AsyncSession,
+    brand_config: dict[str, Any],
+    competitors: list[dict[str, Any]],
+    project_id: str,
+) -> dict[str, Any]:
+    """Auto-enrich vocabulary.competitors from POP competitor URLs.
+
+    Extracts brand names from competitor domains, merges them into the
+    brand_config's vocabulary.competitors list (case-insensitive dedup),
+    and persists changes back to the database if any new names were added.
+
+    Returns the (potentially updated) brand_config dict for use in the
+    current pipeline run.
+    """
+    new_brands = extract_competitor_brands(competitors)
+    if not new_brands:
+        return brand_config
+
+    # Ensure vocabulary exists
+    vocabulary = brand_config.get("vocabulary")
+    if not isinstance(vocabulary, dict):
+        vocabulary = {}
+        brand_config["vocabulary"] = vocabulary
+
+    existing: list[str] = vocabulary.get("competitors", []) or []
+    existing_lower = {name.lower() for name in existing}
+
+    added: list[str] = []
+    for name in new_brands:
+        if name.lower() not in existing_lower:
+            existing.append(name)
+            existing_lower.add(name.lower())
+            added.append(name)
+
+    if not added:
+        return brand_config
+
+    vocabulary["competitors"] = existing
+
+    # Persist to database
+    try:
+        stmt = select(BrandConfig).where(BrandConfig.project_id == project_id)
+        result = await db.execute(stmt)
+        config_record = result.scalar_one_or_none()
+
+        if config_record and config_record.v2_schema:
+            updated_schema = dict(config_record.v2_schema)
+            vocab = updated_schema.get("vocabulary")
+            if not isinstance(vocab, dict):
+                vocab = {}
+                updated_schema["vocabulary"] = vocab
+            vocab["competitors"] = existing
+            config_record.v2_schema = updated_schema
+
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(config_record, "v2_schema")
+            await db.flush()
+
+            logger.info(
+                "Enriched vocabulary.competitors from POP URLs",
+                extra={
+                    "project_id": project_id,
+                    "added": added,
+                    "total": len(existing),
+                },
+            )
+    except Exception:
+        logger.warning(
+            "Failed to persist POP competitor enrichment",
+            extra={"project_id": project_id},
+            exc_info=True,
+        )
+
+    return brand_config

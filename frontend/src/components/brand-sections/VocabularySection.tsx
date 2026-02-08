@@ -16,12 +16,13 @@ export function VocabularySection({ data }: VocabularySectionProps) {
     return <EmptySection message="Vocabulary data not available" />;
   }
 
-  const { power_words, word_substitutions, banned_words, industry_terms, signature_phrases } = data;
+  const { power_words, word_substitutions, banned_words, competitors, industry_terms, signature_phrases } = data;
 
   const hasContent =
     (power_words && power_words.length > 0) ||
     (word_substitutions && word_substitutions.length > 0) ||
     (banned_words && banned_words.length > 0) ||
+    (competitors && competitors.length > 0) ||
     (industry_terms && industry_terms.length > 0) ||
     (signature_phrases && signature_phrases.length > 0);
 
@@ -66,6 +67,13 @@ export function VocabularySection({ data }: VocabularySectionProps) {
       {banned_words && banned_words.length > 0 && (
         <SectionCard title="Banned Words (Never Use)">
           <TagList items={banned_words} variant="danger" />
+        </SectionCard>
+      )}
+
+      {/* Competitor Brands */}
+      {competitors && competitors.length > 0 && (
+        <SectionCard title="Competitor Brands (Never Mention)">
+          <TagList items={competitors} variant="danger" />
         </SectionCard>
       )}
 

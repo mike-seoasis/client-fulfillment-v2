@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import {
   usePageContent,
   useContentGenerationStatus,
@@ -18,6 +18,7 @@ import {
 } from '@/components/content-editor/HighlightToggleControls';
 import { generateVariations } from '@/lib/keyword-variations';
 import { Button } from '@/components/ui';
+import { useBrandConfig } from '@/hooks/useBrandConfig';
 
 // ---------------------------------------------------------------------------
 // Utility helpers
@@ -82,6 +83,7 @@ function QualityStatusCard({ qaResults }: { qaResults: QaResults | null }) {
     'tier1_ai_word',
     'tier2_ai_excess',
     'negation_contrast',
+    'competitor_name',
   ];
   const checkLabels: Record<string, string> = {
     banned_word: 'Banned Words',
@@ -92,6 +94,7 @@ function QualityStatusCard({ qaResults }: { qaResults: QaResults | null }) {
     tier1_ai_word: 'Tier 1 AI Words',
     tier2_ai_excess: 'Tier 2 AI Words',
     negation_contrast: 'Negation Contrast',
+    competitor_name: 'Competitor Names',
   };
 
   const issuesByType: Record<string, number> = {};
@@ -139,6 +142,25 @@ function QualityStatusCard({ qaResults }: { qaResults: QaResults | null }) {
   );
 }
 
+const ISSUE_TYPE_LABELS: Record<string, string> = {
+  banned_word: 'Banned Words',
+  em_dash: 'Em Dashes',
+  ai_pattern: 'AI Openers',
+  triplet_excess: 'Triplet Lists',
+  rhetorical_excess: 'Rhetorical Questions',
+  tier1_ai_word: 'Tier 1 AI Words',
+  tier2_ai_excess: 'Tier 2 AI Words',
+  negation_contrast: 'Negation/Contrast',
+  competitor_name: 'Competitor Names',
+};
+
+const FIELD_LABELS: Record<string, string> = {
+  page_title: 'title',
+  meta_description: 'meta',
+  top_description: 'top',
+  bottom_description: 'body',
+};
+
 function FlaggedPassagesCard({
   issues,
   onJumpTo,
@@ -148,27 +170,67 @@ function FlaggedPassagesCard({
 }) {
   if (!issues || issues.length === 0) return null;
 
+  // Group issues by type
+  const groups: { type: string; label: string; items: QaIssue[] }[] = [];
+  const seen = new Set<string>();
+  for (const issue of issues) {
+    if (!seen.has(issue.type)) {
+      seen.add(issue.type);
+      groups.push({
+        type: issue.type,
+        label: ISSUE_TYPE_LABELS[issue.type] ?? issue.type,
+        items: issues.filter((i) => i.type === issue.type),
+      });
+    }
+  }
+
+  // Clean context for display: strip "..." wrappers
+  const displayContext = (ctx: string) =>
+    ctx.replace(/^\.{3}/, '').replace(/\.{3}$/, '').trim();
+
   return (
-    <div className="bg-white rounded-sm border border-sand-400/60 p-4">
-      <h3 className="text-xs font-semibold text-warm-700 uppercase tracking-wider mb-3">Flagged Passages</h3>
-      <div className="space-y-3">
-        {issues.map((issue, idx) => (
-          <div key={idx} className="flex items-start gap-2.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-coral-500 mt-1.5 flex-shrink-0" />
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-warm-800">{issue.description}</p>
-              <p className="text-xs text-warm-500 mt-0.5 leading-relaxed">
-                &ldquo;{issue.context}&rdquo;
-              </p>
-              {onJumpTo && (
-                <button
-                  type="button"
-                  onClick={() => onJumpTo(issue.context)}
-                  className="text-xs text-lagoon-600 hover:text-lagoon-700 mt-1 font-medium"
-                >
-                  Jump to &darr;
-                </button>
-              )}
+    <div className="bg-white rounded-sm border border-sand-400/60 overflow-hidden">
+      <div className="px-4 py-3 border-b border-sand-200">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-semibold text-warm-700 uppercase tracking-wider">Flagged Passages</h3>
+          <span className="text-xs font-mono text-coral-600">{issues.length}</span>
+        </div>
+      </div>
+      <div className="divide-y divide-sand-100">
+        {groups.map((group) => (
+          <div key={group.type} className="px-4 py-3">
+            {/* Group header */}
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs font-semibold text-warm-800">{group.label}</span>
+              <span className="text-xs font-mono text-coral-500 bg-coral-50 px-1.5 py-0.5 rounded-sm">
+                {group.items.length}
+              </span>
+            </div>
+            {/* Individual instances */}
+            <div className="space-y-1.5">
+              {group.items.map((issue, idx) => {
+                const ctx = displayContext(issue.context);
+                const canJump = onJumpTo && issue.field === 'bottom_description';
+                return (
+                  <div
+                    key={idx}
+                    className={`flex items-start gap-2 text-xs py-1 px-2 rounded-sm ${canJump ? 'hover:bg-sand-50 cursor-pointer group' : ''}`}
+                    onClick={canJump ? () => onJumpTo(issue.context) : undefined}
+                  >
+                    <span className="text-warm-400 font-mono flex-shrink-0 mt-px">
+                      {FIELD_LABELS[issue.field] ?? issue.field}
+                    </span>
+                    <span className="text-warm-600 leading-relaxed min-w-0 truncate" title={ctx}>
+                      {ctx}
+                    </span>
+                    {canJump && (
+                      <span className="text-lagoon-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-px">
+                        &darr;
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         ))}
@@ -411,11 +473,13 @@ export default function ContentEditorPage() {
   const projectId = params.id as string;
   const pageId = params.pageId as string;
 
+  const router = useRouter();
   const { data: content, isLoading, isError } = usePageContent(projectId, pageId);
   const { data: status } = useContentGenerationStatus(projectId);
   const updateContent = useUpdatePageContent();
   const approveContent = useApprovePageContent();
   const recheckContent = useRecheckPageContent();
+  const { data: brandConfig } = useBrandConfig(projectId);
 
   // Find this page's metadata from the status endpoint
   const pageInfo = useMemo(() => {
@@ -487,21 +551,45 @@ export default function ContentEditorPage() {
 
   // Derive keyword and brief data
   const primaryKeyword = content?.brief?.keyword ?? content?.brief_summary?.keyword ?? '';
+  // Competitor names from brand config for LSI filtering
+  const competitorNames = useMemo(() => {
+    const vocab = (brandConfig?.v2_schema as Record<string, unknown>)?.vocabulary;
+    if (!vocab || typeof vocab !== 'object') return [] as string[];
+    const competitors = (vocab as Record<string, unknown>).competitors;
+    if (!Array.isArray(competitors)) return [] as string[];
+    return competitors.filter((c): c is string => typeof c === 'string');
+  }, [brandConfig?.v2_schema]);
+
   const lsiTerms = useMemo(() => {
     if (!content?.brief?.lsi_terms) return [];
-    return (content.brief.lsi_terms as { term?: string; text?: string }[])
-      .map((t) => (typeof t === 'string' ? t : t.term ?? t.text ?? ''))
+    const allTerms = (content.brief.lsi_terms as { term?: string; text?: string; phrase?: string }[])
+      .map((t) => (typeof t === 'string' ? t : t.term ?? t.text ?? t.phrase ?? ''))
       .filter(Boolean);
-  }, [content?.brief?.lsi_terms]);
+
+    // Filter out terms that match competitor brand names
+    if (competitorNames.length === 0) return allTerms;
+    return allTerms.filter((term) => {
+      const termLower = term.toLowerCase();
+      return !competitorNames.some((name) => termLower.includes(name.toLowerCase()));
+    });
+  }, [content?.brief?.lsi_terms, competitorNames]);
 
   const variations = useMemo(() => generateVariations(primaryKeyword), [primaryKeyword]);
 
-  // Derive trope ranges from QA issues
+  // Clean QA context: strip "..." ellipsis wrappers from context strings
+  const cleanContext = useCallback((ctx: string): string => {
+    return ctx.replace(/^\.{3}/, '').replace(/\.{3}$/, '').trim();
+  }, []);
+
+  // Derive trope ranges from QA issues in bottom_description
   const tropeRanges = useMemo(() => {
     const qa = content?.qa_results as QaResults | null;
     if (!qa?.issues) return [];
-    return qa.issues.map((issue) => ({ text: issue.context }));
-  }, [content?.qa_results]);
+    return qa.issues
+      .filter((issue) => issue.field === 'bottom_description')
+      .map((issue) => ({ text: cleanContext(issue.context) }))
+      .filter((r) => r.text.length > 3);
+  }, [content?.qa_results, cleanContext]);
 
   // Ref to the bottom description editor container for jump-to
   const editorContainerRef = useRef<HTMLDivElement>(null);
@@ -511,11 +599,15 @@ export default function ContentEditorPage() {
     const container = editorContainerRef.current;
     if (!container) return;
 
-    // Search for hl-trope spans whose text includes the context
+    const cleaned = cleanContext(context);
+    const searchText = cleaned.slice(0, 40);
+    if (!searchText) return;
+
+    // Search for hl-trope spans whose text includes the cleaned context
     const tropeSpans = Array.from(container.querySelectorAll('.hl-trope'));
     let target: HTMLElement | null = null;
     for (const span of tropeSpans) {
-      if (span.textContent && span.textContent.includes(context.slice(0, 20))) {
+      if (span.textContent && span.textContent.includes(searchText)) {
         target = span as HTMLElement;
         break;
       }
@@ -526,7 +618,7 @@ export default function ContentEditorPage() {
       const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
       let node: Node | null;
       while ((node = walker.nextNode())) {
-        if (node.textContent && node.textContent.includes(context.slice(0, 20))) {
+        if (node.textContent && node.textContent.includes(searchText)) {
           target = node.parentElement;
           break;
         }
@@ -538,7 +630,7 @@ export default function ContentEditorPage() {
       target.classList.add('violation-pulse');
       setTimeout(() => target!.classList.remove('violation-pulse'), 1500);
     }
-  }, []);
+  }, [cleanContext]);
 
   const handleJumpToTerm = useCallback((term: string) => {
     const container = editorContainerRef.current;
@@ -667,14 +759,21 @@ export default function ContentEditorPage() {
     );
   }, [projectId, pageId, pageTitle, metaDescription, topDescription, bottomDescription, content, updateContent]);
 
-  // Approve handler
+  // Approve handler — approve and navigate back to the content list
   const handleApprove = useCallback(() => {
-    approveContent.mutate({
-      projectId,
-      pageId,
-      value: !content?.is_approved,
-    });
-  }, [projectId, pageId, content?.is_approved, approveContent]);
+    approveContent.mutate(
+      {
+        projectId,
+        pageId,
+        value: !content?.is_approved,
+      },
+      {
+        onSuccess: () => {
+          router.push(`/projects/${projectId}/onboarding/content`);
+        },
+      },
+    );
+  }, [projectId, pageId, content?.is_approved, approveContent, router]);
 
   // Recheck handler
   const handleRecheck = useCallback(() => {
@@ -936,8 +1035,8 @@ export default function ContentEditorPage() {
             <button
               type="button"
               onClick={handleApprove}
-              disabled={approveContent.isPending || content.status !== 'complete'}
-              className={`px-5 py-2 text-sm font-semibold rounded-sm transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50 ${
+              disabled={approveContent.isPending}
+              className={`px-5 py-2 text-sm font-semibold rounded-sm transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
                 content.is_approved
                   ? 'text-palm-700 bg-palm-100 hover:bg-palm-200 border border-palm-200'
                   : 'text-white bg-palm-500 hover:bg-palm-600'

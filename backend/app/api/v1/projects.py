@@ -737,12 +737,12 @@ async def regenerate_taxonomy(
     # Run taxonomy regeneration in background
     async def regenerate_labels_task() -> None:
         from app.core.database import db_manager
-        from app.integrations.claude import ClaudeClient
+        from app.integrations.claude import ClaudeClient, get_api_key
         from app.services.label_taxonomy import LabelTaxonomyService
 
         async with db_manager.session_factory() as task_db:
             try:
-                claude_client = ClaudeClient()
+                claude_client = ClaudeClient(api_key=get_api_key())
                 taxonomy_service = LabelTaxonomyService(claude_client)
 
                 # Generate new taxonomy
@@ -1120,8 +1120,10 @@ async def _generate_keywords_background(
 
     try:
         async with db_manager.session_factory() as db:
-            # Create clients
-            claude_client = ClaudeClient()
+            # Create clients — explicit api_key for background task context
+            from app.integrations.claude import get_api_key
+
+            claude_client = ClaudeClient(api_key=get_api_key())
             dataforseo_client = DataForSEOClient()
 
             # Create service

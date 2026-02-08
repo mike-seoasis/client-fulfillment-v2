@@ -415,7 +415,7 @@ export function HighlightPlugin({
       () => {
         applyHighlights(primaryKeyword, variations, lsiTerms, tropeRanges);
       },
-      { tag: 'highlight-plugin' },
+      { tag: ['highlight-plugin', 'history-merge'] },
     );
 
     isApplyingRef.current = false;

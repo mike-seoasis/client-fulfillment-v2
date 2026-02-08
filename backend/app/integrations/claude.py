@@ -27,6 +27,7 @@ RAILWAY DEPLOYMENT REQUIREMENTS:
 
 import asyncio
 import json
+import os
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -192,7 +193,11 @@ class ClaudeClient:
         """
         settings = get_settings()
 
-        self._api_key = api_key or settings.anthropic_api_key
+        self._api_key = (
+            api_key
+            or settings.anthropic_api_key
+            or os.environ.get("ANTHROPIC_API_KEY")
+        )
         self._model = model or settings.claude_model
         self._timeout = timeout or settings.claude_timeout
         self._max_retries = max_retries or settings.claude_max_retries
@@ -911,3 +916,13 @@ async def get_claude() -> ClaudeClient:
     if claude_client is None:
         await init_claude()
     return claude_client  # type: ignore[return-value]
+
+
+def get_api_key() -> str | None:
+    """Get the Anthropic API key from settings.
+
+    Use this when creating ClaudeClient instances in background tasks
+    or other contexts outside the request lifecycle, to avoid issues
+    with settings/env loading in background task contexts.
+    """
+    return get_settings().anthropic_api_key
