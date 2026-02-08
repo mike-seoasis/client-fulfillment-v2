@@ -8,6 +8,7 @@ after each iteration and it's included in prompts for context.
 *Add reusable patterns discovered during development here.*
 
 - **Service pattern**: Services in `backend/app/services/` are classes with `@staticmethod` methods. No `__init__` needed for stateless utility services.
+- **Test DB fixtures**: Use `db_session` fixture from conftest, create model instances with `db_session.add()` + `await db_session.flush()`. Session auto-rollbacks between tests. SQLite in-memory via `aiosqlite`.
 
 ---
 
@@ -50,3 +51,14 @@ after each iteration and it's included in prompts for context.
   - `page_ids` as comma-separated string query param is simpler than using FastAPI's `Query(...)` list parsing for optional UUID lists
 ---
 
+## 2026-02-08 - S7-004
+- Created unit tests for export service: 14 tests across 3 test classes
+- `TestExtractHandle` (7 tests): standard /collections/ URL, URL without /collections/, query params stripped, trailing slash stripped, nested path after /collections/, empty path, combined trailing slash + query params
+- `TestSanitizeFilename` (4 tests): special characters, spaces, consecutive special chars collapsed, leading/trailing stripped
+- `TestGenerateCSV` (3 tests): all fields populated with correct columns/values, null fields render as empty strings (not 'None'), UTF-8 BOM present
+- Files changed: `backend/tests/test_export.py` (new)
+- **Learnings:**
+  - `asyncio_mode = "auto"` in pyproject.toml means no `@pytest.mark.asyncio` needed on async test methods
+  - CSV BOM can be stripped with `csv_string.lstrip("\ufeff")` for clean parsing in assertions
+  - CrawledPage requires `labels=[]` explicitly when creating test fixtures (non-nullable JSONB column)
+---

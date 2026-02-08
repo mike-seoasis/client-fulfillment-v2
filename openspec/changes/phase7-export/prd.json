@@ -71,8 +71,9 @@
         "Tests in backend/tests/test_export.py"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Can test extract_handle and sanitize_filename as pure functions without DB. CSV generation needs DB fixtures with CrawledPage + PageContent."
+      "passes": true,
+      "notes": "Can test extract_handle and sanitize_filename as pure functions without DB. CSV generation needs DB fixtures with CrawledPage + PageContent.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S7-005",
@@ -199,6 +200,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-08T15:46:29.494Z"
+    "updatedAt": "2026-02-08T15:47:59.874Z"
   }
 }
