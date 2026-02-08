@@ -278,3 +278,23 @@ after each iteration and it's included in prompts for context.
   - Pre-existing TS error in GenerationProgress.test.tsx continues — unrelated to this change
   - All quality checks (tsc, eslint) pass clean
 ---
+
+## 2026-02-08 - S8-019
+- Created `frontend/src/app/projects/[id]/clusters/new/page.tsx` — seed keyword input page
+- Form with Seed Keyword (required, min 2 chars) and Cluster Name (optional) fields
+- Cancel button navigates back to project detail page
+- Get Suggestions button triggers `useCreateCluster` mutation
+- 3-step progress indicator during loading: Generating suggestions → Checking search volume → Finalizing results (timed at 3s/6s intervals to show activity during ~5-10s API call)
+- On success, navigates to `/projects/{id}/clusters/{newClusterId}`
+- On error, shows error message with Try Again button
+- Follows design system: bg-white card with border-cream-500, palm-500 primary button, cream-200 secondary, rounded-sm, warm grays
+- Reuses existing `Input` and `Button` UI components, `useProject` and `useCreateCluster` hooks
+- **Files changed:**
+  - `frontend/src/app/projects/[id]/clusters/new/page.tsx` (new)
+- **Learnings:**
+  - Progress step animation uses `setTimeout` timers that are cleared on success/error to avoid stale state updates
+  - `useCreateCluster` returns the full `Cluster` object on success including `id` — used for navigation
+  - Input component has built-in `error` prop for validation display — no need for custom error rendering
+  - Pre-existing TS error in GenerationProgress.test.tsx continues — unrelated to this change
+  - All quality checks (tsc, eslint) pass clean
+---
