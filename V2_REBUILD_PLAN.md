@@ -8,9 +8,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Phase** | 6 - Content Review + Editing (Complete) |
-| **Slice** | Phase 6 complete (S6-001 through S6-026) |
-| **Last Session** | 2026-02-07 |
+| **Phase** | 6 - Content Review + Editing (Complete + Polish) |
+| **Slice** | Phase 6 complete + competitor filtering, editor UX fixes, review tabs |
+| **Last Session** | 2026-02-08 |
 | **Next Action** | Phase 7: Export |
 
 ### Session Log
@@ -32,7 +32,8 @@
 | 2026-02-06 | Phase 5 complete (S5-001 through S5-018): PageContent + PromptLog models, Alembic migration, POPMockClient, POP content brief service, prompt builder, content writing service (Claude Sonnet), quality checks (5 AI trope rules), content generation pipeline orchestrator, Pydantic v2 schemas, 4 API endpoints (trigger/status/content/prompts), frontend API client + TanStack Query hooks, ContentGenerationProgress page, PromptInspector side panel, onboarding navigation, 81 backend tests, end-to-end verification in mock mode (9 pages, 0 failures). | Phase 5 staging deployment + hardening |
 | 2026-02-06 | Phase 5 staging: Crawl4AI content filtering (PruningContentFilter for main body extraction), fixed Crawl4AI Railway service (Docker image reconnect), switched POP to real API (POP_USE_MOCK=false), increased Claude max_tokens to 8192 and timeout to 180s for POP word count targets, committed page content view route, Prompt Inspector run grouping with visual separation, POP prepareId debug logging. Full 3-step POP flow verified with real data (LSI terms, competitors, heading structure, word count targets). | Copywriting skill bible + lean content |
 | 2026-02-07 | Copywriting skill bible integration: enriched system prompt with writing rules + AI trope avoidance + formatting standards. Lean content strategy: dropped word count targets entirely (length driven by structure not SERP competitors), use POP min heading counts capped at 8 H2/12 H3, use min term frequencies for subheading/paragraph targets (floor of 1), 120-word max per paragraph with no minimum. Pipeline reset fix: page statuses reset to pending on regeneration so frontend indicators clear immediately. Concurrency already supported via CONTENT_GENERATION_CONCURRENCY env var (default 1, set to 3+ for parallel). | Phase 6: Content Review + Editing |
-| 2026-02-07 | Phase 6 complete (S6-001 through S6-026): PageContent approval fields + migration, content review/editing schemas, 6 backend endpoints (GET/PUT content, approve, bulk-approve, recheck, status with approval data), Lexical rich text editor with HTML source toggle, keyword variation generator, 4-layer highlight plugin (keyword/variation/LSI/trope) with toggle controls, content editor page (4 fields + sidebar with QA/stats/LSI/outline), auto-save on blur with dirty tracking, bottom action bar (save/recheck/approve), content list review table with QA + approval columns + bulk approve, 24 backend tests + 49 frontend tests, manual verification of all 10 AC items. | Phase 7: Export |
+| 2026-02-07 | Phase 6 complete (S6-001 through S6-026): PageContent approval fields + migration, content review/editing schemas, 6 backend endpoints (GET/PUT content, approve, bulk-approve, recheck, status with approval data), Lexical rich text editor with HTML source toggle, keyword variation generator, 4-layer highlight plugin (keyword/variation/LSI/trope) with toggle controls, content editor page (4 fields + sidebar with QA/stats/LSI/outline), auto-save on blur with dirty tracking, bottom action bar (save/recheck/approve), content list review table with QA + approval columns + bulk approve, 24 backend tests + 49 frontend tests, manual verification of all 10 AC items. | Phase 6 polish |
+| 2026-02-08 | Phase 6 polish: Competitor name filtering (master list in vocabulary.competitors, auto-seeded from brand config + POP URLs, prompt exclusion, LSI filtering, QA check 9), toolbar block type dropdown fix, approve button status gate removed (approve whenever ready), approve navigates back to content list, review/approved tabs on content list page. | Phase 7: Export |
 
 ---
 
