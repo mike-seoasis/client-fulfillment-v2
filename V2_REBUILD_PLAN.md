@@ -342,7 +342,7 @@ Decisions made during planning session:
 | **POP Score Threshold** | Aim for 100, research meaning | Higher = better, need to understand metric |
 | **Retry Logic** | 2-3 retries before human review | Balance automation vs. human oversight |
 | **Real-time Updates** | Polling (2-3s) for MVP | Simpler than WebSockets, good enough UX |
-| **Auth** | Single user for MVP | Multi-user later |
+| **Auth** | WorkOS AuthKit (Phase 10) | Free tier (1M MAU), hosted login UI, no SSO needed. Evaluated Keycloak/SuperTokens/Ory/Authentik — WorkOS wins for our use case (zero infra, zero cost). See `auth-evaluation-report.md`. |
 | **Delete Confirmation** | Two-step for items, type-to-confirm for projects | Prevent accidents |
 | **Keyword Change** | Rerun downstream for that page only | Don't redo everything |
 | **Pause/Resume** | Table if complex | Nice-to-have, not critical |

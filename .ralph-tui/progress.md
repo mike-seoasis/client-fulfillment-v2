@@ -361,3 +361,23 @@ after each iteration and it's included in prompts for context.
   - Project model uses `site_url` field, not `website_url`
   - All quality checks (ruff, mypy, pytest) pass clean — 52/52 tests pass
 ---
+
+## 2026-02-08 - S8-016
+- Created `backend/tests/test_cluster_api.py` with 20 integration tests in 1 test class (TestClusterAPI)
+- **POST create cluster** (2 tests): success with mocked Claude + DataForSEO verifying response schema (seed_keyword, name, status, pages with parent role), 404 for invalid project
+- **GET list clusters** (3 tests): page_count and approved_count computed correctly, empty project returns [], 404 for invalid project
+- **GET cluster detail** (3 tests): all ClusterPage fields returned (13 fields verified), 404 for invalid cluster_id, 404 for invalid project_id
+- **PATCH update page** (5 tests): approve toggle, edit keyword, edit slug, reassign parent (demotes old parent to child verified via GET detail), 404 for invalid page
+- **POST bulk-approve** (3 tests): CrawledPage + PageKeywords created with correct counts, 400 for no approved pages, 409 for already-approved cluster
+- **DELETE cluster** (4 tests): draft deletion returns 204 and removes from DB, 409 for approved cluster, 404 for invalid cluster, 404 for invalid project
+- **Files changed:**
+  - `backend/tests/test_cluster_api.py` (new)
+- **Learnings:**
+  - `KeywordVolumeResult` constructor uses `success` + `keywords` fields, not `data` + `errors` — always check dataclass field names
+  - `AsyncSession.expire_all()` is synchronous (not awaitable) — but causes greenlet issues when test session differs from endpoint session
+  - Integration tests use `async_client` fixture which creates its own DB session via `mock_db_manager` — the test's `db_session` fixture is a separate session. Verifying endpoint side-effects requires either: (a) a fresh session from `async_session_factory`, or (b) querying via the API endpoints themselves
+  - Pattern for verifying parent reassignment: use GET detail endpoint to check all page roles after PATCH, avoids cross-session greenlet issues
+  - `patch("app.api.v1.clusters.get_claude", return_value=mock_claude)` — patch the dependency getter at the module where it's imported, not at the source module
+  - Pre-existing mypy errors in `crawl4ai.py` — unrelated to this change
+  - All quality checks (ruff, mypy, pytest) pass clean — 20/20 tests pass
+---

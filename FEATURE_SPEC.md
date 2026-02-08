@@ -1154,7 +1154,19 @@ Based on dependencies and the shared component architecture:
 - Blog export (HTML download + copy to clipboard for Shopify)
 - **Test:** Full blog flow works (campaign → keywords → generate → edit with live scoring → export)
 
-### Slice 11: Polish
+### Slice 11: Authentication (WorkOS AuthKit)
+- Install `@workos-inc/authkit-nextjs`, configure environment variables
+- Create OAuth callback route (`/app/auth/callback/route.ts`)
+- Add `authkitMiddleware()` in `middleware.ts` to protect all routes
+- Wrap root layout with `AuthKitProvider`
+- Add user display + sign-out to Header (via `useAuth()` hook)
+- Create login landing page for unauthenticated users
+- Pass `accessToken` JWT to FastAPI in API requests
+- Add FastAPI JWT verification middleware for protected endpoints
+- Update Railway env vars (staging + production)
+- **Test:** Full auth flow (sign in → use app → sign out → redirect to login)
+
+### Slice 12: Polish
 - Dashboard metrics (clusters built/pending, content pending, blogs pending)
 - Progress indicators
 - Error handling
@@ -1224,6 +1236,7 @@ Per `backend/PLAN-remove-secondary-keywords-and-paa.md`:
 | Blog linking | **Siloed** — blogs only link to their parent cluster's pages + sibling blogs |
 | Blog export | **HTML + clipboard** — for pasting into Shopify blog creator |
 | Blog-cluster relationship | **One cluster can have multiple blog campaigns** |
+| Authentication provider | **WorkOS AuthKit** (free tier, 1M MAU). Evaluated Keycloak, SuperTokens, Ory, Authentik, BoxyHQ. No SSO needed — WorkOS free tier is zero-cost, zero-infra. See `auth-evaluation-report.md` for full analysis. |
 
 ---
 
