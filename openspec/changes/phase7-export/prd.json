@@ -1,0 +1,202 @@
+{
+  "name": "Phase 7: Matrixify CSV Export",
+  "description": "Add Matrixify-compatible CSV export for approved collection page content. Backend service generates CSV with Handle, Title, Body HTML, SEO Description, and Top Description metafield columns. Frontend export page (onboarding Step 5) with page selection and download.",
+  "branchName": "v2-rebuild",
+  "userStories": [
+    {
+      "id": "S7-001",
+      "title": "Create export service with handle extraction",
+      "description": "As a developer, I need an export service so that page URLs can be converted to Shopify handles and CSV files can be generated.",
+      "acceptanceCriteria": [
+        "Create backend/app/services/export.py with ExportService class",
+        "Implement extract_handle(url) that extracts handle from URL path: if path contains /collections/, use segment(s) after it; otherwise use last non-empty path segment",
+        "Strip trailing slashes and query parameters before extraction",
+        "Implement sanitize_filename(name) that converts project name to lowercase alphanumeric + hyphens"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Examples: https://store.com/collections/running-shoes → running-shoes, https://store.com/shoes/hiking → hiking, https://store.com/collections/sandals?sort=price → sandals",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S7-002",
+      "title": "Add CSV generation to export service",
+      "description": "As a developer, I need a CSV generation function so that approved page content can be exported in Matrixify format.",
+      "acceptanceCriteria": [
+        "Implement generate_csv(db, project_id, page_ids=None) async method on ExportService",
+        "Query CrawledPage joined with PageContent where is_approved=True and status=complete",
+        "If page_ids provided, filter to only those IDs (silently skip non-approved)",
+        "CSV columns in order: Handle, Title, Body (HTML), SEO Description, Metafield: custom.top_description [single_line_text_field]",
+        "Use Python stdlib csv.writer with StringIO",
+        "Include UTF-8 BOM prefix for Excel compatibility",
+        "Null content fields render as empty string, not 'None'",
+        "Return tuple of (csv_string, row_count)"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Handle comes from CrawledPage.normalized_url via extract_handle(). Title from PageContent.page_title, Body from PageContent.bottom_description, SEO Description from PageContent.meta_description, Top Description from PageContent.top_description."
+    },
+    {
+      "id": "S7-003",
+      "title": "Create export API endpoint",
+      "description": "As a developer, I need an API endpoint so that the frontend can trigger a CSV file download.",
+      "acceptanceCriteria": [
+        "Add GET /api/v1/projects/{project_id}/export endpoint",
+        "Accept optional query parameter page_ids (comma-separated UUIDs)",
+        "Return CSV with Content-Type: text/csv; charset=utf-8",
+        "Return Content-Disposition: attachment; filename={sanitized-project-name}-matrixify-export.csv",
+        "Return HTTP 400 with JSON error if no approved pages available for export",
+        "Return HTTP 404 if project not found",
+        "Add endpoint to router in backend/app/api/v1/projects.py or new export.py route file"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Use FastAPI StreamingResponse or Response with media_type='text/csv'. Reference existing endpoint patterns in backend/app/api/v1/projects.py."
+    },
+    {
+      "id": "S7-004",
+      "title": "Backend unit tests for export service",
+      "description": "As a developer, I need unit tests so that handle extraction and CSV generation are verified.",
+      "acceptanceCriteria": [
+        "Test extract_handle with standard /collections/ URL → correct handle",
+        "Test extract_handle with URL without /collections/ → last path segment",
+        "Test extract_handle with query params → stripped",
+        "Test extract_handle with trailing slash → stripped",
+        "Test extract_handle with nested path after /collections/ → preserves sub-path",
+        "Test sanitize_filename with special characters → alphanumeric + hyphens",
+        "Test CSV generation with all fields populated → correct columns and values",
+        "Test CSV generation with null fields → empty strings not 'None'",
+        "Tests in backend/tests/test_export.py"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Can test extract_handle and sanitize_filename as pure functions without DB. CSV generation needs DB fixtures with CrawledPage + PageContent."
+    },
+    {
+      "id": "S7-005",
+      "title": "Backend integration tests for export endpoint",
+      "description": "As a developer, I need integration tests so that the export API endpoint is verified end-to-end.",
+      "acceptanceCriteria": [
+        "Test export with page_ids filter → only selected pages in CSV",
+        "Test export without page_ids → all approved pages in CSV",
+        "Test export with no approved pages → HTTP 400",
+        "Test export with mix of approved and unapproved page_ids → only approved included",
+        "Test export with invalid project_id → HTTP 404",
+        "Verify CSV headers are correct Matrixify column names",
+        "Tests in backend/tests/test_export.py or backend/tests/test_export_api.py"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Follow existing integration test patterns. Create test fixtures with Project, CrawledPage, and PageContent records."
+    },
+    {
+      "id": "S7-006",
+      "title": "Add frontend export API client function",
+      "description": "As a developer, I need a frontend function to call the export endpoint and trigger a browser file download.",
+      "acceptanceCriteria": [
+        "Add exportProject(projectId: string, pageIds?: string[]) function to frontend/src/lib/api.ts",
+        "Function calls GET /api/v1/projects/{projectId}/export with optional page_ids query param",
+        "Uses fetch() to get blob response (not TanStack Query)",
+        "Creates temporary blob URL and triggers download via hidden anchor click",
+        "Extracts filename from Content-Disposition header",
+        "Cleans up blob URL after download"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Standard browser file download pattern: fetch → response.blob() → URL.createObjectURL → anchor.click() → URL.revokeObjectURL"
+    },
+    {
+      "id": "S7-007",
+      "title": "Create export page route and layout",
+      "description": "As a user, I need an export page so that I can select pages and download the Matrixify CSV.",
+      "acceptanceCriteria": [
+        "Create frontend/src/app/projects/[id]/onboarding/export/page.tsx",
+        "Page shows onboarding stepper with Export as active Step 5",
+        "Page fetches project info and pages with content approval status on load",
+        "Uses same ONBOARDING_STEPS config as other onboarding pages",
+        "Matches tropical oasis design system (palm, sand, coral palette, rounded-sm corners)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reference WIREFRAMES.md section 11 for layout. Reference frontend/src/app/projects/[id]/onboarding/content/page.tsx for stepper pattern."
+    },
+    {
+      "id": "S7-008",
+      "title": "Build page selection list component",
+      "description": "As a user, I need a checklist of pages so that I can choose which ones to include in the export.",
+      "acceptanceCriteria": [
+        "Display all project pages in a list with checkboxes",
+        "Show page URL path (e.g., /collections/running-shoes) for each row",
+        "Approved pages have checkbox checked and enabled by default",
+        "Unapproved/incomplete pages have checkbox disabled and row appears visually muted",
+        "Show approval status indicator per row (approved checkmark or 'Not approved' label)",
+        "User can uncheck approved pages to exclude them from export",
+        "Select all / deselect all toggle for convenience"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reference WIREFRAMES.md section 11 for the page list design."
+    },
+    {
+      "id": "S7-009",
+      "title": "Build export summary and download section",
+      "description": "As a user, I need to see what will be exported and download the file.",
+      "acceptanceCriteria": [
+        "Show 'Ready to export: N pages' count that updates when selection changes",
+        "Show list of exported fields: Handle, Title, Body HTML, SEO Description, Top Description (Metafield)",
+        "Show format indicator: 'CSV - Matrixify compatible'",
+        "Download Export button calls exportProject() with selected page IDs",
+        "Button disabled when no pages selected",
+        "Button shows loading spinner during download request",
+        "Button re-enables after download completes or fails"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reference WIREFRAMES.md section 11 for the export summary layout."
+    },
+    {
+      "id": "S7-010",
+      "title": "Add navigation buttons (Back and Finish Onboarding)",
+      "description": "As a user, I need navigation so I can go back to content review or finish the onboarding flow.",
+      "acceptanceCriteria": [
+        "Back button/link navigates to /projects/{id}/onboarding/content",
+        "Finish Onboarding button navigates to /projects/{id}",
+        "Both buttons use consistent styling with other onboarding pages"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Back is secondary style, Finish Onboarding is primary (bg-palm-500)."
+    },
+    {
+      "id": "S7-098",
+      "title": "Update V2_REBUILD_PLAN.md",
+      "description": "As a developer, I need to update the plan status so that progress is tracked.",
+      "acceptanceCriteria": [
+        "Mark Phase 7 checkboxes as [x] complete in V2_REBUILD_PLAN.md",
+        "Update Current Status table: Phase=7 Export (Complete), Next Action=Phase 8",
+        "Add new row to Session Log table with date, completed items, next up"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "This task maintains our planning discipline."
+    },
+    {
+      "id": "S7-099",
+      "title": "Verify Phase 7 completion",
+      "description": "As a developer, I need to verify all Phase 7 criteria are met before moving on.",
+      "acceptanceCriteria": [
+        "All tests pass: pytest backend/tests/ and cd frontend && npm test",
+        "Manual verification: navigate to export page, select pages, download CSV, verify correct columns and data",
+        "CSV opens correctly in Excel/Google Sheets with proper column separation",
+        "Git commit created with message: feat: Phase 7 - Matrixify CSV export",
+        "No uncommitted changes remain"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Do not proceed to Phase 8 until this passes."
+    }
+  ],
+  "metadata": {
+    "updatedAt": "2026-02-08T15:42:44.021Z"
+  }
+}
