@@ -259,3 +259,22 @@ after each iteration and it's included in prompts for context.
   - Pre-existing TS error in GenerationProgress.test.tsx (tuple index out of bounds) — unrelated to this change
   - All quality checks (tsc, eslint) pass clean
 ---
+
+## 2026-02-08 - S8-018
+- Created `frontend/src/hooks/useClusters.ts` with 6 TanStack Query hooks and query keys factory
+- `clusterKeys` factory: `list(projectId)` and `detail(projectId, clusterId)` for consistent cache key management
+- `useCreateCluster()`: useMutation calling `createCluster()`, invalidates cluster list on success
+- `useClusters(projectId)`: useQuery fetching cluster list (ClusterListItem[])
+- `useCluster(projectId, clusterId)`: useQuery fetching cluster detail with pages (Cluster)
+- `useUpdateClusterPage()`: useMutation with optimistic update — cancels in-flight queries, patches page in cache, rolls back on error, invalidates on settle
+- `useBulkApproveCluster()`: useMutation invalidating both cluster detail and list on success
+- `useDeleteCluster()`: useMutation invalidating cluster list on success
+- **Files changed:**
+  - `frontend/src/hooks/useClusters.ts` (new)
+- **Learnings:**
+  - Optimistic update pattern: `onMutate` cancels queries + snapshots previous data + applies optimistic update; `onError` rolls back; `onSettled` invalidates for server truth
+  - Query key convention: `['projects', projectId, 'clusters']` for list, `['projects', projectId, 'clusters', clusterId]` for detail — matches existing patterns (e.g., `pages-with-keywords`)
+  - Mutation input types defined locally in the hooks file (not exported from api.ts) since they bundle projectId with the API params
+  - Pre-existing TS error in GenerationProgress.test.tsx continues — unrelated to this change
+  - All quality checks (tsc, eslint) pass clean
+---

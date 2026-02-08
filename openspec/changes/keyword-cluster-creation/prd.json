@@ -352,11 +352,12 @@
         "useDeleteCluster(): useMutation that calls deleteCluster(), invalidates cluster list on success"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "S8-017"
       ],
-      "notes": "Reference frontend/src/hooks/ for existing TanStack Query hook patterns. Use queryClient.invalidateQueries() for cache management."
+      "notes": "Reference frontend/src/hooks/ for existing TanStack Query hook patterns. Use queryClient.invalidateQueries() for cache management.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S8-019",
@@ -481,6 +482,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-08T20:31:57.464Z"
+    "updatedAt": "2026-02-08T20:33:07.060Z"
   }
 }
