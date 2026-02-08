@@ -424,11 +424,57 @@ function ReviewTable({
   projectId: string;
   onInspect: (pageId: string, pageUrl: string) => void;
 }) {
-  // Only show completed pages in the review table
+  const [activeTab, setActiveTab] = useState<'review' | 'approved'>('review');
+
+  // Split pages into review (unapproved) and approved
   const completedPages = pages.filter((p) => p.status === 'complete');
+  const reviewPages = completedPages.filter((p) => !p.is_approved);
+  const approvedPages = completedPages.filter((p) => p.is_approved);
+
+  const visiblePages = activeTab === 'review' ? reviewPages : approvedPages;
 
   return (
     <div className="border border-cream-500 rounded-sm overflow-hidden">
+      {/* Tabs */}
+      <div className="flex border-b border-cream-500 bg-cream-50">
+        <button
+          type="button"
+          onClick={() => setActiveTab('review')}
+          className={`flex items-center gap-2 px-5 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+            activeTab === 'review'
+              ? 'border-palm-500 text-palm-700 bg-white'
+              : 'border-transparent text-warm-gray-500 hover:text-warm-gray-700'
+          }`}
+        >
+          Needs Review
+          {reviewPages.length > 0 && (
+            <span className={`text-xs font-mono px-1.5 py-0.5 rounded-sm ${
+              activeTab === 'review' ? 'bg-coral-100 text-coral-700' : 'bg-cream-200 text-warm-gray-500'
+            }`}>
+              {reviewPages.length}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('approved')}
+          className={`flex items-center gap-2 px-5 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+            activeTab === 'approved'
+              ? 'border-palm-500 text-palm-700 bg-white'
+              : 'border-transparent text-warm-gray-500 hover:text-warm-gray-700'
+          }`}
+        >
+          Approved
+          {approvedPages.length > 0 && (
+            <span className={`text-xs font-mono px-1.5 py-0.5 rounded-sm ${
+              activeTab === 'approved' ? 'bg-palm-100 text-palm-700' : 'bg-cream-200 text-warm-gray-500'
+            }`}>
+              {approvedPages.length}
+            </span>
+          )}
+        </button>
+      </div>
+
       {/* Table header */}
       <div className="grid grid-cols-[1fr_1fr_100px_120px_80px_60px] gap-4 px-4 py-2.5 bg-cream-100 border-b border-cream-500 text-xs font-medium text-warm-gray-600 uppercase tracking-wide">
         <div>Page URL</div>
@@ -438,9 +484,17 @@ function ReviewTable({
         <div className="text-center">Action</div>
         <div className="text-center"></div>
       </div>
+
       {/* Table body */}
       <div className="max-h-[28rem] overflow-y-auto divide-y divide-cream-300">
-        {completedPages.map((page) => {
+        {visiblePages.length === 0 && (
+          <div className="px-4 py-8 text-center text-sm text-warm-gray-500">
+            {activeTab === 'review'
+              ? 'All pages have been approved!'
+              : 'No pages approved yet.'}
+          </div>
+        )}
+        {visiblePages.map((page) => {
           const displayUrl = (() => {
             try {
               const url = new URL(page.url);
