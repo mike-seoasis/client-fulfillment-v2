@@ -89,8 +89,9 @@
         "Tests in backend/tests/test_export.py or backend/tests/test_export_api.py"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Follow existing integration test patterns. Create test fixtures with Project, CrawledPage, and PageContent records."
+      "passes": true,
+      "notes": "Follow existing integration test patterns. Create test fixtures with Project, CrawledPage, and PageContent records.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S7-006",
@@ -200,6 +201,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-08T15:47:59.874Z"
+    "updatedAt": "2026-02-08T15:53:57.133Z"
   }
 }

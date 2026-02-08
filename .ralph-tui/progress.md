@@ -9,6 +9,7 @@ after each iteration and it's included in prompts for context.
 
 - **Service pattern**: Services in `backend/app/services/` are classes with `@staticmethod` methods. No `__init__` needed for stateless utility services.
 - **Test DB fixtures**: Use `db_session` fixture from conftest, create model instances with `db_session.add()` + `await db_session.flush()`. Session auto-rollbacks between tests. SQLite in-memory via `aiosqlite`.
+- **Integration test fixtures**: When using `async_client` (HTTP endpoint tests), fixtures must call `await db_session.commit()` (not just `flush()`) so data is visible to the endpoint's separate DB session. Unit tests that pass `db_session` directly can use `flush()`.
 
 ---
 
@@ -61,4 +62,22 @@ after each iteration and it's included in prompts for context.
   - `asyncio_mode = "auto"` in pyproject.toml means no `@pytest.mark.asyncio` needed on async test methods
   - CSV BOM can be stripped with `csv_string.lstrip("\ufeff")` for clean parsing in assertions
   - CrawledPage requires `labels=[]` explicitly when creating test fixtures (non-nullable JSONB column)
+---
+
+## 2026-02-08 - S7-005
+- Created integration tests for the export CSV endpoint (GET /api/v1/projects/{project_id}/export)
+- 7 tests in `TestExportEndpoint` class covering all acceptance criteria:
+  - `test_export_with_page_ids_filter` — page_ids filter returns only selected pages
+  - `test_export_without_page_ids_returns_all_approved` — no filter returns all approved pages
+  - `test_export_no_approved_pages_returns_400` — HTTP 400 when no approved pages
+  - `test_export_mixed_approved_unapproved_page_ids` — mix of approved/unapproved returns only approved
+  - `test_export_invalid_project_id_returns_404` — HTTP 404 for non-existent project
+  - `test_export_csv_headers_are_matrixify_columns` — correct Matrixify column names
+  - `test_export_content_disposition_header` — sanitized filename in Content-Disposition
+- Files changed: `backend/tests/test_export_api.py` (new)
+- **Learnings:**
+  - Integration tests using `async_client` fixture need `db_session.commit()` (not just `flush()`) in fixtures so data is visible to the endpoint's separate session
+  - `StaticPool` with SQLite in-memory means all sessions share the same connection, so committed data is visible across sessions within the same test
+  - `_parse_csv()` helper with BOM stripping keeps test assertions clean and DRY
+  - Project model requires `phase_status={}` and `brand_wizard_state={}` explicitly in test fixtures (non-nullable JSONB columns)
 ---
