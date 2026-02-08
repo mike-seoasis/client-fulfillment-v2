@@ -230,10 +230,9 @@ export default function ExportPage() {
 
   const isLoading = isProjectLoading || isStatusLoading;
 
-  // Get approved pages
-  const approvedPages: PageGenerationStatusItem[] = status
-    ? status.pages.filter((p) => p.status === 'complete' && p.is_approved)
-    : [];
+  // All pages and approved subset
+  const allPages: PageGenerationStatusItem[] = status ? status.pages : [];
+  const approvedPages = allPages.filter((p) => p.status === 'complete' && p.is_approved);
 
   // Initialize selection to all approved pages once data loads
   if (!initialized && approvedPages.length > 0) {
@@ -341,14 +340,14 @@ export default function ExportPage() {
           Select the pages to include in your CSV export. Only approved pages are available.
         </p>
 
-        {approvedPages.length === 0 ? (
+        {allPages.length === 0 ? (
           <div className="text-center py-8">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-cream-100 mb-4">
               <XCircleIcon className="w-8 h-8 text-warm-gray-400" />
             </div>
-            <h3 className="text-lg font-medium text-warm-gray-900 mb-1">No Approved Pages</h3>
+            <h3 className="text-lg font-medium text-warm-gray-900 mb-1">No Pages Found</h3>
             <p className="text-warm-gray-600 text-sm">
-              Approve content in the previous step before exporting.
+              No pages have been crawled for this project yet.
             </p>
           </div>
         ) : (
@@ -391,31 +390,45 @@ export default function ExportPage() {
 
               {/* Page rows */}
               <div className="max-h-[24rem] overflow-y-auto divide-y divide-cream-300">
-                {approvedPages.map((page) => (
-                  <label
-                    key={page.page_id}
-                    className="flex items-center gap-3 px-4 py-3 hover:bg-cream-50 transition-colors cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedPageIds.has(page.page_id)}
-                      onChange={() => togglePage(page.page_id)}
-                      className="rounded-sm border-sand-500 text-palm-500 focus:ring-palm-400"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-warm-gray-900 truncate" title={page.url}>
-                        {displayPath(page.url)}
-                      </p>
-                      <p className="text-xs text-warm-gray-500 mt-0.5">
-                        Keyword: <span className="font-medium text-warm-gray-700">{page.keyword}</span>
-                      </p>
-                    </div>
-                    <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-sm bg-palm-100 text-palm-700 shrink-0">
-                      <CheckIcon className="w-3 h-3" />
-                      Approved
-                    </span>
-                  </label>
-                ))}
+                {allPages.map((page) => {
+                  const isApproved = page.status === 'complete' && page.is_approved;
+                  return (
+                    <label
+                      key={page.page_id}
+                      className={`flex items-center gap-3 px-4 py-3 transition-colors ${
+                        isApproved
+                          ? 'hover:bg-cream-50 cursor-pointer'
+                          : 'opacity-50 cursor-not-allowed'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isApproved && selectedPageIds.has(page.page_id)}
+                        onChange={() => togglePage(page.page_id)}
+                        disabled={!isApproved}
+                        className="rounded-sm border-sand-500 text-palm-500 focus:ring-palm-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm truncate ${isApproved ? 'text-warm-gray-900' : 'text-warm-gray-400'}`} title={page.url}>
+                          {displayPath(page.url)}
+                        </p>
+                        <p className="text-xs text-warm-gray-500 mt-0.5">
+                          Keyword: <span className={`font-medium ${isApproved ? 'text-warm-gray-700' : 'text-warm-gray-400'}`}>{page.keyword}</span>
+                        </p>
+                      </div>
+                      {isApproved ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-sm bg-palm-100 text-palm-700 shrink-0">
+                          <CheckIcon className="w-3 h-3" />
+                          Approved
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-sm bg-cream-200 text-warm-gray-500 shrink-0">
+                          Not approved
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
               </div>
             </div>
 

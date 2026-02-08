@@ -113,3 +113,16 @@ after each iteration and it's included in prompts for context.
   - Checkbox indeterminate state requires a ref callback: `ref={(el) => { if (el) el.indeterminate = someSelected; }}` since React doesn't support `indeterminate` as a JSX prop
   - Initializing selection state from async data uses a `!initialized` guard pattern to set defaults once on first data load without re-triggering on re-renders
 ---
+
+## 2026-02-08 - S7-008
+- Updated export page to show ALL project pages (not just approved ones) in the page selection list
+- Unapproved/incomplete pages now appear with disabled checkbox, muted opacity (opacity-50), cursor-not-allowed, and dimmed text colors
+- Added "Not approved" label badge (bg-cream-200, text-warm-gray-500) for unapproved rows alongside existing "Approved" badge for approved rows
+- Empty state updated from "No Approved Pages" to "No Pages Found" since we now show all pages
+- Select all / deselect all toggle still only operates on approved pages (disabled checkboxes unaffected)
+- Files changed: `frontend/src/app/projects/[id]/onboarding/export/page.tsx` (modified)
+- **Learnings:**
+  - S7-007 had already built most of the page selection component; S7-008 specifically required showing unapproved pages as disabled/muted rows rather than filtering them out
+  - Using `opacity-50` on the row container plus `disabled` prop on checkbox provides clean visual distinction without extra CSS
+  - The `allPages` vs `approvedPages` split keeps selection logic clean — `toggleAll` and `togglePage` only operate on approved page IDs while the list renders everything
+---
