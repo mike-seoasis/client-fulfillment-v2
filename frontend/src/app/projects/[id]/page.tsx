@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useProject, useDeleteProject } from '@/hooks/use-projects';
 import { useStartBrandConfigGeneration, useBrandConfigGeneration } from '@/hooks/useBrandConfigGeneration';
 import { useCrawlStatus, getOnboardingStep } from '@/hooks/use-crawl-status';
+import { useClusters } from '@/hooks/useClusters';
 import { Button, Toast } from '@/components/ui';
 
 function LoadingSkeleton() {
@@ -281,6 +282,47 @@ function BrandConfigStatusBadge({
   }
 }
 
+function ClusterStatusBadge({ status }: { status: string }) {
+  switch (status) {
+    case 'complete':
+      return (
+        <span className="inline-flex items-center gap-1 text-xs bg-palm-50 text-palm-700 px-2 py-0.5 rounded-sm">
+          <CheckCircleIcon className="w-3 h-3" />
+          Complete
+        </span>
+      );
+    case 'content_generating':
+      return (
+        <span className="inline-flex items-center gap-1 text-xs bg-lagoon-50 text-lagoon-700 px-2 py-0.5 rounded-sm">
+          <SpinnerIcon className="w-3 h-3" />
+          Generating Content
+        </span>
+      );
+    case 'approved':
+      return (
+        <span className="inline-flex items-center gap-1 text-xs bg-palm-50 text-palm-700 px-2 py-0.5 rounded-sm">
+          <CheckCircleIcon className="w-3 h-3" />
+          Approved
+        </span>
+      );
+    case 'suggestions_ready':
+      return (
+        <span className="inline-flex items-center gap-1 text-xs bg-coral-50 text-coral-700 px-2 py-0.5 rounded-sm">
+          <CircleIcon className="w-3 h-3" />
+          Awaiting Approval
+        </span>
+      );
+    case 'generating':
+    default:
+      return (
+        <span className="inline-flex items-center gap-1 text-xs bg-lagoon-50 text-lagoon-700 px-2 py-0.5 rounded-sm">
+          <SpinnerIcon className="w-3 h-3" />
+          Generating
+        </span>
+      );
+  }
+}
+
 export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -296,6 +338,11 @@ export default function ProjectDetailPage() {
     enabled: !!projectId && !isLoading && !error,
   });
   const onboardingProgress = getOnboardingStep(crawlStatus);
+
+  // Fetch clusters for New Content section
+  const { data: clusters } = useClusters(projectId, {
+    enabled: !!projectId && !isLoading && !error,
+  });
 
   // Two-step delete confirmation
   const [isConfirming, setIsConfirming] = useState(false);
@@ -635,19 +682,57 @@ export default function ProjectDetailPage() {
 
         {/* New Content section */}
         <div className="bg-white rounded-sm border border-cream-500 p-6 shadow-sm">
-          <div className="flex items-center gap-3 mb-3">
-            <PlusIcon className="w-5 h-5 text-palm-500" />
-            <h2 className="text-lg font-semibold text-warm-gray-900">
-              New Content
-            </h2>
-            <span className="text-xs bg-cream-100 text-warm-gray-600 px-2 py-0.5 rounded-full">
-              Keyword Clusters
-            </span>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <PlusIcon className="w-5 h-5 text-palm-500" />
+              <h2 className="text-lg font-semibold text-warm-gray-900">
+                New Content
+              </h2>
+              <span className="text-xs bg-cream-100 text-warm-gray-600 px-2 py-0.5 rounded-full">
+                Keyword Clusters
+              </span>
+            </div>
+            {clusters && clusters.length > 0 && (
+              <Link href={`/projects/${projectId}/clusters/new`}>
+                <Button variant="secondary">+ New Cluster</Button>
+              </Link>
+            )}
           </div>
           <p className="text-warm-gray-600 text-sm mb-4">
             Build new collection pages from keyword clusters
           </p>
-          <Button disabled>+ New Cluster</Button>
+
+          {/* Cluster cards or empty state */}
+          {!clusters || clusters.length === 0 ? (
+            <div className="text-center py-6">
+              <p className="text-warm-gray-500 text-sm mb-4">No clusters yet</p>
+              <Link href={`/projects/${projectId}/clusters/new`}>
+                <Button>+ New Cluster</Button>
+              </Link>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {clusters.map((cluster) => (
+                <Link
+                  key={cluster.id}
+                  href={`/projects/${projectId}/clusters/${cluster.id}`}
+                  className="block"
+                >
+                  <div className="bg-white rounded-sm border border-sand-500 p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+                    <h3 className="font-medium text-warm-gray-900 mb-2 truncate">
+                      {cluster.name || cluster.seed_keyword}
+                    </h3>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-warm-gray-600">
+                        {cluster.page_count} {cluster.page_count === 1 ? 'page' : 'pages'}
+                      </span>
+                      <ClusterStatusBadge status={cluster.status} />
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

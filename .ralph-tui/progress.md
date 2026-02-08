@@ -322,3 +322,21 @@ after each iteration and it's included in prompts for context.
   - Pre-existing TS error in GenerationProgress.test.tsx continues — unrelated to this change
   - All quality checks (tsc, eslint) pass clean
 ---
+
+## 2026-02-08 - S8-021
+- Updated New Content section in `frontend/src/app/projects/[id]/page.tsx` to show live cluster list
+- Added `useClusters` hook to fetch cluster data for the project
+- Cluster cards display: cluster name (falls back to seed_keyword), page count, status badge
+- Clicking a cluster card navigates to `/projects/{id}/clusters/{clusterId}`
+- "+ New Cluster" button in header (when clusters exist) and in empty state navigates to `/projects/{id}/clusters/new`
+- Empty state shows "No clusters yet" with prominent "+ New Cluster" button
+- Added `ClusterStatusBadge` component mapping all 5 statuses: generating, suggestions_ready (Awaiting Approval), approved, content_generating (Generating Content), complete
+- Cards follow design system: `border-sand-500`, `rounded-sm`, warm shadows, hover shadow transition
+- **Files changed:**
+  - `frontend/src/app/projects/[id]/page.tsx` (added useClusters import, cluster fetch, ClusterStatusBadge component, replaced placeholder with live cluster list)
+- **Learnings:**
+  - ClusterListItem has `name` and `seed_keyword` — display `name || seed_keyword` since name is optional
+  - Reused existing icon components (CheckCircleIcon, CircleIcon, SpinnerIcon) for status badges — consistent with BrandConfigStatusBadge pattern
+  - Pre-existing TS error in GenerationProgress.test.tsx continues — unrelated to this change
+  - All quality checks (tsc, eslint) pass clean
+---
