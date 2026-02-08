@@ -232,3 +232,15 @@ after each iteration and it's included in prompts for context.
   - Delete uses `db.delete(cluster)` which cascades to ClusterPages via model's `cascade="all, delete-orphan"`
   - All quality checks (mypy, ruff) pass clean
 ---
+
+## 2026-02-08 - S8-014
+- Verified clusters router already registered in S8-012 — no additional changes needed
+- Confirmed: `clusters_router` imported and included in `backend/app/api/v1/__init__.py`
+- Confirmed: Router prefix `/projects` matches project path pattern (full path: `/api/v1/projects/{project_id}/clusters/...`)
+- Confirmed: All 6 endpoints accessible (POST create, GET list, GET detail, PATCH update page, POST approve, DELETE)
+- **Files changed:** None (already implemented in S8-012)
+- **Learnings:**
+  - S8-012 proactively completed S8-014's scope (router registration) as part of creating the router file
+  - Always check progress.md first — previous stories may have already covered the work
+  - All quality checks (ruff) pass clean
+---
