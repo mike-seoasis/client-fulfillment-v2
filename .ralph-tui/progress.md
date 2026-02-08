@@ -142,3 +142,22 @@ after each iteration and it's included in prompts for context.
   - `KeywordVolumeData` dataclass fields map directly to the four fields needed: `search_volume`, `cpc`, `competition`, `competition_level`
   - All quality checks (mypy, ruff) pass clean
 ---
+
+## 2026-02-08 - S8-009
+- Implemented `_filter_and_assign_roles(candidates, seed_keyword) -> list[dict]` on `ClusterKeywordService`
+- Implemented `_keyword_to_slug(keyword) -> str` static method for URL slug generation (lowercase, hyphens, no special chars, max 60 chars)
+- Implemented `_calculate_composite_score(volume, competition, relevance) -> float` static method reusing PrimaryKeywordService formula
+- Filtering prompt includes all candidates with volume/CPC/competition data, instructs Claude to filter to 8-12 best, remove near-duplicates, remove < 50 volume (unless < 5 remain), assign parent/child roles
+- Each result includes: keyword, role, url_slug, expansion_strategy, reasoning, search_volume, cpc, competition, competition_level, composite_score
+- Uses Claude Haiku with temperature=0.0 for deterministic filtering
+- Results sorted by composite_score descending with parent always first
+- Role assignment enforced in code (not just LLM output): seed keyword always gets role='parent' regardless of LLM response
+- **Files changed:**
+  - `backend/app/services/cluster_keyword.py` (added `_keyword_to_slug`, `_calculate_composite_score`, `_filter_and_assign_roles` methods + `math`, `re` imports)
+- **Learnings:**
+  - Composite score formula: 50% volume (log10 * 10, cap 50) + 35% relevance (*100) + 15% competition ((1-comp)*100). Null volume=0, null competition=50 (mid-range)
+  - Competition normalization: DataForSEO can return 0-100 or 0-1 range, so normalize with `/ 100.0 if > 1.0`
+  - Role assignment should be enforced in code, not trusted from LLM — seed keyword comparison uses normalized lowercase
+  - URL slug generation: regex `[^a-z0-9\s-]` strips special chars, then `[\s-]+` collapses whitespace/hyphens, truncate at 60 chars with trailing hyphen strip
+  - All quality checks (mypy, ruff) pass clean
+---

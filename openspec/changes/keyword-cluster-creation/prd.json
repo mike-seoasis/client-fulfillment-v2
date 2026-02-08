@@ -170,11 +170,12 @@
         "Uses Claude Haiku with temperature=0.0 (deterministic filtering)"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "S8-008"
       ],
-      "notes": "Reference PrimaryKeywordService.calculate_score() at backend/app/services/primary_keyword.py:683 for the scoring formula. The filtering prompt should be explicit about what makes a good collection page keyword vs a blog keyword."
+      "notes": "Reference PrimaryKeywordService.calculate_score() at backend/app/services/primary_keyword.py:683 for the scoring formula. The filtering prompt should be explicit about what makes a good collection page keyword vs a blog keyword.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S8-010",
@@ -474,6 +475,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-08T20:18:05.895Z"
+    "updatedAt": "2026-02-08T20:20:41.380Z"
   }
 }
