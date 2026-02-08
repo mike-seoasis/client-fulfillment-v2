@@ -33,8 +33,9 @@
         "Return tuple of (csv_string, row_count)"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Handle comes from CrawledPage.normalized_url via extract_handle(). Title from PageContent.page_title, Body from PageContent.bottom_description, SEO Description from PageContent.meta_description, Top Description from PageContent.top_description."
+      "passes": true,
+      "notes": "Handle comes from CrawledPage.normalized_url via extract_handle(). Title from PageContent.page_title, Body from PageContent.bottom_description, SEO Description from PageContent.meta_description, Top Description from PageContent.top_description.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S7-003",
@@ -197,6 +198,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-08T15:42:44.021Z"
+    "updatedAt": "2026-02-08T15:44:53.015Z"
   }
 }

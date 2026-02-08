@@ -3,10 +3,19 @@
 Provides utilities for:
 - Extracting Shopify handles from page URLs
 - Sanitizing project names for filenames
+- Generating Matrixify-format CSV exports
 """
 
+import csv
+import io
 import re
 from urllib.parse import urlparse
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.crawled_page import CrawledPage
+from app.models.page_content import PageContent
 
 
 class ExportService:
@@ -53,6 +62,70 @@ class ExportService:
             return segments[-1]
 
         return ""
+
+    @staticmethod
+    async def generate_csv(
+        db: AsyncSession,
+        project_id: str,
+        page_ids: list[str] | None = None,
+    ) -> tuple[str, int]:
+        """Generate a Matrixify-format CSV for approved page content.
+
+        Queries CrawledPage joined with PageContent where is_approved=True
+        and status=complete. If page_ids is provided, filters to only those
+        pages (silently skipping non-approved ones).
+
+        Args:
+            db: Async database session.
+            project_id: UUID of the project.
+            page_ids: Optional list of CrawledPage IDs to filter to.
+
+        Returns:
+            Tuple of (csv_string with UTF-8 BOM, row_count).
+        """
+        stmt = (
+            select(CrawledPage, PageContent)
+            .join(PageContent, PageContent.crawled_page_id == CrawledPage.id)
+            .where(
+                CrawledPage.project_id == project_id,
+                PageContent.is_approved.is_(True),
+                PageContent.status == "complete",
+            )
+        )
+
+        if page_ids is not None:
+            stmt = stmt.where(CrawledPage.id.in_(page_ids))
+
+        result = await db.execute(stmt)
+        rows = result.all()
+
+        output = io.StringIO()
+        # UTF-8 BOM for Excel compatibility
+        output.write("\ufeff")
+
+        writer = csv.writer(output)
+        writer.writerow([
+            "Handle",
+            "Title",
+            "Body (HTML)",
+            "SEO Description",
+            "Metafield: custom.top_description [single_line_text_field]",
+        ])
+
+        row_count = 0
+        for page, content in rows:
+            writer.writerow([
+                ExportService.extract_handle(page.normalized_url),
+                content.page_title or "",
+                content.bottom_description or "",
+                content.meta_description or "",
+                content.top_description or "",
+            ])
+            row_count += 1
+
+        csv_string = output.getvalue()
+        output.close()
+        return csv_string, row_count
 
     @staticmethod
     def sanitize_filename(name: str) -> str:
