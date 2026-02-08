@@ -3,10 +3,10 @@
   "sessionId": "dfdb7767-e4d4-49e2-9c59-747c908022b0",
   "status": "running",
   "startedAt": "2026-02-08T20:03:36.032Z",
-  "updatedAt": "2026-02-08T20:06:28.910Z",
-  "currentIteration": 1,
+  "updatedAt": "2026-02-08T20:07:16.371Z",
+  "currentIteration": 2,
   "maxIterations": 10,
-  "tasksCompleted": 1,
+  "tasksCompleted": 2,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -23,8 +23,8 @@
       {
         "id": "S8-002",
         "title": "Add source column to CrawledPage model",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "S8-003",
@@ -170,6 +170,16 @@
       "durationMs": 114787,
       "startedAt": "2026-02-08T20:03:37.244Z",
       "endedAt": "2026-02-08T20:05:32.031Z"
+    },
+    {
+      "iteration": 2,
+      "status": "completed",
+      "taskId": "S8-002",
+      "taskTitle": "Add source column to CrawledPage model",
+      "taskCompleted": true,
+      "durationMs": 55759,
+      "startedAt": "2026-02-08T20:05:33.150Z",
+      "endedAt": "2026-02-08T20:06:28.909Z"
     }
   ],
   "skippedTaskIds": [],

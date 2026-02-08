@@ -38,3 +38,15 @@ after each iteration and it's included in prompts for context.
   - Simple column additions follow the same pattern as existing String columns (e.g., `status`)
   - All quality checks (mypy, ruff) pass clean
 ---
+
+## 2026-02-08 - S8-003
+- Verified all work was already completed in S8-001: model registration and Project.clusters relationship
+- Confirmed: `KeywordCluster` and `ClusterPage` imported in `__init__.py`, included in `__all__`
+- Confirmed: `Project.clusters` relationship with `back_populates="project"` and `cascade="all, delete-orphan"`
+- Confirmed: All models importable from `app.models`
+- **Files changed:** None (already implemented)
+- **Learnings:**
+  - S8-001 proactively completed S8-003's scope (model registration + relationship)
+  - Always check progress.md first — previous stories may have already covered the work
+  - All quality checks (mypy, ruff) pass clean
+---
