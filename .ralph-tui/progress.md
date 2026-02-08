@@ -127,3 +127,18 @@ after each iteration and it's included in prompts for context.
   - Prompt instructs "no markdown code blocks" but JSON parsing still handles them defensively (LLMs don't always follow instructions)
   - All quality checks (mypy, ruff) pass clean
 ---
+
+## 2026-02-08 - S8-008
+- Implemented `_enrich_with_volume(candidates: list[dict]) -> list[dict]` on `ClusterKeywordService`
+- Extracts keyword strings from candidates and calls `DataForSEOClient.get_keyword_volume_batch()` in a single batch call
+- Merges `search_volume`, `cpc`, `competition`, `competition_level` back into each candidate dict
+- Three graceful fallback paths (all set `volume_unavailable=True`): DataForSEO not configured, API call fails, unexpected exception
+- Keywords not found in volume results get `None` for all volume fields (no `volume_unavailable` flag since the lookup itself succeeded)
+- **Files changed:**
+  - `backend/app/services/cluster_keyword.py` (added `_enrich_with_volume` method)
+- **Learnings:**
+  - Pattern closely mirrors `PrimaryKeywordService.enrich_with_volume()` but adapted: takes/returns `list[dict]` instead of returning `dict[str, KeywordVolumeData]`
+  - `get_keyword_volume_batch()` handles batching internally (splits into 1000-keyword chunks) so caller doesn't need to worry about limits
+  - `KeywordVolumeData` dataclass fields map directly to the four fields needed: `search_volume`, `cpc`, `competition`, `competition_level`
+  - All quality checks (mypy, ruff) pass clean
+---

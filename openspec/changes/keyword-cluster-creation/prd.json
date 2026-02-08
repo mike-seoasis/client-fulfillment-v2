@@ -148,11 +148,12 @@
         "Single batch API call for all candidates (not one per keyword)"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "S8-007"
       ],
-      "notes": "This is almost identical to PrimaryKeywordService.enrich_with_volume() in pattern. Reference backend/app/integrations/dataforseo.py for the client API. The batch endpoint handles up to 1000 keywords in one call."
+      "notes": "This is almost identical to PrimaryKeywordService.enrich_with_volume() in pattern. Reference backend/app/integrations/dataforseo.py for the client API. The batch endpoint handles up to 1000 keywords in one call.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S8-009",
@@ -473,6 +474,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-08T20:16:36.735Z"
+    "updatedAt": "2026-02-08T20:18:05.895Z"
   }
 }

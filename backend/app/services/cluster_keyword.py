@@ -278,3 +278,116 @@ Example:
         )
 
         return result_list
+
+    async def _enrich_with_volume(
+        self,
+        candidates: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Stage 2: Enrich candidates with search volume data from DataForSEO.
+
+        Extracts keyword strings from candidates and calls the DataForSEO
+        batch API to get search volume, CPC, and competition data. Merges
+        the volume data back into each candidate dict.
+
+        If DataForSEO is unavailable (not configured) or the API call fails,
+        returns candidates unchanged with a 'volume_unavailable' flag set to
+        True on each candidate.
+
+        Args:
+            candidates: List of candidate dicts from _generate_candidates().
+                Each must have a 'keyword' key.
+
+        Returns:
+            The same list of candidate dicts, enriched with 'search_volume',
+            'cpc', 'competition', and 'competition_level' keys. If volume
+            data is unavailable, candidates are returned unchanged with
+            'volume_unavailable' set to True.
+        """
+        if not candidates:
+            return candidates
+
+        # Check if DataForSEO is available
+        if not self._dataforseo.available:
+            logger.warning(
+                "DataForSEO not available, skipping cluster volume enrichment",
+                extra={"candidate_count": len(candidates)},
+            )
+            for candidate in candidates:
+                candidate["volume_unavailable"] = True
+            return candidates
+
+        # Extract keyword strings for batch lookup
+        keywords = [c["keyword"] for c in candidates]
+
+        logger.info(
+            "Enriching cluster candidates with volume data",
+            extra={"candidate_count": len(candidates)},
+        )
+
+        try:
+            result = await self._dataforseo.get_keyword_volume_batch(keywords)
+
+            if not result.success:
+                logger.warning(
+                    "DataForSEO volume lookup failed for cluster candidates",
+                    extra={
+                        "error": result.error,
+                        "candidate_count": len(candidates),
+                    },
+                )
+                for candidate in candidates:
+                    candidate["volume_unavailable"] = True
+                return candidates
+
+            # Build keyword -> volume data mapping (normalized to lowercase)
+            volume_map: dict[str, Any] = {}
+            for kw_data in result.keywords:
+                normalized = kw_data.keyword.strip().lower()
+                volume_map[normalized] = {
+                    "search_volume": kw_data.search_volume,
+                    "cpc": kw_data.cpc,
+                    "competition": kw_data.competition,
+                    "competition_level": kw_data.competition_level,
+                }
+
+            # Merge volume data into candidates
+            enriched_count = 0
+            for candidate in candidates:
+                normalized_kw = candidate["keyword"].strip().lower()
+                vol = volume_map.get(normalized_kw)
+                if vol:
+                    candidate["search_volume"] = vol["search_volume"]
+                    candidate["cpc"] = vol["cpc"]
+                    candidate["competition"] = vol["competition"]
+                    candidate["competition_level"] = vol["competition_level"]
+                    enriched_count += 1
+                else:
+                    candidate["search_volume"] = None
+                    candidate["cpc"] = None
+                    candidate["competition"] = None
+                    candidate["competition_level"] = None
+
+            logger.info(
+                "Cluster volume enrichment complete",
+                extra={
+                    "candidates_total": len(candidates),
+                    "candidates_enriched": enriched_count,
+                    "cost": result.cost,
+                    "duration_ms": result.duration_ms,
+                },
+            )
+
+            return candidates
+
+        except Exception as e:
+            logger.error(
+                "Unexpected error during cluster volume enrichment",
+                extra={
+                    "error": str(e),
+                    "candidate_count": len(candidates),
+                },
+                exc_info=True,
+            )
+            for candidate in candidates:
+                candidate["volume_unavailable"] = True
+            return candidates
