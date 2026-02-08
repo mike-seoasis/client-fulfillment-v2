@@ -363,11 +363,13 @@ export default function ExportPage() {
             <div className="mb-4 p-3 bg-cream-50 rounded-sm border border-cream-300 text-sm text-warm-gray-700">
               <p className="font-medium text-warm-gray-900 mb-1">Export includes:</p>
               <ul className="list-disc list-inside space-y-0.5 text-warm-gray-600">
+                <li>Command (UPDATE)</li>
                 <li>Handle (URL slug)</li>
                 <li>Title</li>
                 <li>Body HTML</li>
                 <li>SEO Description</li>
                 <li>Top Description (Metafield)</li>
+                <li>Sort Order, Published, Collection Rules</li>
               </ul>
             </div>
 

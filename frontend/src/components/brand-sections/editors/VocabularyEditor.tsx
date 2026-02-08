@@ -62,6 +62,7 @@ export function VocabularyEditor({
     }))
   );
   const [signaturePhrases, setSignaturePhrases] = useState<string[]>(toArray(data?.signature_phrases));
+  const [shopifyPlaceholderTag, setShopifyPlaceholderTag] = useState<string>(data?.shopify_placeholder_tag ?? '');
 
   const handleSave = useCallback(() => {
     // Convert table data back to typed arrays, filtering out empty rows
@@ -86,10 +87,11 @@ export function VocabularyEditor({
       word_substitutions: cleanedSubstitutions.length > 0 ? cleanedSubstitutions : undefined,
       industry_terms: cleanedTerms.length > 0 ? cleanedTerms : undefined,
       signature_phrases: signaturePhrases.length > 0 ? signaturePhrases : undefined,
+      shopify_placeholder_tag: shopifyPlaceholderTag.trim() || undefined,
     };
 
     onSave(updatedData);
-  }, [powerWords, bannedWords, competitors, wordSubstitutions, industryTerms, signaturePhrases, onSave]);
+  }, [powerWords, bannedWords, competitors, wordSubstitutions, industryTerms, signaturePhrases, shopifyPlaceholderTag, onSave]);
 
   // Use document-level keyboard shortcuts for consistent behavior
   useEditorKeyboardShortcuts({
@@ -204,6 +206,24 @@ export function VocabularyEditor({
           placeholder="Add a signature phrase..."
           addButtonText="Add phrase"
           disabled={isSaving}
+        />
+      </section>
+
+      {/* Shopify Placeholder Tag */}
+      <section className="bg-cream-50 border border-cream-300 rounded-sm p-4">
+        <h3 className="text-sm font-semibold text-warm-gray-800 mb-3 uppercase tracking-wide">
+          Shopify Placeholder Tag
+        </h3>
+        <p className="text-xs text-warm-gray-500 mb-3">
+          A product tag from the Shopify store used as the Rule: Condition in Matrixify exports. This is a placeholder — real collection rules are configured in Shopify.
+        </p>
+        <input
+          type="text"
+          value={shopifyPlaceholderTag}
+          onChange={(e) => setShopifyPlaceholderTag(e.target.value)}
+          placeholder="e.g. running-shoes"
+          disabled={isSaving}
+          className="w-full px-3 py-2 text-sm border border-cream-300 rounded-sm bg-white text-warm-gray-800 placeholder:text-warm-gray-400 focus:outline-none focus:ring-2 focus:ring-palm-400 focus:border-palm-400 disabled:opacity-50"
         />
       </section>
 

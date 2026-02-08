@@ -16,7 +16,7 @@ export function VocabularySection({ data }: VocabularySectionProps) {
     return <EmptySection message="Vocabulary data not available" />;
   }
 
-  const { power_words, word_substitutions, banned_words, competitors, industry_terms, signature_phrases } = data;
+  const { power_words, word_substitutions, banned_words, competitors, industry_terms, signature_phrases, shopify_placeholder_tag } = data;
 
   const hasContent =
     (power_words && power_words.length > 0) ||
@@ -24,7 +24,8 @@ export function VocabularySection({ data }: VocabularySectionProps) {
     (banned_words && banned_words.length > 0) ||
     (competitors && competitors.length > 0) ||
     (industry_terms && industry_terms.length > 0) ||
-    (signature_phrases && signature_phrases.length > 0);
+    (signature_phrases && signature_phrases.length > 0) ||
+    !!shopify_placeholder_tag;
 
   if (!hasContent) {
     return <EmptySection message="Vocabulary guide not configured" />;
@@ -113,6 +114,18 @@ export function VocabularySection({ data }: VocabularySectionProps) {
               </li>
             ))}
           </ul>
+        </SectionCard>
+      )}
+
+      {/* Shopify Placeholder Tag */}
+      {shopify_placeholder_tag && (
+        <SectionCard title="Shopify Placeholder Tag">
+          <p className="text-sm text-warm-gray-700">
+            <span className="inline-block bg-lagoon-50 text-lagoon-700 border border-lagoon-200 px-2 py-0.5 rounded-sm text-xs font-medium">
+              {shopify_placeholder_tag}
+            </span>
+            <span className="text-warm-gray-500 ml-2 text-xs">Used as the Rule: Condition in Matrixify exports</span>
+          </p>
         </SectionCard>
       )}
     </div>

@@ -153,6 +153,7 @@ export interface VocabularyData {
   competitors?: string[];
   industry_terms?: IndustryTerm[];
   signature_phrases?: string[];
+  shopify_placeholder_tag?: string;
 }
 
 // Trust Elements types

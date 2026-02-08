@@ -138,7 +138,8 @@ class TestExportEndpoint:
         rows = self._parse_csv(resp.text)
         # Header + 1 data row
         assert len(rows) == 2
-        assert rows[1][0] == "running-shoes"
+        assert rows[1][0] == "UPDATE"  # Command
+        assert rows[1][1] == "running-shoes"  # Handle
 
     async def test_export_without_page_ids_returns_all_approved(
         self,
@@ -156,7 +157,7 @@ class TestExportEndpoint:
         rows = self._parse_csv(resp.text)
         # Header + 2 data rows
         assert len(rows) == 3
-        handles = {rows[1][0], rows[2][0]}
+        handles = {rows[1][1], rows[2][1]}  # Handle is column index 1 (after Command)
         assert handles == {"running-shoes", "hiking-boots"}
 
     async def test_export_no_approved_pages_returns_400(
@@ -193,7 +194,7 @@ class TestExportEndpoint:
         rows = self._parse_csv(resp.text)
         # Header + 1 data row (only the approved one)
         assert len(rows) == 2
-        assert rows[1][0] == "running-shoes"
+        assert rows[1][1] == "running-shoes"  # Handle at index 1
 
     async def test_export_invalid_project_id_returns_404(
         self,
@@ -215,6 +216,8 @@ class TestExportEndpoint:
         approved_pages: list[tuple[CrawledPage, PageContent]],
     ):
         """CSV headers match the required Matrixify column names."""
+        from app.services.export import ExportService
+
         resp = await async_client.get(
             f"/api/v1/projects/{project.id}/export",
         )
@@ -222,13 +225,29 @@ class TestExportEndpoint:
         assert resp.status_code == 200
 
         rows = self._parse_csv(resp.text)
-        assert rows[0] == [
-            "Handle",
-            "Title",
-            "Body (HTML)",
-            "SEO Description",
-            "Metafield: custom.top_description [single_line_text_field]",
-        ]
+        assert rows[0] == ExportService.CSV_HEADERS
+
+    async def test_export_rows_have_update_command(
+        self,
+        async_client: AsyncClient,
+        project: Project,
+        approved_pages: list[tuple[CrawledPage, PageContent]],
+    ):
+        """Each data row has UPDATE as the Command column for onboarding exports."""
+        resp = await async_client.get(
+            f"/api/v1/projects/{project.id}/export",
+        )
+
+        assert resp.status_code == 200
+
+        rows = self._parse_csv(resp.text)
+        for data_row in rows[1:]:
+            assert data_row[0] == "UPDATE"
+            assert data_row[6] == "Best Selling"  # Sort Order
+            assert data_row[7] == "FALSE"  # Published
+            assert data_row[8] == "all conditions"  # Must Match
+            assert data_row[9] == "Tag"  # Rule: Product Column
+            assert data_row[10] == "Equals"  # Rule: Relation
 
     async def test_export_content_disposition_header(
         self,
@@ -243,4 +262,4 @@ class TestExportEndpoint:
 
         assert resp.status_code == 200
         disposition = resp.headers["content-disposition"]
-        assert "test-project-matrixify-export.csv" in disposition
+        assert "Test Project - Onboarding - Matrixify Export via SEOasis.csv" in disposition

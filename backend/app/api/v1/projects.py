@@ -1745,6 +1745,7 @@ async def update_page_labels(
 async def export_csv(
     project_id: str,
     page_ids: str | None = None,
+    export_label: str = "Onboarding",
     db: AsyncSession = Depends(get_session),
 ) -> Response:
     """Export approved content as a Matrixify-format CSV file.
@@ -1752,6 +1753,7 @@ async def export_csv(
     Args:
         project_id: UUID of the project.
         page_ids: Optional comma-separated list of CrawledPage UUIDs to filter.
+        export_label: Label for the export task (e.g. "Onboarding" or a cluster name).
         db: AsyncSession for database operations.
 
     Returns:
@@ -1776,9 +1778,19 @@ async def export_csv(
     if page_ids:
         parsed_page_ids = [pid.strip() for pid in page_ids.split(",") if pid.strip()]
 
-    # Generate CSV
+    # Extract placeholder tag from BrandConfig.v2_schema.vocabulary
+    from app.models.brand_config import BrandConfig
+    shopify_tag = ""
+    bc_stmt = select(BrandConfig).where(BrandConfig.project_id == project_id)
+    bc_result = await db.execute(bc_stmt)
+    brand_config = bc_result.scalar_one_or_none()
+    if brand_config:
+        vocabulary = brand_config.v2_schema.get("vocabulary", {})
+        shopify_tag = vocabulary.get("shopify_placeholder_tag", "")
+
+    # Generate CSV (onboarding = UPDATE, clusters will use NEW)
     csv_string, row_count = await ExportService.generate_csv(
-        db, project_id, parsed_page_ids
+        db, project_id, parsed_page_ids, command="UPDATE", shopify_placeholder_tag=shopify_tag
     )
 
     if row_count == 0:
@@ -1787,9 +1799,10 @@ async def export_csv(
             detail="No approved pages available for export",
         )
 
-    # Build filename from project name
-    safe_name = ExportService.sanitize_filename(project.name)
-    filename = f"{safe_name}-matrixify-export.csv"
+    # Build filename: "Project Name - Task - Matrixify Export via SEOasis.csv"
+    safe_project = ExportService.safe_filename_part(project.name)
+    safe_label = ExportService.safe_filename_part(export_label)
+    filename = f"{safe_project} - {safe_label} - Matrixify Export via SEOasis.csv"
 
     return Response(
         content=csv_string,

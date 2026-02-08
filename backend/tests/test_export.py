@@ -158,7 +158,7 @@ class TestGenerateCSV:
         page, content = approved_page_with_content
 
         csv_string, row_count = await ExportService.generate_csv(
-            db_session, project_id
+            db_session, project_id, command="UPDATE", shopify_placeholder_tag="my-tag"
         )
 
         assert row_count == 1
@@ -169,20 +169,21 @@ class TestGenerateCSV:
         rows = list(reader)
 
         # Header row
-        assert rows[0] == [
-            "Handle",
-            "Title",
-            "Body (HTML)",
-            "SEO Description",
-            "Metafield: custom.top_description [single_line_text_field]",
-        ]
+        assert rows[0] == ExportService.CSV_HEADERS
 
         # Data row
-        assert rows[1][0] == "running-shoes"  # Handle extracted from URL
-        assert rows[1][1] == "Running Shoes Collection"  # Title
-        assert rows[1][2] == "<p>Full HTML body content</p>"  # Body (HTML)
-        assert rows[1][3] == "Shop the best running shoes"  # SEO Description
-        assert rows[1][4] == "Top picks for runners"  # Metafield
+        assert rows[1][0] == "UPDATE"  # Command
+        assert rows[1][1] == "running-shoes"  # Handle extracted from URL
+        assert rows[1][2] == "Running Shoes Collection"  # Title
+        assert rows[1][3] == "<p>Full HTML body content</p>"  # Body (HTML)
+        assert rows[1][4] == "Shop the best running shoes"  # SEO Description
+        assert rows[1][5] == "Top picks for runners"  # Metafield
+        assert rows[1][6] == "Best Selling"  # Sort Order
+        assert rows[1][7] == "FALSE"  # Published
+        assert rows[1][8] == "all conditions"  # Must Match
+        assert rows[1][9] == "Tag"  # Rule: Product Column
+        assert rows[1][10] == "Equals"  # Rule: Relation
+        assert rows[1][11] == "my-tag"  # Rule: Condition
 
     async def test_csv_null_fields_render_empty(
         self, db_session: AsyncSession, project_id, approved_page_with_null_fields
@@ -199,15 +200,30 @@ class TestGenerateCSV:
         rows = list(reader)
 
         data_row = rows[1]
+        # Command is first column
+        assert data_row[0] == "UPDATE"
         # Handle should still be extracted
-        assert data_row[0] == "hiking-boots"
+        assert data_row[1] == "hiking-boots"
         # All content fields should be empty strings
-        assert data_row[1] == ""
         assert data_row[2] == ""
         assert data_row[3] == ""
         assert data_row[4] == ""
+        assert data_row[5] == ""
         # Verify no 'None' strings
         assert "None" not in csv_string
+
+    async def test_csv_new_command_for_clusters(
+        self, db_session: AsyncSession, project_id, approved_page_with_content
+    ):
+        """CSV uses NEW command when specified (for cluster exports)."""
+        csv_string, row_count = await ExportService.generate_csv(
+            db_session, project_id, command="NEW"
+        )
+
+        clean = csv_string.lstrip("\ufeff")
+        reader = csv.reader(io.StringIO(clean))
+        rows = list(reader)
+        assert rows[1][0] == "NEW"
 
     async def test_csv_has_utf8_bom(
         self, db_session: AsyncSession, project_id, approved_page_with_content

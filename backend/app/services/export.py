@@ -63,11 +63,28 @@ class ExportService:
 
         return ""
 
+    CSV_HEADERS = [
+        "Command",
+        "Handle",
+        "Title",
+        "Body (HTML)",
+        "SEO Description",
+        "Metafield: custom.top_description [single_line_text_field]",
+        "Sort Order",
+        "Published",
+        "Must Match",
+        "Rule: Product Column",
+        "Rule: Relation",
+        "Rule: Condition",
+    ]
+
     @staticmethod
     async def generate_csv(
         db: AsyncSession,
         project_id: str,
         page_ids: list[str] | None = None,
+        command: str = "UPDATE",
+        shopify_placeholder_tag: str = "",
     ) -> tuple[str, int]:
         """Generate a Matrixify-format CSV for approved page content.
 
@@ -79,6 +96,8 @@ class ExportService:
             db: Async database session.
             project_id: UUID of the project.
             page_ids: Optional list of CrawledPage IDs to filter to.
+            command: Matrixify command column value ("UPDATE" or "NEW").
+            shopify_placeholder_tag: Placeholder tag for Rule: Condition column.
 
         Returns:
             Tuple of (csv_string with UTF-8 BOM, row_count).
@@ -104,22 +123,23 @@ class ExportService:
         output.write("\ufeff")
 
         writer = csv.writer(output)
-        writer.writerow([
-            "Handle",
-            "Title",
-            "Body (HTML)",
-            "SEO Description",
-            "Metafield: custom.top_description [single_line_text_field]",
-        ])
+        writer.writerow(ExportService.CSV_HEADERS)
 
         row_count = 0
         for page, content in rows:
             writer.writerow([
+                command,
                 ExportService.extract_handle(page.normalized_url),
                 content.page_title or "",
                 content.bottom_description or "",
                 content.meta_description or "",
                 content.top_description or "",
+                "Best Selling",
+                "FALSE",
+                "all conditions",
+                "Tag",
+                "Equals",
+                shopify_placeholder_tag,
             ])
             row_count += 1
 
@@ -149,4 +169,21 @@ class ExportService:
         result = name.lower()
         result = re.sub(r"[^a-z0-9]+", "-", result)
         result = result.strip("-")
+        return result
+
+    @staticmethod
+    def safe_filename_part(name: str) -> str:
+        """Strip filesystem-unsafe characters while preserving readability.
+
+        Removes characters that are unsafe in filenames (\\/:*?"<>|) and
+        collapses extra whitespace, but preserves casing and spaces.
+
+        Args:
+            name: Raw string to sanitize.
+
+        Returns:
+            Cleaned string safe for use in filenames.
+        """
+        result = re.sub(r'[\\/:*?"<>|]+', "", name)
+        result = re.sub(r"\s+", " ", result).strip()
         return result

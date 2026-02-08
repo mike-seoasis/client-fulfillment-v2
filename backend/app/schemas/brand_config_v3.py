@@ -496,6 +496,10 @@ class VocabularySchema(BaseModel):
     brand_specific_terms: list[IndustryTermSchema] = Field(
         default_factory=list, description="Proprietary names and trademarked features"
     )
+    shopify_placeholder_tag: str = Field(
+        default="",
+        description="Placeholder Shopify product tag used as the Rule: Condition in Matrixify exports. Set to a real tag from the store.",
+    )
 
     model_config = ConfigDict(extra="allow")
 
