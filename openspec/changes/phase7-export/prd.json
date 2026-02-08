@@ -172,8 +172,9 @@
         "Both buttons use consistent styling with other onboarding pages"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Back is secondary style, Finish Onboarding is primary (bg-palm-500)."
+      "passes": true,
+      "notes": "Back is secondary style, Finish Onboarding is primary (bg-palm-500).",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S7-098",
@@ -205,6 +206,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-08T16:00:34.946Z"
+    "updatedAt": "2026-02-08T16:01:25.278Z"
   }
 }

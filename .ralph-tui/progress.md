@@ -136,3 +136,15 @@ after each iteration and it's included in prompts for context.
   - S7-007 built the full export page including summary count, field list, format indicator, download button with loading/disabled states — S7-009's scope was mostly already covered
   - Field names in the UI "Export includes" list should match the backend CSV column names for consistency (e.g. "SEO Description" not "Meta description")
 ---
+
+## 2026-02-08 - S7-010
+- Navigation buttons were already fully implemented by S7-007 when the export page was created
+- Back button: `<Link href={/projects/{id}/onboarding/content}>` with `<Button variant="secondary">` — secondary styling
+- Finish Onboarding button: `<Link href={/projects/{id}}>` with `<Button>` — primary palm-500 styling
+- Both buttons are in a flex container at the bottom of the card, separated by a divider
+- Verified: TypeScript and lint checks pass clean (no new errors)
+- Files changed: None — already complete
+- **Learnings:**
+  - S7-007 was a comprehensive implementation that covered many subsequent stories (S7-008, S7-009, S7-010)
+  - When building a full page component, navigation is naturally included — splitting it into a separate story means it's often already done
+---
