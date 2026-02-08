@@ -1,0 +1,472 @@
+{
+  "name": "Phase 8: Keyword Cluster Creation",
+  "description": "Add keyword cluster creation workflow: seed keyword input, 5-stage pipeline (LLM expansion with 11-strategy prompt, DataForSEO volume enrichment, LLM filtering with parent/child roles), user approval UI, and bridge to existing content pipeline via CrawledPage/PageKeywords records.",
+  "branchName": "v2-rebuild",
+  "userStories": [
+    {
+      "id": "S8-001",
+      "title": "Create KeywordCluster and ClusterPage database models",
+      "description": "As a developer, I need database models for clusters and cluster pages so that cluster data can be persisted.",
+      "acceptanceCriteria": [
+        "Create backend/app/models/keyword_cluster.py with KeywordCluster class: id (UUID PK), project_id (UUID FK to projects), seed_keyword (String not null), name (String not null), status (String default 'generating'), generation_metadata (JSONB nullable), created_at, updated_at",
+        "Same file: ClusterPage class: id (UUID PK), cluster_id (UUID FK to keyword_clusters with cascade delete), keyword (String not null), role (String not null: 'parent' or 'child'), url_slug (String not null), expansion_strategy (String nullable), reasoning (String nullable), search_volume (Integer nullable), cpc (Float nullable), competition (Float nullable), competition_level (String nullable), composite_score (Float nullable), is_approved (Boolean default false), crawled_page_id (UUID FK to crawled_pages nullable), created_at, updated_at",
+        "KeywordCluster has relationship to Project (back_populates='clusters') and pages list relationship to ClusterPage (cascade all delete-orphan)",
+        "ClusterPage has relationship back to KeywordCluster (back_populates='pages')",
+        "Follow existing model patterns from backend/app/models/crawled_page.py (UUID as_uuid=False, text server_defaults, DateTime timezone=True)"
+      ],
+      "priority": 1,
+      "passes": true,
+      "dependsOn": [],
+      "notes": "Reference backend/app/models/crawled_page.py and backend/app/models/page_keywords.py for UUID, datetime, and JSONB patterns. Status values for KeywordCluster: generating, suggestions_ready, approved, content_generating, complete.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S8-002",
+      "title": "Add source column to CrawledPage model",
+      "description": "As a developer, I need a source field on CrawledPage so that we can distinguish onboarding pages from cluster pages.",
+      "acceptanceCriteria": [
+        "Add source column to CrawledPage model: Mapped[str] = mapped_column(String(20), nullable=False, default='onboarding', server_default=text(\"'onboarding'\"), index=True)",
+        "Column values are 'onboarding' or 'cluster'"
+      ],
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [],
+      "notes": "This is a simple column addition to backend/app/models/crawled_page.py. The Alembic migration will backfill existing rows."
+    },
+    {
+      "id": "S8-003",
+      "title": "Register models and add Project.clusters relationship",
+      "description": "As a developer, I need the new models registered so they are available throughout the app.",
+      "acceptanceCriteria": [
+        "Import KeywordCluster and ClusterPage in backend/app/models/__init__.py",
+        "Add 'clusters' relationship to Project model: Mapped[list['KeywordCluster']] = relationship(back_populates='project', cascade='all, delete-orphan')",
+        "All models importable from app.models"
+      ],
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [
+        "S8-001"
+      ],
+      "notes": "Reference how CrawledPage is registered in __init__.py. The Project model is in backend/app/models/project.py."
+    },
+    {
+      "id": "S8-004",
+      "title": "Create Alembic migration",
+      "description": "As a developer, I need a database migration so that the new tables and columns are created.",
+      "acceptanceCriteria": [
+        "Create Alembic migration that adds keyword_clusters table with all columns from S8-001",
+        "Migration adds cluster_pages table with all columns from S8-001",
+        "Migration adds source column to crawled_pages with default 'onboarding' and backfills existing rows",
+        "Migration is reversible (downgrade drops tables and column)",
+        "Migration runs successfully: alembic upgrade head"
+      ],
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [
+        "S8-001",
+        "S8-002",
+        "S8-003"
+      ],
+      "notes": "Run: cd backend && alembic revision --autogenerate -m 'add keyword clusters and cluster pages'. Verify the generated migration includes the source column backfill."
+    },
+    {
+      "id": "S8-005",
+      "title": "Create Pydantic v2 schemas for clusters",
+      "description": "As a developer, I need request/response schemas so that the API has proper validation and serialization.",
+      "acceptanceCriteria": [
+        "Create backend/app/schemas/cluster.py with Pydantic v2 BaseModel classes",
+        "ClusterCreate: seed_keyword (str, min_length=2), name (str | None = None)",
+        "ClusterPageResponse: id, keyword, role, url_slug, expansion_strategy, reasoning, search_volume, cpc, competition, competition_level, composite_score, is_approved, crawled_page_id (all with proper types)",
+        "ClusterResponse: id, project_id, seed_keyword, name, status, generation_metadata, pages (list[ClusterPageResponse]), created_at, updated_at",
+        "ClusterListResponse: id, seed_keyword, name, status, page_count (int), approved_count (int), created_at",
+        "ClusterPageUpdate: is_approved (bool | None), keyword (str | None), url_slug (str | None), role (str | None) — all optional",
+        "All schemas use model_config = ConfigDict(from_attributes=True)"
+      ],
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [
+        "S8-001"
+      ],
+      "notes": "Reference backend/app/schemas/ for existing Pydantic v2 patterns used in this project."
+    },
+    {
+      "id": "S8-006",
+      "title": "Create ClusterKeywordService with brand context builder",
+      "description": "As a developer, I need the service skeleton and brand context helper so that Stages 1-3 can use brand-aware prompts.",
+      "acceptanceCriteria": [
+        "Create backend/app/services/cluster_keyword.py with ClusterKeywordService class",
+        "Constructor takes ClaudeClient and DataForSEOClient (same pattern as PrimaryKeywordService)",
+        "Implement _build_brand_context(brand_config: dict) -> str that extracts: company name, primary products, price point, sales channels from brand_foundation; primary persona name and summary from target_audience; competitor names from competitor_context",
+        "Returns formatted string suitable for prompt injection",
+        "Handle missing/incomplete brand config sections gracefully (skip missing sections)"
+      ],
+      "priority": 1,
+      "passes": false,
+      "dependsOn": [
+        "S8-004",
+        "S8-005"
+      ],
+      "notes": "Reference backend/app/services/primary_keyword.py for the service pattern. Brand config structure is v2_schema JSON — see backend/app/services/brand_config.py for how sections are structured."
+    },
+    {
+      "id": "S8-007",
+      "title": "Implement Stage 1: LLM candidate generation with 11-strategy prompt",
+      "description": "As a developer, I need Stage 1 so that a seed keyword can be expanded into 15-20 collection page keyword candidates.",
+      "acceptanceCriteria": [
+        "Implement _generate_candidates(seed_keyword: str, brand_context: str) -> list[dict] on ClusterKeywordService",
+        "Prompt instructs Claude to expand using 11 strategies: demographic, attribute, price/value, use-case, comparison/intent, seasonal/occasion, material/type, experience level, problem/solution, terrain/environment, values/lifestyle",
+        "Prompt includes brand context from _build_brand_context()",
+        "Prompt constrains output to collection-level keywords (not blog posts), each as viable standalone collection page",
+        "Seed keyword is always included as a candidate with role hint 'parent'",
+        "Uses Claude Haiku (model='claude-haiku-4-5-20251001') with temperature=0.4, max_tokens=1500",
+        "Returns structured JSON: list of {keyword, expansion_strategy, rationale, estimated_intent}",
+        "Handles JSON parsing with markdown code block stripping (same pattern as primary_keyword.py)",
+        "Returns 15-20 candidates on success, raises on failure"
+      ],
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "S8-006"
+      ],
+      "notes": "Use the 11-strategy prompt structure discussed in research. The prompt should ask for 15-20 suggestions ordered by estimated commercial value. Reference backend/app/services/primary_keyword.py:generate_candidates() for Claude call patterns and JSON parsing."
+    },
+    {
+      "id": "S8-008",
+      "title": "Implement Stage 2: DataForSEO volume enrichment",
+      "description": "As a developer, I need Stage 2 so that candidates are enriched with real search volume data.",
+      "acceptanceCriteria": [
+        "Implement _enrich_with_volume(candidates: list[dict]) -> list[dict] on ClusterKeywordService",
+        "Extracts keyword strings from candidates and calls DataForSEOClient.get_keyword_volume_batch()",
+        "Merges search_volume, cpc, competition, competition_level back into each candidate dict",
+        "If DataForSEO is unavailable (client.available is False or API error), returns candidates unchanged with a 'volume_unavailable' flag set to True on the result",
+        "Single batch API call for all candidates (not one per keyword)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "S8-007"
+      ],
+      "notes": "This is almost identical to PrimaryKeywordService.enrich_with_volume() in pattern. Reference backend/app/integrations/dataforseo.py for the client API. The batch endpoint handles up to 1000 keywords in one call."
+    },
+    {
+      "id": "S8-009",
+      "title": "Implement Stage 3: LLM filtering and role assignment",
+      "description": "As a developer, I need Stage 3 so that candidates are filtered to the best 8-12, assigned parent/child roles, and given URL slugs.",
+      "acceptanceCriteria": [
+        "Implement _filter_and_assign_roles(candidates: list[dict], seed_keyword: str) -> list[dict] on ClusterKeywordService",
+        "Prompt includes all candidates with their volume/CPC/competition data",
+        "Prompt instructs Claude to: filter to 8-12 best candidates, remove near-duplicates (cannibalization), remove candidates with search_volume < 50 (unless fewer than 5 would remain), assign the seed keyword as role='parent' and others as role='child'",
+        "Each result includes: keyword, role, url_slug, expansion_strategy, reasoning, search_volume, cpc, competition, competition_level",
+        "URL slugs generated as /collections/{keyword-as-slug} — lowercase, hyphens, no special chars, max 60 chars",
+        "Composite score calculated for each using existing formula: 50% volume (log10 * 10, cap 50) + 35% relevance + 15% competition — reuse the math from PrimaryKeywordService.calculate_score()",
+        "Results sorted by composite_score descending with parent always first",
+        "Uses Claude Haiku with temperature=0.0 (deterministic filtering)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "S8-008"
+      ],
+      "notes": "Reference PrimaryKeywordService.calculate_score() at backend/app/services/primary_keyword.py:683 for the scoring formula. The filtering prompt should be explicit about what makes a good collection page keyword vs a blog keyword."
+    },
+    {
+      "id": "S8-010",
+      "title": "Implement generate_cluster orchestrator",
+      "description": "As a developer, I need the orchestrator so that Stages 1-3 run in sequence and persist results to the database.",
+      "acceptanceCriteria": [
+        "Implement generate_cluster(seed_keyword: str, project_id: str, brand_config: dict, db: AsyncSession, name: str | None = None) -> dict on ClusterKeywordService",
+        "Loads brand context via _build_brand_context(brand_config)",
+        "Runs Stage 1 → Stage 2 → Stage 3 sequentially",
+        "Creates KeywordCluster record with status='suggestions_ready' after Stage 3 completes",
+        "Creates ClusterPage records for each filtered candidate",
+        "Stores generation_metadata JSONB: {stage1_time_ms, stage2_time_ms, stage3_time_ms, total_time_ms, candidates_generated, candidates_enriched, candidates_filtered, volume_unavailable}",
+        "Returns dict with cluster_id, suggestions list, generation_metadata, and any warnings",
+        "On partial failure (Stage 2 DataForSEO fails): continues with Stage 3, includes warning in response",
+        "On total failure (Stage 1 or Stage 3 fails): rolls back DB, returns error"
+      ],
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "S8-009"
+      ],
+      "notes": "This is the main entry point called by the API endpoint. Use time.perf_counter() for timing. Reference backend/app/services/content_generation_service.py for async session patterns."
+    },
+    {
+      "id": "S8-011",
+      "title": "Implement bulk_approve_cluster bridge to content pipeline",
+      "description": "As a developer, I need the bulk-approve function so that approved cluster pages become CrawledPage + PageKeywords records that the existing content pipeline can process.",
+      "acceptanceCriteria": [
+        "Implement bulk_approve_cluster(cluster_id: str, db: AsyncSession) -> dict on ClusterKeywordService",
+        "Queries all ClusterPage records where is_approved=True for the cluster",
+        "Returns 400-equivalent error if no approved pages",
+        "Returns 409-equivalent error if cluster status is already 'approved' or later",
+        "For each approved ClusterPage, creates a CrawledPage with: project_id from cluster, normalized_url from url_slug, source='cluster', status='completed', category='collection', title=keyword (as placeholder)",
+        "For each approved ClusterPage, creates PageKeywords with: crawled_page_id from new CrawledPage, primary_keyword from keyword, is_approved=True, is_priority=True if role='parent' else False, search_volume and composite_score from ClusterPage",
+        "Updates ClusterPage.crawled_page_id to reference the new CrawledPage",
+        "Updates KeywordCluster.status to 'approved'",
+        "Returns dict with bridged_count and list of created crawled_page_ids"
+      ],
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "S8-010"
+      ],
+      "notes": "After this runs, the standard content generation pipeline (POP briefs → Claude writing → quality checks) can be triggered for these pages. Reference how content_generation_service.py processes CrawledPage records."
+    },
+    {
+      "id": "S8-012",
+      "title": "Create cluster API router with create and list endpoints",
+      "description": "As a developer, I need API endpoints so the frontend can create clusters and list them.",
+      "acceptanceCriteria": [
+        "Create backend/app/api/v1/clusters.py with APIRouter",
+        "POST /api/v1/projects/{project_id}/clusters — validates project exists, calls generate_cluster(), returns ClusterResponse with 200",
+        "GET /api/v1/projects/{project_id}/clusters — returns list of ClusterListResponse (includes page_count and approved_count computed from ClusterPage records)",
+        "POST endpoint runs synchronously (~5-10s), returns timeout error if >30s",
+        "404 for invalid project_id on both endpoints",
+        "422 for invalid request body on POST (empty seed_keyword, etc.)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "S8-011"
+      ],
+      "notes": "Reference backend/app/api/v1/projects.py for router patterns. The POST endpoint is synchronous (not a background task) because Stages 1-3 complete in ~5-10 seconds."
+    },
+    {
+      "id": "S8-013",
+      "title": "Add cluster detail, update page, bulk-approve, and delete endpoints",
+      "description": "As a developer, I need CRUD endpoints for cluster details and page management.",
+      "acceptanceCriteria": [
+        "GET /api/v1/projects/{project_id}/clusters/{cluster_id} — returns full ClusterResponse with all ClusterPage records, 404 if not found",
+        "PATCH /api/v1/projects/{project_id}/clusters/{cluster_id}/pages/{page_id} — updates is_approved, keyword, url_slug, and/or role fields. If role is set to 'parent', the previous parent becomes 'child'. Returns updated ClusterPageResponse. 404 if not found.",
+        "POST /api/v1/projects/{project_id}/clusters/{cluster_id}/approve — calls bulk_approve_cluster(), returns 200 with bridged_count. Returns 400 if no approved pages, 409 if already approved.",
+        "DELETE /api/v1/projects/{project_id}/clusters/{cluster_id} — deletes cluster if status < 'approved', returns 204. Returns 409 if status >= 'approved'."
+      ],
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "S8-012"
+      ],
+      "notes": "The PATCH endpoint handles parent reassignment: when setting role='parent' on a child, find the current parent in the same cluster and set it to 'child'. Only one parent per cluster."
+    },
+    {
+      "id": "S8-014",
+      "title": "Register clusters router",
+      "description": "As a developer, I need the clusters router included in the API so endpoints are accessible.",
+      "acceptanceCriteria": [
+        "Import and include clusters router in backend/app/api/v1/__init__.py",
+        "Router mounted with prefix matching the project path pattern",
+        "All 6 endpoints accessible and returning correct status codes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "S8-013"
+      ],
+      "notes": "Reference how the existing routers (projects, brand_config, content_generation, files) are included."
+    },
+    {
+      "id": "S8-015",
+      "title": "Backend unit tests for ClusterKeywordService",
+      "description": "As a developer, I need unit tests so that the cluster service logic is verified.",
+      "acceptanceCriteria": [
+        "Create backend/tests/test_cluster_keyword_service.py",
+        "Test _build_brand_context() with full and partial brand configs",
+        "Test _generate_candidates() with mocked Claude response (verify prompt includes 11 strategies, verify JSON parsing, verify seed keyword included)",
+        "Test _enrich_with_volume() with mocked DataForSEO response (success case with volume data, failure case returns candidates unchanged with warning)",
+        "Test _filter_and_assign_roles() with mocked Claude response (verify parent/child assignment, URL slug format, composite score calculation, duplicate filtering)",
+        "Test generate_cluster() full pipeline with all mocks (success, partial failure with DataForSEO down, total failure with Claude down)",
+        "Test bulk_approve_cluster() (CrawledPage creation with source='cluster', PageKeywords creation with is_priority for parent, crawled_page_id backref, error cases: no approved pages, already approved)",
+        "Test URL slug edge cases: special characters stripped, long keywords truncated, spaces become hyphens"
+      ],
+      "priority": 3,
+      "passes": false,
+      "dependsOn": [
+        "S8-011"
+      ],
+      "notes": "Reference backend/tests/test_primary_keyword_service.py for mocking patterns with Claude and DataForSEO clients. Use pytest-asyncio for async tests."
+    },
+    {
+      "id": "S8-016",
+      "title": "Backend integration tests for cluster API endpoints",
+      "description": "As a developer, I need integration tests so that API endpoints are verified end-to-end.",
+      "acceptanceCriteria": [
+        "Create backend/tests/test_cluster_api.py",
+        "Test POST create cluster (mock Claude + DataForSEO, verify response schema, verify DB records created)",
+        "Test GET list clusters (verify page_count and approved_count)",
+        "Test GET cluster detail (verify all ClusterPage fields returned)",
+        "Test PATCH update page (approve, edit keyword, edit slug, reassign parent)",
+        "Test POST bulk-approve (verify CrawledPage + PageKeywords created, verify 400 no approved pages, verify 409 already approved)",
+        "Test DELETE cluster (success for draft, 409 for approved)",
+        "Test 404 cases for invalid project_id and cluster_id",
+        "All tests use test database with proper fixtures"
+      ],
+      "priority": 3,
+      "passes": false,
+      "dependsOn": [
+        "S8-014"
+      ],
+      "notes": "Reference backend/tests/ for existing API test patterns with AsyncClient and test database fixtures."
+    },
+    {
+      "id": "S8-017",
+      "title": "Add TypeScript types and API client for clusters",
+      "description": "As a developer, I need frontend types and API client so that React components can interact with the cluster API.",
+      "acceptanceCriteria": [
+        "Add Cluster, ClusterPage, ClusterCreate, ClusterPageUpdate TypeScript interfaces in frontend/src/lib/types.ts",
+        "Add cluster API functions in frontend/src/lib/api.ts: createCluster(projectId, data), getClusters(projectId), getCluster(projectId, clusterId), updateClusterPage(projectId, clusterId, pageId, data), bulkApproveCluster(projectId, clusterId), deleteCluster(projectId, clusterId)",
+        "All functions use the existing apiClient pattern with proper error handling"
+      ],
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "S8-005"
+      ],
+      "notes": "Reference existing types and API client functions in frontend/src/lib/types.ts and frontend/src/lib/api.ts for patterns."
+    },
+    {
+      "id": "S8-018",
+      "title": "Create TanStack Query hooks for clusters",
+      "description": "As a developer, I need React hooks so that components have reactive data fetching for clusters.",
+      "acceptanceCriteria": [
+        "Create frontend/src/hooks/useClusters.ts",
+        "useCreateCluster(): useMutation that calls createCluster(), invalidates clusters list on success",
+        "useClusters(projectId): useQuery that fetches cluster list",
+        "useCluster(projectId, clusterId): useQuery that fetches cluster detail with pages",
+        "useUpdateClusterPage(): useMutation that calls updateClusterPage(), optimistically updates cluster detail cache",
+        "useBulkApproveCluster(): useMutation that calls bulkApproveCluster(), invalidates cluster detail and list on success",
+        "useDeleteCluster(): useMutation that calls deleteCluster(), invalidates cluster list on success"
+      ],
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "S8-017"
+      ],
+      "notes": "Reference frontend/src/hooks/ for existing TanStack Query hook patterns. Use queryClient.invalidateQueries() for cache management."
+    },
+    {
+      "id": "S8-019",
+      "title": "Create seed keyword input page",
+      "description": "As a user, I need a page to enter a seed keyword so I can create a new keyword cluster.",
+      "acceptanceCriteria": [
+        "Create page at frontend/src/app/projects/[id]/clusters/new/page.tsx",
+        "Form with 'Seed Keyword' (required, min 2 chars) and 'Cluster Name' (optional) fields",
+        "Cancel button navigates back to project detail page",
+        "Get Suggestions button triggers useCreateCluster mutation",
+        "Loading state shows 3-step progress indicator: 'Generating suggestions...' → 'Checking search volume...' → 'Finalizing results...'",
+        "On success, navigate to /projects/{id}/clusters/{newClusterId}",
+        "On error, show error message with Try Again button",
+        "Page follows project design system (tropical oasis palette, rounded-sm, warm grays)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "S8-018"
+      ],
+      "notes": "Reference WIREFRAMES.md section 12 for layout. Reference frontend/src/app/projects/[id]/onboarding/upload/page.tsx for a similar form page pattern. Design: bg-sand-50 card, palm-500 primary button, sand-200 secondary button."
+    },
+    {
+      "id": "S8-020",
+      "title": "Create cluster suggestions and approval page",
+      "description": "As a user, I need a page to review, approve, and edit cluster keyword suggestions before generating content.",
+      "acceptanceCriteria": [
+        "Create page at frontend/src/app/projects/[id]/clusters/[clusterId]/page.tsx",
+        "Header shows cluster name, seed keyword, and stepper (Keywords → Content → Review → Export) with Keywords active",
+        "Displays all ClusterPage suggestions in a list/table",
+        "Each row shows: keyword (editable on click), role badge ('Parent' in palm-500 green / 'Child' in neutral), search volume, CPC, competition level, composite score, URL slug (editable on click), expansion strategy tag",
+        "Parent page pinned to top of list with visual distinction",
+        "Approve/reject toggle per suggestion (calls useUpdateClusterPage)",
+        "Inline editing for keyword and URL slug — saves on blur or Enter key via PATCH",
+        "'Make Parent' action on child rows — reassigns parent role via PATCH",
+        "'Approve All' button approves all suggestions",
+        "'Generate Content' button calls useBulkApproveCluster, navigates to content generation page on success. Disabled with tooltip when no pages approved.",
+        "Warning banner when volume data was unavailable",
+        "Back button navigates to project detail"
+      ],
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "S8-018"
+      ],
+      "notes": "Reference WIREFRAMES.md section 13 for layout. Reference the onboarding keywords page at frontend/src/app/projects/[id]/onboarding/keywords/page.tsx for approval UI patterns. The stepper should match the onboarding stepper style but with cluster-specific steps."
+    },
+    {
+      "id": "S8-021",
+      "title": "Update project detail page with cluster list",
+      "description": "As a user, I need to see my clusters on the project detail page so I can manage them.",
+      "acceptanceCriteria": [
+        "Update the New Content section in frontend/src/app/projects/[id]/page.tsx",
+        "Replace disabled placeholder with live cluster list fetched via useClusters hook",
+        "Each cluster shown as a card: cluster name, page count (e.g. '8 pages'), status indicator (Awaiting Approval / Generating Content / Complete)",
+        "Clicking a cluster card navigates to /projects/{id}/clusters/{clusterId}",
+        "'+ New Cluster' button navigates to /projects/{id}/clusters/new",
+        "Empty state: 'No clusters yet' with prominent '+ New Cluster' button",
+        "Cluster cards follow design system (border-sand-500, rounded-sm, warm shadows)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "dependsOn": [
+        "S8-018"
+      ],
+      "notes": "Reference WIREFRAMES.md section 4 (Project View) for the New Content section layout. The onboarding section above it shows the pattern for status indicators."
+    },
+    {
+      "id": "S8-022",
+      "title": "Frontend component tests",
+      "description": "As a developer, I need frontend tests so that cluster UI components are verified.",
+      "acceptanceCriteria": [
+        "Test seed keyword input page: form rendering, validation (empty keyword blocked), loading state display, navigation on success/cancel",
+        "Test cluster suggestions page: suggestion list rendering, approval toggle, inline editing, Approve All, Generate Content button disabled state, parent badge display",
+        "Test cluster card and list on project detail: cards render with correct data, click navigation, empty state, New Cluster button",
+        "All tests use Vitest with React Testing Library patterns from existing tests"
+      ],
+      "priority": 3,
+      "passes": false,
+      "dependsOn": [
+        "S8-019",
+        "S8-020",
+        "S8-021"
+      ],
+      "notes": "Reference frontend/src/__tests__/ or frontend/tests/ for existing test patterns."
+    },
+    {
+      "id": "S8-098",
+      "title": "Update V2_REBUILD_PLAN.md",
+      "description": "As a developer, I need to update the plan status so that progress is tracked.",
+      "acceptanceCriteria": [
+        "Mark all Phase 8 checkboxes as [x] complete in V2_REBUILD_PLAN.md",
+        "Update Current Status table: Phase='8 - Keyword Cluster Creation (Complete)', Slice='Phase 8 complete', Last Session=today's date, Next Action='Phase 9: Blog Planning & Writing'",
+        "Add new row to Session Log table with date, completed items, next up"
+      ],
+      "priority": 3,
+      "passes": false,
+      "dependsOn": [
+        "S8-015",
+        "S8-016",
+        "S8-022"
+      ],
+      "notes": "This task maintains our planning discipline."
+    },
+    {
+      "id": "S8-099",
+      "title": "Verify Phase 8 completion",
+      "description": "As a developer, I need to verify all Phase 8 criteria are met before moving on.",
+      "acceptanceCriteria": [
+        "All backend tests pass: cd backend && python -m pytest tests/",
+        "All frontend tests pass: cd frontend && npm test",
+        "Manual verification: can create a cluster from seed keyword, see suggestions with volume data, approve pages, verify CrawledPage + PageKeywords records created in DB, content generation can be triggered for approved cluster pages",
+        "Git commit created with message: feat: Phase 8 - Keyword cluster creation pipeline",
+        "No uncommitted changes remain"
+      ],
+      "priority": 3,
+      "passes": false,
+      "dependsOn": [
+        "S8-098"
+      ],
+      "notes": "Do not proceed to Phase 9 until this passes. The critical test is that approved cluster pages successfully enter the existing content pipeline."
+    }
+  ],
+  "metadata": {
+    "updatedAt": "2026-02-08T20:05:32.034Z"
+  }
+}

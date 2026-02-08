@@ -5,172 +5,24 @@ after each iteration and it's included in prompts for context.
 
 ## Codebase Patterns (Study These First)
 
-*Add reusable patterns discovered during development here.*
-
-- **Service pattern**: Services in `backend/app/services/` are classes with `@staticmethod` methods. No `__init__` needed for stateless utility services.
-- **Test DB fixtures**: Use `db_session` fixture from conftest, create model instances with `db_session.add()` + `await db_session.flush()`. Session auto-rollbacks between tests. SQLite in-memory via `aiosqlite`.
-- **Integration test fixtures**: When using `async_client` (HTTP endpoint tests), fixtures must call `await db_session.commit()` (not just `flush()`) so data is visible to the endpoint's separate DB session. Unit tests that pass `db_session` directly can use `flush()`.
+- **Model file pattern**: UUID(as_uuid=False) with `str` Mapped type, `text("gen_random_uuid()")` server_default, `lambda: str(uuid4())` Python default. DateTime(timezone=True) with `text("now()")` server_default. Boolean with `text("false")` server_default.
+- **Model registration**: Add import to `backend/app/models/__init__.py` and include in `__all__` list (alphabetically sorted).
+- **Relationships with back_populates**: Always define both sides. Use `TYPE_CHECKING` guard for imports to avoid circular deps. Parent side uses `cascade="all, delete-orphan"` with list type. Child FK uses `ondelete="CASCADE"` or `ondelete="SET NULL"` as appropriate.
+- **Python env**: Use `.venv/bin/python` (not bare `python`) for running tools in backend.
 
 ---
 
-## 2026-02-08 - S7-001
-- Created `ExportService` class with `extract_handle(url)` and `sanitize_filename(name)`
-- `extract_handle`: Parses URL, strips query params and trailing slashes. If path contains `/collections/`, returns segment(s) after it; otherwise returns last non-empty path segment.
-- `sanitize_filename`: Lowercases name, replaces non-alphanumeric chars with hyphens, collapses multiples, strips edges.
-- Files changed: `backend/app/services/export.py` (new)
+## 2026-02-08 - S8-001
+- Created `backend/app/models/keyword_cluster.py` with `KeywordCluster` and `ClusterPage` models
+- Added `clusters` relationship to `backend/app/models/project.py` (back_populates with KeywordCluster)
+- Updated `backend/app/models/__init__.py` to export both new models
+- **Files changed:**
+  - `backend/app/models/keyword_cluster.py` (new)
+  - `backend/app/models/project.py` (added relationship + imports)
+  - `backend/app/models/__init__.py` (added exports)
 - **Learnings:**
-  - `urlparse` handles query param stripping automatically via `.path` (no manual `?` splitting needed)
-  - Ruff linting passes clean; mypy errors exist in other service files but not in new code
-  - Run tests from `backend/` directory to get `app.` imports working
----
-
-## 2026-02-08 - S7-002
-- Added `generate_csv(db, project_id, page_ids=None)` async method to `ExportService`
-- Queries `CrawledPage` joined with `PageContent` where `is_approved=True` and `status=complete`
-- Optional `page_ids` filter silently skips non-approved pages
-- CSV columns: Handle, Title, Body (HTML), SEO Description, Metafield: custom.top_description [single_line_text_field]
-- Uses `csv.writer` with `StringIO`, UTF-8 BOM prefix (`\ufeff`) for Excel compatibility
-- Null content fields render as empty string via `or ""`
-- Returns `(csv_string, row_count)` tuple
-- Files changed: `backend/app/services/export.py` (modified)
-- **Learnings:**
-  - `select(CrawledPage, PageContent).join(...)` returns tuples that can be unpacked as `(page, content)` in the result rows
-  - UTF-8 BOM is `\ufeff` — write it before the csv.writer starts to ensure it's the very first bytes
-  - Pre-existing mypy errors in other service files (content_extraction, crawling, content_writing, content_quality) — not related to export service
----
-
-## 2026-02-08 - S7-003
-- Added `GET /api/v1/projects/{project_id}/export` endpoint to `backend/app/api/v1/projects.py`
-- Accepts optional `page_ids` query parameter (comma-separated UUIDs)
-- Returns CSV with `Content-Type: text/csv; charset=utf-8` and `Content-Disposition: attachment; filename="{sanitized}-matrixify-export.csv"`
-- Returns HTTP 400 if no approved pages available, HTTP 404 if project not found
-- Uses `ExportService.generate_csv()` from S7-002 and `ExportService.sanitize_filename()` from S7-001
-- Files changed: `backend/app/api/v1/projects.py` (modified — added `Response` import + export endpoint)
-- **Learnings:**
-  - FastAPI `Response` with `media_type` and `headers` dict is the simplest way to return file downloads (no need for `StreamingResponse` for small CSV payloads)
-  - Inline imports for service classes work well in endpoint functions (follows existing pattern in the codebase, e.g. `regenerate_taxonomy`)
-  - `page_ids` as comma-separated string query param is simpler than using FastAPI's `Query(...)` list parsing for optional UUID lists
----
-
-## 2026-02-08 - S7-004
-- Created unit tests for export service: 14 tests across 3 test classes
-- `TestExtractHandle` (7 tests): standard /collections/ URL, URL without /collections/, query params stripped, trailing slash stripped, nested path after /collections/, empty path, combined trailing slash + query params
-- `TestSanitizeFilename` (4 tests): special characters, spaces, consecutive special chars collapsed, leading/trailing stripped
-- `TestGenerateCSV` (3 tests): all fields populated with correct columns/values, null fields render as empty strings (not 'None'), UTF-8 BOM present
-- Files changed: `backend/tests/test_export.py` (new)
-- **Learnings:**
-  - `asyncio_mode = "auto"` in pyproject.toml means no `@pytest.mark.asyncio` needed on async test methods
-  - CSV BOM can be stripped with `csv_string.lstrip("\ufeff")` for clean parsing in assertions
-  - CrawledPage requires `labels=[]` explicitly when creating test fixtures (non-nullable JSONB column)
----
-
-## 2026-02-08 - S7-005
-- Created integration tests for the export CSV endpoint (GET /api/v1/projects/{project_id}/export)
-- 7 tests in `TestExportEndpoint` class covering all acceptance criteria:
-  - `test_export_with_page_ids_filter` — page_ids filter returns only selected pages
-  - `test_export_without_page_ids_returns_all_approved` — no filter returns all approved pages
-  - `test_export_no_approved_pages_returns_400` — HTTP 400 when no approved pages
-  - `test_export_mixed_approved_unapproved_page_ids` — mix of approved/unapproved returns only approved
-  - `test_export_invalid_project_id_returns_404` — HTTP 404 for non-existent project
-  - `test_export_csv_headers_are_matrixify_columns` — correct Matrixify column names
-  - `test_export_content_disposition_header` — sanitized filename in Content-Disposition
-- Files changed: `backend/tests/test_export_api.py` (new)
-- **Learnings:**
-  - Integration tests using `async_client` fixture need `db_session.commit()` (not just `flush()`) in fixtures so data is visible to the endpoint's separate session
-  - `StaticPool` with SQLite in-memory means all sessions share the same connection, so committed data is visible across sessions within the same test
-  - `_parse_csv()` helper with BOM stripping keeps test assertions clean and DRY
-  - Project model requires `phase_status={}` and `brand_wizard_state={}` explicitly in test fixtures (non-nullable JSONB columns)
----
-
-## 2026-02-08 - S7-006
-- Added `exportProject(projectId, pageIds?)` function to `frontend/src/lib/api.ts`
-- Uses raw `fetch()` (not apiClient) to get blob response from `GET /api/v1/projects/{projectId}/export`
-- Optional `page_ids` query param as comma-separated string
-- Extracts filename from `Content-Disposition` header with regex fallback to `"export.csv"`
-- Triggers browser download via hidden anchor element + blob URL pattern
-- Cleans up: removes anchor from DOM, revokes blob URL after download
-- Error handling reuses `ApiError` class from existing api.ts for consistency
-- Files changed: `frontend/src/lib/api.ts` (modified)
-- **Learnings:**
-  - Browser file download pattern: `fetch → response.blob() → URL.createObjectURL → anchor.click() → URL.revokeObjectURL` is the standard approach
-  - Cannot use `apiClient` wrapper for blob downloads since `handleResponse` calls `response.json()` — need raw fetch for binary/blob responses
-  - `Content-Disposition` filename regex `filename="?([^";\n]+)"?` handles both quoted and unquoted filenames
----
-
-## 2026-02-08 - S7-007
-- Created export page at `frontend/src/app/projects/[id]/onboarding/export/page.tsx`
-- Page shows onboarding stepper with Export as active Step 5 (uses same `ONBOARDING_STEPS` config)
-- Fetches project info via `useProject` and pages with approval status via `useContentGenerationStatus`
-- Filters to approved+complete pages, shows checkboxes for page selection (all selected by default)
-- "Export includes" info box listing Matrixify columns (Handle, Title, Body HTML, Meta description)
-- Download button calls `exportProject()` from api.ts with selected page IDs
-- Select all / deselect all with indeterminate checkbox state
-- Navigation: Back to Content, Finish Onboarding
-- Matches tropical oasis design system (palm, sand, coral palette, rounded-sm corners)
-- Files changed: `frontend/src/app/projects/[id]/onboarding/export/page.tsx` (new)
-- **Learnings:**
-  - `useContentGenerationStatus` hook (not `useContentGeneration`) is the right hook for read-only page status — it's a simpler query-only hook without generation mutation logic
-  - Checkbox indeterminate state requires a ref callback: `ref={(el) => { if (el) el.indeterminate = someSelected; }}` since React doesn't support `indeterminate` as a JSX prop
-  - Initializing selection state from async data uses a `!initialized` guard pattern to set defaults once on first data load without re-triggering on re-renders
----
-
-## 2026-02-08 - S7-008
-- Updated export page to show ALL project pages (not just approved ones) in the page selection list
-- Unapproved/incomplete pages now appear with disabled checkbox, muted opacity (opacity-50), cursor-not-allowed, and dimmed text colors
-- Added "Not approved" label badge (bg-cream-200, text-warm-gray-500) for unapproved rows alongside existing "Approved" badge for approved rows
-- Empty state updated from "No Approved Pages" to "No Pages Found" since we now show all pages
-- Select all / deselect all toggle still only operates on approved pages (disabled checkboxes unaffected)
-- Files changed: `frontend/src/app/projects/[id]/onboarding/export/page.tsx` (modified)
-- **Learnings:**
-  - S7-007 had already built most of the page selection component; S7-008 specifically required showing unapproved pages as disabled/muted rows rather than filtering them out
-  - Using `opacity-50` on the row container plus `disabled` prop on checkbox provides clean visual distinction without extra CSS
-  - The `allPages` vs `approvedPages` split keeps selection logic clean — `toggleAll` and `togglePage` only operate on approved page IDs while the list renders everything
----
-
-## 2026-02-08 - S7-009
-- Export summary and download section was already ~95% implemented by S7-007/S7-008
-- Added missing "SEO Description" and "Top Description (Metafield)" to the "Export includes" field list to match backend CSV columns and acceptance criteria
-- Changed "Meta description" label to "SEO Description" to match the actual CSV column name from the backend export service
-- Files changed: `frontend/src/app/projects/[id]/onboarding/export/page.tsx` (modified — updated export includes list)
-- **Learnings:**
-  - S7-007 built the full export page including summary count, field list, format indicator, download button with loading/disabled states — S7-009's scope was mostly already covered
-  - Field names in the UI "Export includes" list should match the backend CSV column names for consistency (e.g. "SEO Description" not "Meta description")
----
-
-## 2026-02-08 - S7-010
-- Navigation buttons were already fully implemented by S7-007 when the export page was created
-- Back button: `<Link href={/projects/{id}/onboarding/content}>` with `<Button variant="secondary">` — secondary styling
-- Finish Onboarding button: `<Link href={/projects/{id}}>` with `<Button>` — primary palm-500 styling
-- Both buttons are in a flex container at the bottom of the card, separated by a divider
-- Verified: TypeScript and lint checks pass clean (no new errors)
-- Files changed: None — already complete
-- **Learnings:**
-  - S7-007 was a comprehensive implementation that covered many subsequent stories (S7-008, S7-009, S7-010)
-  - When building a full page component, navigation is naturally included — splitting it into a separate story means it's often already done
----
-
-## 2026-02-08 - S7-098
-- Updated V2_REBUILD_PLAN.md to reflect Phase 7 completion
-- Marked Phase 7 checkboxes as [x] complete with ✅ badge
-- Updated Current Status table: Phase=7 Export (Complete), Next Action=Phase 8: Keyword Cluster Creation
-- Added session log row summarizing all S7-001 through S7-010 deliverables
-- Files changed: `V2_REBUILD_PLAN.md`
-- **Learnings:**
-  - Phase 7 session log entry is long but captures the full scope (export service, API, frontend page, tests) for future reference
-  - Status table updates are the most important part — this is what the session start protocol reads first
----
-
-## 2026-02-08 - S7-099
-- Verified Phase 7 completion: all acceptance criteria met
-- Backend: 14 unit tests + 7 integration tests all passing (21/21)
-- Frontend: export page component verified with correct columns, selection, download, navigation
-- CSV columns verified: Handle, Title, Body (HTML), SEO Description, Metafield: custom.top_description [single_line_text_field]
-- UTF-8 BOM present for Excel compatibility
-- All Phase 7 commits present (S7-001 through S7-010, S7-098)
-- Only uncommitted files are Ralph TUI session files and OpenSpec prd.json (tooling, not code)
-- Files changed: None — verification only
-- **Learnings:**
-  - Integration tests (`test_export_api.py`) require running from `backend/` directory so `Settings(env_file=".env")` finds `backend/.env`; running from project root causes `database_url` validation errors
-  - Pre-existing test failures in other modules (brand_config, content_quality, crawling) are unrelated to Phase 7 and should not block export verification
-  - No frontend export tests exist yet — future phases should consider adding component tests for the export page
+  - Project model had no existing relationships - this is the first relationship added to it
+  - Project model didn't import `relationship` from sqlalchemy.orm - needed to add it along with TYPE_CHECKING guard
+  - ClusterPage FK to crawled_pages uses `ondelete="SET NULL"` since deleting a crawled page shouldn't cascade-delete cluster pages
+  - All quality checks (mypy, ruff) pass clean
 ---

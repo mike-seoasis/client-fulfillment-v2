@@ -8,14 +8,17 @@ The Project model represents a client onboarding project with:
 """
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from sqlalchemy import DateTime, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+if TYPE_CHECKING:
+    from app.models.keyword_cluster import KeywordCluster
 
 
 class Project(Base):
@@ -110,6 +113,13 @@ class Project(Base):
         default=lambda: datetime.now(UTC),
         server_default=text("now()"),
         onupdate=lambda: datetime.now(UTC),
+    )
+
+    # Relationships
+    clusters: Mapped[list["KeywordCluster"]] = relationship(
+        "KeywordCluster",
+        back_populates="project",
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:
