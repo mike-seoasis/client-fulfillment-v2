@@ -47,6 +47,7 @@ class CrawledPage(Base):
         category: Page category (e.g., 'homepage', 'product', 'about', 'contact')
         labels: JSONB array of labels for flexible tagging
         title: Page title extracted from HTML
+        source: Page source ('onboarding' or 'cluster')
         status: Crawl status (pending, crawling, completed, failed)
         meta_description: Page meta description extracted from HTML
         body_content: Main content extracted as markdown
@@ -113,6 +114,14 @@ class CrawledPage(Base):
     content_hash: Mapped[str | None] = mapped_column(
         String(64),
         nullable=True,
+    )
+
+    source: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="onboarding",
+        server_default=text("'onboarding'"),
+        index=True,
     )
 
     status: Mapped[str] = mapped_column(

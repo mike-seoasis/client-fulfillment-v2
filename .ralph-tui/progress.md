@@ -26,3 +26,15 @@ after each iteration and it's included in prompts for context.
   - ClusterPage FK to crawled_pages uses `ondelete="SET NULL"` since deleting a crawled page shouldn't cascade-delete cluster pages
   - All quality checks (mypy, ruff) pass clean
 ---
+
+## 2026-02-08 - S8-002
+- Added `source` column to `CrawledPage` model: `Mapped[str]` with `String(20)`, `default="onboarding"`, `server_default=text("'onboarding'")`, `index=True`
+- Column supports values 'onboarding' or 'cluster' to distinguish page origins
+- Updated model docstring to document the new attribute
+- **Files changed:**
+  - `backend/app/models/crawled_page.py` (added source column + docstring update)
+- **Learnings:**
+  - No venv found in project root or backend/ — system `python3` used for quality checks
+  - Simple column additions follow the same pattern as existing String columns (e.g., `status`)
+  - All quality checks (mypy, ruff) pass clean
+---
