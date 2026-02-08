@@ -8,10 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Phase** | 7 - Export (Complete) |
-| **Slice** | Phase 7 complete: Matrixify CSV export with page selection, download, tests |
+| **Phase** | 8 - Keyword Cluster Creation (Complete) |
+| **Slice** | Phase 8 complete: Keyword cluster creation with seed input, AI suggestions, approval, content pipeline bridging, tests |
 | **Last Session** | 2026-02-08 |
-| **Next Action** | Phase 8: Keyword Cluster Creation |
+| **Next Action** | Phase 9: Blog Planning & Writing |
 | **Auth Decision** | WorkOS AuthKit (free tier, 1M MAU) — see Phase 10 |
 
 ### Session Log
@@ -36,6 +36,7 @@
 | 2026-02-07 | Phase 6 complete (S6-001 through S6-026): PageContent approval fields + migration, content review/editing schemas, 6 backend endpoints (GET/PUT content, approve, bulk-approve, recheck, status with approval data), Lexical rich text editor with HTML source toggle, keyword variation generator, 4-layer highlight plugin (keyword/variation/LSI/trope) with toggle controls, content editor page (4 fields + sidebar with QA/stats/LSI/outline), auto-save on blur with dirty tracking, bottom action bar (save/recheck/approve), content list review table with QA + approval columns + bulk approve, 24 backend tests + 49 frontend tests, manual verification of all 10 AC items. | Phase 6 polish |
 | 2026-02-08 | Phase 6 polish: Competitor name filtering (master list in vocabulary.competitors, auto-seeded from brand config + POP URLs, prompt exclusion, LSI filtering, QA check 9), toolbar block type dropdown fix, approve button status gate removed (approve whenever ready), approve navigates back to content list, review/approved tabs on content list page. | Phase 7: Export |
 | 2026-02-08 | Phase 7 complete (S7-001 through S7-010): ExportService with URL handle extraction + filename sanitization, Matrixify CSV generation with UTF-8 BOM, export API endpoint with page_ids filter + 400/404 error handling, frontend export API client with blob download, export page with onboarding stepper + page selection list + select all/deselect all + export summary + download button, Back/Finish Onboarding navigation, 23 tests. Phase 7 polish: Added 7 Matrixify columns (Command, Sort Order, Published, Must Match, Rule: Product Column, Rule: Relation, Rule: Condition), shopify_placeholder_tag field in vocabulary section (backend schema + frontend editor/display), fixed export to read tag from BrandConfig table, updated filename to "Project Name - Onboarding - Matrixify Export via SEOasis.csv", exposed Content-Disposition header via CORS. | Phase 8: Keyword Cluster Creation |
+| 2026-02-08 | Phase 8 complete (S8-001 through S8-022): KeywordCluster + ClusterPage models with Alembic migration, CrawledPage source column, Pydantic v2 schemas, ClusterKeywordService (3-stage pipeline: Claude candidate generation with 11 expansion strategies, DataForSEO volume enrichment, Claude filtering/role assignment with composite scoring), bulk approve bridging to CrawledPage + PageKeywords, 6 API endpoints (create/list/detail/update-page/approve/delete), frontend API client + TanStack Query hooks with optimistic updates, seed keyword input page with progress indicator, cluster suggestions page with inline editing + approve/reject + parent reassignment, project detail cluster list with status badges, 52 backend unit tests + 20 integration tests + 71 frontend component tests. | Phase 9: Blog Planning & Writing |
 
 ---
 
@@ -213,11 +214,11 @@
 - [x] Download functionality
 - [x] **Verify:** Export works in Matrixify
 
-### Phase 8: Keyword Cluster Creation
-- [ ] Seed keyword input UI
-- [ ] POP API for cluster suggestions
-- [ ] Wire into shared components
-- [ ] **Verify:** Full cluster flow works (create → generate → export)
+### Phase 8: Keyword Cluster Creation ✅
+- [x] Seed keyword input UI
+- [x] POP API for cluster suggestions
+- [x] Wire into shared components
+- [x] **Verify:** Full cluster flow works (create → generate → export)
 
 ### Phase 9: Blog Planning & Writing
 - [ ] BlogCampaign and BlogPost models + migration

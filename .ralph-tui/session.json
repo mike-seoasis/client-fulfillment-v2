@@ -3,10 +3,10 @@
   "sessionId": "dfdb7767-e4d4-49e2-9c59-747c908022b0",
   "status": "running",
   "startedAt": "2026-02-08T20:03:36.032Z",
-  "updatedAt": "2026-02-08T21:02:09.493Z",
-  "currentIteration": 21,
+  "updatedAt": "2026-02-08T21:03:04.360Z",
+  "currentIteration": 22,
   "maxIterations": 10,
-  "tasksCompleted": 21,
+  "tasksCompleted": 22,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -143,8 +143,8 @@
       {
         "id": "S8-022",
         "title": "Frontend component tests",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "S8-098",
@@ -370,6 +370,16 @@
       "durationMs": 364451,
       "startedAt": "2026-02-08T20:49:26.883Z",
       "endedAt": "2026-02-08T20:55:31.334Z"
+    },
+    {
+      "iteration": 22,
+      "status": "completed",
+      "taskId": "S8-022",
+      "taskTitle": "Frontend component tests",
+      "taskCompleted": true,
+      "durationMs": 397041,
+      "startedAt": "2026-02-08T20:55:32.449Z",
+      "endedAt": "2026-02-08T21:02:09.490Z"
     }
   ],
   "skippedTaskIds": [],
