@@ -88,3 +88,20 @@ after each iteration and it's included in prompts for context.
   - `cluster` sorts after `categorize` but before `content_brief`
   - All quality checks (mypy, ruff) pass clean
 ---
+
+## 2026-02-08 - S8-006
+- Created `backend/app/services/cluster_keyword.py` with `ClusterKeywordService` class
+- Constructor takes `ClaudeClient` and `DataForSEOClient` (same pattern as `PrimaryKeywordService`)
+- Implemented `_build_brand_context(brand_config: dict) -> str` static method
+- Extracts: company name, primary products, price point, sales channels from `brand_foundation`; primary persona name and summary from `target_audience`; competitor names from `competitor_context`
+- Returns formatted string with `## Brand`, `## Target Audience`, `## Competitors` sections
+- Handles missing/incomplete/malformed brand config gracefully (skips missing sections, returns empty string if no data)
+- **Files changed:**
+  - `backend/app/services/cluster_keyword.py` (new)
+- **Learnings:**
+  - `_build_brand_context` is a `@staticmethod` since it doesn't need instance state — makes it easy to test independently
+  - Brand config v2_schema structure: `brand_foundation.company_overview.company_name`, `brand_foundation.what_they_sell.primary_products_services`, etc.
+  - Target audience primary persona is always `personas[0]` in the array
+  - Competitor names live at `competitor_context.direct_competitors[].name`
+  - All quality checks (mypy, ruff) pass clean
+---
