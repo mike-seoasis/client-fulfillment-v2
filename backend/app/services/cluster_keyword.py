@@ -176,8 +176,10 @@ class ClusterKeywordService:
         brand_section = ""
         if brand_context:
             brand_section = f"""
-## Brand Context
+## Brand Context (for tone and style only)
 {brand_context}
+
+IMPORTANT: The brand context above is provided ONLY so you understand the store's voice and product style. ALL keyword suggestions MUST be directly related to the seed keyword "{seed_keyword}". Do NOT suggest keywords for unrelated product categories even if the brand sells them.
 """
 
         exclude_section = ""
@@ -207,11 +209,13 @@ class ClusterKeywordService:
 11. **Values/Lifestyle** — Align with values (e.g., "vegan hiking boots")
 
 ## Rules
+- EVERY keyword must be directly related to the seed keyword "{seed_keyword}" — it should be a variation, subcategory, or closely related product type
 - Each keyword must be viable as a standalone Shopify collection page (NOT a blog post)
 - Focus on commercial/transactional intent
 - Order results by estimated commercial value (highest first)
 - Do NOT include the seed keyword itself — it will be added separately
 - Do NOT repeat any keywords from the "Already Suggested" list above
+- Do NOT suggest keywords from unrelated product categories, even if the brand sells them
 
 ## Output Format
 Return ONLY a JSON array of objects. No explanations, no markdown code blocks.
@@ -1212,17 +1216,26 @@ Example:
 
         try:
             for cp in approved_pages:
-                # Create CrawledPage for the content pipeline
-                crawled_page = CrawledPage(
-                    project_id=cluster.project_id,
-                    normalized_url=cp.url_slug,
-                    source="cluster",
-                    status=CrawlStatus.COMPLETED.value,
-                    category="collection",
-                    title=cp.keyword,
+                # Check if a CrawledPage already exists for this URL
+                existing_stmt = select(CrawledPage).where(
+                    CrawledPage.project_id == cluster.project_id,
+                    CrawledPage.normalized_url == cp.url_slug,
                 )
-                db.add(crawled_page)
-                await db.flush()  # Get crawled_page.id
+                existing_result = await db.execute(existing_stmt)
+                crawled_page = existing_result.scalar_one_or_none()
+
+                if crawled_page is None:
+                    # Create CrawledPage for the content pipeline
+                    crawled_page = CrawledPage(
+                        project_id=cluster.project_id,
+                        normalized_url=cp.url_slug,
+                        source="cluster",
+                        status=CrawlStatus.COMPLETED.value,
+                        category="collection",
+                        title=cp.keyword,
+                    )
+                    db.add(crawled_page)
+                    await db.flush()  # Get crawled_page.id
 
                 # Create PageKeywords for the content pipeline
                 page_keywords = PageKeywords(
