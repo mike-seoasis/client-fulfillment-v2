@@ -30,7 +30,7 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/projects", tags=["Clusters"])
 
-CLUSTER_GENERATION_TIMEOUT_SECONDS = 30
+CLUSTER_GENERATION_TIMEOUT_SECONDS = 90
 
 
 @router.post(
@@ -47,9 +47,9 @@ async def create_cluster(
 ) -> ClusterResponse:
     """Create a new keyword cluster from a seed keyword.
 
-    Runs the 3-stage generation pipeline synchronously (~5-10s):
-    1. LLM candidate generation
-    2. DataForSEO volume enrichment
+    Runs the iterative generation pipeline synchronously:
+    1. LLM candidate generation (loops until 20+ with volume, max 4 iterations)
+    2. DataForSEO volume enrichment (per iteration)
     3. LLM filtering and role assignment
 
     Args:
@@ -65,7 +65,7 @@ async def create_cluster(
     Raises:
         HTTPException: 404 if project not found.
         HTTPException: 422 if request body is invalid.
-        HTTPException: 504 if generation exceeds 30s timeout.
+        HTTPException: 504 if generation exceeds 90s timeout.
         HTTPException: 500 if generation fails.
     """
     # Verify project exists (raises 404 if not)
@@ -93,7 +93,7 @@ async def create_cluster(
     except TimeoutError:
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail="Cluster generation timed out (>30s). Please try again.",
+            detail="Cluster generation timed out (>90s). Please try again.",
         )
     except ValueError as e:
         raise HTTPException(

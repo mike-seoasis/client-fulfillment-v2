@@ -802,11 +802,13 @@ class TestGenerateCluster:
         dataforseo = _make_dataforseo_client()
         service = ClusterKeywordService(claude, dataforseo)
 
-        # Stage 1: Generate candidates
+        # Generate 22 candidates so that with volume data for all,
+        # the loop stops after 1 iteration (>= 20 with volume).
         claude.complete.side_effect = [
+            # Stage 1 iteration 1: Generate candidates
             CompletionResult(
                 success=True,
-                text=_candidates_json(8),
+                text=_candidates_json(22),
                 input_tokens=500,
                 output_tokens=300,
             ),
@@ -819,12 +821,16 @@ class TestGenerateCluster:
             ),
         ]
 
-        # Stage 2: Volume enrichment
+        # Return volume data for all candidates so loop breaks after 1 iteration
+        volume_keywords = [
+            KeywordVolumeData(keyword=f"hiking boots keyword {i + 1}", search_volume=500 + i * 100, cpc=1.5, competition=0.65, competition_level="HIGH")
+            for i in range(22)
+        ] + [
+            KeywordVolumeData(keyword="hiking boots", search_volume=12000, cpc=1.5, competition=0.65, competition_level="HIGH"),
+        ]
         dataforseo.get_keyword_volume_batch.return_value = KeywordVolumeResult(
             success=True,
-            keywords=[
-                KeywordVolumeData(keyword="hiking boots", search_volume=12000, cpc=1.5, competition=0.65, competition_level="HIGH"),
-            ],
+            keywords=volume_keywords,
             cost=0.05,
             duration_ms=200,
         )
@@ -847,6 +853,7 @@ class TestGenerateCluster:
         meta = result["generation_metadata"]
         assert meta["candidates_generated"] > 0
         assert meta["volume_unavailable"] is False
+        assert meta["iterations"] == 1  # Stopped after 1 iteration
         assert "total_time_ms" in meta
 
         # Verify DB persistence
@@ -919,10 +926,10 @@ class TestGenerateCluster:
         service = ClusterKeywordService(claude, dataforseo)
 
         claude.complete.side_effect = [
-            # Stage 1 succeeds
+            # Stage 1 succeeds (22 candidates so loop stops after 1 iteration)
             CompletionResult(
                 success=True,
-                text=_candidates_json(8),
+                text=_candidates_json(22),
                 input_tokens=500,
                 output_tokens=300,
             ),
@@ -933,9 +940,15 @@ class TestGenerateCluster:
             ),
         ]
 
+        volume_keywords = [
+            KeywordVolumeData(keyword=f"hiking boots keyword {i + 1}", search_volume=500 + i * 100, cpc=1.5, competition=0.65, competition_level="HIGH")
+            for i in range(22)
+        ] + [
+            KeywordVolumeData(keyword="hiking boots", search_volume=12000, cpc=1.5, competition=0.65, competition_level="HIGH"),
+        ]
         dataforseo.get_keyword_volume_batch.return_value = KeywordVolumeResult(
             success=True,
-            keywords=[],
+            keywords=volume_keywords,
             cost=0.01,
             duration_ms=100,
         )
@@ -956,10 +969,16 @@ class TestGenerateCluster:
         service = ClusterKeywordService(claude, dataforseo)
 
         claude.complete.side_effect = [
-            CompletionResult(success=True, text=_candidates_json(8), input_tokens=500, output_tokens=300),
+            CompletionResult(success=True, text=_candidates_json(22), input_tokens=500, output_tokens=300),
             CompletionResult(success=True, text=_filter_json("hiking boots", child_count=3), input_tokens=600, output_tokens=400),
         ]
-        dataforseo.get_keyword_volume_batch.return_value = KeywordVolumeResult(success=True, keywords=[], cost=0.01, duration_ms=100)
+        volume_keywords = [
+            KeywordVolumeData(keyword=f"hiking boots keyword {i + 1}", search_volume=500 + i * 100, cpc=1.5, competition=0.65, competition_level="HIGH")
+            for i in range(22)
+        ] + [
+            KeywordVolumeData(keyword="hiking boots", search_volume=12000, cpc=1.5, competition=0.65, competition_level="HIGH"),
+        ]
+        dataforseo.get_keyword_volume_batch.return_value = KeywordVolumeResult(success=True, keywords=volume_keywords, cost=0.01, duration_ms=100)
 
         result = await service.generate_cluster(
             seed_keyword="hiking boots",

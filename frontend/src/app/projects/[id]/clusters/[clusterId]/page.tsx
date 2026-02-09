@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useProject } from '@/hooks/use-projects';
@@ -8,6 +8,7 @@ import {
   useCluster,
   useUpdateClusterPage,
   useBulkApproveCluster,
+  useDeleteCluster,
 } from '@/hooks/useClusters';
 import { Button, Toast } from '@/components/ui';
 import type { ClusterPage } from '@/lib/api';
@@ -483,10 +484,16 @@ export default function ClusterDetailPage() {
   // Tooltip state for Generate Content button
   const [showGenerateTooltip, setShowGenerateTooltip] = useState(false);
 
+  // Delete confirmation state
+  const [isDeleteConfirming, setIsDeleteConfirming] = useState(false);
+  const deleteConfirmTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const deleteButtonRef = useRef<HTMLButtonElement>(null);
+
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
   const { data: cluster, isLoading: isClusterLoading, error: clusterError } = useCluster(projectId, clusterId);
   const updatePage = useUpdateClusterPage();
   const bulkApprove = useBulkApproveCluster();
+  const deleteClusterMutation = useDeleteCluster();
 
   const isLoading = isProjectLoading || isClusterLoading;
 
@@ -512,10 +519,54 @@ export default function ClusterDetailPage() {
     cluster?.generation_metadata &&
     (cluster.generation_metadata as Record<string, unknown>).volume_unavailable === true;
 
+  // Reset delete confirmation after 3 seconds
+  useEffect(() => {
+    if (isDeleteConfirming) {
+      deleteConfirmTimeoutRef.current = setTimeout(() => {
+        setIsDeleteConfirming(false);
+      }, 3000);
+    }
+    return () => {
+      if (deleteConfirmTimeoutRef.current) {
+        clearTimeout(deleteConfirmTimeoutRef.current);
+      }
+    };
+  }, [isDeleteConfirming]);
+
+  // Whether cluster can be deleted (only before approved)
+  const canDelete = cluster
+    ? !['approved', 'content_generating', 'complete'].includes(cluster.status)
+    : false;
+
   const handleShowToast = useCallback((message: string, variant: 'success' | 'error') => {
     setToastMessage(message);
     setToastVariant(variant);
     setShowToast(true);
+  }, []);
+
+  const handleDeleteCluster = useCallback(() => {
+    if (!isDeleteConfirming) {
+      setIsDeleteConfirming(true);
+      return;
+    }
+    deleteClusterMutation.mutate(
+      { projectId, clusterId },
+      {
+        onSuccess: () => {
+          router.push(`/projects/${projectId}`);
+        },
+        onError: (err) => {
+          setIsDeleteConfirming(false);
+          handleShowToast(err.message || 'Failed to delete cluster', 'error');
+        },
+      }
+    );
+  }, [isDeleteConfirming, deleteClusterMutation, projectId, clusterId, router, handleShowToast]);
+
+  const handleDeleteBlur = useCallback((e: React.FocusEvent) => {
+    if (!deleteButtonRef.current?.contains(e.relatedTarget as Node)) {
+      setIsDeleteConfirming(false);
+    }
   }, []);
 
   // Approve all suggestions
@@ -692,12 +743,29 @@ export default function ClusterDetailPage() {
 
         {/* Actions */}
         <div className="flex justify-between items-center">
-          <Link href={`/projects/${projectId}`}>
-            <Button variant="secondary">
-              <BackArrowIcon className="w-4 h-4 mr-1.5" />
-              Back to Project
-            </Button>
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href={`/projects/${projectId}`}>
+              <Button variant="secondary">
+                <BackArrowIcon className="w-4 h-4 mr-1.5" />
+                Back to Project
+              </Button>
+            </Link>
+            {canDelete && (
+              <Button
+                ref={deleteButtonRef}
+                variant="danger"
+                onClick={handleDeleteCluster}
+                onBlur={handleDeleteBlur}
+                disabled={deleteClusterMutation.isPending}
+              >
+                {deleteClusterMutation.isPending
+                  ? 'Deleting...'
+                  : isDeleteConfirming
+                  ? 'Confirm Delete'
+                  : 'Delete Cluster'}
+              </Button>
+            )}
+          </div>
 
           <div className="relative">
             <Button

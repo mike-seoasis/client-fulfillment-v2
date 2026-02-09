@@ -151,6 +151,7 @@ class ClusterKeywordService:
         self,
         seed_keyword: str,
         brand_context: str,
+        exclude_keywords: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Stage 1: Expand a seed keyword into 15-20 collection page candidates.
 
@@ -163,6 +164,7 @@ class ClusterKeywordService:
         Args:
             seed_keyword: The seed keyword to expand.
             brand_context: Brand context string from _build_brand_context().
+            exclude_keywords: Keywords to exclude (already found in prior iterations).
 
         Returns:
             List of dicts with keys: keyword, expansion_strategy, rationale,
@@ -178,11 +180,19 @@ class ClusterKeywordService:
 {brand_context}
 """
 
+        exclude_section = ""
+        if exclude_keywords:
+            exclude_list = "\n".join(f"- {kw}" for kw in exclude_keywords)
+            exclude_section = f"""
+## Already Suggested (DO NOT repeat these)
+{exclude_list}
+"""
+
         prompt = f"""You are an e-commerce SEO strategist. Given a seed keyword, generate 15-20 collection page keyword ideas using the expansion strategies below.
 
 ## Seed Keyword
 "{seed_keyword}"
-{brand_section}
+{brand_section}{exclude_section}
 ## Expansion Strategies (use as many as relevant)
 1. **Demographic** — Target a specific audience segment (e.g., "women's hiking boots")
 2. **Attribute** — Add a product attribute (e.g., "waterproof hiking boots")
@@ -201,6 +211,7 @@ class ClusterKeywordService:
 - Focus on commercial/transactional intent
 - Order results by estimated commercial value (highest first)
 - Do NOT include the seed keyword itself — it will be added separately
+- Do NOT repeat any keywords from the "Already Suggested" list above
 
 ## Output Format
 Return ONLY a JSON array of objects. No explanations, no markdown code blocks.
@@ -474,8 +485,8 @@ Example:
     ) -> list[dict[str, Any]]:
         """Stage 3: Filter candidates and assign parent/child roles with URL slugs.
 
-        Uses Claude Haiku to intelligently filter 15-20 candidates down to the
-        best 8-12, removing near-duplicates and low-quality candidates. The seed
+        Uses Claude Haiku to intelligently filter candidates down to the
+        best 12-20, removing near-duplicates and low-quality candidates. The seed
         keyword is always assigned as parent, others as children.
 
         Each result includes a composite score calculated using the same formula
@@ -486,7 +497,7 @@ Example:
             seed_keyword: The original seed keyword (assigned role='parent').
 
         Returns:
-            Filtered list of 8-12 candidates sorted by composite_score descending,
+            Filtered list of 12-20 candidates sorted by composite_score descending,
             with parent always first. Each dict has: keyword, role, url_slug,
             expansion_strategy, reasoning, search_volume, cpc, competition,
             competition_level, composite_score.
@@ -522,7 +533,7 @@ Example:
 {candidates_text}
 
 ## Your Task
-Filter these candidates to the **best 8-12 keywords** for collection pages. Apply these rules:
+Filter these candidates to the **best 12-20 keywords** for collection pages. Apply these rules:
 
 ### Selection Criteria
 1. **Remove near-duplicates**: If two keywords would target the same products/intent, keep only the one with higher volume (e.g., "men's running shoes" and "running shoes for men" are duplicates — this is keyword cannibalization)
@@ -553,7 +564,7 @@ Example:
 
         result = await self._claude.complete(
             user_prompt=prompt,
-            max_tokens=2000,
+            max_tokens=4000,
             temperature=0.0,
             model=HAIKU_MODEL,
         )
@@ -692,47 +703,128 @@ Example:
         # Build brand context
         brand_context = self._build_brand_context(brand_config)
 
-        # --- Stage 1: Generate candidates ---
-        t1_start = time.perf_counter()
-        try:
-            candidates = await self._generate_candidates(seed_keyword, brand_context)
-        except Exception as e:
-            logger.error(
-                "Stage 1 (candidate generation) failed",
-                extra={"seed_keyword": seed_keyword, "error": str(e)},
-                exc_info=True,
-            )
-            raise ValueError(f"Cluster generation failed at Stage 1: {e}") from e
-        t1_ms = round((time.perf_counter() - t1_start) * 1000)
+        # --- Iterative Stages 1+2: Loop until we have enough candidates with volume ---
+        # Goal: accumulate >= 20 candidates with search volume > 0 so the user
+        # has a meaningful pool to choose from. Max 4 iterations to stay within
+        # a reasonable time budget (~8s per iteration).
+        MAX_ITERATIONS = 4
+        MIN_WITH_VOLUME = 20
 
-        candidates_generated = len(candidates)
-
-        # --- Stage 2: Enrich with volume data ---
-        t2_start = time.perf_counter()
+        all_candidates: list[dict[str, Any]] = []
+        seen_keywords: set[str] = set()
+        total_generated = 0
+        total_enriched = 0
         volume_unavailable = False
-        try:
-            candidates = await self._enrich_with_volume(candidates)
-            # Check if volume was unavailable (flag set by _enrich_with_volume)
-            if candidates and candidates[0].get("volume_unavailable"):
+        t1_total_ms = 0
+        t2_total_ms = 0
+        iterations_run = 0
+
+        for iteration in range(MAX_ITERATIONS):
+            iterations_run += 1
+
+            # Stage 1: Generate candidates (excluding already found keywords)
+            exclude = list(seen_keywords) if seen_keywords else None
+            t1_start = time.perf_counter()
+            try:
+                new_candidates = await self._generate_candidates(
+                    seed_keyword, brand_context, exclude_keywords=exclude
+                )
+            except Exception as e:
+                if iteration == 0:
+                    # First iteration failure is fatal
+                    logger.error(
+                        "Stage 1 (candidate generation) failed on first iteration",
+                        extra={"seed_keyword": seed_keyword, "error": str(e)},
+                        exc_info=True,
+                    )
+                    raise ValueError(f"Cluster generation failed at Stage 1: {e}") from e
+                # Later iterations: stop looping but use what we have
+                logger.warning(
+                    f"Stage 1 failed on iteration {iteration + 1}, using accumulated candidates",
+                    extra={"seed_keyword": seed_keyword, "error": str(e)},
+                )
+                break
+            t1_total_ms += round((time.perf_counter() - t1_start) * 1000)
+
+            # Deduplicate against already-seen keywords
+            unique_new: list[dict[str, Any]] = []
+            for c in new_candidates:
+                kw = c["keyword"].strip().lower()
+                if kw not in seen_keywords:
+                    seen_keywords.add(kw)
+                    unique_new.append(c)
+
+            if not unique_new:
+                logger.info(
+                    f"No new unique candidates on iteration {iteration + 1}, stopping",
+                    extra={"seed_keyword": seed_keyword},
+                )
+                break
+
+            total_generated += len(unique_new)
+
+            # Stage 2: Enrich with volume
+            t2_start = time.perf_counter()
+            try:
+                enriched = await self._enrich_with_volume(unique_new)
+                if enriched and enriched[0].get("volume_unavailable"):
+                    volume_unavailable = True
+                    warnings.append(
+                        "Search volume data unavailable — DataForSEO lookup failed or not configured. "
+                        "Filtering proceeded without volume data."
+                    )
+                    # Can't check volume, so just use what we have from this single pass
+                    all_candidates.extend(enriched)
+                    t2_total_ms += round((time.perf_counter() - t2_start) * 1000)
+                    break
+                else:
+                    all_candidates.extend(enriched)
+            except Exception as e:
+                logger.warning(
+                    "Stage 2 (volume enrichment) failed, continuing without volume",
+                    extra={"seed_keyword": seed_keyword, "error": str(e)},
+                    exc_info=True,
+                )
                 volume_unavailable = True
                 warnings.append(
-                    "Search volume data unavailable — DataForSEO lookup failed or not configured. "
+                    f"Search volume enrichment failed: {e}. "
                     "Filtering proceeded without volume data."
                 )
-        except Exception as e:
-            logger.warning(
-                "Stage 2 (volume enrichment) failed, continuing without volume",
-                extra={"seed_keyword": seed_keyword, "error": str(e)},
-                exc_info=True,
-            )
-            volume_unavailable = True
-            warnings.append(
-                f"Search volume enrichment failed: {e}. "
-                "Filtering proceeded without volume data."
-                )
-        t2_ms = round((time.perf_counter() - t2_start) * 1000)
+                all_candidates.extend(unique_new)
+                t2_total_ms += round((time.perf_counter() - t2_start) * 1000)
+                break
+            t2_total_ms += round((time.perf_counter() - t2_start) * 1000)
 
-        candidates_enriched = 0 if volume_unavailable else len(candidates)
+            # Count candidates with volume
+            with_volume = sum(
+                1 for c in all_candidates
+                if c.get("search_volume") and c["search_volume"] > 0
+            )
+            total_enriched = with_volume
+
+            logger.info(
+                f"Iteration {iteration + 1}: {len(unique_new)} new, "
+                f"{with_volume}/{len(all_candidates)} total with volume",
+                extra={
+                    "seed_keyword": seed_keyword,
+                    "iteration": iteration + 1,
+                    "new_candidates": len(unique_new),
+                    "with_volume": with_volume,
+                    "total_accumulated": len(all_candidates),
+                },
+            )
+
+            if with_volume >= MIN_WITH_VOLUME:
+                break
+
+        candidates = all_candidates
+        candidates_generated = total_generated
+
+        if not volume_unavailable:
+            total_enriched = sum(
+                1 for c in candidates
+                if c.get("search_volume") and c["search_volume"] > 0
+            )
 
         # --- Stage 3: Filter and assign roles ---
         t3_start = time.perf_counter()
@@ -747,17 +839,18 @@ Example:
             raise ValueError(f"Cluster generation failed at Stage 3: {e}") from e
         t3_ms = round((time.perf_counter() - t3_start) * 1000)
 
-        total_ms = t1_ms + t2_ms + t3_ms
+        total_ms = t1_total_ms + t2_total_ms + t3_ms
 
         generation_metadata: dict[str, Any] = {
-            "stage1_time_ms": t1_ms,
-            "stage2_time_ms": t2_ms,
+            "stage1_time_ms": t1_total_ms,
+            "stage2_time_ms": t2_total_ms,
             "stage3_time_ms": t3_ms,
             "total_time_ms": total_ms,
             "candidates_generated": candidates_generated,
-            "candidates_enriched": candidates_enriched,
+            "candidates_enriched": total_enriched,
             "candidates_filtered": len(filtered),
             "volume_unavailable": volume_unavailable,
+            "iterations": iterations_run,
         }
 
         # --- Persist to database ---

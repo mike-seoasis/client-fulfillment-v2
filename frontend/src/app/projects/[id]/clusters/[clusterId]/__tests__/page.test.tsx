@@ -24,6 +24,7 @@ vi.mock('@/hooks/use-projects', () => ({
 const mockUseCluster = vi.fn();
 const mockUpdatePageMutate = vi.fn();
 const mockBulkApproveMutate = vi.fn();
+const mockDeleteClusterMutate = vi.fn();
 vi.mock('@/hooks/useClusters', () => ({
   useCluster: () => mockUseCluster(),
   useUpdateClusterPage: () => ({
@@ -31,6 +32,10 @@ vi.mock('@/hooks/useClusters', () => ({
   }),
   useBulkApproveCluster: () => ({
     mutate: mockBulkApproveMutate,
+    isPending: false,
+  }),
+  useDeleteCluster: () => ({
+    mutate: mockDeleteClusterMutate,
     isPending: false,
   }),
 }));
@@ -520,6 +525,53 @@ describe('ClusterDetailPage', () => {
       render(<ClusterDetailPage />);
 
       expect(screen.getByRole('button', { name: /Back to Project/i })).toBeInTheDocument();
+    });
+  });
+
+  // ============================================================================
+  // Delete cluster
+  // ============================================================================
+  describe('delete cluster', () => {
+    it('renders Delete Cluster button for suggestions_ready status', () => {
+      render(<ClusterDetailPage />);
+
+      expect(screen.getByRole('button', { name: /Delete Cluster/i })).toBeInTheDocument();
+    });
+
+    it('does not render Delete Cluster button for approved status', () => {
+      mockUseCluster.mockReturnValue(
+        defaultMockCluster(defaultPages, { status: 'approved' })
+      );
+
+      render(<ClusterDetailPage />);
+
+      expect(screen.queryByRole('button', { name: /Delete Cluster/i })).not.toBeInTheDocument();
+    });
+
+    it('shows Confirm Delete on first click', async () => {
+      const user = userEvent.setup();
+      render(<ClusterDetailPage />);
+
+      await user.click(screen.getByRole('button', { name: /Delete Cluster/i }));
+
+      expect(screen.getByRole('button', { name: /Confirm Delete/i })).toBeInTheDocument();
+    });
+
+    it('calls deleteCluster on second click', async () => {
+      const user = userEvent.setup();
+      render(<ClusterDetailPage />);
+
+      const deleteBtn = screen.getByRole('button', { name: /Delete Cluster/i });
+      await user.click(deleteBtn);
+      await user.click(screen.getByRole('button', { name: /Confirm Delete/i }));
+
+      expect(mockDeleteClusterMutate).toHaveBeenCalledWith(
+        { projectId: 'test-project-123', clusterId: 'cluster-456' },
+        expect.objectContaining({
+          onSuccess: expect.any(Function),
+          onError: expect.any(Function),
+        })
+      );
     });
   });
 });
