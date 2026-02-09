@@ -607,18 +607,23 @@ export default function ClusterDetailPage() {
 
   // Generate Content (bulk approve then navigate)
   const handleGenerateContent = useCallback(() => {
+    // If cluster is already approved, just navigate directly
+    if (cluster?.status === 'approved' || cluster?.status === 'content_generating' || cluster?.status === 'complete') {
+      router.push(`/projects/${projectId}/clusters/${clusterId}/content`);
+      return;
+    }
     bulkApprove.mutate(
       { projectId, clusterId },
       {
         onSuccess: () => {
-          router.push(`/projects/${projectId}/onboarding/content`);
+          router.push(`/projects/${projectId}/clusters/${clusterId}/content`);
         },
         onError: (err) => {
           handleShowToast(err.message || 'Failed to approve cluster', 'error');
         },
       }
     );
-  }, [bulkApprove, projectId, clusterId, router, handleShowToast]);
+  }, [bulkApprove, projectId, clusterId, cluster?.status, router, handleShowToast]);
 
   // Loading state
   if (isLoading) {

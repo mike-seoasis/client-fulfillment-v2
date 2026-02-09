@@ -628,11 +628,20 @@ export function deleteCluster(
  */
 export async function exportProject(
   projectId: string,
-  pageIds?: string[]
+  pageIds?: string[],
+  exportLabel?: string
 ): Promise<void> {
-  let url = `${API_BASE_URL}/projects/${projectId}/export`;
+  const params = new URLSearchParams();
   if (pageIds && pageIds.length > 0) {
-    url += `?page_ids=${pageIds.join(",")}`;
+    params.set("page_ids", pageIds.join(","));
+  }
+  if (exportLabel) {
+    params.set("export_label", exportLabel);
+  }
+  const qs = params.toString();
+  let url = `${API_BASE_URL}/projects/${projectId}/export`;
+  if (qs) {
+    url += `?${qs}`;
   }
 
   const response = await fetch(url);
