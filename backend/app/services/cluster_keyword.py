@@ -537,7 +537,7 @@ Filter these candidates to the **best 12-20 keywords** for collection pages. App
 
 ### Selection Criteria
 1. **Remove near-duplicates**: If two keywords would target the same products/intent, keep only the one with higher volume (e.g., "men's running shoes" and "running shoes for men" are duplicates — this is keyword cannibalization)
-2. **Remove low-volume keywords**: Remove candidates with search_volume < 50, UNLESS removing them would leave fewer than 5 total candidates
+2. **Remove low-volume keywords**: Strongly prefer candidates with search_volume >= 100. Only include keywords with volume < 100 if they fill a critical niche gap
 3. **Prioritize commercial/transactional intent**: Collection pages need buying intent, not informational
 4. **Prefer keywords that represent distinct product groupings**: Each collection page should serve a unique subset of products
 5. **Good collection page keywords** are specific enough to curate a product set but broad enough to have meaningful search volume
@@ -825,6 +825,27 @@ Example:
                 1 for c in candidates
                 if c.get("search_volume") and c["search_volume"] > 0
             )
+
+        # Pre-filter: drop candidates with no volume data before Stage 3.
+        # The seed keyword is always kept (it becomes the parent page).
+        seed_normalized = seed_keyword.strip().lower()
+        if not volume_unavailable:
+            before_count = len(candidates)
+            candidates = [
+                c for c in candidates
+                if c["keyword"] == seed_normalized
+                or (c.get("search_volume") and c["search_volume"] > 0)
+            ]
+            dropped = before_count - len(candidates)
+            if dropped:
+                logger.info(
+                    f"Pre-filter: dropped {dropped} candidates with no volume data",
+                    extra={
+                        "seed_keyword": seed_keyword,
+                        "before": before_count,
+                        "after": len(candidates),
+                    },
+                )
 
         # --- Stage 3: Filter and assign roles ---
         t3_start = time.perf_counter()
