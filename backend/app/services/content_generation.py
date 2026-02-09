@@ -147,7 +147,17 @@ async def run_content_pipeline(
                 extra={"project_id": project_id, "pages_reset": len(page_ids)},
             )
 
-    # Process pages with concurrency control
+    # --- Phase 1: Pre-fetch all POP briefs concurrently ---
+    # POP briefs involve async polling loops that are mostly I/O wait.
+    # Fetching all briefs upfront in parallel (ungated) eliminates the
+    # per-page serial bottleneck where brief → write was sequential.
+    await _prefetch_all_briefs(
+        pages_data=pages_data,
+        force_refresh=force_refresh,
+        refresh_briefs=refresh_briefs,
+    )
+
+    # --- Phase 2: Write content + quality checks (briefs are now cached) ---
     semaphore = asyncio.Semaphore(concurrency)
 
     async def _process_with_semaphore(
@@ -158,7 +168,7 @@ async def run_content_pipeline(
                 page_data=page_data,
                 brand_config=brand_config,
                 force_refresh=force_refresh,
-                refresh_briefs=refresh_briefs,
+                refresh_briefs=False,  # Briefs already fetched in Phase 1
             )
 
     tasks = [_process_with_semaphore(pd) for pd in pages_data]
@@ -188,6 +198,97 @@ async def run_content_pipeline(
     )
 
     return result
+
+
+async def _prefetch_all_briefs(
+    pages_data: list[dict[str, Any]],
+    force_refresh: bool,
+    refresh_briefs: bool,
+) -> None:
+    """Phase 1: Pre-fetch POP content briefs for all pages concurrently.
+
+    POP briefs involve async polling loops (2s intervals) that are mostly I/O
+    wait. Running all brief fetches in parallel — instead of gated behind the
+    per-page content-writing semaphore — dramatically reduces wall-clock time.
+
+    Brief results are stored in the database by fetch_content_brief and will be
+    returned from cache when _process_single_page runs in Phase 2.
+    """
+    # Skip pages that will be skipped in Phase 2 (already complete)
+    pages_needing_briefs = [
+        pd
+        for pd in pages_data
+        if force_refresh
+        or pd["existing_content_status"] != ContentStatus.COMPLETE.value
+    ]
+
+    if not pages_needing_briefs:
+        logger.info("Phase 1: All pages already complete, skipping brief pre-fetch")
+        return
+
+    logger.info(
+        "Phase 1: Pre-fetching POP briefs concurrently",
+        extra={"page_count": len(pages_needing_briefs)},
+    )
+
+    # Batch-set all pages to GENERATING_BRIEF and commit so the frontend
+    # polling endpoint can see the status immediately.
+    async with db_manager.session_factory() as status_db:
+        page_ids = [pd["page_id"] for pd in pages_needing_briefs]
+        stmt = select(PageContent).where(
+            PageContent.crawled_page_id.in_(page_ids)
+        )
+        result = await status_db.execute(stmt)
+        existing = {pc.crawled_page_id: pc for pc in result.scalars().all()}
+
+        for pd in pages_needing_briefs:
+            pid = pd["page_id"]
+            if pid in existing:
+                existing[pid].status = ContentStatus.GENERATING_BRIEF.value
+            else:
+                status_db.add(
+                    PageContent(
+                        crawled_page_id=pid,
+                        status=ContentStatus.GENERATING_BRIEF.value,
+                    )
+                )
+        await status_db.commit()
+
+    async def _fetch_one_brief(page_data: dict[str, Any]) -> None:
+        page_id = page_data["page_id"]
+        keyword = page_data["keyword"]
+        url = page_data["url"]
+
+        try:
+            async with db_manager.session_factory() as db:
+                stmt = select(CrawledPage).where(CrawledPage.id == page_id)
+                result = await db.execute(stmt)
+                crawled_page = result.scalar_one_or_none()
+
+                if crawled_page is None:
+                    return
+
+                await fetch_content_brief(
+                    db=db,
+                    crawled_page=crawled_page,
+                    keyword=keyword,
+                    target_url=url,
+                    force_refresh=refresh_briefs,
+                )
+        except Exception as exc:
+            # Non-fatal: _process_single_page will retry in Phase 2
+            logger.warning(
+                "Brief pre-fetch failed (will retry in pipeline)",
+                extra={"page_id": page_id, "error": str(exc)},
+            )
+
+    brief_tasks = [_fetch_one_brief(pd) for pd in pages_needing_briefs]
+    await asyncio.gather(*brief_tasks)
+
+    logger.info(
+        "Phase 1: Brief pre-fetch complete",
+        extra={"page_count": len(pages_needing_briefs)},
+    )
 
 
 async def _load_approved_pages(
@@ -319,7 +420,7 @@ async def _process_single_page(
             page_content = await _ensure_page_content(db, crawled_page)
             page_content.status = ContentStatus.GENERATING_BRIEF.value
             page_content.generation_started_at = datetime.now(UTC)
-            await db.flush()
+            await db.commit()
 
             # By default, use cached POP brief — force_refresh only controls
             # whether we re-run the Claude writing step. Re-fetching from POP
@@ -385,7 +486,7 @@ async def _process_single_page(
                 )
 
             written_content.status = ContentStatus.CHECKING.value
-            await db.flush()
+            await db.commit()
 
             run_quality_checks(written_content, brand_config)
 

@@ -727,10 +727,10 @@ async def generate_content(
         db.add(page_content)
         await db.flush()
 
-    # Mark as writing
+    # Mark as writing — commit so the polling endpoint sees this status
     page_content.status = ContentStatus.WRITING.value
     page_content.generation_started_at = datetime.now(UTC)
-    await db.flush()
+    await db.commit()
 
     # Build prompts
     prompts = build_content_prompt(crawled_page, keyword, brand_config, content_brief)

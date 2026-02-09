@@ -1103,19 +1103,45 @@ Based on dependencies and the shared component architecture:
 - **Test:** Can see primary keyword, edit, approve, set priority
 - **Note:** No secondary keywords here — POP provides LSI terms during content generation
 
-### Slice 5: Internal Link Mapping (WORKFLOW-SPECIFIC)
-- **Onboarding:** Label-based link algorithm
-  - Calculate relatedness from label overlap
-  - Weight priority pages higher
-  - Generate 3-6 links per page with anchor text
-- **Clusters:** Hierarchical link structure
-  - Parent-child relationships
-  - Sibling links between children
-  - Mandatory links up to parent
-- Link map visualization (optional)
-- Manual link adjustment UI
-- **Test:** Can see link map, adjust links, verify correct structure
-- **Research:** Study Kyle Roof's silo/internal linking methodology before implementing
+### Slice 5: Internal Linking (Phase 9 — SHARED, runs after content generation)
+
+> **Research complete.** See `.tmp/linking-research-consensus.md` for full synthesis of Kyle Roof, Koray Tugberk, Zyppy 23M link study, and algorithmic approaches.
+
+**Hard Rules (user-defined, non-negotiable):**
+1. First internal link on every sub-page → parent/hub collection of the silo
+2. No cross-silo links — ever
+3. Every SEO-relevant page must belong to a silo
+4. Anchor text = primary keyword or POP variation, diversified (50-60% partial match, ~10% exact, ~30% natural/contextual). Cycle through variations — never repeat same anchor for same target more than 2-3x across site
+5. Links flow DOWN the funnel only:
+   - Collection → sub-collection ✅ (hierarchy)
+   - Sub-collection → parent collection ✅ (mandatory first link)
+   - Sub-collection → sibling sub-collection ✅
+   - Blog → any collection in silo ✅
+   - Blog → sibling blog ✅ (1-2)
+   - Collection → blog ❌ NEVER
+   - Parent collection outbound → sub-collections only (not blogs)
+6. Uniform 3-5 link budget per page (eligible targets vary by page type)
+
+**Architecture — Hybrid Link Injection:**
+- **Step 1: Plan** — SiloLinkPlanner runs AFTER all content in a silo is generated. Calculates link budgets, selects targets, chooses anchor text with diversity tracking.
+- **Step 2: Generate** — Mandatory parent link is included in content generation prompt so LLM writes naturally around it.
+- **Step 3: Inject** — Post-processing via BeautifulSoup keyword scanning for discretionary links. LLM fallback (~30%) for links where no natural keyword match exists.
+- **Step 4: Validate** — First-link rule, silo integrity, density limits (max 2 per paragraph, min 50 words between links), anchor diversity check.
+- **Step 5: Persist** — SQL edge table (`internal_links`) with rich metadata (anchor_text, anchor_type, position, placement_method, status).
+
+**Data Model:**
+- `InternalLink` model (source_page_id, target_page_id, cluster_id, anchor_text, anchor_type, position_in_content, is_mandatory, placement_method, status)
+- `LinkPlanSnapshot` model (cluster_id, plan_data JSONB, total_links, created_by)
+- AnchorTextSelector with global usage tracking per target page
+
+**Key Numbers (from research):**
+- 1 link per 250 words base budget, clamped 3-5 per page
+- Target 7-10 incoming links per important page (sweet spot)
+- Max 45-50 incoming before diminishing returns
+- Anchor text avg length ~4.85 words, max 5
+- High anchor diversity → avg rank 1.3 vs 3.5 for low diversity (Zyppy study)
+
+- **Test:** Generate content for a silo → run link planner → inject links → validate all rules pass → view link map per silo → verify first link on every page is parent
 
 ### Slice 6: Content Generation Pipeline (SHARED)
 - POP Content Brief fetching (returns LSI terms, related questions, targets)
@@ -1143,14 +1169,14 @@ Based on dependencies and the shared component architecture:
 - Wire into shared components (approval, generation, review, export)
 - **Test:** Can create cluster, generate content, export
 
-### Slice 10: Blog Planning & Writing (Blogs-specific)
+### Slice 10: Blog Planning & Writing (Blogs-specific, Phase 10)
 - BlogCampaign and BlogPost models + migration
 - Blog topic discovery service (POP API for blog ideas around cluster)
 - Blog keyword approval (reuse shared KeywordApproval component)
 - Blog content generation (reuse pipeline with blog-specific template)
 - Lexical rich editor integration
 - Live POP scoring sidebar (score + word count + LSI checklist)
-- Siloed internal linking (only cluster pages + sibling blogs)
+- Blog internal linking (reuse Phase 9 infrastructure — blogs link to cluster collection pages + sibling blogs, siloed)
 - Blog export (HTML download + copy to clipboard for Shopify)
 - **Test:** Full blog flow works (campaign → keywords → generate → edit with live scoring → export)
 
@@ -1240,28 +1266,22 @@ Per `backend/PLAN-remove-secondary-keywords-and-paa.md`:
 
 ---
 
-## Research Needed: Internal Linking Strategy
+## Research Complete: Internal Linking Strategy ✅
 
-### Kyle Roof's Silo Structure
+> Research conducted 2026-02-08 by 3 independent agents. Full reports in `.tmp/linking-research-*.md`.
 
-Before implementing the internal linking algorithm (Slice 5), research Kyle Roof's approach to:
-- **Silo structure** — How to organize pages into topical silos
-- **Internal link patterns** — Which pages should link to which
-- **Anchor text strategy** — How to vary anchors without over-optimization
-- **Link juice flow** — How PageRank flows through internal links
-- **Priority pages** — How to identify and boost important pages
+### Key Findings
+- **Kyle Roof's Reverse Content Silo:** 2 internal links with silo structure beat 1 external DA-100 link. Without silo structure, internal links are nearly worthless.
+- **Zyppy 23M link study:** Anchor text variety is the #1 factor. High diversity → avg rank 1.3 vs 3.5 for low diversity.
+- **Kevin Indig:** 7+ incoming internal links is the inflection point for traffic.
+- **Hybrid injection approach:** Parent link at generation-time (LLM writes around it), discretionary links post-processing (deterministic control).
 
-### Resources to Study
-- Kyle Roof's YouTube channel / podcast appearances on internal linking
-- PageOptimizer Pro documentation on silo structure
-- Case studies on internal linking impact on rankings
-
-### Questions to Answer
-1. How many internal links per page is optimal?
-2. Should every page link back to the homepage/main category?
-3. How do you handle pages that don't fit neatly into a silo?
-4. What's the right balance between related links vs. priority links?
-5. How often should anchor text match the target's primary keyword exactly?
+### Questions Answered
+1. **Links per page:** 3-5 uniform budget (1 per 250 words base). Eligible targets vary by page type.
+2. **Link to homepage?** No. Links stay within the silo. Parent collection is the hub.
+3. **Pages that don't fit a silo?** Must choose one. Every page belongs to a silo.
+4. **Related vs. priority links:** First link always to parent. Remaining links distributed by keyword relevance within silo.
+5. **Anchor text matching:** 50-60% partial match variations, ~10% exact match, ~30% natural/contextual. Never repeat same anchor for same target more than 2-3x.
 
 ### Algorithm Requirements
 Based on research, define:

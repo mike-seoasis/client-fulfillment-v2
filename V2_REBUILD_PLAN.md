@@ -214,24 +214,50 @@
 - [x] Download functionality
 - [x] **Verify:** Export works in Matrixify
 
-### Phase 8: Keyword Cluster Creation ✅
-- [x] Seed keyword input UI
-- [x] POP API for cluster suggestions
-- [x] Wire into shared components
-- [x] **Verify:** Full cluster flow works (create → generate → export)
+### Phase 8: Keyword Cluster Creation
+- [ ] Seed keyword input UI
+- [ ] POP API for cluster suggestions
+- [ ] Wire into shared components
+- [ ] **Verify:** Full cluster flow works (create → generate → export)
 
-### Phase 9: Blog Planning & Writing
+### Phase 9: Internal Linking
+- [ ] `InternalLink` model + edge table migration (source_page, target_page, cluster, anchor_text, position, status)
+- [ ] `LinkPlanSnapshot` model for auditing/rollback
+- [ ] SiloLinkPlanner algorithm (budget calculation, target selection, anchor text selection)
+- [ ] AnchorTextSelector with diversity tracking (POP keyword variations as source)
+- [ ] Link injection — hybrid approach:
+  - [ ] Generation-time: mandatory parent link in content generation prompt
+  - [ ] Post-processing: BeautifulSoup keyword scanning for discretionary links
+  - [ ] LLM fallback for links that can't be placed rule-based (~30%)
+- [ ] Link validation layer (first-link rule, silo integrity, density, anchor diversity)
+- [ ] API endpoints (link plan per page, link map per silo, manual link adjustment)
+- [ ] Link map UI (per-silo visualization, per-page link list, manual add/remove)
+- [ ] Integration with content pipeline (run link planning AFTER all silo content is generated)
+- [ ] **Hard rules enforced:**
+  - First link on every sub-page → parent/hub collection
+  - No cross-silo links
+  - Every page in a silo
+  - Anchor text = primary keyword or POP variation, diversified (50-60% partial, ~10% exact, ~30% natural)
+  - Links flow DOWN funnel only (collection→collection OK, blog→anything in silo OK, collection→blog NEVER)
+  - Uniform 3-5 link budget per page (eligible targets vary by page type)
+  - Parent collection outbound links go to sub-collections only
+  - Blog → blog sibling links allowed (1-2)
+  - Sub-collection → sub-collection sibling links allowed
+- [ ] **Verify:** Full linking flow works (generate content → plan links → inject → validate → view link map)
+- [ ] **Research complete:** See `.tmp/linking-research-consensus.md` and supporting reports
+
+### Phase 10: Blog Planning & Writing
 - [ ] BlogCampaign and BlogPost models + migration
 - [ ] Blog topic discovery service (POP API)
 - [ ] Blog keyword approval (reuse shared UI)
 - [ ] Blog content generation (reuse pipeline, blog template)
 - [ ] Lexical rich editor integration
 - [ ] Live POP scoring sidebar
-- [ ] Siloed internal linking (cluster pages + sibling blogs only)
+- [ ] Blog internal linking (reuse Phase 9 infrastructure, siloed to cluster + sibling blogs)
 - [ ] Blog export (HTML + copy to clipboard)
 - [ ] **Verify:** Full blog flow works (campaign → keywords → generate → edit → export)
 
-### Phase 10: Authentication (WorkOS AuthKit)
+### Phase 11: Authentication (WorkOS AuthKit)
 - [ ] Install `@workos-inc/authkit-nextjs` package
 - [ ] Configure WorkOS environment variables (`WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `WORKOS_COOKIE_PASSWORD`, `NEXT_PUBLIC_WORKOS_REDIRECT_URI`)
 - [ ] Create WorkOS account and configure AuthKit in dashboard (redirect URIs, sign-out redirect)
@@ -246,7 +272,7 @@
 - [ ] Update Railway environment variables (staging + production)
 - [ ] **Verify:** Full auth flow works (sign in → use app → sign out → redirected to login)
 
-### Phase 11: Polish & UX Foundations
+### Phase 12: Polish & UX Foundations
 
 #### 11a: Quick Wins (< 30 min each, no new deps)
 - [ ] Relative timestamps everywhere (`date-fns` `formatDistanceToNow` — already installed)

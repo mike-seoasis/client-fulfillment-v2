@@ -571,6 +571,8 @@ export default function ClusterContentGenerationPage() {
   const isComplete = !isGenerating && clusterPagesTotal > 0 && clusterPagesCompleted + clusterPagesFailed >= clusterPagesTotal && clusterPagesFailed === 0;
   const isFailed = !isGenerating && clusterPagesTotal > 0 && clusterPagesFailed > 0 && clusterPagesCompleted + clusterPagesFailed >= clusterPagesTotal;
   const hasPages = clusterPagesTotal > 0;
+  // Partial: some pages done but not all, pipeline not running (e.g. 3/4 complete, 1 pending)
+  const isPartial = !isGenerating && !isIdle && !isComplete && !isFailed && hasPages;
 
   // Handle trigger generation
   const handleGenerate = async () => {
@@ -702,11 +704,13 @@ export default function ClusterContentGenerationPage() {
               ? 'Content Generation Complete'
               : isFailed
               ? 'Content Generation Complete'
+              : isPartial
+              ? `${clusterPagesCompleted} of ${clusterPagesTotal} Pages Complete`
               : `${clusterPagesTotal} Pages with Approved Keywords`}
           </h2>
 
           {/* Generate / Retry buttons */}
-          {isIdle && hasPages && (
+          {(isIdle || isPartial) && hasPages && (
             <Button
               onClick={handleGenerate}
               disabled={contentGen.isStarting}
@@ -716,6 +720,8 @@ export default function ClusterContentGenerationPage() {
                   <SpinnerIcon className="w-4 h-4 mr-1.5 animate-spin" />
                   Starting...
                 </>
+              ) : isPartial ? (
+                'Continue Generation'
               ) : (
                 'Generate Content'
               )}
@@ -849,7 +855,7 @@ export default function ClusterContentGenerationPage() {
         )}
 
         {/* Pages table - generation progress view */}
-        {hasPages && (isGenerating || isIdle) && (
+        {hasPages && (isGenerating || isIdle || isPartial) && (
           <div className="border border-cream-500 rounded-sm overflow-hidden">
             <div className="max-h-[28rem] overflow-y-auto divide-y divide-cream-300">
               {clusterPages.map((page) => (
