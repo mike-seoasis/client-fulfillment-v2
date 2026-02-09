@@ -594,6 +594,19 @@ export function bulkApproveCluster(
 }
 
 /**
+ * Regenerate unapproved keywords in a cluster.
+ * Keeps approved pages and replaces unapproved ones with fresh suggestions.
+ */
+export function regenerateCluster(
+  projectId: string,
+  clusterId: string
+): Promise<Cluster> {
+  return apiClient.post<Cluster>(
+    `/projects/${projectId}/clusters/${clusterId}/regenerate`
+  );
+}
+
+/**
  * Delete a cluster. Only allowed if status is before 'approved'.
  */
 export function deleteCluster(

@@ -24,6 +24,7 @@ vi.mock('@/hooks/use-projects', () => ({
 const mockUseCluster = vi.fn();
 const mockUpdatePageMutate = vi.fn();
 const mockBulkApproveMutate = vi.fn();
+const mockRegenerateClusterMutate = vi.fn();
 const mockDeleteClusterMutate = vi.fn();
 vi.mock('@/hooks/useClusters', () => ({
   useCluster: () => mockUseCluster(),
@@ -32,6 +33,10 @@ vi.mock('@/hooks/useClusters', () => ({
   }),
   useBulkApproveCluster: () => ({
     mutate: mockBulkApproveMutate,
+    isPending: false,
+  }),
+  useRegenerateCluster: () => ({
+    mutate: mockRegenerateClusterMutate,
     isPending: false,
   }),
   useDeleteCluster: () => ({
@@ -525,6 +530,51 @@ describe('ClusterDetailPage', () => {
       render(<ClusterDetailPage />);
 
       expect(screen.getByRole('button', { name: /Back to Project/i })).toBeInTheDocument();
+    });
+  });
+
+  // ============================================================================
+  // Regenerate keywords
+  // ============================================================================
+  describe('regenerate keywords', () => {
+    it('renders Regenerate Keywords button for suggestions_ready status', () => {
+      render(<ClusterDetailPage />);
+
+      expect(screen.getByRole('button', { name: /Regenerate Keywords/i })).toBeInTheDocument();
+    });
+
+    it('does not render Regenerate Keywords button for approved status', () => {
+      mockUseCluster.mockReturnValue(
+        defaultMockCluster(defaultPages, { status: 'approved' })
+      );
+
+      render(<ClusterDetailPage />);
+
+      expect(screen.queryByRole('button', { name: /Regenerate Keywords/i })).not.toBeInTheDocument();
+    });
+
+    it('calls regenerateCluster when clicked', async () => {
+      const user = userEvent.setup();
+      render(<ClusterDetailPage />);
+
+      await user.click(screen.getByRole('button', { name: /Regenerate Keywords/i }));
+
+      expect(mockRegenerateClusterMutate).toHaveBeenCalledWith(
+        { projectId: 'test-project-123', clusterId: 'cluster-456' },
+        expect.objectContaining({
+          onSuccess: expect.any(Function),
+          onError: expect.any(Function),
+        })
+      );
+    });
+
+    it('is disabled when all pages are approved', () => {
+      const allApproved = defaultPages.map((p) => ({ ...p, is_approved: true }));
+      mockUseCluster.mockReturnValue(defaultMockCluster(allApproved));
+
+      render(<ClusterDetailPage />);
+
+      expect(screen.getByRole('button', { name: /Regenerate Keywords/i })).toBeDisabled();
     });
   });
 

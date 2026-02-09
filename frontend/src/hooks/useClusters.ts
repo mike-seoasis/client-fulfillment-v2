@@ -19,6 +19,7 @@ import {
   getCluster,
   updateClusterPage,
   bulkApproveCluster,
+  regenerateCluster,
   deleteCluster,
   type Cluster,
   type ClusterCreate,
@@ -49,6 +50,11 @@ interface UpdateClusterPageInput {
 }
 
 interface BulkApproveClusterInput {
+  projectId: string;
+  clusterId: string;
+}
+
+interface RegenerateClusterInput {
   projectId: string;
   clusterId: string;
 }
@@ -170,6 +176,30 @@ export function useBulkApproveCluster(): UseMutationResult<
       queryClient.invalidateQueries({
         queryKey: clusterKeys.detail(projectId, clusterId),
       });
+      queryClient.invalidateQueries({
+        queryKey: clusterKeys.list(projectId),
+      });
+    },
+  });
+}
+
+/**
+ * Regenerate unapproved keywords in a cluster.
+ * Keeps approved pages, replaces unapproved ones with fresh suggestions.
+ * Invalidates the cluster detail on success.
+ */
+export function useRegenerateCluster(): UseMutationResult<
+  Cluster,
+  Error,
+  RegenerateClusterInput
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ projectId, clusterId }: RegenerateClusterInput) =>
+      regenerateCluster(projectId, clusterId),
+    onSuccess: (data, { projectId, clusterId }) => {
+      queryClient.setQueryData(clusterKeys.detail(projectId, clusterId), data);
       queryClient.invalidateQueries({
         queryKey: clusterKeys.list(projectId),
       });

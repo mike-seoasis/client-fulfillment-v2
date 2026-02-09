@@ -296,6 +296,98 @@ async def update_cluster_page(
 
 
 @router.post(
+    "/{project_id}/clusters/{cluster_id}/regenerate",
+    response_model=ClusterResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def regenerate_cluster(
+    project_id: str,
+    cluster_id: str,
+    db: AsyncSession = Depends(get_session),
+    claude: ClaudeClient = Depends(get_claude),
+    dataforseo: DataForSEOClient = Depends(get_dataforseo),
+) -> ClusterResponse:
+    """Regenerate unapproved keywords in a cluster.
+
+    Keeps approved pages, deletes unapproved ones, and re-runs the
+    keyword generation pipeline to produce fresh suggestions.
+
+    Args:
+        project_id: UUID of the project.
+        cluster_id: UUID of the cluster.
+        db: AsyncSession for database operations.
+        claude: Claude client for LLM calls.
+        dataforseo: DataForSEO client for volume data.
+
+    Returns:
+        ClusterResponse with updated pages.
+
+    Raises:
+        HTTPException: 404 if project or cluster not found.
+        HTTPException: 409 if cluster already approved.
+        HTTPException: 504 if generation exceeds timeout.
+    """
+    await ProjectService.get_project(db, project_id)
+
+    # Verify cluster belongs to project
+    cluster_stmt = select(KeywordCluster).where(
+        KeywordCluster.id == cluster_id,
+        KeywordCluster.project_id == project_id,
+    )
+    cluster_result = await db.execute(cluster_stmt)
+    cluster = cluster_result.scalar_one_or_none()
+    if cluster is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Cluster {cluster_id} not found",
+        )
+
+    # Fetch brand config
+    bc_stmt = select(BrandConfig).where(BrandConfig.project_id == project_id)
+    bc_result = await db.execute(bc_stmt)
+    brand_config_row = bc_result.scalar_one_or_none()
+    brand_config: dict = brand_config_row.v2_schema if brand_config_row else {}
+
+    service = ClusterKeywordService(claude, dataforseo)
+    try:
+        await asyncio.wait_for(
+            service.regenerate_unapproved(
+                cluster_id=cluster_id,
+                brand_config=brand_config,
+                db=db,
+            ),
+            timeout=CLUSTER_GENERATION_TIMEOUT_SECONDS,
+        )
+    except TimeoutError:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Cluster regeneration timed out (>90s). Please try again.",
+        )
+    except ValueError as e:
+        error_msg = str(e)
+        if "Cannot regenerate" in error_msg:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=error_msg,
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_msg,
+        )
+
+    # Reload cluster with pages for response
+    stmt = (
+        select(KeywordCluster)
+        .options(selectinload(KeywordCluster.pages))
+        .where(KeywordCluster.id == cluster_id)
+    )
+    reload_result = await db.execute(stmt)
+    updated_cluster = reload_result.scalar_one()
+
+    return ClusterResponse.model_validate(updated_cluster)
+
+
+@router.post(
     "/{project_id}/clusters/{cluster_id}/approve",
     status_code=status.HTTP_200_OK,
 )

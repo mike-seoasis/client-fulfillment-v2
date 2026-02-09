@@ -8,6 +8,7 @@ import {
   useCluster,
   useUpdateClusterPage,
   useBulkApproveCluster,
+  useRegenerateCluster,
   useDeleteCluster,
 } from '@/hooks/useClusters';
 import { Button, Toast } from '@/components/ui';
@@ -493,6 +494,7 @@ export default function ClusterDetailPage() {
   const { data: cluster, isLoading: isClusterLoading, error: clusterError } = useCluster(projectId, clusterId);
   const updatePage = useUpdateClusterPage();
   const bulkApprove = useBulkApproveCluster();
+  const regenerateCluster = useRegenerateCluster();
   const deleteClusterMutation = useDeleteCluster();
 
   const isLoading = isProjectLoading || isClusterLoading;
@@ -568,6 +570,22 @@ export default function ClusterDetailPage() {
       setIsDeleteConfirming(false);
     }
   }, []);
+
+  // Regenerate unapproved keywords
+  const unapprovedCount = totalPages - approvedCount;
+  const handleRegenerate = useCallback(() => {
+    regenerateCluster.mutate(
+      { projectId, clusterId },
+      {
+        onSuccess: () => {
+          handleShowToast('Keywords regenerated', 'success');
+        },
+        onError: (err) => {
+          handleShowToast(err.message || 'Failed to regenerate keywords', 'error');
+        },
+      }
+    );
+  }, [regenerateCluster, projectId, clusterId, handleShowToast]);
 
   // Approve all suggestions
   const handleApproveAll = useCallback(() => {
@@ -701,13 +719,31 @@ export default function ClusterDetailPage() {
               Seed keyword: <span className="font-medium text-warm-gray-700">{cluster.seed_keyword}</span>
             </p>
           </div>
-          <Button
-            variant="secondary"
-            onClick={handleApproveAll}
-            disabled={approvedCount === totalPages}
-          >
-            Approve All
-          </Button>
+          <div className="flex items-center gap-2">
+            {canDelete && (
+              <Button
+                variant="secondary"
+                onClick={handleRegenerate}
+                disabled={regenerateCluster.isPending || unapprovedCount === 0}
+              >
+                {regenerateCluster.isPending ? (
+                  <>
+                    <SpinnerIcon className="w-4 h-4 mr-1.5 animate-spin" />
+                    Regenerating...
+                  </>
+                ) : (
+                  'Regenerate Keywords'
+                )}
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              onClick={handleApproveAll}
+              disabled={approvedCount === totalPages}
+            >
+              Approve All
+            </Button>
+          </div>
         </div>
 
         {/* Summary stats */}

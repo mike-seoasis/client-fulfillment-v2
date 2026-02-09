@@ -930,6 +930,230 @@ Example:
             )
             raise ValueError(f"Cluster generation failed during persistence: {e}") from e
 
+    async def regenerate_unapproved(
+        self,
+        cluster_id: str,
+        brand_config: dict[str, Any],
+        db: AsyncSession,
+    ) -> dict[str, Any]:
+        """Re-run keyword research, replacing unapproved pages with fresh suggestions.
+
+        Keeps all approved ClusterPages, deletes unapproved ones, then runs
+        the generation pipeline (Stages 1+2+3) with approved keywords excluded.
+        New ClusterPages are inserted for the filtered results.
+
+        Args:
+            cluster_id: UUID of the KeywordCluster to regenerate.
+            brand_config: The v2_schema dict from BrandConfig model.
+            db: AsyncSession for database operations.
+
+        Returns:
+            Dict with cluster_id, new_count, kept_count, generation_metadata, warnings.
+
+        Raises:
+            ValueError: If cluster not found, already approved, or generation fails.
+        """
+        # Load cluster
+        result = await db.execute(
+            select(KeywordCluster).where(KeywordCluster.id == cluster_id)
+        )
+        cluster = result.scalar_one_or_none()
+        if cluster is None:
+            raise ValueError(f"Cluster {cluster_id} not found")
+
+        # Block if already approved or later
+        blocked_statuses = {
+            ClusterStatus.APPROVED.value,
+            ClusterStatus.CONTENT_GENERATING.value,
+            ClusterStatus.COMPLETE.value,
+        }
+        if cluster.status in blocked_statuses:
+            raise ValueError(
+                f"Cannot regenerate cluster with status '{cluster.status}'"
+            )
+
+        # Load all pages
+        pages_result = await db.execute(
+            select(ClusterPage).where(ClusterPage.cluster_id == cluster_id)
+        )
+        all_pages = list(pages_result.scalars().all())
+
+        approved_pages = [p for p in all_pages if p.is_approved]
+        unapproved_pages = [p for p in all_pages if not p.is_approved]
+
+        # Collect approved keywords to exclude from generation
+        approved_keywords = [p.keyword.strip().lower() for p in approved_pages]
+
+        # Delete unapproved pages
+        for page in unapproved_pages:
+            await db.delete(page)
+        await db.flush()
+
+        logger.info(
+            "Regenerating unapproved keywords",
+            extra={
+                "cluster_id": cluster_id,
+                "seed_keyword": cluster.seed_keyword,
+                "kept_approved": len(approved_pages),
+                "deleted_unapproved": len(unapproved_pages),
+            },
+        )
+
+        # Build brand context
+        brand_context = self._build_brand_context(brand_config)
+
+        # Run iterative Stages 1+2 with approved keywords excluded
+        MAX_ITERATIONS = 4
+        MIN_WITH_VOLUME = 20
+
+        all_candidates: list[dict[str, Any]] = []
+        seen_keywords: set[str] = set(approved_keywords)  # Exclude approved
+        seen_keywords.add(cluster.seed_keyword.strip().lower())  # Exclude seed
+        volume_unavailable = False
+        warnings: list[str] = []
+        t1_total_ms = 0
+        t2_total_ms = 0
+        iterations_run = 0
+        total_generated = 0
+
+        for iteration in range(MAX_ITERATIONS):
+            iterations_run += 1
+            exclude = list(seen_keywords) if seen_keywords else None
+
+            t1_start = time.perf_counter()
+            try:
+                new_candidates = await self._generate_candidates(
+                    cluster.seed_keyword, brand_context, exclude_keywords=exclude
+                )
+            except Exception as e:
+                if iteration == 0:
+                    raise ValueError(f"Regeneration failed at Stage 1: {e}") from e
+                break
+            t1_total_ms += round((time.perf_counter() - t1_start) * 1000)
+
+            # Deduplicate
+            unique_new: list[dict[str, Any]] = []
+            for c in new_candidates:
+                kw = c["keyword"].strip().lower()
+                if kw not in seen_keywords:
+                    seen_keywords.add(kw)
+                    unique_new.append(c)
+
+            if not unique_new:
+                break
+
+            total_generated += len(unique_new)
+
+            # Stage 2: Enrich
+            t2_start = time.perf_counter()
+            try:
+                enriched = await self._enrich_with_volume(unique_new)
+                if enriched and enriched[0].get("volume_unavailable"):
+                    volume_unavailable = True
+                    warnings.append(
+                        "Search volume data unavailable — DataForSEO lookup failed or not configured."
+                    )
+                    all_candidates.extend(enriched)
+                    t2_total_ms += round((time.perf_counter() - t2_start) * 1000)
+                    break
+                else:
+                    all_candidates.extend(enriched)
+            except Exception as e:
+                volume_unavailable = True
+                warnings.append(f"Search volume enrichment failed: {e}.")
+                all_candidates.extend(unique_new)
+                t2_total_ms += round((time.perf_counter() - t2_start) * 1000)
+                break
+            t2_total_ms += round((time.perf_counter() - t2_start) * 1000)
+
+            with_volume = sum(
+                1 for c in all_candidates
+                if c.get("search_volume") and c["search_volume"] > 0
+            )
+            if with_volume >= MIN_WITH_VOLUME:
+                break
+
+        # Pre-filter: drop 0-volume candidates (keep seed)
+        seed_normalized = cluster.seed_keyword.strip().lower()
+        if not volume_unavailable:
+            all_candidates = [
+                c for c in all_candidates
+                if c["keyword"] == seed_normalized
+                or (c.get("search_volume") and c["search_volume"] > 0)
+            ]
+
+        # Stage 3: Filter and assign roles
+        t3_start = time.perf_counter()
+        try:
+            filtered = await self._filter_and_assign_roles(
+                all_candidates, cluster.seed_keyword
+            )
+        except Exception as e:
+            raise ValueError(f"Regeneration failed at Stage 3: {e}") from e
+        t3_ms = round((time.perf_counter() - t3_start) * 1000)
+
+        # Remove any filtered results that match an approved keyword
+        # (the seed keyword may already be approved — keep it only if not)
+        approved_set = set(approved_keywords)
+        filtered = [f for f in filtered if f["keyword"] not in approved_set]
+
+        total_ms = t1_total_ms + t2_total_ms + t3_ms
+        generation_metadata: dict[str, Any] = {
+            "stage1_time_ms": t1_total_ms,
+            "stage2_time_ms": t2_total_ms,
+            "stage3_time_ms": t3_ms,
+            "total_time_ms": total_ms,
+            "candidates_generated": total_generated,
+            "candidates_filtered": len(filtered),
+            "volume_unavailable": volume_unavailable,
+            "iterations": iterations_run,
+            "regeneration": True,
+            "kept_approved": len(approved_pages),
+        }
+
+        # Persist new pages
+        try:
+            for page_data in filtered:
+                cluster_page = ClusterPage(
+                    cluster_id=cluster.id,
+                    keyword=page_data["keyword"],
+                    role=page_data["role"],
+                    url_slug=page_data["url_slug"],
+                    expansion_strategy=page_data.get("expansion_strategy"),
+                    reasoning=page_data.get("reasoning"),
+                    search_volume=page_data.get("search_volume"),
+                    cpc=page_data.get("cpc"),
+                    competition=page_data.get("competition"),
+                    competition_level=page_data.get("competition_level"),
+                    composite_score=page_data.get("composite_score"),
+                )
+                db.add(cluster_page)
+
+            cluster.generation_metadata = generation_metadata
+            await db.commit()
+
+            logger.info(
+                "Cluster regeneration complete",
+                extra={
+                    "cluster_id": cluster_id,
+                    "new_pages": len(filtered),
+                    "kept_approved": len(approved_pages),
+                    "total_time_ms": total_ms,
+                },
+            )
+
+            return {
+                "cluster_id": cluster.id,
+                "new_count": len(filtered),
+                "kept_count": len(approved_pages),
+                "generation_metadata": generation_metadata,
+                "warnings": warnings,
+            }
+
+        except Exception as e:
+            await db.rollback()
+            raise ValueError(f"Regeneration failed during persistence: {e}") from e
+
     @staticmethod
     async def bulk_approve_cluster(
         cluster_id: str,
