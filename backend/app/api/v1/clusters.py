@@ -460,10 +460,7 @@ async def delete_cluster(
     cluster_id: str,
     db: AsyncSession = Depends(get_session),
 ) -> None:
-    """Delete a cluster if its status is before 'approved'.
-
-    Only clusters with status 'generating' or 'suggestions_ready' can be
-    deleted. Approved or later clusters return 409.
+    """Delete a cluster and its associated bridged content pipeline data.
 
     Args:
         project_id: UUID of the project.
@@ -472,7 +469,6 @@ async def delete_cluster(
 
     Raises:
         HTTPException: 404 if project or cluster not found.
-        HTTPException: 409 if cluster status >= 'approved'.
     """
     await ProjectService.get_project(db, project_id)
 
@@ -487,18 +483,6 @@ async def delete_cluster(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Cluster {cluster_id} not found",
-        )
-
-    # Block deletion if status >= approved
-    approved_or_later = {
-        ClusterStatus.APPROVED.value,
-        ClusterStatus.CONTENT_GENERATING.value,
-        ClusterStatus.COMPLETE.value,
-    }
-    if cluster.status in approved_or_later:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cannot delete cluster with status '{cluster.status}'",
         )
 
     await db.delete(cluster)

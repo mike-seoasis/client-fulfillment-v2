@@ -535,10 +535,7 @@ export default function ClusterDetailPage() {
     };
   }, [isDeleteConfirming]);
 
-  // Whether cluster can be deleted (only before approved)
-  const canDelete = cluster
-    ? !['approved', 'content_generating', 'complete'].includes(cluster.status)
-    : false;
+  const canDelete = !!cluster;
 
   const handleShowToast = useCallback((message: string, variant: 'success' | 'error') => {
     setToastMessage(message);
