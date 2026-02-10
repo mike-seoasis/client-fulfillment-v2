@@ -546,3 +546,22 @@ after each iteration and it's included in prompts for context.
   - When `pages_config` is a list of dicts with mixed value types (`str`, `bool`, `list[str]`), mypy strict mode rejects `cfg["key"]: str` assignments — restructure as parallel typed lists indexed by `range(N)` to satisfy type inference
   - Mock LLM clients need separate instances for `link_planning.py` (natural phrases) and `link_injection.py` (LLM fallback) since they're patched in different module namespaces
 ---
+
+## 2026-02-10 - S9-032
+- Created 4 frontend component test files (86 tests total, all passing):
+  - `frontend/src/app/projects/[id]/links/__tests__/page.test.tsx` (27 tests) — OnboardingLinksPage: prerequisites rendering, button disabled/enabled/hidden, progress indicator steps, completion redirect, failure retry, toast notifications
+  - `frontend/src/app/projects/[id]/links/map/__tests__/page.test.tsx` (22 tests) — OnboardingLinkMapPage: stats sidebar, table rows, filter controls (label/priority/search), re-plan button confirmation, empty state
+  - `frontend/src/app/projects/[id]/links/page/[pageId]/__tests__/page.test.tsx` (32 tests) — PageLinkDetailPage: outbound/inbound links, mandatory link no Remove button, Add Link modal validation, Edit Anchor modal, Remove link confirmation, anchor diversity
+  - `frontend/src/app/projects/[id]/__tests__/linkStatus.test.tsx` (5 tests) — ProjectDetailPage link status indicators: not planned, N planned, planning, cluster badges
+- **Files changed:**
+  - `frontend/src/app/projects/[id]/links/__tests__/page.test.tsx` (new)
+  - `frontend/src/app/projects/[id]/links/map/__tests__/page.test.tsx` (new)
+  - `frontend/src/app/projects/[id]/links/page/[pageId]/__tests__/page.test.tsx` (new)
+  - `frontend/src/app/projects/[id]/__tests__/linkStatus.test.tsx` (new)
+- **Learnings:**
+  - When components render the same text in multiple DOM locations (breadcrumb + heading, label visualization + table), use scoped queries: `screen.getByRole('heading', { level: 1 })` + `toHaveTextContent`, or `within(container)`, or `getAllByText` instead of `getByText`
+  - Async button click handlers that call `mutateAsync` should use `fireEvent.click()` wrapped in `act(async () => {...})` — `userEvent.click()` causes test timeouts
+  - Fake timer tests should use `act(() => vi.advanceTimersByTime(N))` synchronously — `waitFor` doesn't work well with fake timers. Always pair with `afterEach(() => vi.useRealTimers())`
+  - `.closest()` returns `Element | null`, but RTL's `within()` expects `HTMLElement` — cast with `as HTMLElement`
+  - Pre-existing TS error in `GenerationProgress.test.tsx` (tuple index out of bounds) — not related to this task
+---
