@@ -14,6 +14,7 @@ after each iteration and it's included in prompts for context.
 - **Model registration**: Import in `backend/app/models/__init__.py` and add to `__all__`.
 - **Migration numbering**: Sequential `0001`, `0002`, etc. in `backend/alembic/versions/`. Set `down_revision` to previous.
 - **Virtual env**: Use `.venv/bin/python` (not `python`) in the backend directory.
+- **Test DB verification**: When verifying DB state after an API endpoint commits, use `async_session_factory()` for a fresh session — the test's `db_session` has stale cached objects.
 
 ---
 
@@ -303,4 +304,25 @@ after each iteration and it's included in prompts for context.
   - Scope auto-detection for manual links: query ClusterPage for both source and target, check for shared cluster_id via set intersection — avoids requiring scope in the request body
   - BeautifulSoup `Tag.string = "new text"` directly replaces the tag's text content, simpler than extract+insert for anchor text edits
   - `db.flush()` after content update + before commit ensures PageContent and InternalLink changes are in the same transaction
+---
+
+## 2026-02-10 - S9-024
+- Verified links router already registered in `backend/app/api/v1/__init__.py` (done in S9-021)
+- Created `backend/tests/test_links_api.py` with 21 integration tests covering all 8 endpoints:
+  - POST `/links/plan`: success (202), 400 prerequisites not met, 400 missing cluster_id, 400 not enough pages
+  - GET `/links/plan/status`: idle, during planning, complete with total_links
+  - GET `/links` (link map): cluster scope with hierarchy, onboarding scope empty
+  - GET `/links/page/{page_id}`: outbound + inbound lists, 404 invalid page
+  - GET `/links/suggestions/{target_page_id}`: keyword + variations + counts, 404 invalid page
+  - POST `/links` (add): success rule-based, 400 self-link, 400 duplicate
+  - DELETE `/links/{link_id}`: success discretionary, 400 mandatory, 404 invalid
+  - PUT `/links/{link_id}`: success with DB + content verification, 404 invalid
+- **Files changed:**
+  - `backend/tests/test_links_api.py` (new)
+- **Learnings:**
+  - When verifying DB state after API endpoint commits (separate session), must use `async_session_factory()` for a fresh session — the test's `db_session` has stale cached objects that don't reflect the API's committed changes
+  - Ruff B905 requires `strict=True` on `zip()` calls in test code
+  - Testing pipeline progress state: directly inject into module-level `_pipeline_progress` dict, clean up in `finally` block
+  - Rule-based link injection works in tests when the anchor text literally appears in the HTML content (case-insensitive match)
+  - `_active_plans` module-level set needs cleanup after successful plan tests to avoid 409 conflicts in subsequent tests
 ---
