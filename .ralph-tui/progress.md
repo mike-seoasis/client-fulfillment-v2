@@ -255,3 +255,19 @@ after each iteration and it's included in prompts for context.
   - Import ordering: `project` sorts after `page_keywords` alphabetically — ruff caught the mis-order and auto-fixed
   - The `urlparse` import can be localized (inside function body) to avoid top-level import of `urllib.parse` when it's only used in one function
 ---
+
+## 2026-02-10 - S9-021
+- Created `backend/app/api/v1/links.py` with APIRouter for link management endpoints
+- POST `/api/v1/projects/{project_id}/links/plan` — validates prerequisites (content complete + keywords approved), validates cluster scope (cluster exists, >= 2 approved pages), checks for existing links to trigger re-plan flow, starts pipeline as BackgroundTask, returns 202 with LinkPlanStatusResponse
+- GET `/api/v1/projects/{project_id}/links/plan/status` — accepts `scope` and `cluster_id` query params, reads progress from `get_pipeline_progress()` in link_planning.py, returns LinkPlanStatusResponse
+- Module-level `_active_plans` set prevents duplicate concurrent runs (keyed by project_id, scope, cluster_id tuple)
+- Background task wrapper `_run_link_planning_background` creates its own DB session via `db_manager.session_factory()`, calls `replan_links` or `run_link_planning_pipeline` based on existing links
+- Registered router in `backend/app/api/v1/__init__.py`
+- **Files changed:**
+  - `backend/app/api/v1/links.py` (new)
+  - `backend/app/api/v1/__init__.py` (added links router import + include)
+- **Learnings:**
+  - Deferred imports inside background task functions avoid circular imports and ensure fresh module references — `from app.core.database import db_manager` must come before `from app.services.link_planning import ...` for ruff import sorting
+  - `type: ignore[arg-type]` needed on `replan_links`/`run_link_planning_pipeline` calls because the Literal["onboarding", "cluster"] param doesn't match `str` from the request body
+  - The `_active_plans` set uses tuples `(project_id, scope, cluster_id)` rather than just project_id (unlike content_generation.py) because link planning can run independently per scope/cluster
+---

@@ -426,12 +426,13 @@
         "GET /api/v1/projects/{project_id}/links/plan/status — accepts query params scope and cluster_id, returns current LinkPlanStatusResponse from progress state dict"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "S9-013",
         "S9-005"
       ],
-      "notes": "Follow the same background task + polling pattern as backend/app/api/v1/content_generation.py. The progress state is stored in a module-level dict in link_planning.py. Reference how content_generation.py stores and reads pipeline_status."
+      "notes": "Follow the same background task + polling pattern as backend/app/api/v1/content_generation.py. The progress state is stored in a module-level dict in link_planning.py. Reference how content_generation.py stores and reads pipeline_status.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S9-022",
@@ -700,6 +701,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-10T18:45:54.266Z"
+    "updatedAt": "2026-02-10T18:48:30.389Z"
   }
 }
