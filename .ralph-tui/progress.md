@@ -530,3 +530,19 @@ after each iteration and it's included in prompts for context.
   - Ruff import sorter requires `from types import SimpleNamespace` (stdlib) before `import pytest` (third-party) — auto-fixable with `--fix`
   - `dict` return type without type params triggers mypy `type-arg` — use `dict[str, Any]` even in test helpers
 ---
+
+## 2026-02-10 - S9-020
+- Created `backend/tests/test_link_pipeline_integration.py` with 5 integration tests across 3 test classes
+- `TestClusterPipeline` (2 tests): full pipeline creates InternalLink rows with verified status, parent + 4 children with mandatory parent links pointing to parent ClusterPage.id, parent outbound only targets children; mandatory parent links positioned first in content (lowest paragraph index)
+- `TestOnboardingPipeline` (2 tests): full pipeline with 6 pages and label overlaps creates links only between pages sharing >= 2 labels; priority pages get more inbound links on average due to +2 priority bonus scoring
+- `TestReplanFlow` (1 test): runs pipeline once, then re-plans — verifies snapshot created with correct total_links and plan_data structure, old link IDs completely replaced by new ones, no snapshot exists before re-plan
+- All tests use real SQLite in-memory DB via `db_session`/`async_session_factory` fixtures, mock Claude calls for both natural phrase generation and LLM fallback injection
+- **Files changed:**
+  - `backend/tests/test_link_pipeline_integration.py` (new)
+- **Learnings:**
+  - In cluster scope, `InternalLink.target_page_id` stores the ClusterPage.id (not CrawledPage.id) because `select_targets_cluster` returns targets with `page_id` = ClusterPage.id and the target dict lacks `crawled_page_id`. Source pages have `crawled_page_id` from the graph, so `InternalLink.source_page_id` = CrawledPage.id.
+  - Patching `db_manager.session_factory()` requires creating a mock class with `session_factory` as a staticmethod returning the test session factory — the pipeline creates write sessions via `async with db_manager.session_factory() as write_db`
+  - CrawledPage model uses `title` (not `page_title`) as its field name
+  - When `pages_config` is a list of dicts with mixed value types (`str`, `bool`, `list[str]`), mypy strict mode rejects `cfg["key"]: str` assignments — restructure as parallel typed lists indexed by `range(N)` to satisfy type inference
+  - Mock LLM clients need separate instances for `link_planning.py` (natural phrases) and `link_injection.py` (LLM fallback) since they're patched in different module namespaces
+---
