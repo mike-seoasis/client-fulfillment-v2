@@ -458,3 +458,18 @@ after each iteration and it's included in prompts for context.
   - Ruff import sorter requires stdlib imports (`uuid4`) before third-party (`pytest`) — auto-fixable with `--fix`
   - No need to create PageContent/PageKeywords for cluster graph tests — `build_cluster_graph` queries ClusterPage directly, not CrawledPage joins
 ---
+
+## 2026-02-10 - S9-016
+- Added 15 pure function unit tests to `backend/tests/test_link_planning.py` across 3 new test classes
+- `TestCalculateBudget` (6 tests): 200→3, 1000→4, 2000→5, 0→3, 750→3, 1250→5 — validates clamp(word_count // 250, 3, 5)
+- `TestSelectTargetsCluster` (4 tests): child gets parent as mandatory first target + siblings by composite_score, parent gets children sorted by composite_score, small cluster (2 pages) partially fills budget, sibling ordering verified
+- `TestSelectTargetsOnboarding` (5 tests): priority page bonus (+2) wins tiebreakers, diversity penalty spreads inbound links, page with no eligible targets gets empty list, target fields include label_overlap and score, budget limits enforced
+- Helper functions `_make_cluster_graph()` and `_make_onboarding_graph()` build synthetic graph dicts mimicking build_*_graph output — no DB needed
+- **Files changed:**
+  - `backend/tests/test_link_planning.py` (added imports, 3 test classes, 2 helper functions)
+- **Learnings:**
+  - Pure function tests for `select_targets_*` and `calculate_budget` don't need any DB fixtures — synthetic graph dicts with the right shape are sufficient
+  - Ruff B007 flags unused loop variables in `for page_id, targets in result.items()` — rename to `_page_id`
+  - `-> dict:` without type params triggers mypy `type-arg` — use `-> dict[str, Any]:` even in test helpers
+  - The diversity penalty test verifies distribution via `max(inbound) <= min(inbound) + 3` rather than exact counts, since the algorithm is order-dependent
+---

@@ -327,11 +327,12 @@
         "Test select_targets_onboarding: page with no eligible targets gets empty list"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "S9-007"
       ],
-      "notes": "These are pure function tests — no DB needed. Create test data dicts that mimic graph output."
+      "notes": "These are pure function tests — no DB needed. Create test data dicts that mimic graph output.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S9-017",
@@ -712,6 +713,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-10T19:25:40.977Z"
+    "updatedAt": "2026-02-10T19:28:20.349Z"
   }
 }
