@@ -177,11 +177,13 @@ class InternalLink(Base):
     source_page: Mapped["CrawledPage"] = relationship(
         "CrawledPage",
         foreign_keys=[source_page_id],
+        back_populates="outbound_links",
     )
 
     target_page: Mapped["CrawledPage"] = relationship(
         "CrawledPage",
         foreign_keys=[target_page_id],
+        back_populates="inbound_links",
     )
 
     project: Mapped["Project"] = relationship(

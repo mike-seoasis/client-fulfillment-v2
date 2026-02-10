@@ -23,6 +23,7 @@ from app.core.database import Base
 if TYPE_CHECKING:
     from app.models.content_brief import ContentBrief
     from app.models.content_score import ContentScore
+    from app.models.internal_link import InternalLink
     from app.models.page_content import PageContent
     from app.models.page_keywords import PageKeywords
 
@@ -210,6 +211,22 @@ class CrawledPage(Base):
         back_populates="page",
         cascade="all, delete-orphan",
         uselist=False,
+    )
+
+    # Internal links where this page is the source (outgoing links)
+    outbound_links: Mapped[list["InternalLink"]] = relationship(
+        "InternalLink",
+        foreign_keys="[InternalLink.source_page_id]",
+        back_populates="source_page",
+        cascade="all, delete-orphan",
+    )
+
+    # Internal links where this page is the target (incoming links)
+    inbound_links: Mapped[list["InternalLink"]] = relationship(
+        "InternalLink",
+        foreign_keys="[InternalLink.target_page_id]",
+        back_populates="target_page",
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:

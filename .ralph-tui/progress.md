@@ -48,3 +48,17 @@ after each iteration and it's included in prompts for context.
   - Python type hint for JSONB column is `Mapped[dict]`
   - Multiple models in the same file sharing FKs to the same tables (e.g. both InternalLink and LinkPlanSnapshot referencing keyword_clusters) works fine without `foreign_keys=` disambiguation since each model only has one FK to that table
 ---
+
+## 2026-02-10 - S9-003
+- Added `outbound_links` and `inbound_links` relationships to `CrawledPage` model
+- Added `back_populates` to `InternalLink.source_page` and `InternalLink.target_page` relationships for bidirectional linking
+- Added `InternalLink` to `TYPE_CHECKING` imports in `crawled_page.py`
+- Models already registered in `__init__.py` from S9-001/S9-002
+- **Files changed:**
+  - `backend/app/models/crawled_page.py` (added TYPE_CHECKING import + two relationships)
+  - `backend/app/models/internal_link.py` (added back_populates to source_page and target_page)
+- **Learnings:**
+  - When adding reverse relationships on a model with multi-FK ambiguity, use string-form `foreign_keys="[ClassName.column]"` on the parent side and `foreign_keys=[column]` on the child side
+  - Both sides need `back_populates` for proper bidirectional behavior
+  - `cascade="all, delete-orphan"` on the parent side ensures links are cleaned up when a page is deleted
+---
