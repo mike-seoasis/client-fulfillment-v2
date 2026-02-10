@@ -74,3 +74,18 @@ after each iteration and it's included in prompts for context.
   - When model creation stories (S9-001, S9-002) each create their own migration, the migration story (S9-004) becomes a verification task rather than a creation task
   - Always verify both upgrade AND downgrade paths when validating migrations
 ---
+
+## 2026-02-10 - S9-005
+- Created Pydantic v2 schemas for internal link management API
+- 9 schema classes: LinkPlanRequest, LinkPlanStatusResponse, InternalLinkResponse, PageLinksResponse, LinkMapPageSummary, LinkMapResponse, AddLinkRequest, EditLinkRequest, AnchorSuggestionsResponse
+- All use `Literal` types for constrained string fields (scope, anchor_type, status)
+- `ConfigDict(from_attributes=True)` on InternalLinkResponse for ORM serialization
+- Registered all schemas in `backend/app/schemas/__init__.py`
+- **Files changed:**
+  - `backend/app/schemas/internal_link.py` (new)
+  - `backend/app/schemas/__init__.py` (added imports + __all__ entries)
+- **Learnings:**
+  - Pydantic v2 `Literal` types work well for constrained string enums in request schemas (cleaner than validator)
+  - Ruff import sorter (isort) requires `internal_link` to sort alphabetically among other schema imports — placing it before `crawled_page` caused a re-sort
+  - Response schemas that join data from relationships (e.g., InternalLinkResponse with target_url/target_title) don't need `from_attributes=True` if they'll be constructed manually rather than from ORM objects — but including it is harmless and future-proofs
+---

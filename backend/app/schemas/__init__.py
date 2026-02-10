@@ -101,6 +101,17 @@ from app.schemas.crawled_page import (
 from app.schemas.crawled_page import (
     CrawledPageResponse as CrawledPageFullResponse,
 )
+from app.schemas.internal_link import (
+    AddLinkRequest,
+    AnchorSuggestionsResponse,
+    EditLinkRequest,
+    InternalLinkResponse,
+    LinkMapPageSummary,
+    LinkMapResponse,
+    LinkPlanRequest,
+    LinkPlanStatusResponse,
+    PageLinksResponse,
+)
 from app.schemas.keyword_research import (
     KeywordIdeaRequest,
     KeywordIdeaResponse,
@@ -268,6 +279,16 @@ __all__ = [
     "BriefSummary",
     "PageContentResponse",
     "PromptLogResponse",
+    # Internal Link schemas
+    "LinkPlanRequest",
+    "LinkPlanStatusResponse",
+    "InternalLinkResponse",
+    "PageLinksResponse",
+    "LinkMapPageSummary",
+    "LinkMapResponse",
+    "AddLinkRequest",
+    "EditLinkRequest",
+    "AnchorSuggestionsResponse",
     # CrawledPage schemas
     "CrawledPageCreate",
     "CrawledPageFullResponse",
