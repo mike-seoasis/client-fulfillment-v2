@@ -489,3 +489,24 @@ after each iteration and it's included in prompts for context.
   - `ContentBrief` uses `page_id` (not `crawled_page_id`) as its FK column name — inconsistent with PageContent/PageKeywords
   - `Counter` from `collections` is the clean way to tally anchor type distribution in batch tests
 ---
+
+## 2026-02-10 - S9-018
+- Created `backend/tests/test_link_injection.py` with 24 unit tests across 8 test classes for link injection and stripping
+- `TestInjectRuleBasedFound` (3 tests): anchor found wraps in `<a>` tag, surrounding text preserved, headings not modified
+- `TestInjectRuleBasedNotFound` (1 test): no match returns original HTML with None paragraph index
+- `TestInjectRuleBasedInsideExistingLink` (2 tests): anchor inside `<a>` tag treated as not found, falls through to next paragraph if anchor is free there
+- `TestInjectRuleBasedCaseInsensitive` (2 tests): case-insensitive match preserves original casing from content (both "Hiking Boots" → preserved, and "HIKING BOOTS" anchor matches lowercase content)
+- `TestInjectRuleBasedDensityLimit` (2 tests): paragraph at 2-link limit skipped → injection moves to next paragraph, all paragraphs at limit returns None
+- `TestInjectLlmFallback` (2 tests): successful rewrite with mocked Claude client, markdown code fences stripped from LLM response
+- `TestInjectLlmFallbackMalformed` (4 tests): API failure returns original, wrong href returns original, multiple `<a>` tags returns original, no paragraphs returns original
+- `TestStripInternalLinks` (4 tests): relative links unwrapped, same-domain links unwrapped, external links preserved, mixed internal+external handled correctly
+- `TestStripInternalLinksStructure` (4 tests): headings preserved, paragraph structure preserved, list structure preserved, no-links HTML unchanged
+- **Files changed:**
+  - `backend/tests/test_link_injection.py` (new)
+- **Learnings:**
+  - `LinkInjector` methods are pure (no DB) — `inject_rule_based` is sync, `inject_llm_fallback` is async. Only LLM fallback needs mocking (ClaudeClient + get_api_key)
+  - Mock both `ClaudeClient` and `get_api_key` in `app.services.link_injection` namespace (not `app.integrations.claude`) since that's where they're imported
+  - `dataclass` is a lightweight alternative to importing `CompletionResult` for mock return values — just needs `success`, `text`, and `error` fields
+  - Real HTML snippet fixtures at module level (not in conftest) keep test file self-contained and make the HTML structure immediately visible alongside assertions
+  - `AsyncMock()` for the ClaudeClient mock — both `complete` and `close` need to be `AsyncMock` since they're awaited
+---
