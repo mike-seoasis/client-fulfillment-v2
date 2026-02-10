@@ -41,6 +41,11 @@ from app.services.label_taxonomy import (
     validate_labels,
     validate_page_labels,
 )
+from app.services.link_injection import (
+    MAX_LINKS_PER_PARAGRAPH,
+    MIN_WORDS_BETWEEN_LINKS,
+    LinkInjector,
+)
 from app.services.link_planning import (
     ANCHOR_LLM_MODEL,
     LABEL_OVERLAP_THRESHOLD,
@@ -69,6 +74,8 @@ __all__ = [
     "ContentWritingResult",
     "CrawlingService",
     "MAX_ANCHOR_REUSE",
+    "MAX_LINKS_PER_PARAGRAPH",
+    "MIN_WORDS_BETWEEN_LINKS",
     "QualityIssue",
     "QualityResult",
     "build_content_prompt",
@@ -82,6 +89,7 @@ __all__ = [
     "get_project_taxonomy_labels",
     "KeywordGenerationStats",
     "LABEL_OVERLAP_THRESHOLD",
+    "LinkInjector",
     "LabelAssignment",
     "LabelTaxonomyService",
     "LabelValidationError",

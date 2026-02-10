@@ -173,11 +173,12 @@
         "If target paragraph is at density limit, try next paragraph with the match"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "S9-004"
       ],
-      "notes": "Use BeautifulSoup4 (already installed). Parse with 'html.parser'. When wrapping text, use NavigableString replacement to preserve surrounding HTML. For density check: count existing <a> tags in paragraph, measure word distance between link positions."
+      "notes": "Use BeautifulSoup4 (already installed). Parse with 'html.parser'. When wrapping text, use NavigableString replacement to preserve surrounding HTML. For density check: count existing <a> tags in paragraph, measure word distance between link positions.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S9-010",
@@ -694,6 +695,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-10T18:27:29.707Z"
+    "updatedAt": "2026-02-10T18:31:35.885Z"
   }
 }

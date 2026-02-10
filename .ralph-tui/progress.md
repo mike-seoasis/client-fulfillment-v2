@@ -137,3 +137,22 @@ after each iteration and it's included in prompts for context.
   - `select_anchor` type_weights approximate the 50-60% partial / 10% exact / 30% natural distribution via scoring bias rather than hard quotas
   - Must close ClaudeClient instances created outside the global lifecycle (`await client.close()` in finally block)
 ---
+
+## 2026-02-10 - S9-009
+- Created `LinkInjector` class in `backend/app/services/link_injection.py`
+- `inject_rule_based(html, anchor_text, target_url)` → parses HTML with BeautifulSoup, scans `<p>` tags for case-insensitive anchor text match, wraps first occurrence in `<a href>` tag. Returns `(modified_html, paragraph_index)` or `(original_html, None)`.
+- Does NOT inject inside existing `<a>`, `<h2>`, `<h3>`, or `<li>` elements — walks NavigableString descendants and checks parent chain for forbidden tags
+- Case-insensitive matching via `re.compile(re.escape(anchor_text), re.IGNORECASE)` preserves original casing in anchor tag
+- Density limits enforced: max 2 links per paragraph (`MAX_LINKS_PER_PARAGRAPH`), min 50 words between links (`MIN_WORDS_BETWEEN_LINKS`)
+- If target paragraph is at density limit, automatically tries next paragraph with the match
+- Constants `MAX_LINKS_PER_PARAGRAPH` and `MIN_WORDS_BETWEEN_LINKS` exported for reuse
+- Registered `LinkInjector`, `MAX_LINKS_PER_PARAGRAPH`, `MIN_WORDS_BETWEEN_LINKS` in `backend/app/services/__init__.py`
+- **Files changed:**
+  - `backend/app/services/link_injection.py` (new)
+  - `backend/app/services/__init__.py` (added imports + __all__ entries)
+- **Learnings:**
+  - BeautifulSoup `NavigableString` import requires `# type: ignore[attr-defined]` because `types-beautifulsoup4` stubs don't explicitly export it (works fine at runtime)
+  - For inserting before/after a text node: use `text_node.extract()` then `parent.insert(idx, ...)` rather than `replace_with()` + `find(string=...)` — the find approach is fragile when multiple text nodes have identical content
+  - `list(parent.children).index(text_node)` gives the correct insertion index for splicing a text node into [before, link, after]
+  - Word distance check uses character offsets in the paragraph's full text to calculate word count between proposed link position and existing links
+---
