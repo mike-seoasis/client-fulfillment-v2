@@ -373,3 +373,21 @@ after each iteration and it's included in prompts for context.
   - The `usePlanStatus` hook accepts an `enabled` param — set to `true` to start polling immediately on page load (catches in-progress plans if user navigates away and back)
   - Progress bar calculation: `((currentStep - 1) / 4 * 100) + (pagesProcessed / totalPages * 25)` gives smooth progress across 4 equal-weight steps
 ---
+
+## 2026-02-10 - S9-028
+- Created cluster link map overview page at `frontend/src/app/projects/[id]/clusters/[clusterId]/links/map/page.tsx`
+- Stats sidebar: total links, pages, avg per page, validation pass rate, method breakdown (with colored dots), anchor diversity percentages
+- Tree visualization: parent node (★ badge) at top → children below with ↑N (inbound) and ↓N (outbound) counts; sibling connection indicators (◄►) between linked children; rows of up to 4 children with connecting lines
+- Page table: sortable columns (Page, Role, Out, In, Method, Status) with parent always pinned to top; parent row highlighted with green left border; click row → navigate to page link detail
+- Validation status icons: ✓ (verified/pass), ✗ (failed with tooltip showing failed rules), ⚠ (warnings)
+- Re-plan Links button with modal confirmation dialog: "This will replace all current links. Previous plan will be saved as a snapshot." — triggers `usePlanLinks` mutation then redirects to planning trigger page for progress
+- Empty state when no links exist with "Plan Links" CTA linking to the planning trigger page
+- Back button to project detail
+- **Files changed:**
+  - `frontend/src/app/projects/[id]/clusters/[clusterId]/links/map/page.tsx` (new)
+- **Learnings:**
+  - The `hierarchy` field in `LinkMap` response is typed as `Record<string, unknown> | null` on the frontend — needs cast to a typed `HierarchyNode` interface matching the backend `_build_hierarchy_tree` output structure (page_id, keyword, role, url, title, outbound_count, inbound_count, children)
+  - For sortable tables with a pinned row (parent always at top), sort the array first then splice the parent to index 0 — avoids complex sort comparators
+  - `formatMethodSummary` maps backend method keys (`rule_based`, `llm_fallback`, `generation`) to short display labels (`rule`, `LLM`, `gen`) joined by ` + ` — matches wireframe format like "1 gen + 2 rule"
+  - Re-plan flow redirects to the planning trigger page (`/clusters/{clusterId}/links`) rather than showing inline progress — reuses the existing progress UI from S9-027
+---
