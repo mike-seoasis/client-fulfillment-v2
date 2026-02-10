@@ -113,11 +113,12 @@
         "Handle edge cases: cluster with 0-1 pages returns empty graph, onboarding with no overlapping labels returns graph with pages but no edges"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "S9-004"
       ],
-      "notes": "For onboarding graph, CrawledPage.labels is a JSONB array of strings like ['running', 'women', 'trail']. Overlap = len(set(a.labels) & set(b.labels)). The 2-label threshold is a constant (LABEL_OVERLAP_THRESHOLD = 2). Reference backend/app/models/crawled_page.py for label field and backend/app/models/keyword_cluster.py for ClusterPage.role field."
+      "notes": "For onboarding graph, CrawledPage.labels is a JSONB array of strings like ['running', 'women', 'trail']. Overlap = len(set(a.labels) & set(b.labels)). The 2-label threshold is a constant (LABEL_OVERLAP_THRESHOLD = 2). Reference backend/app/models/crawled_page.py for label field and backend/app/models/keyword_cluster.py for ClusterPage.role field.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S9-007",
@@ -691,6 +692,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-10T18:17:01.489Z"
+    "updatedAt": "2026-02-10T18:19:10.432Z"
   }
 }

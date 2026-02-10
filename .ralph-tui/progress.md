@@ -89,3 +89,18 @@ after each iteration and it's included in prompts for context.
   - Ruff import sorter (isort) requires `internal_link` to sort alphabetically among other schema imports — placing it before `crawled_page` caused a re-sort
   - Response schemas that join data from relationships (e.g., InternalLinkResponse with target_url/target_title) don't need `from_attributes=True` if they'll be constructed manually rather than from ORM objects — but including it is harmless and future-proofs
 ---
+
+## 2026-02-10 - S9-006
+- Created `SiloLinkPlanner` class in `backend/app/services/link_planning.py`
+- `build_cluster_graph(cluster_id, db)`: queries ClusterPage with joinedload on crawled_page, builds parent_child + sibling edges
+- `build_onboarding_graph(project_id, db)`: queries CrawledPage joined with PageContent (status='complete') and PageKeywords (is_approved=True), computes pairwise label overlap with LABEL_OVERLAP_THRESHOLD=2
+- Edge cases handled: 0-1 cluster pages returns empty edges, no overlapping labels returns pages but no edges
+- Registered `SiloLinkPlanner` and `LABEL_OVERLAP_THRESHOLD` in `backend/app/services/__init__.py`
+- **Files changed:**
+  - `backend/app/services/link_planning.py` (new)
+  - `backend/app/services/__init__.py` (added imports + __all__ entries)
+- **Learnings:**
+  - `joinedload` with `result.unique().scalars().all()` is needed when using joined eager loading to avoid duplicate rows from the SQL join
+  - Import sorting in `__init__.py` is alphabetical by module name — `link_planning` sorts after `label_taxonomy`
+  - `itertools.combinations` is the clean way to generate pairwise edges for the overlap graph
+---

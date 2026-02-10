@@ -41,6 +41,10 @@ from app.services.label_taxonomy import (
     validate_labels,
     validate_page_labels,
 )
+from app.services.link_planning import (
+    LABEL_OVERLAP_THRESHOLD,
+    SiloLinkPlanner,
+)
 from app.services.pop_content_brief import (
     ContentBriefResult,
     fetch_content_brief,
@@ -68,6 +72,7 @@ __all__ = [
     "GenerationStatus",
     "get_project_taxonomy_labels",
     "KeywordGenerationStats",
+    "LABEL_OVERLAP_THRESHOLD",
     "LabelAssignment",
     "LabelTaxonomyService",
     "LabelValidationError",
@@ -82,6 +87,7 @@ __all__ = [
     "ResearchContext",
     "run_content_pipeline",
     "run_quality_checks",
+    "SiloLinkPlanner",
     "TaxonomyLabel",
     "truncate_body_content",
     "validate_labels",
