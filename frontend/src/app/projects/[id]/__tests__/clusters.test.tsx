@@ -147,14 +147,14 @@ describe('ProjectDetailPage - Cluster Section', () => {
       expect(screen.getByText('No clusters yet')).toBeInTheDocument();
     });
 
-    it('shows "+ New Cluster" button in empty state', () => {
+    it('shows "+ New Cluster" link in empty state', () => {
       mockUseClusters.mockReturnValue({ data: [], isLoading: false, error: null });
 
       render(<ProjectDetailPage />);
 
-      // The empty state + New Cluster button
-      const newClusterButtons = screen.getAllByRole('button', { name: /New Cluster/i });
-      expect(newClusterButtons.length).toBeGreaterThanOrEqual(1);
+      // The empty state + New Cluster renders as a ButtonLink (<a>), not a <button>
+      const newClusterLink = screen.getByRole('link', { name: /New Cluster/i });
+      expect(newClusterLink).toBeInTheDocument();
     });
 
     it('links New Cluster button to correct URL in empty state', () => {
@@ -279,7 +279,7 @@ describe('ProjectDetailPage - Cluster Section', () => {
   // New Cluster button (when clusters exist)
   // ============================================================================
   describe('New Cluster button with existing clusters', () => {
-    it('shows "+ New Cluster" button in header when clusters exist', () => {
+    it('shows "+ New Cluster" link in header when clusters exist', () => {
       const clusters = [
         createMockClusterListItem('c1', 'Running Shoes', 'running shoes', 'suggestions_ready', 8),
       ];
@@ -287,11 +287,11 @@ describe('ProjectDetailPage - Cluster Section', () => {
 
       render(<ProjectDetailPage />);
 
-      const headerButton = screen.getByRole('button', { name: '+ New Cluster' });
-      expect(headerButton).toBeInTheDocument();
+      const headerLink = screen.getByRole('link', { name: '+ New Cluster' });
+      expect(headerLink).toBeInTheDocument();
     });
 
-    it('header New Cluster button links to correct URL', () => {
+    it('header New Cluster link has correct URL', () => {
       const clusters = [
         createMockClusterListItem('c1', 'Running Shoes', 'running shoes', 'suggestions_ready', 8),
       ];
@@ -299,8 +299,8 @@ describe('ProjectDetailPage - Cluster Section', () => {
 
       render(<ProjectDetailPage />);
 
-      const headerButtonLink = screen.getByRole('button', { name: '+ New Cluster' }).closest('a');
-      expect(headerButtonLink).toHaveAttribute('href', '/projects/test-project-123/clusters/new');
+      const headerLink = screen.getByRole('link', { name: '+ New Cluster' });
+      expect(headerLink).toHaveAttribute('href', '/projects/test-project-123/clusters/new');
     });
   });
 

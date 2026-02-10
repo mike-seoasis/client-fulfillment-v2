@@ -1255,6 +1255,377 @@ This is a comprehensive brand guidelines document based on the skill bible in `s
 
 ---
 
+## 15. Internal Linking: Plan & Progress
+
+> This screen is shared by both flows. The title and rules adapt to context.
+
+**Cluster variant:**
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  ← Back to Project                                                  │
+│                                                                     │
+│  Internal Links — Running Shoes Cluster                             │
+│  Plan and inject internal links across all pages in this silo.      │
+│                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────┐│
+│  │ Prerequisites                                                   ││
+│  │                                                                 ││
+│  │  ✓ All pages have approved keywords                             ││
+│  │  ✓ All content generated (8/8 pages complete)                   ││
+│  │  ✓ Quality checks passed                                       ││
+│  └─────────────────────────────────────────────────────────────────┘│
+│                                                                     │
+│              [ Plan & Inject Links ]                                │
+│                                                                     │
+│  ─────────────────────────────────────────────────────────────────  │
+│                                                                     │
+│  Link Rules (applied automatically):                                │
+│                                                                     │
+│  • First link on every child page → parent collection               │
+│  • No cross-silo links                                              │
+│  • 3-5 links per page                                               │
+│  • Anchor text diversified (partial match, exact, natural)          │
+│  • Parent collection links to sub-collections only                  │
+│  • Sub-collections link to parent + siblings                        │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Onboarding variant:**
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  ← Back to Project                                                  │
+│                                                                     │
+│  Internal Links — Onboarding Pages                                  │
+│  Plan and inject internal links across all crawled pages.           │
+│                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────┐│
+│  │ Prerequisites                                                   ││
+│  │                                                                 ││
+│  │  ✓ All pages have approved keywords                             ││
+│  │  ✓ All content generated (24/24 pages complete)                 ││
+│  │  ✓ Quality checks passed                                       ││
+│  └─────────────────────────────────────────────────────────────────┘│
+│                                                                     │
+│              [ Plan & Inject Links ]                                │
+│                                                                     │
+│  ─────────────────────────────────────────────────────────────────  │
+│                                                                     │
+│  Link Rules (applied automatically):                                │
+│                                                                     │
+│  • Pages link to related pages (shared labels = related)            │
+│  • ★ Priority pages receive more inbound links                     │
+│  • 3-5 links per page                                               │
+│  • Anchor text diversified (partial match, exact, natural)          │
+│  • Links stay within onboarding pages only                          │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**During planning (replaces button area — same for both flows):**
+
+```
+│  ┌─────────────────────────────────────────────────────────────────┐│
+│  │ Planning & Injecting Links...                                   ││
+│  │                                                                 ││
+│  │  ████████████████████░░░░░░░░░░░░  Step 2 of 4                  ││
+│  │                                                                 ││
+│  │  ✓ Step 1: Building link graph                                  ││
+│  │  ● Step 2: Selecting targets & anchor text    (12/24 pages)     ││
+│  │  ○ Step 3: Injecting links into content                         ││
+│  │  ○ Step 4: Validating link rules                                ││
+│  │                                                                 ││
+│  └─────────────────────────────────────────────────────────────────┘│
+```
+
+**Notes:**
+- Button disabled until all prerequisites are met (all content generated)
+- Link rules section adapts to context (cluster = silo/hierarchy, onboarding = label-based)
+- Progress shows 4 discrete steps: graph → plan → inject → validate
+- On completion, auto-redirects to Link Map view (Screen 16)
+- Can re-run if content is regenerated (replans from scratch)
+
+---
+
+## 16. Internal Linking: Link Map
+
+> Two layout variants: **Cluster** (tree hierarchy) and **Onboarding** (label-grouped flat view).
+> Same stats sidebar, same page table, different visualization.
+
+### 16a. Cluster Link Map (tree hierarchy)
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  ← Back to Project                                                  │
+│                                                                     │
+│  Link Map — Running Shoes Cluster                  [ Re-plan Links ]│
+│                                                                     │
+│  ┌──────────────────────┐  ┌────────────────────────────────────────┐│
+│  │ Summary              │  │                                        ││
+│  │                      │  │            ┌──────────────┐            ││
+│  │ Total links:    28   │  │            │ Running Shoes│            ││
+│  │ Pages:           8   │  │            │  (parent)    │            ││
+│  │ Avg per page:  3.5   │  │            │  ↓5 links    │            ││
+│  │ Validation:   100%   │  │            └──────┬───────┘            ││
+│  │                      │  │       ┌───────────┼───────────┐        ││
+│  │ Link Methods         │  │       │           │           │        ││
+│  │ ▪ Generation:    8   │  │       ▼           ▼           ▼        ││
+│  │ ▪ Rule-based:   14   │  │  ┌─────────┐┌─────────┐┌─────────┐   ││
+│  │ ▪ LLM fallback:  6   │  │  │ Trail   ││ Road    ││ Racing  │   ││
+│  │                      │  │  │ ↑1 ↓3   ││ ↑1 ↓4   ││ ↑1 ↓3   │   ││
+│  │ Anchor Diversity     │  │  └────┬────┘└────┬────┘└────┬────┘   ││
+│  │ ▪ Partial:  54%      │  │       │     ◄────►     ◄────►        ││
+│  │ ▪ Exact:    11%      │  │       │           │           │        ││
+│  │ ▪ Natural:  28%      │  │       ▼           ▼           ▼        ││
+│  │ ▪ Generic:   7%      │  │  ┌─────────┐┌─────────┐┌─────────┐   ││
+│  │                      │  │  │ Women's ││ Men's   ││ Kids    │   ││
+│  │                      │  │  │ ↑2 ↓3   ││ ↑2 ↓4   ││ ↑1 ↓3   │   ││
+│  │                      │  │  └─────────┘└─────────┘└─────────┘   ││
+│  │                      │  │       ◄────────────►                   ││
+│  └──────────────────────┘  │                                        ││
+│                            └────────────────────────────────────────┘│
+│                                                                     │
+│  ┌──────────────────────────────────────────────────────────────────┐│
+│  │ Page                         │ Out │ In │ Method         │ Status││
+│  ├──────────────────────────────┼─────┼────┼────────────────┼───────┤│
+│  │ ★ Running Shoes (parent)     │  5  │  5 │ 5 rule-based   │  ✓    ││
+│  │   Trail Running Shoes        │  4  │  3 │ 1 gen + 2 rule │  ✓    ││
+│  │   Road Running Shoes         │  4  │  4 │ 1 gen + 3 rule │  ✓    ││
+│  │   Racing Flats               │  3  │  3 │ 1 gen + 1 rule │  ✓    ││
+│  │   Women's Running Shoes      │  3  │  4 │ 1 gen + 2 rule │  ✓    ││
+│  │   Men's Running Shoes        │  4  │  4 │ 1 gen + 2 LLM  │  ✓    ││
+│  │   Kids Running Shoes         │  3  │  3 │ 1 gen + 1 LLM  │  ✓    ││
+│  │   Lightweight Running Shoes  │  3  │  2 │ 1 gen + 2 rule │  ✓    ││
+│  ├──────────────────────────────┴─────┴────┴────────────────┴───────┤│
+│  │ Click any page to view and edit its links                        ││
+│  └──────────────────────────────────────────────────────────────────┘│
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 16b. Onboarding Link Map (label-grouped flat view)
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  ← Back to Project                                                  │
+│                                                                     │
+│  Link Map — Onboarding Pages                       [ Re-plan Links ]│
+│                                                                     │
+│  ┌──────────────────────┐  ┌────────────────────────────────────────┐│
+│  │ Summary              │  │                                        ││
+│  │                      │  │  Label Groups          Shared labels   ││
+│  │ Total links:    84   │  │  ─────────────────────────────────────  ││
+│  │ Pages:          24   │  │                                        ││
+│  │ Avg per page:  3.5   │  │  ┌─ running ─────────────────────────┐ ││
+│  │ Validation:   100%   │  │  │ ★ Running Shoes         ↓4 ↑8    │ ││
+│  │                      │  │  │   Trail Running          ↓3 ↑4    │ ││
+│  │ Link Methods         │  │  │   Road Running           ↓4 ↑3    │ ││
+│  │ ▪ Rule-based:   52   │  │  │   Racing Flats           ↓3 ↑3    │ ││
+│  │ ▪ LLM fallback: 32   │  │  └──────────────────────────────────┘ ││
+│  │                      │  │           │ running, lightweight       ││
+│  │ Anchor Diversity     │  │           ▼                            ││
+│  │ ▪ Partial:  52%      │  │  ┌─ lightweight ─────────────────────┐ ││
+│  │ ▪ Exact:    12%      │  │  │   Lightweight Shoes      ↓4 ↑5    │ ││
+│  │ ▪ Natural:  29%      │  │  │   Carbon Fiber Shoes     ↓3 ↑3    │ ││
+│  │ ▪ Generic:   7%      │  │  └──────────────────────────────────┘ ││
+│  │                      │  │           │ women                      ││
+│  │ Priority Pages       │  │           ▼                            ││
+│  │ ▪ 4 priority pages   │  │  ┌─ women ──────────────────────────┐ ││
+│  │ ▪ Avg 6.2 inbound    │  │  │ ★ Women's Shoes          ↓5 ↑7   │ ││
+│  │ ▪ Others avg 3.1     │  │  │   Women's Trail          ↓3 ↑4    │ ││
+│  │                      │  │  │   Women's Training       ↓4 ↑3    │ ││
+│  └──────────────────────┘  │  └──────────────────────────────────┘ ││
+│                            │  ... (scrollable)                      ││
+│                            └────────────────────────────────────────┘│
+│                                                                     │
+│  ┌──────────────────────────────────────────────────────────────────┐│
+│  │ Filter: [All ▼]  [Label: ▼]  [Priority only ☐]    Search: [   ]││
+│  ├──────────────────────────────────────────────────────────────────┤│
+│  │ Page                         │ Labels  │ Out │ In │ Meth  │ Stat ││
+│  ├──────────────────────────────┼─────────┼─────┼────┼───────┼──────┤│
+│  │ ★ Running Shoes              │ 3 tags  │  4  │  8 │ 4 rul │  ✓   ││
+│  │ ★ Women's Shoes              │ 2 tags  │  5  │  7 │ 3+2   │  ✓   ││
+│  │ ★ Men's Shoes                │ 2 tags  │  4  │  7 │ 2+2   │  ✓   ││
+│  │ ★ Kids Shoes                 │ 2 tags  │  3  │  6 │ 3 rul │  ✓   ││
+│  │   Trail Running              │ 3 tags  │  3  │  4 │ 2+1   │  ✓   ││
+│  │   Road Running               │ 2 tags  │  4  │  3 │ 3+1   │  ✓   ││
+│  │   Racing Flats               │ 2 tags  │  3  │  3 │ 2+1   │  ✓   ││
+│  │   Lightweight Shoes          │ 3 tags  │  4  │  5 │ 2+2   │  ✓   ││
+│  │   Carbon Fiber Shoes         │ 2 tags  │  3  │  3 │ 2+1   │  ✓   ││
+│  │   Women's Trail              │ 3 tags  │  3  │  4 │ 2+1   │  ✓   ││
+│  │   Women's Training           │ 2 tags  │  4  │  3 │ 3+1   │  ✓   ││
+│  │   ... (24 pages total)       │         │     │    │       │      ││
+│  ├──────────────────────────────┴─────────┴─────┴────┴───────┴──────┤│
+│  │ Click any page to view and edit its links                        ││
+│  └──────────────────────────────────────────────────────────────────┘│
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Notes (both variants):**
+- ↑N = inbound links, ↓N = outbound links
+- ★ marks priority pages
+- Left sidebar: aggregate stats — total links, methods breakdown, anchor diversity %
+- Bottom table: per-page summary — click row to drill into page link detail (Screen 17)
+- "Re-plan Links" re-runs the algorithm (e.g., after content edits)
+- Validation column shows ✓ if all rules pass, ⚠ if warnings, ✗ if violations
+
+**Cluster-specific notes (16a):**
+- Tree visualization shows parent → children hierarchy
+- ◄► arrows indicate sibling cross-links
+- Parent page always at top
+
+**Onboarding-specific notes (16b):**
+- Pages grouped by primary label — shows which pages share labels (and thus link to each other)
+- Connecting arrows between groups show shared labels that cause cross-group linking
+- Priority pages shown with ★ and get measurably more inbound links (stats in sidebar)
+- Filter bar: filter by label, priority status, or search by page name
+- No mandatory parent link — all links are based on label relatedness + priority weighting
+- Table includes Labels column (hover to see full label list)
+- Potentially many more pages than cluster view, so table is scrollable with filters
+
+---
+
+## 17. Internal Linking: Page Link Detail
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  ← Back to Link Map                                                 │
+│                                                                     │
+│  Links — Trail Running Shoes                                        │
+│  /collections/trail-running-shoes                                   │
+│                                                                     │
+│  ┌──────────────────────────────────────────────────────────────────┐│
+│  │ Outbound Links (4)                                     [+ Add ] ││
+│  ├──────────────────────────────────────────────────────────────────┤│
+│  │                                                                  ││
+│  │  1. ★ Running Shoes (parent)                          mandatory  ││
+│  │     Anchor: "running shoes collection"                           ││
+│  │     Type: partial match  •  Method: generation-time              ││
+│  │     Position: paragraph 1                                        ││
+│  │     [ Edit Anchor ] [ Preview ]                                  ││
+│  │  ───────────────────────────────────────────────────────────────  ││
+│  │  2. Women's Trail Running Shoes                                  ││
+│  │     Anchor: "trail running shoes for women"                      ││
+│  │     Type: exact match  •  Method: rule-based                     ││
+│  │     Position: paragraph 4                                        ││
+│  │     [ Edit Anchor ] [ Remove ] [ Preview ]                       ││
+│  │  ───────────────────────────────────────────────────────────────  ││
+│  │  3. Lightweight Running Shoes                                    ││
+│  │     Anchor: "lightweight options for the trail"                  ││
+│  │     Type: natural  •  Method: LLM fallback                       ││
+│  │     Position: paragraph 6                                        ││
+│  │     [ Edit Anchor ] [ Remove ] [ Preview ]                       ││
+│  │  ───────────────────────────────────────────────────────────────  ││
+│  │  4. Road Running Shoes                                           ││
+│  │     Anchor: "road running alternatives"                          ││
+│  │     Type: natural  •  Method: rule-based                         ││
+│  │     Position: paragraph 8                                        ││
+│  │     [ Edit Anchor ] [ Remove ] [ Preview ]                       ││
+│  │                                                                  ││
+│  └──────────────────────────────────────────────────────────────────┘│
+│                                                                     │
+│  ┌──────────────────────────────────────────────────────────────────┐│
+│  │ Inbound Links (3)                                                ││
+│  ├──────────────────────────────────────────────────────────────────┤│
+│  │                                                                  ││
+│  │  From: Running Shoes (parent)                                    ││
+│  │  Anchor: "trail running shoes"  •  Type: exact match             ││
+│  │                                                                  ││
+│  │  From: Women's Trail Running Shoes                               ││
+│  │  Anchor: "best trail shoes"  •  Type: partial match              ││
+│  │                                                                  ││
+│  │  From: Lightweight Running Shoes                                 ││
+│  │  Anchor: "trail-ready running shoes"  •  Type: natural           ││
+│  │                                                                  ││
+│  └──────────────────────────────────────────────────────────────────┘│
+│                                                                     │
+│  ┌──────────────────────────────────────────────────────────────────┐│
+│  │ Anchor Diversity for This Page (as target)                       ││
+│  │                                                                  ││
+│  │  "trail running shoes" ×1  •  "best trail shoes" ×1              ││
+│  │  "trail-ready running shoes" ×1                                  ││
+│  │                                                                  ││
+│  │  Diversity score: High ✓  (3 unique anchors / 3 inbound links)   ││
+│  └──────────────────────────────────────────────────────────────────┘│
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Add Link Modal (when clicking [+ Add]):**
+
+```
+│  ┌───────────────────────────────────────────┐                      │
+│  │ Add Internal Link                         │                      │
+│  │                                           │                      │
+│  │ Target Page:                              │                      │
+│  │ ┌───────────────────────────────────────┐ │                      │
+│  │ │ Search pages in this silo...       ▼ │ │                      │
+│  │ └───────────────────────────────────────┘ │                      │
+│  │                                           │                      │
+│  │ Anchor Text:                              │                      │
+│  │ ┌───────────────────────────────────────┐ │                      │
+│  │ │                                       │ │                      │
+│  │ └───────────────────────────────────────┘ │                      │
+│  │                                           │                      │
+│  │ Suggested anchors (from POP variations):  │                      │
+│  │   "trail running shoes"                   │                      │
+│  │   "best trail runners"                    │                      │
+│  │   "shoes for trail running"               │                      │
+│  │                                           │                      │
+│  │          [ Cancel ]  [ Add Link ]         │                      │
+│  └───────────────────────────────────────────┘                      │
+```
+
+**Edit Anchor Modal:**
+
+```
+│  ┌───────────────────────────────────────────┐                      │
+│  │ Edit Anchor Text                          │                      │
+│  │                                           │                      │
+│  │ Target: Women's Trail Running Shoes       │                      │
+│  │                                           │                      │
+│  │ Current anchor:                           │                      │
+│  │ ┌───────────────────────────────────────┐ │                      │
+│  │ │ trail running shoes for women         │ │                      │
+│  │ └───────────────────────────────────────┘ │                      │
+│  │                                           │                      │
+│  │ Suggested variations:                     │                      │
+│  │   "women's trail running shoes"           │                      │
+│  │   "trail shoes for women"                 │                      │
+│  │   "women's trail runners"                 │                      │
+│  │                                           │                      │
+│  │ Anchor type:                              │                      │
+│  │   (●) Partial match                       │                      │
+│  │   ( ) Exact match                         │                      │
+│  │   ( ) Natural                             │                      │
+│  │                                           │                      │
+│  │        [ Cancel ]  [ Save Anchor ]        │                      │
+│  └───────────────────────────────────────────┘                      │
+```
+
+**Notes:**
+- Outbound links section shows all links FROM this page, ordered by position in content
+- [Preview] scrolls to the link's position in the content (opens content editor view)
+- Inbound links section is read-only — shows links pointing TO this page from other pages
+- Anchor diversity section shows how varied the anchors are that point to this page
+- [+ Add] allows manually adding a link — dropdown scoped to same silo/project
+- Suggested anchors come from POP keyword variations for the target page
+- Anchor type selector helps maintain the target distribution (50-60% partial, ~10% exact, ~30% natural)
+
+**Cluster-specific:**
+- Link #1 is always the mandatory parent link — cannot be removed (no [Remove] button)
+- [+ Add] dropdown only shows pages within the same cluster silo
+
+**Onboarding-specific:**
+- No mandatory parent link — all links are discretionary, all removable
+- [+ Add] dropdown shows all onboarding pages in the project, sorted by label overlap (most related first)
+- Each link row also shows "Shared labels: running, women" to explain WHY the link was selected
+
+---
+
 ## Screen Flow Summary
 
 ```
@@ -1314,6 +1685,13 @@ This is a comprehensive brand guidelines document based on the skill bible in `s
                       ┌──────────────┐
                       │   Content    │  (SHARED)
                       │  Generation  │
+                      └──────┬───────┘
+                             │
+                             ▼
+                      ┌──────────────┐
+                      │  Internal    │  (SHARED)
+                      │   Linking    │
+                      │  Plan/Map    │
                       └──────┬───────┘
                              │
                              ▼

@@ -1,6 +1,7 @@
 'use client';
 
 import { forwardRef, type ButtonHTMLAttributes } from 'react';
+import Link from 'next/link';
 
 type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost';
 type ButtonSize = 'sm' | 'md' | 'lg';
@@ -27,11 +28,11 @@ const sizeClasses: Record<ButtonSize, string> = {
   lg: 'px-6 py-3 text-lg',
 };
 
+const baseClasses =
+  'inline-flex items-center justify-center font-medium rounded-sm transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-palm-400 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
+
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ variant = 'primary', size = 'md', className = '', disabled, children, ...props }, ref) => {
-    const baseClasses =
-      'inline-flex items-center justify-center font-medium rounded-sm transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-palm-400 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
-
     return (
       <button
         ref={ref}
@@ -47,4 +48,34 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 
 Button.displayName = 'Button';
 
-export { Button, type ButtonProps, type ButtonVariant, type ButtonSize };
+/**
+ * A Next.js Link styled as a button. Use this instead of nesting
+ * <Button> inside <Link>, which creates invalid HTML (<button> inside <a>)
+ * and causes rendering bugs in Next.js production builds.
+ */
+interface ButtonLinkProps {
+  href: string;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  className?: string;
+  children: React.ReactNode;
+}
+
+function ButtonLink({
+  href,
+  variant = 'primary',
+  size = 'md',
+  className = '',
+  children,
+}: ButtonLinkProps) {
+  return (
+    <Link
+      href={href}
+      className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+    >
+      {children}
+    </Link>
+  );
+}
+
+export { Button, ButtonLink, type ButtonProps, type ButtonLinkProps, type ButtonVariant, type ButtonSize };

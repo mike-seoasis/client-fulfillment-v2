@@ -730,11 +730,15 @@ This means:
 
 ## Feature 7: Blog Planning & Writing (MVP)
 
-**Priority:** MVP — Third core workflow
+**Priority:** MVP — Phase 10
+
+> **Key simplification (2026-02-08):** This phase is almost entirely reuse. Topic discovery reuses the Phase 8 cluster keyword pipeline (seeded from existing POP reports). Content generation reuses the existing pipeline (minus `top_description`). Editor reuses the collection page editor. Internal linking reuses Phase 9 infrastructure. The only truly new piece is HTML/clipboard export.
 
 ### Overview
 
 Plan and write blog posts that support keyword clusters. Blogs are siloed to their parent cluster — they only link to pages within that cluster and other blogs in the same campaign. This creates tight topical relevance and clean internal link architecture.
+
+**One campaign per cluster.** Each cluster gets exactly one blog campaign. A cluster with 5 collection pages might generate 8-15 blog topics across all those pages. Simplifies the data model and UI.
 
 ### Client Project Dashboard Structure
 
@@ -776,9 +780,10 @@ Plan and write blog posts that support keyword clusters. Blogs are siloed to the
 BlogCampaign:
   id: UUID
   project_id: UUID
-  cluster_id: UUID              # Parent cluster this campaign supports
-  name: str                     # Campaign name (defaults to cluster name + "Blog")
+  cluster_id: UUID (unique)     # 1:1 with cluster — one campaign per cluster
+  name: str                     # Defaults to "[Cluster Name] Blog Campaign"
   status: str                   # "planning" | "writing" | "review" | "complete"
+  generation_metadata: JSON     # Stage timings, costs (same pattern as cluster)
   created_at: datetime
   updated_at: datetime
 
@@ -786,11 +791,12 @@ BlogPost:
   id: UUID
   campaign_id: UUID
   primary_keyword: str
+  url_slug: str                 # Generated URL slug for the blog post
+  search_volume: int | None
+  source_page_id: UUID | None   # Which cluster page's POP report seeded this topic
   title: str | None
   meta_description: str | None
-  content: str | None           # Full article HTML
-  content_json: JSON | None     # Lexical editor state (for resuming edits)
-  pop_score: float | None
+  content: str | None           # Full article HTML (no top_description for blogs)
   pop_brief: JSON | None        # Stored POP brief data
   is_approved: bool             # Keyword approved
   status: str                   # "keyword_pending" | "generating" | "editing" | "complete"
@@ -798,22 +804,50 @@ BlogPost:
   updated_at: datetime
 ```
 
-### Step 7.1: Create Blog Campaign
+**Removed from original spec:** `content_json` (Lexical state) — we reuse the existing editor which stores HTML directly. `pop_score` — POP scoring API is too slow for interactive use; we rely on text-matching checks (keyword/LSI presence) same as collection pages.
+
+### Step 7.1: Create Blog Campaign + Topic Discovery
 
 **User provides:**
-- Select parent cluster (required)
+- Select parent cluster (required — only clusters with completed content are eligible)
 - Campaign name (optional, defaults to "[Cluster Name] Blog Campaign")
 
-**System does:**
-- Creates BlogCampaign linked to cluster
-- Calls POP API to discover blog topics around cluster's seed keyword
-- Returns 5-10 blog topic suggestions with estimated search volume
+**System does (reuses Phase 8 cluster keyword pipeline pattern):**
+
+```
+Stage 1: Extract seed keywords from existing POP reports
+├── For each cluster page that has a POP content brief:
+│   ├── Extract related_searches from POP brief
+│   ├── Extract related_questions from POP brief
+│   └── Collect as seed keywords
+└── Deduplicate seeds across all cluster pages
+
+Stage 2: LLM expansion (Claude Haiku)
+├── Take seed keywords + brand context
+├── Expand into 15-25 blog topic candidates
+├── Focus on informational intent (how-to, guide, comparison, listicle)
+└── Tag each with the source cluster page it relates to
+
+Stage 3: DataForSEO enrichment
+├── Batch volume lookup for all candidates
+├── Filter out zero-volume / below-threshold topics
+└── Merge volume/CPC/competition data
+
+Stage 4: LLM filtering + ranking (Claude Haiku)
+├── Filter to best 8-15 topics
+├── Remove near-duplicates
+├── Assign relevance score
+├── Generate URL slugs
+└── Return ranked list
+```
 
 **User sees:**
-- List of suggested blog topics/keywords
-- Search volume estimates
-- Can add custom topics
-- Can remove topics
+- List of suggested blog topics with search volume
+- Which cluster page each topic relates to (source_page_id)
+- Can approve/reject/edit topics
+- Can add custom topics manually
+
+**Cost:** ~$0.01-0.02 per campaign (same as cluster generation)
 
 ---
 
@@ -835,108 +869,70 @@ BlogPost:
 
 ```
 Phase 1: Get POP Content Brief
-├── Send blog keyword to POP API
+├── Send blog keyword to POP API (page_not_built_yet=True)
 ├── POP returns brief with:
 │   ├── lsi_terms
 │   ├── related_questions (for FAQ section)
-│   ├── word_count_target (typically longer for blogs)
 │   ├── heading_targets
 │   └── competitor analysis
 └── Store brief for reference
 
 Phase 2: Generate Blog Content
-├── Use Claude with blog-specific template:
-│   ├── Title (SEO-optimized)
-│   ├── Meta description
-│   ├── Introduction (hook + thesis)
-│   ├── Body sections (H2s with content)
-│   ├── FAQ section (from related_questions)
-│   └── Conclusion (with CTA)
+├── Use Claude with blog template (same pipeline, different template):
+│   ├── page_title (SEO-optimized)
+│   ├── meta_description (150-160 chars with CTA)
+│   ├── content (full article HTML — NO top_description for blogs):
+│   │   ├── Introduction (hook + thesis)
+│   │   ├── Body sections (H2s with content)
+│   │   ├── FAQ section (from related_questions)
+│   │   └── Conclusion (with CTA)
+│   ├── Mandatory parent link in first paragraphs (Phase 9 generation-time)
 ├── Apply brand voice from brand config
-├── Insert internal links (SILOED):
-│   ├── Links to parent cluster's collection pages
-│   ├── Links to sibling blogs in same campaign
-│   └── NO links outside the cluster silo
 └── Output as structured HTML
 
-Phase 3: Quality Check
-├── AI trope detection (same as collection pages)
-├── POP scoring API call
-│   └── Aim for score ≥70
-├── Internal link verification
-│   └── All links within cluster silo?
+Phase 3: Link Injection (Phase 9 post-processing)
+├── SiloLinkPlanner assigns discretionary links
+├── Links to cluster collection pages + sibling blogs only
+└── All Phase 9 validation rules apply
+
+Phase 4: Quality Check (same as collection pages)
+├── AI trope detection (5 rules)
+├── Text-matching QA (keyword count, LSI presence, banned words)
 └── Flag issues for review
 ```
 
----
-
-### Step 7.4: Rich Editor + Live POP Scoring (NEW)
-
-**User sees:**
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│  Blog Editor: "Best Trail Running Shoes for Beginners"              │
-├─────────────────────────────────────────────────────┬───────────────┤
-│                                                     │ POP Score     │
-│  ┌───────────────────────────────────────────────┐ │ ┌───────────┐ │
-│  │ [B] [I] [H2] [H3] [Link] [Image] [Quote]      │ │ │    78     │ │
-│  ├───────────────────────────────────────────────┤ │ │  ▲ Good   │ │
-│  │                                               │ │ └───────────┘ │
-│  │ # Best Trail Running Shoes for Beginners     │ │               │
-│  │                                               │ │ Word Count    │
-│  │ Finding the right trail running shoes can    │ │ 1,847 / 2,000 │
-│  │ make or break your off-road experience...    │ │               │
-│  │                                               │ │ ─────────────│
-│  │ ## What to Look For                          │ │               │
-│  │                                               │ │ LSI Terms     │
-│  │ When shopping for [trail running shoes],     │ │ ☑ trail shoes │
-│  │ consider these key factors:                  │ │ ☑ grip        │
-│  │                                               │ │ ☐ traction    │
-│  │ ...                                          │ │ ☑ cushioning  │
-│  │                                               │ │               │
-│  │ ## FAQ                                       │ │ ─────────────│
-│  │                                               │ │               │
-│  │ **Are trail shoes worth it?**                │ │ Internal Links│
-│  │ Yes, trail-specific shoes provide...         │ │ ☑ 3 cluster   │
-│  │                                               │ │ ☑ 2 blog      │
-│  └───────────────────────────────────────────────┘ │               │
-│                                                     │ [Re-score]    │
-│  [Save Draft]              [Mark Complete]          │               │
-└─────────────────────────────────────────────────────┴───────────────┘
-```
-
-**Editor Features (Lexical-based):**
-- Rich text editing (bold, italic, headings, lists, links, images, quotes)
-- Keyboard shortcuts (Cmd+B, Cmd+I, etc.)
-- HTML source view toggle
-- Auto-save on changes
-
-**Live Scoring Sidebar:**
-- POP score (updates on re-score button click, debounced)
-- Word count progress
-- LSI term checklist (checked = term present in content)
-- Internal link status
-- Re-score button (calls POP API)
-
-**Internal Link Insertion:**
-- Link button shows only valid targets:
-  - Collection pages from parent cluster
-  - Other blogs in same campaign
-- Suggests anchor text based on target's primary keyword
+**Key difference from collection pages:** Output is `page_title` + `meta_description` + `content` (one field, not top/bottom split).
 
 ---
 
-### Step 7.5: Blog Export
+### Step 7.4: Blog Review + Editing (REUSES Collection Page Editor)
+
+**Reuses the existing collection page content editor** with minor adjustments:
+- Single `content` field instead of `top_description` + `bottom_description`
+- Sidebar shows same QA checks: keyword count, LSI term checklist, word count, quality score
+- Re-score button runs text-matching checks (NOT live POP API — too slow)
+- Keyword/LSI/trope highlighting plugins already built (Phase 6)
+- Auto-save on blur, dirty tracking, approve button — all existing
+- No image insertion needed (done in Shopify after export)
+- Internal links already injected by Phase 9 — visible in editor, manually adjustable
+
+**No new Lexical editor work required.** The existing editor handles blogs as-is.
+
+---
+
+### Step 7.5: Blog Export (NEW — only truly new piece)
 
 **User can:**
-- Export single blog or all completed blogs
-- Copy HTML to clipboard (for Shopify blog paste)
-- Download as HTML file
+- Export single blog or all completed blogs in campaign
+- **Copy HTML to clipboard** (primary use case — paste into Shopify blog editor)
+- Download as HTML file (backup)
 
 **Export includes:**
 - Clean HTML (no editor artifacts)
-- Properly formatted internal links
-- SEO-ready structure
+- Internal links preserved
+- SEO-ready structure (proper heading hierarchy, meta fields separate)
+
+**Note:** Blogs do NOT use Matrixify export (that's for collection pages). Blog export is HTML-focused for pasting into Shopify's blog editor.
 
 ---
 
@@ -991,10 +987,10 @@ Blog posts are SILOED to their parent cluster:
 | Content Generation (Claude) | ✅ | ✅ | ✅ | **YES** (blog template) |
 | Quality Checks | ✅ | ✅ | ✅ | **YES** |
 | Internal Linking | ✅ | ✅ | ✅ | **YES** (siloed mode) |
-| Blog Topic Discovery | ❌ | ❌ | ✅ | Blog only |
-| Rich Editor + Live Scoring | ❌ | ❌ | ✅ | Blog only |
+| Blog Topic Discovery | ❌ | ❌ | ✅ | Blog only (reuses cluster pipeline pattern) |
+| Content Editor | ✅ | ✅ | ✅ | **YES** (blogs use same editor, single content field) |
 | Matrixify Export | ✅ | ✅ | ❌ | Not for blogs |
-| HTML/Copy Export | ❌ | ❌ | ✅ | Blog only |
+| HTML/Copy Export | ❌ | ❌ | ✅ | Blog only (NEW) |
 
 ---
 
@@ -1170,15 +1166,17 @@ Based on dependencies and the shared component architecture:
 - **Test:** Can create cluster, generate content, export
 
 ### Slice 10: Blog Planning & Writing (Blogs-specific, Phase 10)
-- BlogCampaign and BlogPost models + migration
-- Blog topic discovery service (POP API for blog ideas around cluster)
+
+> **Mostly reuse.** Topic discovery reuses cluster pipeline. Content gen reuses existing pipeline (blog template). Editor reuses collection page editor. Internal linking reuses Phase 9. Only new piece: HTML/clipboard export.
+
+- BlogCampaign (1:1 with cluster) and BlogPost models + migration
+- Blog topic discovery service (extract seeds from POP reports → LLM expand → DataForSEO enrich → LLM filter, same pattern as Phase 8 cluster pipeline)
 - Blog keyword approval (reuse shared KeywordApproval component)
-- Blog content generation (reuse pipeline with blog-specific template)
-- Lexical rich editor integration
-- Live POP scoring sidebar (score + word count + LSI checklist)
+- Blog content generation (reuse pipeline, blog template: page_title + meta_description + content, no top_description)
+- Blog review/editing (reuse collection page editor — single content field, text-matching QA, no live POP scoring)
 - Blog internal linking (reuse Phase 9 infrastructure — blogs link to cluster collection pages + sibling blogs, siloed)
-- Blog export (HTML download + copy to clipboard for Shopify)
-- **Test:** Full blog flow works (campaign → keywords → generate → edit with live scoring → export)
+- Blog export — NEW: HTML copy to clipboard + download (NOT Matrixify)
+- **Test:** Full blog flow works (campaign → topics → approve → generate → edit → export)
 
 ### Slice 11: Authentication (WorkOS AuthKit)
 - Install `@workos-inc/authkit-nextjs`, configure environment variables
@@ -1261,7 +1259,7 @@ Per `backend/PLAN-remove-secondary-keywords-and-paa.md`:
 | Blog editor | **Lexical** — 100% free (Meta), excellent React integration, great performance |
 | Blog linking | **Siloed** — blogs only link to their parent cluster's pages + sibling blogs |
 | Blog export | **HTML + clipboard** — for pasting into Shopify blog creator |
-| Blog-cluster relationship | **One cluster can have multiple blog campaigns** |
+| Blog-cluster relationship | **One campaign per cluster** (1:1, simplifies model) |
 | Authentication provider | **WorkOS AuthKit** (free tier, 1M MAU). Evaluated Keycloak, SuperTokens, Ory, Authentik, BoxyHQ. No SSO needed — WorkOS free tier is zero-cost, zero-infra. See `auth-evaluation-report.md` for full analysis. |
 
 ---

@@ -1,3 +1,7 @@
+/* Lock CSS cascade layer ordering to prevent Next.js production reordering bug.
+   See: https://github.com/vercel/next.js/issues/64921 */
+@layer base, components, utilities;
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

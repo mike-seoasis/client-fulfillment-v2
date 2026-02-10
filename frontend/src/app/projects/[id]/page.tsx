@@ -7,7 +7,7 @@ import { useProject, useDeleteProject } from '@/hooks/use-projects';
 import { useStartBrandConfigGeneration, useBrandConfigGeneration } from '@/hooks/useBrandConfigGeneration';
 import { useCrawlStatus, getOnboardingStep } from '@/hooks/use-crawl-status';
 import { useClusters } from '@/hooks/useClusters';
-import { Button, Toast } from '@/components/ui';
+import { Button, ButtonLink, Toast } from '@/components/ui';
 
 function LoadingSkeleton() {
   return (
@@ -61,9 +61,7 @@ function NotFoundState() {
       <p className="text-warm-gray-600 mb-6">
         The project you&apos;re looking for doesn&apos;t exist or has been deleted.
       </p>
-      <Link href="/">
-        <Button>Back to Dashboard</Button>
-      </Link>
+      <ButtonLink href="/">Back to Dashboard</ButtonLink>
     </div>
   );
 }
@@ -500,9 +498,7 @@ export default function ProjectDetailPage() {
         <div className="flex items-center gap-3">
           {/* Brand config action button */}
           {project.has_brand_config ? (
-            <Link href={`/projects/${projectId}/brand-config`}>
-              <Button variant="secondary">Brand Details</Button>
-            </Link>
+            <ButtonLink href={`/projects/${projectId}/brand-config`} variant="secondary">Brand Details</ButtonLink>
           ) : generation.isGenerating ? (
             <Button variant="secondary" disabled>
               <SpinnerIcon className="w-4 h-4 mr-2" />
@@ -665,7 +661,7 @@ export default function ProjectDetailPage() {
           )}
 
           {/* Action button */}
-          <Link
+          <ButtonLink
             href={
               onboardingProgress.currentStep === 'upload'
                 ? `/projects/${projectId}/onboarding/upload`
@@ -674,10 +670,8 @@ export default function ProjectDetailPage() {
                 : `/projects/${projectId}/onboarding/keywords`
             }
           >
-            <Button>
-              {onboardingProgress.hasStarted ? 'Continue Onboarding' : 'Start Onboarding'}
-            </Button>
-          </Link>
+            {onboardingProgress.hasStarted ? 'Continue Onboarding' : 'Start Onboarding'}
+          </ButtonLink>
         </div>
 
         {/* New Content section */}
@@ -693,9 +687,7 @@ export default function ProjectDetailPage() {
               </span>
             </div>
             {clusters && clusters.length > 0 && (
-              <Link href={`/projects/${projectId}/clusters/new`}>
-                <Button variant="secondary">+ New Cluster</Button>
-              </Link>
+              <ButtonLink href={`/projects/${projectId}/clusters/new`}>+ New Cluster</ButtonLink>
             )}
           </div>
           <p className="text-warm-gray-600 text-sm mb-4">
@@ -706,9 +698,7 @@ export default function ProjectDetailPage() {
           {!clusters || clusters.length === 0 ? (
             <div className="text-center py-6">
               <p className="text-warm-gray-500 text-sm mb-4">No clusters yet</p>
-              <Link href={`/projects/${projectId}/clusters/new`}>
-                <Button>+ New Cluster</Button>
-              </Link>
+              <ButtonLink href={`/projects/${projectId}/clusters/new`}>+ New Cluster</ButtonLink>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

@@ -1,399 +1,228 @@
 {
   "version": 1,
-  "sessionId": "dfdb7767-e4d4-49e2-9c59-747c908022b0",
+  "sessionId": "7ea6927e-18ee-42e8-9880-238d858eeb41",
   "status": "running",
-  "startedAt": "2026-02-08T20:03:36.032Z",
-  "updatedAt": "2026-02-08T21:08:37.317Z",
-  "currentIteration": 23,
+  "startedAt": "2026-02-10T18:08:46.514Z",
+  "updatedAt": "2026-02-10T18:11:18.747Z",
+  "currentIteration": 0,
   "maxIterations": 10,
-  "tasksCompleted": 23,
+  "tasksCompleted": 0,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
     "plugin": "json",
-    "prdPath": "openspec/changes/keyword-cluster-creation/prd.json",
-    "totalTasks": 24,
+    "prdPath": "openspec/changes/phase-9-internal-linking/prd.json",
+    "totalTasks": 34,
     "tasks": [
       {
-        "id": "S8-001",
-        "title": "Create KeywordCluster and ClusterPage database models",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S9-001",
+        "title": "Create InternalLink database model",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S8-002",
-        "title": "Add source column to CrawledPage model",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S9-002",
+        "title": "Create LinkPlanSnapshot database model",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S8-003",
-        "title": "Register models and add Project.clusters relationship",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S9-003",
+        "title": "Add relationships to CrawledPage and register models",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S8-004",
-        "title": "Create Alembic migration",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S9-004",
+        "title": "Create Alembic migration for internal links tables",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S8-005",
-        "title": "Create Pydantic v2 schemas for clusters",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S9-005",
+        "title": "Create Pydantic v2 schemas for internal links",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S8-006",
-        "title": "Create ClusterKeywordService with brand context builder",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S9-006",
+        "title": "Implement link graph construction (cluster + onboarding)",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S8-007",
-        "title": "Implement Stage 1: LLM candidate generation with 11-strategy prompt",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S9-007",
+        "title": "Implement budget calculation and target selection",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S8-008",
-        "title": "Implement Stage 2: DataForSEO volume enrichment",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S9-008",
+        "title": "Implement anchor text selection with diversity tracking",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S8-009",
-        "title": "Implement Stage 3: LLM filtering and role assignment",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S9-009",
+        "title": "Implement rule-based link injection (BeautifulSoup)",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S8-010",
-        "title": "Implement generate_cluster orchestrator",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S9-010",
+        "title": "Implement LLM fallback injection",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S8-011",
-        "title": "Implement bulk_approve_cluster bridge to content pipeline",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S9-011",
+        "title": "Implement link stripping for re-planning",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S8-012",
-        "title": "Create cluster API router with create and list endpoints",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S9-012",
+        "title": "Implement link validation rules",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S8-013",
-        "title": "Add cluster detail, update page, bulk-approve, and delete endpoints",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S9-013",
+        "title": "Implement link planning pipeline orchestrator",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S8-014",
-        "title": "Register clusters router",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S9-014",
+        "title": "Implement re-plan flow (snapshot, strip, delete, re-run)",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S8-015",
-        "title": "Backend unit tests for ClusterKeywordService",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S9-015",
+        "title": "Write unit tests for link graph construction",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S8-016",
-        "title": "Backend integration tests for cluster API endpoints",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S9-016",
+        "title": "Write unit tests for target selection and budget",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S8-017",
-        "title": "Add TypeScript types and API client for clusters",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S9-017",
+        "title": "Write unit tests for anchor text selection",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S8-018",
-        "title": "Create TanStack Query hooks for clusters",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S9-018",
+        "title": "Write unit tests for link injection and stripping",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S8-019",
-        "title": "Create seed keyword input page",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S9-019",
+        "title": "Write unit tests for link validation",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S8-020",
-        "title": "Create cluster suggestions and approval page",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S9-020",
+        "title": "Write integration test for full planning pipeline",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S8-021",
-        "title": "Update project detail page with cluster list",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S9-021",
+        "title": "Create link management API router with plan and status endpoints",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S8-022",
-        "title": "Frontend component tests",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S9-022",
+        "title": "Add link map and page detail API endpoints",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S8-098",
+        "id": "S9-023",
+        "title": "Add manual link management endpoints (add, remove, edit)",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "S9-024",
+        "title": "Register links router and write API tests",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "S9-025",
+        "title": "Add TypeScript types and API client for links",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "S9-026",
+        "title": "Create TanStack Query hooks for links",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "S9-027",
+        "title": "Create link planning trigger page (onboarding + cluster)",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "S9-028",
+        "title": "Create link map overview page (cluster variant)",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "S9-029",
+        "title": "Create link map overview page (onboarding variant)",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "S9-030",
+        "title": "Create page link detail view",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "S9-031",
+        "title": "Update project detail page with link status indicators",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "S9-032",
+        "title": "Write frontend component tests",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "S9-098",
         "title": "Update V2_REBUILD_PLAN.md",
-        "status": "completed",
-        "completedInSession": true
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S8-099",
-        "title": "Verify Phase 8 completion",
+        "id": "S9-099",
+        "title": "Verify Phase 9 completion",
         "status": "open",
         "completedInSession": false
       }
     ]
   },
-  "iterations": [
-    {
-      "iteration": 1,
-      "status": "completed",
-      "taskId": "S8-001",
-      "taskTitle": "Create KeywordCluster and ClusterPage database models",
-      "taskCompleted": true,
-      "durationMs": 114787,
-      "startedAt": "2026-02-08T20:03:37.244Z",
-      "endedAt": "2026-02-08T20:05:32.031Z"
-    },
-    {
-      "iteration": 2,
-      "status": "completed",
-      "taskId": "S8-002",
-      "taskTitle": "Add source column to CrawledPage model",
-      "taskCompleted": true,
-      "durationMs": 55759,
-      "startedAt": "2026-02-08T20:05:33.150Z",
-      "endedAt": "2026-02-08T20:06:28.909Z"
-    },
-    {
-      "iteration": 3,
-      "status": "completed",
-      "taskId": "S8-003",
-      "taskTitle": "Register models and add Project.clusters relationship",
-      "taskCompleted": true,
-      "durationMs": 46354,
-      "startedAt": "2026-02-08T20:06:30.016Z",
-      "endedAt": "2026-02-08T20:07:16.370Z"
-    },
-    {
-      "iteration": 4,
-      "status": "completed",
-      "taskId": "S8-004",
-      "taskTitle": "Create Alembic migration",
-      "taskCompleted": true,
-      "durationMs": 178921,
-      "startedAt": "2026-02-08T20:07:17.479Z",
-      "endedAt": "2026-02-08T20:10:16.400Z"
-    },
-    {
-      "iteration": 5,
-      "status": "completed",
-      "taskId": "S8-005",
-      "taskTitle": "Create Pydantic v2 schemas for clusters",
-      "taskCompleted": true,
-      "durationMs": 103309,
-      "startedAt": "2026-02-08T20:10:17.499Z",
-      "endedAt": "2026-02-08T20:12:00.808Z"
-    },
-    {
-      "iteration": 6,
-      "status": "completed",
-      "taskId": "S8-006",
-      "taskTitle": "Create ClusterKeywordService with brand context builder",
-      "taskCompleted": true,
-      "durationMs": 124638,
-      "startedAt": "2026-02-08T20:12:01.919Z",
-      "endedAt": "2026-02-08T20:14:06.557Z"
-    },
-    {
-      "iteration": 7,
-      "status": "completed",
-      "taskId": "S8-007",
-      "taskTitle": "Implement Stage 1: LLM candidate generation with 11-strategy prompt",
-      "taskCompleted": true,
-      "durationMs": 149066,
-      "startedAt": "2026-02-08T20:14:07.668Z",
-      "endedAt": "2026-02-08T20:16:36.734Z"
-    },
-    {
-      "iteration": 8,
-      "status": "completed",
-      "taskId": "S8-008",
-      "taskTitle": "Implement Stage 2: DataForSEO volume enrichment",
-      "taskCompleted": true,
-      "durationMs": 88066,
-      "startedAt": "2026-02-08T20:16:37.828Z",
-      "endedAt": "2026-02-08T20:18:05.894Z"
-    },
-    {
-      "iteration": 9,
-      "status": "completed",
-      "taskId": "S8-009",
-      "taskTitle": "Implement Stage 3: LLM filtering and role assignment",
-      "taskCompleted": true,
-      "durationMs": 154392,
-      "startedAt": "2026-02-08T20:18:06.987Z",
-      "endedAt": "2026-02-08T20:20:41.379Z"
-    },
-    {
-      "iteration": 10,
-      "status": "completed",
-      "taskId": "S8-010",
-      "taskTitle": "Implement generate_cluster orchestrator",
-      "taskCompleted": true,
-      "durationMs": 122813,
-      "startedAt": "2026-02-08T20:20:42.475Z",
-      "endedAt": "2026-02-08T20:22:45.288Z"
-    },
-    {
-      "iteration": 11,
-      "status": "completed",
-      "taskId": "S8-011",
-      "taskTitle": "Implement bulk_approve_cluster bridge to content pipeline",
-      "taskCompleted": true,
-      "durationMs": 152625,
-      "startedAt": "2026-02-08T20:22:46.378Z",
-      "endedAt": "2026-02-08T20:25:19.003Z"
-    },
-    {
-      "iteration": 12,
-      "status": "completed",
-      "taskId": "S8-012",
-      "taskTitle": "Create cluster API router with create and list endpoints",
-      "taskCompleted": true,
-      "durationMs": 134004,
-      "startedAt": "2026-02-08T20:25:20.118Z",
-      "endedAt": "2026-02-08T20:27:34.122Z"
-    },
-    {
-      "iteration": 13,
-      "status": "completed",
-      "taskId": "S8-013",
-      "taskTitle": "Add cluster detail, update page, bulk-approve, and delete endpoints",
-      "taskCompleted": true,
-      "durationMs": 133382,
-      "startedAt": "2026-02-08T20:27:35.226Z",
-      "endedAt": "2026-02-08T20:29:48.608Z"
-    },
-    {
-      "iteration": 14,
-      "status": "completed",
-      "taskId": "S8-014",
-      "taskTitle": "Register clusters router",
-      "taskCompleted": true,
-      "durationMs": 56937,
-      "startedAt": "2026-02-08T20:29:49.703Z",
-      "endedAt": "2026-02-08T20:30:46.640Z"
-    },
-    {
-      "iteration": 15,
-      "status": "completed",
-      "taskId": "S8-017",
-      "taskTitle": "Add TypeScript types and API client for clusters",
-      "taskCompleted": true,
-      "durationMs": 69732,
-      "startedAt": "2026-02-08T20:30:47.732Z",
-      "endedAt": "2026-02-08T20:31:57.464Z"
-    },
-    {
-      "iteration": 16,
-      "status": "completed",
-      "taskId": "S8-018",
-      "taskTitle": "Create TanStack Query hooks for clusters",
-      "taskCompleted": true,
-      "durationMs": 68507,
-      "startedAt": "2026-02-08T20:31:58.552Z",
-      "endedAt": "2026-02-08T20:33:07.059Z"
-    },
-    {
-      "iteration": 17,
-      "status": "completed",
-      "taskId": "S8-019",
-      "taskTitle": "Create seed keyword input page",
-      "taskCompleted": true,
-      "durationMs": 142043,
-      "startedAt": "2026-02-08T20:33:08.175Z",
-      "endedAt": "2026-02-08T20:35:30.218Z"
-    },
-    {
-      "iteration": 18,
-      "status": "completed",
-      "taskId": "S8-020",
-      "taskTitle": "Create cluster suggestions and approval page",
-      "taskCompleted": true,
-      "durationMs": 371613,
-      "startedAt": "2026-02-08T20:35:31.313Z",
-      "endedAt": "2026-02-08T20:41:42.926Z"
-    },
-    {
-      "iteration": 19,
-      "status": "completed",
-      "taskId": "S8-021",
-      "taskTitle": "Update project detail page with cluster list",
-      "taskCompleted": true,
-      "durationMs": 123390,
-      "startedAt": "2026-02-08T20:41:44.100Z",
-      "endedAt": "2026-02-08T20:43:47.490Z"
-    },
-    {
-      "iteration": 20,
-      "status": "completed",
-      "taskId": "S8-015",
-      "taskTitle": "Backend unit tests for ClusterKeywordService",
-      "taskCompleted": true,
-      "durationMs": 337143,
-      "startedAt": "2026-02-08T20:43:48.622Z",
-      "endedAt": "2026-02-08T20:49:25.765Z"
-    },
-    {
-      "iteration": 21,
-      "status": "completed",
-      "taskId": "S8-016",
-      "taskTitle": "Backend integration tests for cluster API endpoints",
-      "taskCompleted": true,
-      "durationMs": 364451,
-      "startedAt": "2026-02-08T20:49:26.883Z",
-      "endedAt": "2026-02-08T20:55:31.334Z"
-    },
-    {
-      "iteration": 22,
-      "status": "completed",
-      "taskId": "S8-022",
-      "taskTitle": "Frontend component tests",
-      "taskCompleted": true,
-      "durationMs": 397041,
-      "startedAt": "2026-02-08T20:55:32.449Z",
-      "endedAt": "2026-02-08T21:02:09.490Z"
-    },
-    {
-      "iteration": 23,
-      "status": "completed",
-      "taskId": "S8-098",
-      "taskTitle": "Update V2_REBUILD_PLAN.md",
-      "taskCompleted": true,
-      "durationMs": 53724,
-      "startedAt": "2026-02-08T21:02:10.634Z",
-      "endedAt": "2026-02-08T21:03:04.358Z"
-    }
-  ],
+  "iterations": [],
   "skippedTaskIds": [],
   "cwd": "/Users/mike/Projects (1)/client-onboarding-v2",
   "activeTaskIds": [],
-  "subagentPanelVisible": true
+  "subagentPanelVisible": false
 }

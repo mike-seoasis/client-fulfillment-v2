@@ -13,6 +13,7 @@ from app.models.crawl_history import CrawlHistory
 from app.models.crawl_schedule import CrawlSchedule
 from app.models.crawled_page import CrawledPage
 from app.models.generated_content import GeneratedContent
+from app.models.internal_link import InternalLink
 from app.models.keyword_cluster import ClusterPage, KeywordCluster
 from app.models.nlp_analysis_cache import NLPAnalysisCache
 from app.models.notification import (
@@ -40,6 +41,7 @@ __all__ = [
     "ClusterPage",
     "CrawledPage",
     "GeneratedContent",
+    "InternalLink",
     "KeywordCluster",
     "NLPAnalysisCache",
     "NotificationChannel",

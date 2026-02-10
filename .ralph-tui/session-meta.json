@@ -1,14 +1,14 @@
 {
-  "id": "dfdb7767-e4d4-49e2-9c59-747c908022b0",
+  "id": "7ea6927e-18ee-42e8-9880-238d858eeb41",
   "status": "running",
-  "startedAt": "2026-02-08T20:03:35.962Z",
-  "updatedAt": "2026-02-08T21:03:04.476Z",
+  "startedAt": "2026-02-10T18:08:43.563Z",
+  "updatedAt": "2026-02-10T18:08:51.807Z",
   "agentPlugin": "claude",
   "trackerPlugin": "json",
-  "prdPath": "openspec/changes/keyword-cluster-creation/prd.json",
-  "currentIteration": 23,
-  "maxIterations": 110,
+  "prdPath": "openspec/changes/phase-9-internal-linking/prd.json",
+  "currentIteration": 0,
+  "maxIterations": 100,
   "totalTasks": 0,
-  "tasksCompleted": 23,
+  "tasksCompleted": 0,
   "cwd": "/Users/mike/Projects (1)/client-onboarding-v2"
 }
