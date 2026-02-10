@@ -284,12 +284,13 @@
         "Snapshot plan_data includes page contents so original state can be restored if needed"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "S9-013",
         "S9-011"
       ],
-      "notes": "The snapshot is created BEFORE stripping/deleting. This is the rollback point. The re-plan is triggered by the same POST endpoint — it detects existing links and runs the cleanup flow first."
+      "notes": "The snapshot is created BEFORE stripping/deleting. This is the rollback point. The re-plan is triggered by the same POST endpoint — it detects existing links and runs the cleanup flow first.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S9-015",
@@ -699,6 +700,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-10T18:42:53.489Z"
+    "updatedAt": "2026-02-10T18:45:54.266Z"
   }
 }

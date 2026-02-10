@@ -238,3 +238,20 @@ after each iteration and it's included in prompts for context.
   - Cluster graph pages have both `page_id` (ClusterPage.id) and `crawled_page_id` (CrawledPage.id) — always use `crawled_page_id` for PageContent/InternalLink lookups
   - `selectinload` import wasn't needed (pipeline uses separate queries, not eager loading) — ruff caught the unused import
 ---
+
+## 2026-02-10 - S9-014
+- Implemented `replan_links(project_id, scope, cluster_id, db)` async function in `backend/app/services/link_planning.py`
+- 4-step re-plan flow: snapshot current state → strip internal links from content → delete InternalLink rows → run full pipeline
+- `LinkPlanSnapshot` created BEFORE stripping/deleting — stores all InternalLink rows + pre-strip `bottom_description` per page as rollback point
+- Short-circuits to `run_link_planning_pipeline` directly when no existing links found (first-time plan)
+- Site domain extracted from `Project.site_url` via `urlparse` for accurate internal link detection in `strip_internal_links`
+- Uses `sqlalchemy.delete()` for bulk deletion of InternalLink rows (filtered by project_id + scope + cluster_id)
+- Separate `db_manager.session_factory()` write sessions for snapshot, strip, and delete steps (consistent with pipeline pattern)
+- **Files changed:**
+  - `backend/app/services/link_planning.py` (added `replan_links` function + imports for `delete`, `LinkPlanSnapshot`, `Project`, `strip_internal_links`)
+  - `backend/app/services/__init__.py` (added `replan_links` import + `__all__` entry)
+- **Learnings:**
+  - `Result.rowcount` from async SQLAlchemy `delete()` needs `# type: ignore[attr-defined]` — mypy doesn't see `rowcount` on the generic `Result[Any]` type from async execute
+  - Import ordering: `project` sorts after `page_keywords` alphabetically — ruff caught the mis-order and auto-fixed
+  - The `urlparse` import can be localized (inside function body) to avoid top-level import of `urllib.parse` when it's only used in one function
+---

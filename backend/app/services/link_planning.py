@@ -24,7 +24,7 @@ import json
 from itertools import combinations
 from typing import Any, Literal
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -33,11 +33,16 @@ from app.core.logging import get_logger
 from app.integrations.claude import ClaudeClient, get_api_key
 from app.models.content_brief import ContentBrief
 from app.models.crawled_page import CrawledPage
-from app.models.internal_link import InternalLink
+from app.models.internal_link import InternalLink, LinkPlanSnapshot
 from app.models.keyword_cluster import ClusterPage
 from app.models.page_content import PageContent
 from app.models.page_keywords import PageKeywords
-from app.services.link_injection import LinkInjector, LinkValidator
+from app.models.project import Project
+from app.services.link_injection import (
+    LinkInjector,
+    LinkValidator,
+    strip_internal_links,
+)
 
 logger = get_logger(__name__)
 
@@ -1103,6 +1108,188 @@ async def run_link_planning_pipeline(
             exc_info=True,
         )
         raise
+
+
+# ---------------------------------------------------------------------------
+# Re-plan flow: snapshot → strip → delete → re-run
+# ---------------------------------------------------------------------------
+
+
+async def replan_links(
+    project_id: str,
+    scope: Literal["onboarding", "cluster"],
+    cluster_id: str | None,
+    db: AsyncSession,
+) -> dict[str, Any]:
+    """Re-plan links by snapshotting current state, cleaning up, then re-running.
+
+    Steps:
+    1. Create a LinkPlanSnapshot with all current InternalLink rows and
+       pre-strip bottom_description for each page in scope.
+    2. Strip all internal links from bottom_description for each page in scope.
+    3. Delete all InternalLink rows for the scope.
+    4. Run the full pipeline from scratch.
+
+    The snapshot is created BEFORE stripping/deleting — it's the rollback point.
+
+    Args:
+        project_id: UUID of the project.
+        scope: 'onboarding' or 'cluster'.
+        cluster_id: Required when scope='cluster', None for onboarding.
+        db: Async database session (read-only; writes use db_manager sessions).
+
+    Returns:
+        Dict with pipeline result summary from run_link_planning_pipeline.
+    """
+    logger.info(
+        "Starting re-plan flow",
+        extra={"project_id": project_id, "scope": scope, "cluster_id": cluster_id},
+    )
+
+    # ------------------------------------------------------------------
+    # Step 1: Snapshot current plan data
+    # ------------------------------------------------------------------
+
+    # Load existing InternalLink rows for this scope
+    link_stmt = select(InternalLink).where(
+        InternalLink.project_id == project_id,
+        InternalLink.scope == scope,
+    )
+    if scope == "cluster" and cluster_id:
+        link_stmt = link_stmt.where(InternalLink.cluster_id == cluster_id)
+
+    link_result = await db.execute(link_stmt)
+    existing_links = link_result.scalars().all()
+
+    if not existing_links:
+        # No existing links — just run the pipeline directly
+        logger.info(
+            "No existing links found, running pipeline directly",
+            extra={"project_id": project_id, "scope": scope},
+        )
+        return await run_link_planning_pipeline(project_id, scope, cluster_id, db)
+
+    # Collect unique source page IDs to snapshot their content
+    source_page_ids = list({lnk.source_page_id for lnk in existing_links})
+
+    # Load pre-strip bottom_description for each page
+    pc_stmt = select(PageContent).where(
+        PageContent.crawled_page_id.in_(source_page_ids)
+    )
+    pc_result = await db.execute(pc_stmt)
+    page_contents = {pc.crawled_page_id: pc for pc in pc_result.scalars().all()}
+
+    # Build snapshot plan_data
+    pages_snapshot: list[dict[str, Any]] = []
+    for page_id in source_page_ids:
+        pc = page_contents.get(page_id)
+        page_links = [
+            {
+                "target_id": lnk.target_page_id,
+                "anchor_text": lnk.anchor_text,
+                "anchor_type": lnk.anchor_type,
+                "placement_method": lnk.placement_method,
+                "is_mandatory": lnk.is_mandatory,
+                "status": lnk.status,
+            }
+            for lnk in existing_links
+            if lnk.source_page_id == page_id
+        ]
+        pages_snapshot.append(
+            {
+                "page_id": page_id,
+                "pre_injection_content": pc.bottom_description if pc else None,
+                "links": page_links,
+            }
+        )
+
+    plan_data: dict[str, Any] = {
+        "pages": pages_snapshot,
+        "metadata": {
+            "scope": scope,
+            "cluster_id": cluster_id,
+            "total_pages": len(source_page_ids),
+        },
+    }
+
+    # Persist snapshot
+    async with db_manager.session_factory() as write_db:
+        snapshot = LinkPlanSnapshot(
+            project_id=project_id,
+            cluster_id=cluster_id,
+            scope=scope,
+            plan_data=plan_data,
+            total_links=len(existing_links),
+        )
+        write_db.add(snapshot)
+        await write_db.commit()
+
+    logger.info(
+        "Snapshot created",
+        extra={
+            "project_id": project_id,
+            "snapshot_links": len(existing_links),
+            "snapshot_pages": len(source_page_ids),
+        },
+    )
+
+    # ------------------------------------------------------------------
+    # Step 2: Strip internal links from bottom_description
+    # ------------------------------------------------------------------
+
+    # Get site_domain for accurate internal link detection
+    proj_stmt = select(Project).where(Project.id == project_id)
+    proj_result = await db.execute(proj_stmt)
+    project = proj_result.scalar_one_or_none()
+    site_domain: str | None = None
+    if project and project.site_url:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(project.site_url)
+        site_domain = parsed.netloc or parsed.path
+
+    async with db_manager.session_factory() as write_db:
+        for page_id in source_page_ids:
+            pc_load_stmt = select(PageContent).where(
+                PageContent.crawled_page_id == page_id
+            )
+            pc_load_result = await write_db.execute(pc_load_stmt)
+            pc = pc_load_result.scalar_one_or_none()
+            if pc and pc.bottom_description:
+                pc.bottom_description = strip_internal_links(
+                    pc.bottom_description, site_domain
+                )
+        await write_db.commit()
+
+    logger.info(
+        "Stripped internal links from pages",
+        extra={"project_id": project_id, "pages_stripped": len(source_page_ids)},
+    )
+
+    # ------------------------------------------------------------------
+    # Step 3: Delete all InternalLink rows for the scope
+    # ------------------------------------------------------------------
+    async with db_manager.session_factory() as write_db:
+        del_stmt = delete(InternalLink).where(
+            InternalLink.project_id == project_id,
+            InternalLink.scope == scope,
+        )
+        if scope == "cluster" and cluster_id:
+            del_stmt = del_stmt.where(InternalLink.cluster_id == cluster_id)
+
+        del_result = await write_db.execute(del_stmt)
+        deleted_count: int = del_result.rowcount  # type: ignore[attr-defined]
+        await write_db.commit()
+
+    logger.info(
+        "Deleted existing InternalLink rows",
+        extra={"project_id": project_id, "deleted_count": deleted_count},
+    )
+
+    # ------------------------------------------------------------------
+    # Step 4: Run full pipeline from scratch
+    # ------------------------------------------------------------------
+    return await run_link_planning_pipeline(project_id, scope, cluster_id, db)
 
 
 # ---------------------------------------------------------------------------
