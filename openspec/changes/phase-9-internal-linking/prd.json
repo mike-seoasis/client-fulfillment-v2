@@ -599,11 +599,12 @@
         "Back button to project detail"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "S9-026"
       ],
-      "notes": "Reference WIREFRAMES.md section 16b for layout. The label grouping visualization can use simple grouped boxes. The filter controls should be above the table. For the label dropdown, collect unique labels across all pages."
+      "notes": "Reference WIREFRAMES.md section 16b for layout. The label grouping visualization can use simple grouped boxes. The filter controls should be above the table. For the label dropdown, collect unique labels across all pages.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S9-030",
@@ -708,6 +709,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-10T19:11:05.270Z"
+    "updatedAt": "2026-02-10T19:14:45.953Z"
   }
 }

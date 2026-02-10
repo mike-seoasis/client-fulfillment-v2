@@ -391,3 +391,24 @@ after each iteration and it's included in prompts for context.
   - `formatMethodSummary` maps backend method keys (`rule_based`, `llm_fallback`, `generation`) to short display labels (`rule`, `LLM`, `gen`) joined by ` + ` — matches wireframe format like "1 gen + 2 rule"
   - Re-plan flow redirects to the planning trigger page (`/clusters/{clusterId}/links`) rather than showing inline progress — reuses the existing progress UI from S9-027
 ---
+
+## 2026-02-10 - S9-029
+- Created onboarding link map overview page at `frontend/src/app/projects/[id]/links/map/page.tsx`
+- Stats sidebar: total links, pages, avg per page, validation pass rate, method breakdown, anchor diversity, plus onboarding-specific priority page stats (count, avg inbound vs non-priority avg)
+- Label-grouped visualization: pages grouped by primary label (first in labels array), groups sorted by page count descending, connections between adjacent groups showing shared labels
+- Page table with 3 filter controls: label dropdown (populated from unique labels across all pages), priority-only toggle checkbox, search-by-page-name input with search icon
+- Table columns: page title (with ★ for priority), labels (tag chip with hover tooltip), out count, in count, method summary, validation status icon
+- Priority pages float to top of sorted results; table is scrollable with max-height
+- Click table row → navigate to `/projects/{id}/links/page/{pageId}` for page link detail
+- Re-plan Links button with confirmation dialog → triggers `usePlanLinks` mutation then redirects to `/projects/{id}/links` planning trigger page
+- Back button to project detail; breadcrumb navigation: project → Link Map
+- Empty state with "Plan Links" CTA when no links exist
+- **Files changed:**
+  - `frontend/src/app/projects/[id]/links/map/page.tsx` (new)
+- **Learnings:**
+  - `[...Set]` spread syntax triggers TS2802 when `target` is below ES2015 — use `Array.from(set)` instead for Set-to-Array conversion
+  - Onboarding link map has no `hierarchy` field (that's cluster-specific) — uses label grouping visualization instead, built from `LinkMapPage.labels` array
+  - For the label groups visualization, grouping by first label (`labels?.[0]`) is a clean primary-label approach; connections between groups are derived from set intersection of all labels across group pages
+  - Filter controls above the table (not inside table header) keeps the sortable column headers clean and simple
+  - The onboarding variant's page table includes a Labels column (tag chips) instead of the cluster variant's Role column — different metadata is relevant per scope
+---
