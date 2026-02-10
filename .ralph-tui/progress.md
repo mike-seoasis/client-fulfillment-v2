@@ -326,3 +326,18 @@ after each iteration and it's included in prompts for context.
   - Rule-based link injection works in tests when the anchor text literally appears in the HTML content (case-insensitive match)
   - `_active_plans` module-level set needs cleanup after successful plan tests to avoid 409 conflicts in subsequent tests
 ---
+
+## 2026-02-10 - S9-025
+- Added TypeScript interfaces and API client functions for the internal linking API to `frontend/src/lib/api.ts`
+- 8 TypeScript interfaces: InternalLink, LinkMapPage, LinkMap, PageLinks, PlanStatus, AnchorSuggestions, AddLinkRequest, EditLinkRequest
+- 8 API client functions: planLinks, getPlanStatus, getLinkMap, getPageLinks, addLink, removeLink, editLink, getAnchorSuggestions
+- All functions follow existing apiClient pattern (get/post/put/delete convenience methods)
+- Query params built with URLSearchParams for getPlanStatus and getLinkMap (scope + optional cluster_id)
+- **Files changed:**
+  - `frontend/src/lib/api.ts` (added types + functions section before EXPORT section)
+- **Learnings:**
+  - Frontend types are simplified versions of backend Pydantic schemas — no need for `Field()` metadata, just plain TS interfaces
+  - The codebase puts all types AND API functions in a single `api.ts` file (no separate `types.ts`) — types are co-located with their API functions in feature sections
+  - DELETE endpoints returning 204 use `apiClient.delete<void>()` which is handled by the `handleResponse` function's 204 branch returning `undefined as T`
+  - URLSearchParams is the clean way to build query strings with optional params — avoids manual `?` and `&` concatenation
+---

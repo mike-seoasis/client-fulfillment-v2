@@ -619,6 +619,212 @@ export function deleteCluster(
 }
 
 // =============================================================================
+// INTERNAL LINKING API TYPES
+// =============================================================================
+
+/** A single internal link between two pages. */
+export interface InternalLink {
+  id: string;
+  source_page_id: string;
+  target_page_id: string;
+  target_url: string;
+  target_title: string;
+  target_keyword: string;
+  anchor_text: string;
+  anchor_type: string;
+  position_in_content: number | null;
+  is_mandatory: boolean;
+  placement_method: string;
+  status: string;
+}
+
+/** Summary of a page within the link map overview. */
+export interface LinkMapPage {
+  page_id: string;
+  url: string;
+  title: string;
+  is_priority: boolean;
+  role: string | null;
+  labels: string[] | null;
+  outbound_count: number;
+  inbound_count: number;
+  methods: Record<string, number>;
+  validation_status: string;
+}
+
+/** Full link map overview for a project scope. */
+export interface LinkMap {
+  scope: string;
+  total_links: number;
+  total_pages: number;
+  avg_links_per_page: number;
+  validation_pass_rate: number;
+  method_breakdown: Record<string, number>;
+  anchor_diversity: Record<string, number>;
+  pages: LinkMapPage[];
+  hierarchy: Record<string, unknown> | null;
+}
+
+/** All links for a specific page with diversity metrics. */
+export interface PageLinks {
+  outbound_links: InternalLink[];
+  inbound_links: InternalLink[];
+  anchor_diversity: Record<string, number>;
+  diversity_score: string;
+}
+
+/** Status of the link planning pipeline. */
+export interface PlanStatus {
+  status: "idle" | "planning" | "complete" | "failed";
+  current_step: number | null;
+  step_label: string | null;
+  pages_processed: number;
+  total_pages: number;
+  total_links: number | null;
+  error: string | null;
+}
+
+/** Anchor text suggestions for a target page. */
+export interface AnchorSuggestions {
+  primary_keyword: string;
+  pop_variations: string[];
+  usage_counts: Record<string, number>;
+}
+
+/** Request to manually add an internal link. */
+export interface AddLinkRequest {
+  source_page_id: string;
+  target_page_id: string;
+  anchor_text: string;
+  anchor_type: "exact_match" | "partial_match" | "natural";
+}
+
+/** Request to edit an existing link's anchor. */
+export interface EditLinkRequest {
+  anchor_text: string;
+  anchor_type: "exact_match" | "partial_match" | "natural";
+}
+
+// =============================================================================
+// INTERNAL LINKING API FUNCTIONS
+// =============================================================================
+
+/**
+ * Trigger link planning for a project scope.
+ * Returns 202 with initial status. Poll with getPlanStatus for progress.
+ */
+export function planLinks(
+  projectId: string,
+  scope: "onboarding" | "cluster",
+  clusterId?: string
+): Promise<PlanStatus> {
+  return apiClient.post<PlanStatus>(
+    `/projects/${projectId}/links/plan`,
+    { scope, cluster_id: clusterId ?? null }
+  );
+}
+
+/**
+ * Get link planning pipeline status for a project scope.
+ * Returns idle if no pipeline has run.
+ */
+export function getPlanStatus(
+  projectId: string,
+  scope: "onboarding" | "cluster",
+  clusterId?: string
+): Promise<PlanStatus> {
+  const params = new URLSearchParams({ scope });
+  if (clusterId) params.set("cluster_id", clusterId);
+  return apiClient.get<PlanStatus>(
+    `/projects/${projectId}/links/plan/status?${params.toString()}`
+  );
+}
+
+/**
+ * Get the link map overview for a project scope.
+ * Returns aggregate stats, per-page summaries, and optional hierarchy.
+ */
+export function getLinkMap(
+  projectId: string,
+  scope: "onboarding" | "cluster" = "onboarding",
+  clusterId?: string
+): Promise<LinkMap> {
+  const params = new URLSearchParams({ scope });
+  if (clusterId) params.set("cluster_id", clusterId);
+  return apiClient.get<LinkMap>(
+    `/projects/${projectId}/links?${params.toString()}`
+  );
+}
+
+/**
+ * Get all links for a specific page with diversity metrics.
+ * Returns outbound/inbound links and anchor diversity score.
+ */
+export function getPageLinks(
+  projectId: string,
+  pageId: string
+): Promise<PageLinks> {
+  return apiClient.get<PageLinks>(
+    `/projects/${projectId}/links/page/${pageId}`
+  );
+}
+
+/**
+ * Manually add an internal link.
+ * Validates silo integrity and injects the link into content.
+ */
+export function addLink(
+  projectId: string,
+  data: AddLinkRequest
+): Promise<InternalLink> {
+  return apiClient.post<InternalLink>(
+    `/projects/${projectId}/links`,
+    data
+  );
+}
+
+/**
+ * Remove a discretionary internal link.
+ * Strips the anchor tag from content and marks the link as removed.
+ */
+export function removeLink(
+  projectId: string,
+  linkId: string
+): Promise<void> {
+  return apiClient.delete<void>(
+    `/projects/${projectId}/links/${linkId}`
+  );
+}
+
+/**
+ * Edit an existing link's anchor text and type.
+ * Updates both the InternalLink record and the HTML content.
+ */
+export function editLink(
+  projectId: string,
+  linkId: string,
+  data: EditLinkRequest
+): Promise<InternalLink> {
+  return apiClient.put<InternalLink>(
+    `/projects/${projectId}/links/${linkId}`,
+    data
+  );
+}
+
+/**
+ * Get anchor text suggestions for a target page.
+ * Returns primary keyword, POP variations, and usage counts.
+ */
+export function getAnchorSuggestions(
+  projectId: string,
+  targetPageId: string
+): Promise<AnchorSuggestions> {
+  return apiClient.get<AnchorSuggestions>(
+    `/projects/${projectId}/links/suggestions/${targetPageId}`
+  );
+}
+
+// =============================================================================
 // EXPORT API FUNCTIONS
 // =============================================================================
 
