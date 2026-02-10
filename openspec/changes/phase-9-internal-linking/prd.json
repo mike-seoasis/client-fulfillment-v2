@@ -346,11 +346,12 @@
         "Test distribution approximates target ratios over a batch"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "S9-008"
       ],
-      "notes": "Mock Claude Haiku calls for natural phrase generation. Mock DB queries for POP variations."
+      "notes": "Mock Claude Haiku calls for natural phrase generation. Mock DB queries for POP variations.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S9-018",
@@ -713,6 +714,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-10T19:28:20.349Z"
+    "updatedAt": "2026-02-10T19:31:47.858Z"
   }
 }

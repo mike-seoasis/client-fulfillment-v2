@@ -473,3 +473,19 @@ after each iteration and it's included in prompts for context.
   - `-> dict:` without type params triggers mypy `type-arg` — use `-> dict[str, Any]:` even in test helpers
   - The diversity penalty test verifies distribution via `max(inbound) <= min(inbound) + 3` rather than exact counts, since the algorithm is order-dependent
 ---
+
+## 2026-02-10 - S9-017
+- Added 21 unit tests for `AnchorTextSelector` across 5 test classes in `backend/tests/test_link_planning.py`
+- `TestGatherCandidates` (5 tests): returns all 3 sources (exact_match + partial_match from POP + secondary fallback), skips primary keyword duplicates in POP, prefers POP over secondary, handles unapproved keywords
+- `TestSelectAnchor` (9 tests): diversity bonus prefers unused anchors, context_fit +2.0 when anchor in source (case-insensitive), blocks at MAX_ANCHOR_REUSE (3), returns None when all blocked or empty, mutates usage_tracker in-place, type_weights influence selection (partial > natural > exact)
+- `TestAnchorDistribution` (2 tests): partial_match dominates over 30 selections, reuse forces diversity across same-target selections using all available anchors
+- `TestGenerateNaturalPhrases` (5 tests): mocked Claude Haiku returns natural-type candidates, handles empty input/LLM failure/markdown fences/unknown page IDs
+- **Files changed:**
+  - `backend/tests/test_link_planning.py` (added 5 test classes, 1 helper function, expanded imports)
+- **Learnings:**
+  - `AnchorTextSelector.select_anchor` is a pure function (no DB/async) — all scoring tests use synthetic candidate dicts and empty/prepopulated usage_trackers
+  - `AnchorTextSelector.gather_candidates` needs DB (queries PageKeywords + ContentBrief) — uses same `db_session` fixture as graph tests
+  - `generate_natural_phrases` requires patching both `ClaudeClient` and `get_api_key` in `app.services.link_planning` namespace (not `app.integrations.claude`)
+  - `ContentBrief` uses `page_id` (not `crawled_page_id`) as its FK column name — inconsistent with PageContent/PageKeywords
+  - `Counter` from `collections` is the clean way to tally anchor type distribution in batch tests
+---

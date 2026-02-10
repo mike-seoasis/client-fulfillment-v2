@@ -1,4 +1,4 @@
-"""Tests for SiloLinkPlanner graph construction and target selection.
+"""Tests for SiloLinkPlanner graph construction, target selection, and anchor text.
 
 Tests cover:
 - Cluster graph: parent + children produce parent_child + sibling edges
@@ -10,20 +10,28 @@ Tests cover:
 - calculate_budget: word count → link budget clamped to 3-5
 - select_targets_cluster: parent/child targeting with hierarchy rules
 - select_targets_onboarding: label overlap + priority bonus + diversity penalty
+- AnchorTextSelector.gather_candidates: 3 sources (primary, POP, secondary fallback)
+- AnchorTextSelector.select_anchor: diversity bonus, context_fit, usage blocking
+- Distribution: anchor type ratios approximate targets over a batch
 """
 
+from collections import Counter
 from typing import Any
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.content_brief import ContentBrief
 from app.models.crawled_page import CrawledPage
 from app.models.keyword_cluster import ClusterPage, KeywordCluster
 from app.models.page_content import PageContent
 from app.models.page_keywords import PageKeywords
 from app.models.project import Project
 from app.services.link_planning import (
+    MAX_ANCHOR_REUSE,
+    AnchorTextSelector,
     SiloLinkPlanner,
     calculate_budget,
     select_targets_cluster,
@@ -1008,3 +1016,529 @@ class TestSelectTargetsOnboarding:
         # No page should exceed its budget
         for page_id, targets in result.items():
             assert len(targets) <= budgets[page_id]
+
+
+# ---------------------------------------------------------------------------
+# Helpers for AnchorTextSelector tests (S9-017)
+# ---------------------------------------------------------------------------
+
+
+def _make_content_brief(
+    db: AsyncSession,
+    page_id: str,
+    *,
+    keyword_targets: list[dict[str, str]] | None = None,
+) -> ContentBrief:
+    """Create and add a ContentBrief for a crawled page."""
+    brief = ContentBrief(
+        id=str(uuid4()),
+        page_id=page_id,
+        keyword="test keyword",
+        keyword_targets=keyword_targets or [],
+    )
+    db.add(brief)
+    return brief
+
+
+# ---------------------------------------------------------------------------
+# Tests: AnchorTextSelector.gather_candidates (S9-017)
+# ---------------------------------------------------------------------------
+
+
+class TestGatherCandidates:
+    """Tests for AnchorTextSelector.gather_candidates — DB-backed."""
+
+    @pytest.mark.asyncio
+    async def test_returns_candidates_from_all_3_sources(
+        self, db_session: AsyncSession
+    ):
+        """gather_candidates returns primary keyword, POP variations, and secondary fallback."""
+        project = _make_project(db_session)
+        page = _make_crawled_page(db_session, project.id)
+        _make_page_keywords(
+            db_session,
+            page.id,
+            primary_keyword="hiking boots",
+            is_approved=True,
+        )
+        _make_content_brief(
+            db_session,
+            page.id,
+            keyword_targets=[
+                {"keyword": "best hiking boots"},
+                {"keyword": "waterproof hiking boots"},
+            ],
+        )
+        await db_session.flush()
+
+        selector = AnchorTextSelector()
+        candidates = await selector.gather_candidates(page.id, db_session)
+
+        # Should have 1 exact_match + 2 partial_match = 3 candidates
+        assert len(candidates) == 3
+
+        types = {c["anchor_type"] for c in candidates}
+        assert "exact_match" in types
+        assert "partial_match" in types
+
+        # Primary keyword is the exact_match
+        exact = [c for c in candidates if c["anchor_type"] == "exact_match"]
+        assert len(exact) == 1
+        assert exact[0]["anchor_text"] == "hiking boots"
+
+        # POP variations are partial_match
+        partial = [c for c in candidates if c["anchor_type"] == "partial_match"]
+        assert len(partial) == 2
+        partial_texts = {c["anchor_text"] for c in partial}
+        assert "best hiking boots" in partial_texts
+        assert "waterproof hiking boots" in partial_texts
+
+    @pytest.mark.asyncio
+    async def test_pop_variations_skip_primary_keyword_duplicate(
+        self, db_session: AsyncSession
+    ):
+        """POP variations that match the primary keyword are excluded."""
+        project = _make_project(db_session)
+        page = _make_crawled_page(db_session, project.id)
+        _make_page_keywords(
+            db_session, page.id, primary_keyword="hiking boots", is_approved=True
+        )
+        _make_content_brief(
+            db_session,
+            page.id,
+            keyword_targets=[
+                {"keyword": "hiking boots"},  # duplicate of primary
+                {"keyword": "trail boots"},
+            ],
+        )
+        await db_session.flush()
+
+        selector = AnchorTextSelector()
+        candidates = await selector.gather_candidates(page.id, db_session)
+
+        # 1 exact_match + 1 partial_match (duplicate excluded)
+        assert len(candidates) == 2
+        texts = {c["anchor_text"] for c in candidates}
+        assert "hiking boots" in texts
+        assert "trail boots" in texts
+
+    @pytest.mark.asyncio
+    async def test_secondary_keywords_fallback_when_no_pop(
+        self, db_session: AsyncSession
+    ):
+        """When no POP variations exist, secondary_keywords are used as partial_match."""
+        project = _make_project(db_session)
+        page = _make_crawled_page(db_session, project.id)
+        pk = _make_page_keywords(
+            db_session, page.id, primary_keyword="hiking boots", is_approved=True
+        )
+        pk.secondary_keywords = ["trail boots", "outdoor footwear"]
+        # No ContentBrief → no POP variations
+        await db_session.flush()
+
+        selector = AnchorTextSelector()
+        candidates = await selector.gather_candidates(page.id, db_session)
+
+        # 1 exact_match + 2 partial_match (from secondary_keywords)
+        assert len(candidates) == 3
+        partial = [c for c in candidates if c["anchor_type"] == "partial_match"]
+        assert len(partial) == 2
+        partial_texts = {c["anchor_text"] for c in partial}
+        assert "trail boots" in partial_texts
+        assert "outdoor footwear" in partial_texts
+
+    @pytest.mark.asyncio
+    async def test_no_keywords_returns_empty(self, db_session: AsyncSession):
+        """Page with no approved keywords returns empty candidates list."""
+        project = _make_project(db_session)
+        page = _make_crawled_page(db_session, project.id)
+        # Unapproved keyword → not picked up
+        _make_page_keywords(
+            db_session, page.id, primary_keyword="hiking boots", is_approved=False
+        )
+        await db_session.flush()
+
+        selector = AnchorTextSelector()
+        candidates = await selector.gather_candidates(page.id, db_session)
+
+        assert candidates == []
+
+    @pytest.mark.asyncio
+    async def test_pop_variations_preferred_over_secondary(
+        self, db_session: AsyncSession
+    ):
+        """When POP variations exist, secondary_keywords are NOT added."""
+        project = _make_project(db_session)
+        page = _make_crawled_page(db_session, project.id)
+        pk = _make_page_keywords(
+            db_session, page.id, primary_keyword="hiking boots", is_approved=True
+        )
+        pk.secondary_keywords = ["should not appear", "also ignored"]
+        _make_content_brief(
+            db_session,
+            page.id,
+            keyword_targets=[{"keyword": "best hiking boots"}],
+        )
+        await db_session.flush()
+
+        selector = AnchorTextSelector()
+        candidates = await selector.gather_candidates(page.id, db_session)
+
+        # 1 exact_match + 1 partial_match (POP only, not secondary)
+        assert len(candidates) == 2
+        texts = {c["anchor_text"] for c in candidates}
+        assert "should not appear" not in texts
+        assert "also ignored" not in texts
+
+
+# ---------------------------------------------------------------------------
+# Tests: AnchorTextSelector.select_anchor (S9-017)
+# ---------------------------------------------------------------------------
+
+
+class TestSelectAnchor:
+    """Tests for AnchorTextSelector.select_anchor — pure function, no DB needed."""
+
+    def test_prefers_unused_anchors_diversity_bonus(self):
+        """Unused anchors get full diversity_bonus (3.0) vs used anchors (2.0)."""
+        selector = AnchorTextSelector()
+        candidates = [
+            {"anchor_text": "used anchor", "anchor_type": "partial_match"},
+            {"anchor_text": "fresh anchor", "anchor_type": "partial_match"},
+        ]
+        usage_tracker: dict[str, dict[str, int]] = {
+            "target-1": {"used anchor": 1},
+        }
+
+        result = selector.select_anchor(
+            candidates, "some source content", "target-1", usage_tracker
+        )
+
+        assert result is not None
+        # fresh anchor has diversity_bonus=3.0 vs used anchor=2.0
+        assert result["anchor_text"] == "fresh anchor"
+
+    def test_context_fit_bonus_when_anchor_in_source(self):
+        """Anchor that appears in source content gets +2.0 context_fit bonus."""
+        selector = AnchorTextSelector()
+        candidates = [
+            {"anchor_text": "not in source", "anchor_type": "partial_match"},
+            {"anchor_text": "hiking boots", "anchor_type": "partial_match"},
+        ]
+        usage_tracker: dict[str, dict[str, int]] = {}
+
+        result = selector.select_anchor(
+            candidates,
+            "This article covers the best hiking boots for beginners.",
+            "target-1",
+            usage_tracker,
+        )
+
+        assert result is not None
+        # "hiking boots" gets context_fit=2.0, "not in source" gets 0.0
+        assert result["anchor_text"] == "hiking boots"
+        # Score = diversity_bonus(3.0) + context_fit(2.0) + type_weight(1.5) = 6.5
+        assert result["score"] == 6.5
+
+    def test_context_fit_is_case_insensitive(self):
+        """Context fit check is case-insensitive."""
+        selector = AnchorTextSelector()
+        candidates = [
+            {"anchor_text": "Hiking Boots", "anchor_type": "partial_match"},
+        ]
+        usage_tracker: dict[str, dict[str, int]] = {}
+
+        result = selector.select_anchor(
+            candidates,
+            "Find the best hiking boots here.",
+            "target-1",
+            usage_tracker,
+        )
+
+        assert result is not None
+        # Case-insensitive match gives context_fit=2.0
+        assert result["score"] == 3.0 + 2.0 + 1.5  # diversity + context + partial
+
+    def test_blocks_anchor_after_max_reuse(self):
+        """Anchor used >= MAX_ANCHOR_REUSE (3) times for same target is rejected."""
+        selector = AnchorTextSelector()
+        candidates = [
+            {"anchor_text": "overused anchor", "anchor_type": "partial_match"},
+            {"anchor_text": "available anchor", "anchor_type": "partial_match"},
+        ]
+        usage_tracker: dict[str, dict[str, int]] = {
+            "target-1": {"overused anchor": MAX_ANCHOR_REUSE},  # exactly at limit
+        }
+
+        result = selector.select_anchor(
+            candidates, "source content", "target-1", usage_tracker
+        )
+
+        assert result is not None
+        assert result["anchor_text"] == "available anchor"
+
+    def test_all_candidates_blocked_returns_none(self):
+        """When all candidates are blocked by usage, returns None."""
+        selector = AnchorTextSelector()
+        candidates = [
+            {"anchor_text": "anchor a", "anchor_type": "partial_match"},
+            {"anchor_text": "anchor b", "anchor_type": "exact_match"},
+        ]
+        usage_tracker: dict[str, dict[str, int]] = {
+            "target-1": {
+                "anchor a": MAX_ANCHOR_REUSE,
+                "anchor b": MAX_ANCHOR_REUSE,
+            },
+        }
+
+        result = selector.select_anchor(
+            candidates, "source content", "target-1", usage_tracker
+        )
+
+        assert result is None
+
+    def test_empty_candidates_returns_none(self):
+        """Empty candidates list returns None."""
+        selector = AnchorTextSelector()
+        result = selector.select_anchor([], "source content", "target-1", {})
+        assert result is None
+
+    def test_usage_tracker_mutated_in_place(self):
+        """select_anchor increments the usage tracker for the selected anchor."""
+        selector = AnchorTextSelector()
+        candidates = [
+            {"anchor_text": "test anchor", "anchor_type": "partial_match"},
+        ]
+        usage_tracker: dict[str, dict[str, int]] = {}
+
+        selector.select_anchor(
+            candidates, "source content", "target-1", usage_tracker
+        )
+
+        assert usage_tracker["target-1"]["test anchor"] == 1
+
+        # Call again — count increments
+        selector.select_anchor(
+            candidates, "source content", "target-1", usage_tracker
+        )
+        assert usage_tracker["target-1"]["test anchor"] == 2
+
+    def test_type_weights_influence_selection(self):
+        """partial_match (1.5) is preferred over exact_match (0.3) by type weight."""
+        selector = AnchorTextSelector()
+        candidates = [
+            {"anchor_text": "exact keyword", "anchor_type": "exact_match"},
+            {"anchor_text": "partial keyword", "anchor_type": "partial_match"},
+        ]
+        usage_tracker: dict[str, dict[str, int]] = {}
+
+        result = selector.select_anchor(
+            candidates, "unrelated source", "target-1", usage_tracker
+        )
+
+        assert result is not None
+        # Both have same diversity_bonus (3.0) and no context_fit (0.0)
+        # partial_match type_weight=1.5 > exact_match type_weight=0.3
+        assert result["anchor_text"] == "partial keyword"
+        assert result["anchor_type"] == "partial_match"
+
+    def test_natural_type_weighted_between_partial_and_exact(self):
+        """natural (1.0) is weighted between partial_match (1.5) and exact_match (0.3)."""
+        selector = AnchorTextSelector()
+        candidates = [
+            {"anchor_text": "exact kw", "anchor_type": "exact_match"},
+            {"anchor_text": "natural phrase", "anchor_type": "natural"},
+        ]
+        usage_tracker: dict[str, dict[str, int]] = {}
+
+        result = selector.select_anchor(
+            candidates, "unrelated source", "target-1", usage_tracker
+        )
+
+        assert result is not None
+        # natural type_weight=1.0 > exact_match type_weight=0.3
+        assert result["anchor_text"] == "natural phrase"
+
+
+# ---------------------------------------------------------------------------
+# Tests: Distribution approximation over a batch (S9-017)
+# ---------------------------------------------------------------------------
+
+
+class TestAnchorDistribution:
+    """Tests verifying anchor type distribution approximates targets over a batch."""
+
+    def test_distribution_approximates_target_ratios(self):
+        """Over many selections, partial_match dominates, natural is second, exact is rare."""
+        selector = AnchorTextSelector()
+        usage_tracker: dict[str, dict[str, int]] = {}
+
+        # Create candidates for 30 different target pages
+        # Each page gets 1 exact, 2 partial, 1 natural candidate
+        type_counts: Counter[str] = Counter()
+
+        for i in range(30):
+            target_id = f"target-{i}"
+            candidates = [
+                {"anchor_text": f"exact kw {i}", "anchor_type": "exact_match"},
+                {"anchor_text": f"partial var1 {i}", "anchor_type": "partial_match"},
+                {"anchor_text": f"partial var2 {i}", "anchor_type": "partial_match"},
+                {"anchor_text": f"natural phrase {i}", "anchor_type": "natural"},
+            ]
+
+            result = selector.select_anchor(
+                candidates,
+                f"source content for page {i}",
+                target_id,
+                usage_tracker,
+            )
+
+            assert result is not None
+            type_counts[result["anchor_type"]] += 1
+
+        # partial_match should be most common (type_weight=1.5)
+        assert type_counts["partial_match"] > type_counts["exact_match"]
+        assert type_counts["partial_match"] > type_counts["natural"]
+
+        # exact_match should be least common (type_weight=0.3)
+        assert type_counts["exact_match"] <= type_counts["natural"]
+
+    def test_reuse_forces_diversity_across_selections(self):
+        """When same target is linked multiple times, different anchors are chosen."""
+        selector = AnchorTextSelector()
+        usage_tracker: dict[str, dict[str, int]] = {}
+
+        candidates = [
+            {"anchor_text": "anchor A", "anchor_type": "partial_match"},
+            {"anchor_text": "anchor B", "anchor_type": "partial_match"},
+            {"anchor_text": "anchor C", "anchor_type": "partial_match"},
+        ]
+
+        selected_anchors: list[str] = []
+        for _ in range(6):
+            result = selector.select_anchor(
+                candidates, "source content", "same-target", usage_tracker
+            )
+            if result is None:
+                break
+            selected_anchors.append(result["anchor_text"])
+
+        # Should use all 3 anchors (not just repeat one)
+        unique_anchors = set(selected_anchors)
+        assert len(unique_anchors) == 3
+
+        # Each anchor should be used at most MAX_ANCHOR_REUSE times
+        for anchor in unique_anchors:
+            assert selected_anchors.count(anchor) <= MAX_ANCHOR_REUSE
+
+
+# ---------------------------------------------------------------------------
+# Tests: AnchorTextSelector.generate_natural_phrases (S9-017)
+# ---------------------------------------------------------------------------
+
+
+class TestGenerateNaturalPhrases:
+    """Tests for generate_natural_phrases with mocked Claude API."""
+
+    @pytest.mark.asyncio
+    async def test_returns_natural_candidates_from_llm(self):
+        """generate_natural_phrases returns natural-type candidates from mocked LLM."""
+        selector = AnchorTextSelector()
+
+        mock_result = AsyncMock()
+        mock_result.success = True
+        mock_result.text = '{"results": [{"id": "page-1", "phrases": ["explore hiking trails", "discover trail options"]}]}'
+        mock_result.input_tokens = 50
+        mock_result.output_tokens = 30
+        mock_result.error = None
+
+        mock_client = AsyncMock()
+        mock_client.complete.return_value = mock_result
+
+        with patch(
+            "app.services.link_planning.ClaudeClient", return_value=mock_client
+        ), patch("app.services.link_planning.get_api_key", return_value="test-key"):
+            result = await selector.generate_natural_phrases({"page-1": "hiking trails"})
+
+        assert "page-1" in result
+        assert len(result["page-1"]) == 2
+        for candidate in result["page-1"]:
+            assert candidate["anchor_type"] == "natural"
+        texts = {c["anchor_text"] for c in result["page-1"]}
+        assert "explore hiking trails" in texts
+        assert "discover trail options" in texts
+
+    @pytest.mark.asyncio
+    async def test_empty_keywords_returns_empty(self):
+        """Empty keywords dict returns empty result without LLM call."""
+        selector = AnchorTextSelector()
+        result = await selector.generate_natural_phrases({})
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_handles_llm_failure_gracefully(self):
+        """LLM failure returns empty dict instead of raising."""
+        selector = AnchorTextSelector()
+
+        mock_result = AsyncMock()
+        mock_result.success = False
+        mock_result.text = None
+        mock_result.error = "API error"
+
+        mock_client = AsyncMock()
+        mock_client.complete.return_value = mock_result
+
+        with patch(
+            "app.services.link_planning.ClaudeClient", return_value=mock_client
+        ), patch("app.services.link_planning.get_api_key", return_value="test-key"):
+            result = await selector.generate_natural_phrases(
+                {"page-1": "hiking trails"}
+            )
+
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_handles_markdown_code_fences(self):
+        """LLM response wrapped in markdown code fences is parsed correctly."""
+        selector = AnchorTextSelector()
+
+        mock_result = AsyncMock()
+        mock_result.success = True
+        mock_result.text = '```json\n{"results": [{"id": "page-1", "phrases": ["natural phrase"]}]}\n```'
+        mock_result.input_tokens = 50
+        mock_result.output_tokens = 30
+        mock_result.error = None
+
+        mock_client = AsyncMock()
+        mock_client.complete.return_value = mock_result
+
+        with patch(
+            "app.services.link_planning.ClaudeClient", return_value=mock_client
+        ), patch("app.services.link_planning.get_api_key", return_value="test-key"):
+            result = await selector.generate_natural_phrases({"page-1": "keyword"})
+
+        assert "page-1" in result
+        assert result["page-1"][0]["anchor_text"] == "natural phrase"
+
+    @pytest.mark.asyncio
+    async def test_ignores_unknown_page_ids_in_response(self):
+        """LLM response with unknown page IDs are filtered out."""
+        selector = AnchorTextSelector()
+
+        mock_result = AsyncMock()
+        mock_result.success = True
+        mock_result.text = '{"results": [{"id": "page-1", "phrases": ["phrase"]}, {"id": "unknown-page", "phrases": ["other"]}]}'
+        mock_result.input_tokens = 50
+        mock_result.output_tokens = 30
+        mock_result.error = None
+
+        mock_client = AsyncMock()
+        mock_client.complete.return_value = mock_result
+
+        with patch(
+            "app.services.link_planning.ClaudeClient", return_value=mock_client
+        ), patch("app.services.link_planning.get_api_key", return_value="test-key"):
+            result = await selector.generate_natural_phrases({"page-1": "keyword"})
+
+        assert "page-1" in result
+        assert "unknown-page" not in result
