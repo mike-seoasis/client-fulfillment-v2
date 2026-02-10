@@ -430,3 +430,17 @@ after each iteration and it's included in prompts for context.
   - The `useAnchorSuggestions` hook enables on target page ID — setting `targetPageId` to empty string effectively disables it, enabling lazy loading when user selects a target in the Add Link modal
   - Pre-existing TS error in `GenerationProgress.test.tsx:425` (tuple index out of bounds) is unrelated to links work
 ---
+
+## 2026-02-10 - S9-031
+- Added link status indicators to the project detail page for both onboarding and cluster scopes
+- Created `LinkStatusBadge` component showing 3 states: "Links: Not planned" (gray), "Links: N planned" (green), "Links: Planning..." (lagoon/spinner)
+- Created `ClusterCard` wrapper component to enable per-cluster `useLinkMap` and `usePlanStatus` hook usage inside the `.map()` loop
+- Added onboarding-scope link status badge next to the `OnboardingStepIndicator` in the onboarding section header
+- Clicking any link status badge navigates to the corresponding link planning page
+- **Files changed:**
+  - `frontend/src/app/projects/[id]/page.tsx` (added imports, `LinkStatusBadge` component, `ClusterCard` component, onboarding link hooks)
+- **Learnings:**
+  - React hooks cannot be called inside `.map()` callbacks — extract a wrapper component (`ClusterCard`) so each card gets its own hook scope for per-cluster link data
+  - `usePlanStatus` with `enabled: true` on page load catches in-progress planning sessions (user navigates away and back)
+  - `onClick={(e) => e.preventDefault()}` on the link status badge wrapper prevents the parent `<Link>` from capturing the click, allowing the badge's own `<Link>` to navigate to the link planning page
+---

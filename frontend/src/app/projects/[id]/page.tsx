@@ -7,6 +7,7 @@ import { useProject, useDeleteProject } from '@/hooks/use-projects';
 import { useStartBrandConfigGeneration, useBrandConfigGeneration } from '@/hooks/useBrandConfigGeneration';
 import { useCrawlStatus, getOnboardingStep } from '@/hooks/use-crawl-status';
 import { useClusters } from '@/hooks/useClusters';
+import { useLinkMap, usePlanStatus } from '@/hooks/useLinks';
 import { Button, ButtonLink, Toast } from '@/components/ui';
 
 function LoadingSkeleton() {
@@ -321,6 +322,80 @@ function ClusterStatusBadge({ status }: { status: string }) {
   }
 }
 
+function LinkStatusBadge({
+  totalLinks,
+  isPlanning,
+  href,
+}: {
+  totalLinks: number | undefined;
+  isPlanning: boolean;
+  href: string;
+}) {
+  let label: string;
+  let badgeClass: string;
+  let icon: React.ReactNode;
+
+  if (isPlanning) {
+    label = 'Links: Planning...';
+    badgeClass = 'bg-lagoon-50 text-lagoon-700 border-lagoon-200';
+    icon = <SpinnerIcon className="w-3 h-3" />;
+  } else if (totalLinks && totalLinks > 0) {
+    label = `Links: ${totalLinks} planned`;
+    badgeClass = 'bg-palm-50 text-palm-700 border-palm-200';
+    icon = (
+      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <polyline points="20 6 9 17 4 12" />
+      </svg>
+    );
+  } else {
+    label = 'Links: Not planned';
+    badgeClass = 'bg-cream-100 text-warm-gray-600 border-cream-300';
+    icon = <CircleIcon className="w-3 h-3" />;
+  }
+
+  return (
+    <Link href={href}>
+      <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-sm border cursor-pointer hover:opacity-80 transition-opacity ${badgeClass}`}>
+        {icon}
+        {label}
+      </span>
+    </Link>
+  );
+}
+
+function ClusterCard({
+  cluster,
+  projectId,
+}: {
+  cluster: { id: string; name: string; seed_keyword: string; page_count: number; status: string };
+  projectId: string;
+}) {
+  const { data: linkMap } = useLinkMap(projectId, 'cluster', cluster.id);
+  const { data: planStatus } = usePlanStatus(projectId, 'cluster', cluster.id, true);
+  const isPlanning = planStatus?.status === 'planning';
+
+  return (
+    <div className="bg-white rounded-sm border border-sand-500 p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+      <h3 className="font-medium text-warm-gray-900 mb-2 truncate">
+        {cluster.name || cluster.seed_keyword}
+      </h3>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm text-warm-gray-600">
+          {cluster.page_count} {cluster.page_count === 1 ? 'page' : 'pages'}
+        </span>
+        <ClusterStatusBadge status={cluster.status} />
+      </div>
+      <div onClick={(e) => e.preventDefault()}>
+        <LinkStatusBadge
+          totalLinks={linkMap?.total_links}
+          isPlanning={isPlanning}
+          href={`/projects/${projectId}/clusters/${cluster.id}/links`}
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -341,6 +416,11 @@ export default function ProjectDetailPage() {
   const { data: clusters } = useClusters(projectId, {
     enabled: !!projectId && !isLoading && !error,
   });
+
+  // Fetch link status for onboarding scope
+  const { data: onboardingLinkMap } = useLinkMap(projectId, 'onboarding');
+  const { data: onboardingPlanStatus } = usePlanStatus(projectId, 'onboarding', undefined, true);
+  const isOnboardingLinkPlanning = onboardingPlanStatus?.status === 'planning';
 
   // Two-step delete confirmation
   const [isConfirming, setIsConfirming] = useState(false);
@@ -572,10 +652,17 @@ export default function ProjectDetailPage() {
                 Existing Pages
               </span>
             </div>
-            <OnboardingStepIndicator
-              currentStep={onboardingProgress.currentStep}
-              hasStarted={onboardingProgress.hasStarted}
-            />
+            <div className="flex items-center gap-2">
+              <OnboardingStepIndicator
+                currentStep={onboardingProgress.currentStep}
+                hasStarted={onboardingProgress.hasStarted}
+              />
+              <LinkStatusBadge
+                totalLinks={onboardingLinkMap?.total_links}
+                isPlanning={isOnboardingLinkPlanning}
+                href={`/projects/${projectId}/links`}
+              />
+            </div>
           </div>
 
           {/* Quick stats when pages exist */}
@@ -708,17 +795,10 @@ export default function ProjectDetailPage() {
                   href={`/projects/${projectId}/clusters/${cluster.id}`}
                   className="block"
                 >
-                  <div className="bg-white rounded-sm border border-sand-500 p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
-                    <h3 className="font-medium text-warm-gray-900 mb-2 truncate">
-                      {cluster.name || cluster.seed_keyword}
-                    </h3>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-warm-gray-600">
-                        {cluster.page_count} {cluster.page_count === 1 ? 'page' : 'pages'}
-                      </span>
-                      <ClusterStatusBadge status={cluster.status} />
-                    </div>
-                  </div>
+                  <ClusterCard
+                    cluster={cluster}
+                    projectId={projectId}
+                  />
                 </Link>
               ))}
             </div>
