@@ -62,3 +62,15 @@ after each iteration and it's included in prompts for context.
   - Both sides need `back_populates` for proper bidirectional behavior
   - `cascade="all, delete-orphan"` on the parent side ensures links are cleaned up when a page is deleted
 ---
+
+## 2026-02-10 - S9-004
+- Migrations already existed from S9-001 and S9-002 (0024 + 0025), so this was a verification task
+- Verified `0024_create_internal_links_table.py` creates internal_links with all columns, FKs, and indexes
+- Verified `0025_create_link_plan_snapshots_table.py` creates link_plan_snapshots with all columns, FKs, and indexes
+- Ran `alembic upgrade head` successfully (0023 → 0024 → 0025)
+- Verified reversibility: `alembic downgrade 0023` drops both tables cleanly, then re-upgraded to head
+- **Files changed:** None (migrations already existed)
+- **Learnings:**
+  - When model creation stories (S9-001, S9-002) each create their own migration, the migration story (S9-004) becomes a verification task rather than a creation task
+  - Always verify both upgrade AND downgrade paths when validating migrations
+---

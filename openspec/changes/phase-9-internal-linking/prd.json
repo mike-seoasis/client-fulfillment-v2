@@ -67,13 +67,14 @@
         "Migration runs successfully: cd backend && alembic upgrade head"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "S9-001",
         "S9-002",
         "S9-003"
       ],
-      "notes": "Run: cd backend && alembic revision --autogenerate -m 'add internal links and snapshots'. Latest existing migration is 0023. Verify the generated migration has correct indexes."
+      "notes": "Run: cd backend && alembic revision --autogenerate -m 'add internal links and snapshots'. Latest existing migration is 0023. Verify the generated migration has correct indexes.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S9-005",
@@ -689,6 +690,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-10T18:13:46.539Z"
+    "updatedAt": "2026-02-10T18:14:56.120Z"
   }
 }
