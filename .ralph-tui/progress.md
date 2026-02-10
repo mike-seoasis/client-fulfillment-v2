@@ -341,3 +341,17 @@ after each iteration and it's included in prompts for context.
   - DELETE endpoints returning 204 use `apiClient.delete<void>()` which is handled by the `handleResponse` function's 204 branch returning `undefined as T`
   - URLSearchParams is the clean way to build query strings with optional params — avoids manual `?` and `&` concatenation
 ---
+
+## 2026-02-10 - S9-026
+- Created `frontend/src/hooks/useLinks.ts` with 9 TanStack Query hooks for internal linking
+- Query hooks: `usePlanStatus` (2s polling), `useLinkMap`, `usePageLinks`, `useAnchorSuggestions`
+- Mutation hooks: `usePlanLinks`, `useAddLink`, `useRemoveLink`, `useEditLink`
+- Query keys factory `linkKeys` with `allForProject` prefix for broad invalidation on mutations
+- Polling pattern: `refetchInterval` callback checks `data?.status === 'planning'` → returns 2000ms, otherwise `false`
+- **Files changed:**
+  - `frontend/src/hooks/useLinks.ts` (new)
+- **Learnings:**
+  - For mutations that affect multiple query keys (e.g., addLink invalidates both link map and page links), use a shared prefix key like `['projects', projectId, 'links']` with `invalidateQueries` — TanStack Query matches all queries whose key starts with the provided prefix
+  - The polling pattern for plan status mirrors `useContentGenerationStatus` but with 2s interval (vs 3s for content gen) per the spec
+  - Pre-existing TS error in `GenerationProgress.test.tsx:425` (index out of bounds on tuple) — unrelated to links
+---

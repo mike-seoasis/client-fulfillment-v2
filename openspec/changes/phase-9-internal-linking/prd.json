@@ -529,11 +529,12 @@
         "useAnchorSuggestions(projectId, targetPageId): useQuery fetching anchor suggestions"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "S9-025"
       ],
-      "notes": "Reference frontend/src/hooks/useClusters.ts and frontend/src/hooks/useContentGeneration.ts for TanStack Query patterns. The polling pattern for plan status is the same as content generation status polling."
+      "notes": "Reference frontend/src/hooks/useClusters.ts and frontend/src/hooks/useContentGeneration.ts for TanStack Query patterns. The polling pattern for plan status is the same as content generation status polling.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S9-027",
@@ -705,6 +706,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-10T19:00:38.358Z"
+    "updatedAt": "2026-02-10T19:01:54.010Z"
   }
 }
