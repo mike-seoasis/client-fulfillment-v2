@@ -1,4 +1,5 @@
-"""Link planning service for building link graphs and selecting targets.
+"""Link planning service for building link graphs, selecting targets, and orchestrating
+the full link planning pipeline.
 
 SiloLinkPlanner constructs two types of graphs:
 - Cluster graph: parent/child + sibling adjacency from ClusterPage records
@@ -11,23 +12,32 @@ AnchorTextSelector handles anchor text diversity:
 - Gathers candidates from primary keywords, POP variations, and LLM phrases
 - Selects anchors with diversity tracking to avoid repetition
 - Targets ~50-60% partial_match, ~10% exact_match, ~30% natural distribution
+
+Pipeline orchestrator (run_link_planning_pipeline) runs the 4-step sequence:
+1. Build link graph
+2. Select targets + anchor text
+3. Inject links (rule-based + LLM fallback)
+4. Validate all rules
 """
 
 import json
 from itertools import combinations
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
+from app.core.database import db_manager
 from app.core.logging import get_logger
 from app.integrations.claude import ClaudeClient, get_api_key
 from app.models.content_brief import ContentBrief
 from app.models.crawled_page import CrawledPage
+from app.models.internal_link import InternalLink
 from app.models.keyword_cluster import ClusterPage
 from app.models.page_content import PageContent
 from app.models.page_keywords import PageKeywords
+from app.services.link_injection import LinkInjector, LinkValidator
 
 logger = get_logger(__name__)
 
@@ -686,3 +696,485 @@ class AnchorTextSelector:
             "anchor_type": best_candidate["anchor_type"],
             "score": best_score,
         }
+
+
+# ---------------------------------------------------------------------------
+# Pipeline progress tracking
+# ---------------------------------------------------------------------------
+
+# Module-level dict for progress polling, keyed by (project_id, scope, cluster_id).
+# Follows the same pattern as content_generation.py's background task state.
+_pipeline_progress: dict[tuple[str, str, str | None], dict[str, Any]] = {}
+
+
+def get_pipeline_progress(
+    project_id: str,
+    scope: str,
+    cluster_id: str | None = None,
+) -> dict[str, Any] | None:
+    """Return the current pipeline progress for a given key, or None if not running."""
+    return _pipeline_progress.get((project_id, scope, cluster_id))
+
+
+# ---------------------------------------------------------------------------
+# Pipeline orchestrator
+# ---------------------------------------------------------------------------
+
+
+async def run_link_planning_pipeline(
+    project_id: str,
+    scope: Literal["onboarding", "cluster"],
+    cluster_id: str | None,
+    db: AsyncSession,
+) -> dict[str, Any]:
+    """Run the full link planning pipeline: graph → targets → inject → validate.
+
+    Designed to be called from a FastAPI BackgroundTask. Tracks progress in the
+    module-level ``_pipeline_progress`` dict so the frontend can poll status.
+
+    Args:
+        project_id: UUID of the project.
+        scope: 'onboarding' or 'cluster'.
+        cluster_id: Required when scope='cluster', None for onboarding.
+        db: Async database session (used for read-only graph building; the
+            pipeline creates its own sessions for writes to enable rollback).
+
+    Returns:
+        Dict with pipeline result summary.
+    """
+    progress_key = (project_id, scope, cluster_id)
+    progress: dict[str, Any] = {
+        "current_step": 1,
+        "step_label": "Building link graph",
+        "pages_processed": 0,
+        "total_pages": 0,
+        "status": "planning",
+    }
+    _pipeline_progress[progress_key] = progress
+
+    planner = SiloLinkPlanner()
+    injector = LinkInjector()
+    validator = LinkValidator()
+    anchor_selector = AnchorTextSelector()
+
+    try:
+        # ------------------------------------------------------------------
+        # Step 1: Build link graph
+        # ------------------------------------------------------------------
+        progress["current_step"] = 1
+        progress["step_label"] = "Building link graph"
+
+        if scope == "cluster":
+            if cluster_id is None:
+                raise ValueError("cluster_id is required for cluster scope")
+            graph = await planner.build_cluster_graph(cluster_id, db)
+        else:
+            graph = await planner.build_onboarding_graph(project_id, db)
+
+        pages = graph["pages"]
+        progress["total_pages"] = len(pages)
+
+        if not pages:
+            progress["status"] = "complete"
+            logger.info(
+                "Link planning pipeline: no pages found",
+                extra={"project_id": project_id, "scope": scope},
+            )
+            return {"status": "complete", "total_pages": 0, "total_links": 0}
+
+        logger.info(
+            "Step 1 complete: graph built",
+            extra={
+                "project_id": project_id,
+                "scope": scope,
+                "page_count": len(pages),
+                "edge_count": len(graph["edges"]),
+            },
+        )
+
+        # ------------------------------------------------------------------
+        # Step 2: Select targets + anchor text for all pages
+        # ------------------------------------------------------------------
+        progress["current_step"] = 2
+        progress["step_label"] = "Selecting targets and anchor text"
+
+        # Load word counts to compute budgets
+        page_ids = _extract_page_ids(pages, scope)
+        word_counts = await _load_word_counts(db, page_ids)
+        budgets = {pid: calculate_budget(wc) for pid, wc in word_counts.items()}
+
+        # Select targets per scope
+        if scope == "cluster":
+            targets_map = select_targets_cluster(graph, budgets)
+        else:
+            targets_map = select_targets_onboarding(graph, budgets)
+
+        # Gather anchor candidates and generate natural phrases
+        # Build keyword map for LLM natural phrase generation
+        keyword_map: dict[str, str] = {}
+        for page in pages:
+            pid = _page_id_for_scope(page, scope)
+            kw = page.get("keyword", "")
+            if kw:
+                keyword_map[pid] = kw
+
+        natural_phrases = await anchor_selector.generate_natural_phrases(keyword_map)
+
+        # Select anchors for each page's targets
+        usage_tracker: dict[str, dict[str, int]] = {}
+        # page_link_plans: list of (source_page_id, target_info_with_anchor)
+        page_link_plans: dict[str, list[dict[str, Any]]] = {}
+
+        for page in pages:
+            source_id = _page_id_for_scope(page, scope)
+            page_targets = targets_map.get(
+                page.get("page_id", source_id), []
+            )
+            planned_links: list[dict[str, Any]] = []
+
+            # Load source page content for context_fit scoring
+            source_content = await _load_page_content_text(db, source_id)
+
+            for target in page_targets:
+                target_id = _page_id_for_scope(target, scope)
+
+                # Gather candidates from DB
+                candidates = await anchor_selector.gather_candidates(target_id, db)
+
+                # Append natural phrase candidates if available
+                if target_id in natural_phrases:
+                    candidates.extend(natural_phrases[target_id])
+
+                anchor_result = anchor_selector.select_anchor(
+                    candidates, source_content, target_id, usage_tracker
+                )
+
+                if anchor_result is None:
+                    # Fallback: use the target keyword as exact_match
+                    anchor_result = {
+                        "anchor_text": target.get("keyword", "link"),
+                        "anchor_type": "exact_match",
+                        "score": 0.0,
+                    }
+
+                planned_links.append(
+                    {
+                        **target,
+                        "anchor_text": anchor_result["anchor_text"],
+                        "anchor_type": anchor_result["anchor_type"],
+                        "target_page_id": target_id,
+                    }
+                )
+
+            page_link_plans[source_id] = planned_links
+            progress["pages_processed"] = len(page_link_plans)
+
+        logger.info(
+            "Step 2 complete: targets and anchors selected",
+            extra={
+                "project_id": project_id,
+                "total_planned_links": sum(
+                    len(v) for v in page_link_plans.values()
+                ),
+            },
+        )
+
+        # ------------------------------------------------------------------
+        # Step 3: Inject links into content
+        # ------------------------------------------------------------------
+        progress["current_step"] = 3
+        progress["step_label"] = "Injecting links into content"
+        progress["pages_processed"] = 0
+
+        # Collect all injection results before persisting anything.
+        # Each entry: (source_id, target_id, anchor_text, anchor_type,
+        #              placement_method, position, is_mandatory, updated_html)
+        injection_results: list[dict[str, Any]] = []
+        # Track updated HTML per source page for validation + DB write
+        pages_html: dict[str, str] = {}
+
+        pages_processed = 0
+        for source_id, planned_links in page_link_plans.items():
+            try:
+                html = await _load_bottom_description(db, source_id)
+                if not html:
+                    logger.warning(
+                        "No bottom_description for page, skipping injection",
+                        extra={"page_id": source_id},
+                    )
+                    pages_processed += 1
+                    progress["pages_processed"] = pages_processed
+                    continue
+
+                current_html = html
+                for link_plan in planned_links:
+                    anchor_text = link_plan["anchor_text"]
+                    target_url = link_plan.get("url", "")
+                    target_id = link_plan["target_page_id"]
+                    is_mandatory = link_plan.get("is_mandatory", False)
+
+                    # Try rule-based first
+                    modified_html, p_idx = injector.inject_rule_based(
+                        current_html, anchor_text, target_url
+                    )
+
+                    if p_idx is not None:
+                        current_html = modified_html
+                        injection_results.append(
+                            {
+                                "source_page_id": source_id,
+                                "target_page_id": target_id,
+                                "anchor_text": anchor_text,
+                                "anchor_type": link_plan["anchor_type"],
+                                "placement_method": "rule_based",
+                                "position_in_content": p_idx,
+                                "is_mandatory": is_mandatory,
+                            }
+                        )
+                    else:
+                        # LLM fallback
+                        target_keyword = link_plan.get("keyword", "")
+                        modified_html, p_idx = await injector.inject_llm_fallback(
+                            current_html,
+                            anchor_text,
+                            target_url,
+                            target_keyword,
+                            mandatory_parent=is_mandatory,
+                        )
+                        if p_idx is not None:
+                            current_html = modified_html
+                            injection_results.append(
+                                {
+                                    "source_page_id": source_id,
+                                    "target_page_id": target_id,
+                                    "anchor_text": anchor_text,
+                                    "anchor_type": link_plan["anchor_type"],
+                                    "placement_method": "llm_fallback",
+                                    "position_in_content": p_idx,
+                                    "is_mandatory": is_mandatory,
+                                }
+                            )
+                        else:
+                            logger.warning(
+                                "Link injection failed (both rule-based and LLM)",
+                                extra={
+                                    "source_page_id": source_id,
+                                    "target_page_id": target_id,
+                                    "anchor_text": anchor_text,
+                                },
+                            )
+
+                pages_html[source_id] = current_html
+
+            except Exception:
+                logger.error(
+                    "Injection failed for page, skipping",
+                    extra={"page_id": source_id},
+                    exc_info=True,
+                )
+
+            pages_processed += 1
+            progress["pages_processed"] = pages_processed
+
+        logger.info(
+            "Step 3 complete: links injected",
+            extra={
+                "project_id": project_id,
+                "injected_count": len(injection_results),
+                "pages_with_html": len(pages_html),
+            },
+        )
+
+        # ------------------------------------------------------------------
+        # Step 4: Validate all rules
+        # ------------------------------------------------------------------
+        progress["current_step"] = 4
+        progress["step_label"] = "Validating link rules"
+        progress["pages_processed"] = 0
+
+        # Build cluster_data for cluster scope validation
+        cluster_data: dict[str, Any] | None = None
+        if scope == "cluster":
+            parent_url = ""
+            for p in pages:
+                if p.get("role") == "parent" and p.get("url"):
+                    parent_url = p["url"]
+                    break
+            cluster_data = {"pages": pages, "parent_url": parent_url}
+
+        # Create temporary InternalLink-like objects for validation
+        # (validator expects objects with .source_page_id, .target_page_id, etc.)
+        temp_links = [_LinkProxy({**r, "scope": scope}) for r in injection_results]
+
+        validation = validator.validate_links(
+            temp_links, pages_html, scope, cluster_data
+        )
+
+        logger.info(
+            "Step 4 complete: validation done",
+            extra={
+                "project_id": project_id,
+                "passed": validation["passed"],
+            },
+        )
+
+        # ------------------------------------------------------------------
+        # Persist: Create InternalLink rows + update PageContent
+        # ------------------------------------------------------------------
+        async with db_manager.session_factory() as write_db:
+            # Create InternalLink rows
+            created_links: list[InternalLink] = []
+            for result_dict in injection_results:
+                # Determine status based on validation
+                source_id = result_dict["source_page_id"]
+                # Find validation status for this link's source page
+                link_status = "injected"
+                if validation["passed"]:
+                    link_status = "verified"
+                else:
+                    # Check if this specific page had failures
+                    for page_result in validation.get("results", []):
+                        if page_result["page_id"] == source_id:
+                            failing = [
+                                r["rule"]
+                                for r in page_result["rules"]
+                                if not r["passed"]
+                            ]
+                            if failing:
+                                link_status = f"failed:{','.join(failing)}"
+                            else:
+                                link_status = "verified"
+                            break
+
+                link = InternalLink(
+                    source_page_id=result_dict["source_page_id"],
+                    target_page_id=result_dict["target_page_id"],
+                    project_id=project_id,
+                    cluster_id=cluster_id,
+                    scope=scope,
+                    anchor_text=result_dict["anchor_text"],
+                    anchor_type=result_dict["anchor_type"],
+                    placement_method=result_dict["placement_method"],
+                    position_in_content=result_dict["position_in_content"],
+                    is_mandatory=result_dict["is_mandatory"],
+                    status=link_status,
+                )
+                write_db.add(link)
+                created_links.append(link)
+
+            # Update PageContent.bottom_description with injected HTML
+            for page_id, updated_html in pages_html.items():
+                stmt = select(PageContent).where(
+                    PageContent.crawled_page_id == page_id
+                )
+                pc_result = await write_db.execute(stmt)
+                pc = pc_result.scalar_one_or_none()
+                if pc is not None:
+                    pc.bottom_description = updated_html
+
+            await write_db.commit()
+
+            logger.info(
+                "Pipeline persist complete",
+                extra={
+                    "project_id": project_id,
+                    "links_created": len(created_links),
+                    "pages_updated": len(pages_html),
+                },
+            )
+
+        progress["status"] = "complete"
+        progress["pages_processed"] = len(pages)
+
+        return {
+            "status": "complete",
+            "total_pages": len(pages),
+            "total_links": len(injection_results),
+            "validation_passed": validation["passed"],
+            "validation_results": validation["results"],
+        }
+
+    except Exception as exc:
+        progress["status"] = "failed"
+        progress["step_label"] = f"Failed: {exc}"
+        logger.error(
+            "Link planning pipeline failed",
+            extra={"project_id": project_id, "scope": scope, "error": str(exc)},
+            exc_info=True,
+        )
+        raise
+
+
+# ---------------------------------------------------------------------------
+# Pipeline helpers
+# ---------------------------------------------------------------------------
+
+
+class _LinkProxy:
+    """Lightweight proxy that mimics InternalLink attributes for validation."""
+
+    def __init__(self, data: dict[str, Any]) -> None:
+        self.id = data.get("id", "temp")
+        self.source_page_id: str = data["source_page_id"]
+        self.target_page_id: str = data["target_page_id"]
+        self.anchor_text: str = data["anchor_text"]
+        self.anchor_type: str = data["anchor_type"]
+        self.scope: str = data.get("scope", "")
+        self.status: str = "injected"
+
+
+def _extract_page_ids(pages: list[dict[str, Any]], scope: str) -> list[str]:
+    """Extract the correct page ID field based on scope.
+
+    For cluster scope, pages have both ``page_id`` (ClusterPage.id) and
+    ``crawled_page_id`` (CrawledPage.id). We need the crawled_page_id for
+    DB lookups on PageContent / PageKeywords.
+    """
+    ids: list[str] = []
+    for p in pages:
+        pid = p.get("crawled_page_id") or p.get("page_id", "")
+        if pid:
+            ids.append(pid)
+    return ids
+
+
+def _page_id_for_scope(page: dict[str, Any], scope: str) -> str:
+    """Get the canonical page ID (crawled_page_id) from a graph page dict."""
+    crawled: str = page.get("crawled_page_id") or page.get("page_id", "")
+    return crawled
+
+
+async def _load_word_counts(
+    db: AsyncSession,
+    page_ids: list[str],
+) -> dict[str, int]:
+    """Load word counts from PageContent for a list of page IDs."""
+    if not page_ids:
+        return {}
+
+    stmt = select(PageContent).where(PageContent.crawled_page_id.in_(page_ids))
+    result = await db.execute(stmt)
+    word_counts: dict[str, int] = {}
+    for pc in result.scalars().all():
+        word_counts[pc.crawled_page_id] = pc.word_count or 0
+    return word_counts
+
+
+async def _load_page_content_text(db: AsyncSession, page_id: str) -> str:
+    """Load the bottom_description text for a page (used for anchor context_fit)."""
+    stmt = select(PageContent).where(PageContent.crawled_page_id == page_id)
+    result = await db.execute(stmt)
+    pc = result.scalar_one_or_none()
+    if pc and pc.bottom_description:
+        return pc.bottom_description
+    return ""
+
+
+async def _load_bottom_description(db: AsyncSession, page_id: str) -> str:
+    """Load bottom_description HTML for a page."""
+    stmt = select(PageContent).where(PageContent.crawled_page_id == page_id)
+    result = await db.execute(stmt)
+    pc = result.scalar_one_or_none()
+    if pc and pc.bottom_description:
+        return pc.bottom_description
+    return ""

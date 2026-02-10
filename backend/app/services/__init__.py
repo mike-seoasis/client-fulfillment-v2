@@ -59,6 +59,8 @@ from app.services.link_planning import (
     AnchorTextSelector,
     SiloLinkPlanner,
     calculate_budget,
+    get_pipeline_progress,
+    run_link_planning_pipeline,
     select_targets_cluster,
     select_targets_onboarding,
 )
@@ -118,6 +120,8 @@ __all__ = [
     "SiloLinkPlanner",
     "strip_internal_links",
     "calculate_budget",
+    "get_pipeline_progress",
+    "run_link_planning_pipeline",
     "select_targets_cluster",
     "select_targets_onboarding",
     "TaxonomyLabel",

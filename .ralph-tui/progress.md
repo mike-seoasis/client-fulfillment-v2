@@ -217,3 +217,24 @@ after each iteration and it's included in prompts for context.
   - `cluster_data` uses `crawled_page_id` as the primary identifier for pages within a cluster (maps to InternalLink's source/target_page_id), with `page_id` as fallback (ClusterPage.id)
   - The `budget_check` rule intentionally always passes (WARN semantics) — it reports outside-range counts but never fails validation
 ---
+
+## 2026-02-10 - S9-013
+- Implemented `run_link_planning_pipeline(project_id, scope, cluster_id, db)` in `backend/app/services/link_planning.py`
+- 4-step pipeline: build graph → select targets + anchor text → inject links (rule-based + LLM fallback) → validate all rules
+- Module-level `_pipeline_progress` dict keyed by `(project_id, scope, cluster_id)` for frontend polling
+- `get_pipeline_progress()` helper function for reading progress state
+- Per-page try/except in injection step so one page failing doesn't kill the pipeline
+- `_LinkProxy` class mimics InternalLink attributes for validator (avoids DB writes before validation passes)
+- InternalLink rows created after successful injection with status='injected' then updated based on validation results
+- PageContent.bottom_description updated with injected HTML using separate write session via `db_manager.session_factory()`
+- Helper functions: `_extract_page_ids`, `_page_id_for_scope`, `_load_word_counts`, `_load_page_content_text`, `_load_bottom_description`
+- **Files changed:**
+  - `backend/app/services/link_planning.py` (added pipeline orchestrator + progress dict + helpers)
+  - `backend/app/services/__init__.py` (added `run_link_planning_pipeline`, `get_pipeline_progress` imports + __all__ entries)
+- **Learnings:**
+  - `dict.get()` on `dict[str, Any]` returns `Any` — mypy `no-any-return` requires assigning to a typed local variable before returning
+  - The pipeline follows the same background task pattern as `content_generation.py` — module-level dict for progress, `db_manager.session_factory()` for write sessions
+  - `_LinkProxy` pattern avoids creating real DB rows before validation, enabling clean rollback (no partial state) if the pipeline fails
+  - Cluster graph pages have both `page_id` (ClusterPage.id) and `crawled_page_id` (CrawledPage.id) — always use `crawled_page_id` for PageContent/InternalLink lookups
+  - `selectinload` import wasn't needed (pipeline uses separate queries, not eager loading) — ruff caught the unused import
+---
