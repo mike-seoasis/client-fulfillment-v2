@@ -444,3 +444,17 @@ after each iteration and it's included in prompts for context.
   - `usePlanStatus` with `enabled: true` on page load catches in-progress planning sessions (user navigates away and back)
   - `onClick={(e) => e.preventDefault()}` on the link status badge wrapper prevents the parent `<Link>` from capturing the click, allowing the badge's own `<Link>` to navigate to the link planning page
 ---
+
+## 2026-02-10 - S9-015
+- Created `backend/tests/test_link_planning.py` with 13 unit tests across 3 test classes for link graph construction
+- `TestBuildClusterGraph` (4 tests): parent + 5 children produces 5 parent_child + 10 sibling edges, single page returns no edges, empty cluster returns empty graph, edges use ClusterPage IDs
+- `TestBuildOnboardingGraph` (4 tests): overlapping labels produce edges with correct weights, 1-shared-label pairs below threshold have no edges, pages with no/empty labels have no edges, page fields include labels and is_priority
+- `TestGraphFiltering` (5 tests): onboarding excludes incomplete content, unapproved keywords, pages without content, cluster-source pages; cluster graph only includes pages from the specified cluster
+- **Files changed:**
+  - `backend/tests/test_link_planning.py` (new)
+- **Learnings:**
+  - Tests use real SQLite in-memory DB via `db_session` fixture (not mocks) — helper functions that add models to the session + `await db_session.flush()` is the established pattern
+  - `tuple(sorted([a, b]))` returns `tuple[str, ...]` not `tuple[str, str]` per mypy — use `tuple[str, ...]` for dict key type annotation when building edge lookup maps
+  - Ruff import sorter requires stdlib imports (`uuid4`) before third-party (`pytest`) — auto-fixable with `--fix`
+  - No need to create PageContent/PageKeywords for cluster graph tests — `build_cluster_graph` queries ClusterPage directly, not CrawledPage joins
+---
