@@ -31,3 +31,20 @@ after each iteration and it's included in prompts for context.
   - Enums defined as `str, Enum` for JSON serialization compatibility
   - Virtual env is at `backend/.venv/bin/python`
 ---
+
+## 2026-02-10 - S9-002
+- Created `LinkPlanSnapshot` model in `backend/app/models/internal_link.py` (same file as InternalLink)
+- Fields: id (UUID PK), project_id (FK CASCADE), cluster_id (FK SET NULL nullable), scope (String(20)), plan_data (JSONB), total_links (Integer), created_at (DateTime timezone)
+- Composite index on (project_id, scope)
+- Relationship to Project and KeywordCluster
+- Created Alembic migration `0025_create_link_plan_snapshots_table.py`
+- Registered `LinkPlanSnapshot` in `backend/app/models/__init__.py`
+- **Files changed:**
+  - `backend/app/models/internal_link.py` (added LinkPlanSnapshot class, added JSONB import)
+  - `backend/app/models/__init__.py` (added LinkPlanSnapshot import + __all__ entry)
+  - `backend/alembic/versions/0025_create_link_plan_snapshots_table.py` (new)
+- **Learnings:**
+  - JSONB column uses `from sqlalchemy.dialects.postgresql import JSONB` alongside `UUID`
+  - Python type hint for JSONB column is `Mapped[dict]`
+  - Multiple models in the same file sharing FKs to the same tables (e.g. both InternalLink and LinkPlanSnapshot referencing keyword_clusters) works fine without `foreign_keys=` disambiguation since each model only has one FK to that table
+---

@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -196,4 +196,81 @@ class InternalLink(Base):
         return (
             f"<InternalLink(id={self.id!r}, source={self.source_page_id!r}, "
             f"target={self.target_page_id!r}, scope={self.scope!r})>"
+        )
+
+
+class LinkPlanSnapshot(Base):
+    """Snapshot of a link plan for audit and rollback.
+
+    Stores the full plan including pre-injection content per page,
+    enabling rollback by restoring pre-injection content.
+
+    plan_data JSONB structure:
+    {
+        pages: [{page_id, pre_injection_content, links: [{target_id, anchor_text, anchor_type}]}],
+        metadata: {scope, cluster_id, total_pages}
+    }
+    """
+
+    __tablename__ = "link_plan_snapshots"
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        primary_key=True,
+        default=lambda: str(uuid4()),
+        server_default=text("gen_random_uuid()"),
+    )
+
+    project_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    cluster_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("keyword_clusters.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    scope: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+    )
+
+    plan_data: Mapped[dict] = mapped_column(
+        JSONB,
+        nullable=False,
+    )
+
+    total_links: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        server_default=text("now()"),
+    )
+
+    # Composite index for project_id + scope queries
+    __table_args__ = (
+        Index("ix_link_plan_snapshots_project_id_scope", "project_id", "scope"),
+    )
+
+    # Relationships
+    project: Mapped["Project"] = relationship(
+        "Project",
+    )
+
+    cluster: Mapped["KeywordCluster | None"] = relationship(
+        "KeywordCluster",
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<LinkPlanSnapshot(id={self.id!r}, project_id={self.project_id!r}, "
+            f"scope={self.scope!r}, total_links={self.total_links!r})>"
         )
