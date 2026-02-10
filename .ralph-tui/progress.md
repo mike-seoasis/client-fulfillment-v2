@@ -355,3 +355,21 @@ after each iteration and it's included in prompts for context.
   - The polling pattern for plan status mirrors `useContentGenerationStatus` but with 2s interval (vs 3s for content gen) per the spec
   - Pre-existing TS error in `GenerationProgress.test.tsx:425` (index out of bounds on tuple) — unrelated to links
 ---
+
+## 2026-02-10 - S9-027
+- Created link planning trigger page for onboarding scope at `frontend/src/app/projects/[id]/links/page.tsx`
+- Created link planning trigger page for cluster scope at `frontend/src/app/projects/[id]/clusters/[clusterId]/links/page.tsx`
+- Both pages share the same structure: prerequisites checklist, Plan & Inject Links button, 4-step progress indicator with polling, auto-redirect to link map on completion, scope-specific link rules
+- Prerequisites derived from content generation status: all keywords approved, all content generated (N/N), quality checks passed
+- Progress polling uses `usePlanStatus` hook (2s interval) with step icons (check/spinner/circle) and page counts for steps 2-3
+- Cluster variant filters content gen pages by `clusterCrawledPageIds` (same pattern as cluster content generation page)
+- Auto-redirect after 1.5s delay to `/links/map` (onboarding) or `/clusters/{clusterId}/links/map` (cluster) — link map pages are future stories S9-028/S9-029
+- **Files changed:**
+  - `frontend/src/app/projects/[id]/links/page.tsx` (new)
+  - `frontend/src/app/projects/[id]/clusters/[clusterId]/links/page.tsx` (new)
+- **Learnings:**
+  - Link map routes are at `/links/map` (onboarding, S9-029) and `/clusters/{clusterId}/links/map` (cluster, S9-028) — separate from the planning trigger pages
+  - SVG icon components are duplicated per page (no shared icon library) — consistent with the codebase pattern in content generation pages
+  - The `usePlanStatus` hook accepts an `enabled` param — set to `true` to start polling immediately on page load (catches in-progress plans if user navigates away and back)
+  - Progress bar calculation: `((currentStep - 1) / 4 * 100) + (pagesProcessed / totalPages * 25)` gives smooth progress across 4 equal-weight steps
+---
