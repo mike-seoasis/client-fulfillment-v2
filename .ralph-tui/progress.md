@@ -119,3 +119,21 @@ after each iteration and it's included in prompts for context.
   - The diversity_penalty formula `max(0, (inbound - avg_inbound) * 0.5)` only penalizes pages above average, preventing any single page from hogging all links
   - `replace_all=true` in Edit tool matches literal text — if formatting differs between occurrences, some won't match
 ---
+
+## 2026-02-10 - S9-008
+- Created `AnchorTextSelector` class in `backend/app/services/link_planning.py`
+- `gather_candidates(target_page_id, db)`: Returns candidates from 3 sources — primary keyword (exact_match) from PageKeywords, POP keyword_targets variations (partial_match) from ContentBrief, with secondary_keywords fallback when POP data unavailable
+- `generate_natural_phrases(keywords)`: Batches all target keywords into a single Claude Haiku call, parses JSON response into natural-type candidates
+- `select_anchor(candidates, source_content, target_page_id, usage_tracker)`: Scores by diversity_bonus (3 - use_count), context_fit (+2 if anchor in source), type_weight (1.5 partial, 1.0 natural, 0.3 exact). Rejects anchors used >= 3 times per target.
+- Usage tracker is `dict[target_page_id, dict[anchor_text, count]]`, mutated in-place by select_anchor
+- Constants: `ANCHOR_LLM_MODEL = "claude-haiku-4-5-20251001"`, `MAX_ANCHOR_REUSE = 3`
+- Registered `AnchorTextSelector`, `ANCHOR_LLM_MODEL`, `MAX_ANCHOR_REUSE` in `backend/app/services/__init__.py`
+- **Files changed:**
+  - `backend/app/services/link_planning.py` (added AnchorTextSelector class + constants)
+  - `backend/app/services/__init__.py` (added 3 new exports)
+- **Learnings:**
+  - ContentBrief.keyword_targets is a JSONB array of dicts with `keyword` key — useful for POP variations
+  - ClaudeClient from `app.integrations.claude` uses httpx directly (no SDK), init with `ClaudeClient(api_key=get_api_key())` for background contexts
+  - `select_anchor` type_weights approximate the 50-60% partial / 10% exact / 30% natural distribution via scoring bias rather than hard quotas
+  - Must close ClaudeClient instances created outside the global lifecycle (`await client.close()` in finally block)
+---

@@ -42,7 +42,10 @@ from app.services.label_taxonomy import (
     validate_page_labels,
 )
 from app.services.link_planning import (
+    ANCHOR_LLM_MODEL,
     LABEL_OVERLAP_THRESHOLD,
+    MAX_ANCHOR_REUSE,
+    AnchorTextSelector,
     SiloLinkPlanner,
     calculate_budget,
     select_targets_cluster,
@@ -59,10 +62,13 @@ from app.services.primary_keyword import (
 from app.services.project import ProjectService
 
 __all__ = [
+    "ANCHOR_LLM_MODEL",
+    "AnchorTextSelector",
     "BrandConfigService",
     "ContentBriefResult",
     "ContentWritingResult",
     "CrawlingService",
+    "MAX_ANCHOR_REUSE",
     "QualityIssue",
     "QualityResult",
     "build_content_prompt",
