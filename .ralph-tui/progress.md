@@ -510,3 +510,23 @@ after each iteration and it's included in prompts for context.
   - Real HTML snippet fixtures at module level (not in conftest) keep test file self-contained and make the HTML structure immediately visible alongside assertions
   - `AsyncMock()` for the ClaudeClient mock — both `complete` and `close` need to be `AsyncMock` since they're awaited
 ---
+
+## 2026-02-10 - S9-019
+- Created `backend/tests/test_link_validation.py` with 36 unit tests across 10 test classes for all 8 LinkValidator rules
+- `TestBudgetCheck` (4 tests): within range passes with no WARN, below/above range WARN but still pass, never fails overall
+- `TestSiloIntegrity` (4 tests): same scope passes, different scope fails, cluster target outside cluster fails, cluster target inside passes
+- `TestNoSelfLinks` (3 tests): different source/target passes, self-link fails, self-link fails overall validation
+- `TestNoDuplicateLinks` (3 tests): unique targets pass, duplicate target fails with "2x" message, same target from different sources passes
+- `TestDensity` (5 tests): good density passes, 3 links/paragraph fails, links too close fails, empty HTML passes, 2 links far apart passes
+- `TestAnchorDiversity` (4 tests): within limit (3x) passes, exceeds limit (4x) fails, different anchors same target passes, case-insensitive matching groups variants
+- `TestFirstLink` (5 tests): first link to parent passes, first link to non-parent fails, no links fails, parent page skips check, onboarding scope has no first_link rule
+- `TestDirection` (6 tests): parent→child passes, parent→non-child fails, child→parent passes, child→sibling passes, child→outsider fails, onboarding scope has no direction rule
+- `TestLinkStatusUpdate` (2 tests): all pass sets 'verified', failure sets 'failed:rule_name'
+- **Files changed:**
+  - `backend/tests/test_link_validation.py` (new)
+- **Learnings:**
+  - `SimpleNamespace` is a lighter alternative to dataclass for link proxies in tests — just pass keyword args and attributes are accessible via dot notation
+  - LinkValidator rules are all pure functions (no DB, no async) — tests use synthetic link proxies and HTML fixtures, no mocking needed
+  - Ruff import sorter requires `from types import SimpleNamespace` (stdlib) before `import pytest` (third-party) — auto-fixable with `--fix`
+  - `dict` return type without type params triggers mypy `type-arg` — use `dict[str, Any]` even in test helpers
+---
