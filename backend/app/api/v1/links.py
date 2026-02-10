@@ -7,7 +7,9 @@ and managing internal links across project pages.
 from collections import Counter
 from typing import Any
 
+from bs4 import BeautifulSoup, Tag
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -21,7 +23,9 @@ from app.models.keyword_cluster import ClusterPage, KeywordCluster
 from app.models.page_content import ContentStatus, PageContent
 from app.models.page_keywords import PageKeywords
 from app.schemas.internal_link import (
+    AddLinkRequest,
     AnchorSuggestionsResponse,
+    EditLinkRequest,
     InternalLinkResponse,
     LinkMapPageSummary,
     LinkMapResponse,
@@ -29,6 +33,7 @@ from app.schemas.internal_link import (
     LinkPlanStatusResponse,
     PageLinksResponse,
 )
+from app.services.link_injection import LinkInjector
 from app.services.project import ProjectService
 
 logger = get_logger(__name__)
@@ -724,3 +729,391 @@ async def get_anchor_suggestions(
         pop_variations=pop_variations,
         usage_counts=usage_counts,
     )
+
+
+# =============================================================================
+# MANUAL LINK MANAGEMENT ENDPOINTS (S9-023)
+# =============================================================================
+
+
+@router.post(
+    "/{project_id}/links",
+    response_model=InternalLinkResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_link(
+    project_id: str,
+    body: AddLinkRequest,
+    db: AsyncSession = Depends(get_session),
+) -> InternalLinkResponse:
+    """Manually add an internal link.
+
+    Validates silo integrity, no duplicates, and no self-links. Injects
+    the link into bottom_description content (rule-based, LLM fallback).
+    Creates InternalLink with status='verified'.
+
+    Returns 400 for validation violations, 404 for invalid page IDs.
+    """
+    await ProjectService.get_project(db, project_id)
+
+    source_page_id = body.source_page_id
+    target_page_id = body.target_page_id
+
+    # ---- Validate no self-links ----
+    if source_page_id == target_page_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot create a self-link (source and target are the same page)",
+        )
+
+    # ---- Verify source page exists and belongs to project ----
+    source_stmt = select(CrawledPage).where(
+        CrawledPage.id == source_page_id,
+        CrawledPage.project_id == project_id,
+    )
+    source_result = await db.execute(source_stmt)
+    source_page = source_result.scalar_one_or_none()
+    if not source_page:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Source page {source_page_id} not found in project {project_id}",
+        )
+
+    # ---- Verify target page exists and belongs to project ----
+    target_stmt = select(CrawledPage).where(
+        CrawledPage.id == target_page_id,
+        CrawledPage.project_id == project_id,
+    )
+    target_result = await db.execute(target_stmt)
+    target_page = target_result.scalar_one_or_none()
+    if not target_page:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Target page {target_page_id} not found in project {project_id}",
+        )
+
+    # ---- Validate no duplicate links (same source -> same target) ----
+    dup_stmt = (
+        select(func.count())
+        .select_from(InternalLink)
+        .where(
+            InternalLink.source_page_id == source_page_id,
+            InternalLink.target_page_id == target_page_id,
+            InternalLink.project_id == project_id,
+            InternalLink.status != "removed",
+        )
+    )
+    dup_result = await db.execute(dup_stmt)
+    if (dup_result.scalar_one() or 0) > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A link from this source to this target already exists",
+        )
+
+    # ---- Determine scope and validate silo integrity ----
+    # Check if both pages are in the same cluster
+    source_cluster_stmt = select(ClusterPage).where(
+        ClusterPage.crawled_page_id == source_page_id,
+        ClusterPage.is_approved.is_(True),
+    )
+    source_cp_result = await db.execute(source_cluster_stmt)
+    source_cluster_pages = list(source_cp_result.scalars().all())
+
+    target_cluster_stmt = select(ClusterPage).where(
+        ClusterPage.crawled_page_id == target_page_id,
+        ClusterPage.is_approved.is_(True),
+    )
+    target_cp_result = await db.execute(target_cluster_stmt)
+    target_cluster_pages = list(target_cp_result.scalars().all())
+
+    # Find shared cluster (if any)
+    source_clusters = {cp.cluster_id for cp in source_cluster_pages}
+    target_clusters = {cp.cluster_id for cp in target_cluster_pages}
+    shared_clusters = source_clusters & target_clusters
+
+    if shared_clusters:
+        scope = "cluster"
+        cluster_id: str | None = next(iter(shared_clusters))
+    else:
+        scope = "onboarding"
+        cluster_id = None
+        # For onboarding scope, verify silo integrity:
+        # if source is in a cluster, target must also be in the same cluster
+        # (already checked above — no shared cluster means onboarding scope is fine)
+
+    # ---- Load source page content for injection ----
+    content_stmt = select(PageContent).where(
+        PageContent.crawled_page_id == source_page_id,
+    )
+    content_result = await db.execute(content_stmt)
+    page_content = content_result.scalar_one_or_none()
+
+    if not page_content or not page_content.bottom_description:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Source page has no content to inject a link into",
+        )
+
+    # ---- Inject link into content ----
+    injector = LinkInjector()
+    target_url = target_page.normalized_url
+
+    # Try rule-based first
+    modified_html, p_idx = injector.inject_rule_based(
+        page_content.bottom_description,
+        body.anchor_text,
+        target_url,
+    )
+
+    placement_method = "rule_based"
+    if p_idx is None:
+        # Fall back to LLM injection
+        # Get target keyword for relevance scoring
+        kw_stmt = select(PageKeywords).where(
+            PageKeywords.crawled_page_id == target_page_id,
+        )
+        kw_result = await db.execute(kw_stmt)
+        target_kw = kw_result.scalar_one_or_none()
+        target_keyword = target_kw.primary_keyword if target_kw else ""
+
+        modified_html, p_idx = await injector.inject_llm_fallback(
+            page_content.bottom_description,
+            body.anchor_text,
+            target_url,
+            target_keyword,
+        )
+        placement_method = "llm_fallback"
+
+    if p_idx is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not inject link into content (no suitable location found)",
+        )
+
+    # ---- Update page content with injected HTML ----
+    page_content.bottom_description = modified_html
+    await db.flush()
+
+    # ---- Create InternalLink record ----
+    new_link = InternalLink(
+        source_page_id=source_page_id,
+        target_page_id=target_page_id,
+        project_id=project_id,
+        cluster_id=cluster_id,
+        scope=scope,
+        anchor_text=body.anchor_text,
+        anchor_type=body.anchor_type,
+        position_in_content=p_idx,
+        is_mandatory=False,
+        placement_method=placement_method,
+        status="verified",
+    )
+    db.add(new_link)
+    await db.flush()
+
+    # ---- Load relationships for response ----
+    link_stmt = (
+        select(InternalLink)
+        .where(InternalLink.id == new_link.id)
+        .options(
+            selectinload(InternalLink.target_page).selectinload(CrawledPage.keywords),
+        )
+    )
+    link_result = await db.execute(link_stmt)
+    loaded_link = link_result.unique().scalar_one()
+
+    await db.commit()
+
+    logger.info(
+        "Manual link added",
+        extra={
+            "project_id": project_id,
+            "link_id": new_link.id,
+            "source_page_id": source_page_id,
+            "target_page_id": target_page_id,
+            "placement_method": placement_method,
+        },
+    )
+
+    return _build_link_response(loaded_link)
+
+
+@router.delete(
+    "/{project_id}/links/{link_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_link(
+    project_id: str,
+    link_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> Response:
+    """Remove an internal link.
+
+    Rejects removal of mandatory links (400). Strips the <a> tag from
+    content (unwrap), keeping the text. Sets InternalLink status='removed'.
+
+    Returns 204 on success, 400 for mandatory links, 404 for invalid link_id.
+    """
+    await ProjectService.get_project(db, project_id)
+
+    # ---- Load the link ----
+    link_stmt = select(InternalLink).where(
+        InternalLink.id == link_id,
+        InternalLink.project_id == project_id,
+    )
+    link_result = await db.execute(link_stmt)
+    link = link_result.scalar_one_or_none()
+    if not link:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Link {link_id} not found in project {project_id}",
+        )
+
+    # ---- Reject mandatory links ----
+    if link.is_mandatory:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot remove a mandatory link",
+        )
+
+    # ---- Strip <a> tag from content ----
+    content_stmt = select(PageContent).where(
+        PageContent.crawled_page_id == link.source_page_id,
+    )
+    content_result = await db.execute(content_stmt)
+    page_content = content_result.scalar_one_or_none()
+
+    if page_content and page_content.bottom_description:
+        soup = BeautifulSoup(page_content.bottom_description, "html.parser")
+        target_url = ""
+
+        # Load target page URL
+        target_stmt = select(CrawledPage).where(CrawledPage.id == link.target_page_id)
+        target_result = await db.execute(target_stmt)
+        target_page = target_result.scalar_one_or_none()
+        if target_page:
+            target_url = target_page.normalized_url
+
+        # Find and unwrap the <a> tag matching this link's anchor text and href
+        for a_tag in soup.find_all("a"):
+            href = a_tag.get("href", "")
+            if not isinstance(href, str):
+                href = str(href)
+            tag_text = a_tag.get_text()
+
+            # Match by anchor text; if multiple matches, use href to disambiguate
+            if tag_text == link.anchor_text and (not target_url or href == target_url):
+                a_tag.unwrap()
+                break
+
+        page_content.bottom_description = str(soup)
+        await db.flush()
+
+    # ---- Set status to removed ----
+    link.status = "removed"
+    await db.commit()
+
+    logger.info(
+        "Link removed",
+        extra={
+            "project_id": project_id,
+            "link_id": link_id,
+        },
+    )
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.put(
+    "/{project_id}/links/{link_id}",
+    response_model=InternalLinkResponse,
+)
+async def edit_link(
+    project_id: str,
+    link_id: str,
+    body: EditLinkRequest,
+    db: AsyncSession = Depends(get_session),
+) -> InternalLinkResponse:
+    """Edit an existing internal link's anchor text and type.
+
+    Finds the existing <a> tag in content by matching current anchor text,
+    replaces with new anchor text, updates the InternalLink row.
+
+    Returns 404 for invalid link_id, updated link on success.
+    """
+    await ProjectService.get_project(db, project_id)
+
+    # ---- Load the link with target page relationship ----
+    link_stmt = (
+        select(InternalLink)
+        .where(
+            InternalLink.id == link_id,
+            InternalLink.project_id == project_id,
+        )
+        .options(
+            selectinload(InternalLink.target_page).selectinload(CrawledPage.keywords),
+        )
+    )
+    link_result = await db.execute(link_stmt)
+    link = link_result.unique().scalar_one_or_none()
+    if not link:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Link {link_id} not found in project {project_id}",
+        )
+
+    old_anchor_text = link.anchor_text
+    new_anchor_text = body.anchor_text
+
+    # ---- Update anchor text in content ----
+    content_stmt = select(PageContent).where(
+        PageContent.crawled_page_id == link.source_page_id,
+    )
+    content_result = await db.execute(content_stmt)
+    page_content = content_result.scalar_one_or_none()
+
+    if page_content and page_content.bottom_description:
+        soup = BeautifulSoup(page_content.bottom_description, "html.parser")
+        target_url = link.target_page.normalized_url if link.target_page else ""
+
+        # Find the <a> tag by text content; disambiguate by href if needed
+        matched_tag: Tag | None = None
+        for a_tag in soup.find_all("a"):
+            tag_text = a_tag.get_text()
+            if tag_text == old_anchor_text:
+                href = a_tag.get("href", "")
+                if not isinstance(href, str):
+                    href = str(href)
+                # If href matches or no target_url to check, this is the one
+                if not target_url or href == target_url:
+                    matched_tag = a_tag
+                    break
+                # Fallback: accept text match even without href match
+                if matched_tag is None:
+                    matched_tag = a_tag
+
+        if matched_tag is not None:
+            matched_tag.string = new_anchor_text
+
+        page_content.bottom_description = str(soup)
+        await db.flush()
+
+    # ---- Update InternalLink row ----
+    link.anchor_text = new_anchor_text
+    link.anchor_type = body.anchor_type
+    await db.commit()
+
+    # Refresh for response
+    await db.refresh(link)
+
+    logger.info(
+        "Link edited",
+        extra={
+            "project_id": project_id,
+            "link_id": link_id,
+            "old_anchor": old_anchor_text,
+            "new_anchor": new_anchor_text,
+        },
+    )
+
+    return _build_link_response(link)

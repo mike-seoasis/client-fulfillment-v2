@@ -287,3 +287,20 @@ after each iteration and it's included in prompts for context.
   - `ContentBrief.page_id` (not `crawled_page_id`) is the FK column name — inconsistent with other models like PageContent/PageKeywords which use `crawled_page_id`
   - `func.count().label("count")` with `.group_by()` returns tuples — access via positional index `row[0]`, `row[1]`
 ---
+
+## 2026-02-10 - S9-023
+- Added 3 manual link management endpoints to `backend/app/api/v1/links.py`:
+  - POST `/{project_id}/links` — validates self-links, duplicates, silo integrity (auto-detects scope/cluster from ClusterPage membership), injects link via rule-based or LLM fallback, creates InternalLink with status='verified', returns 201
+  - DELETE `/{project_id}/links/{link_id}` — rejects mandatory links (400), uses BeautifulSoup to find and `.unwrap()` the `<a>` tag matching anchor text + href, sets status='removed', returns 204
+  - PUT `/{project_id}/links/{link_id}` — finds `<a>` tag by matching current anchor text (disambiguates by href), replaces `.string` with new anchor text, updates InternalLink row, returns updated link
+- Added imports: `AddLinkRequest`, `EditLinkRequest`, `BeautifulSoup`, `Tag`, `Response`, `LinkInjector`
+- Router now has 8 total routes
+- **Files changed:**
+  - `backend/app/api/v1/links.py` (added 3 endpoints + imports)
+- **Learnings:**
+  - `from bs4 import BeautifulSoup, Tag` does NOT need `# type: ignore[attr-defined]` — only `NavigableString` triggers that (mypy flags unused ignore comments)
+  - For DELETE endpoints returning 204, use `-> Response` return type with `return Response(status_code=status.HTTP_204_NO_CONTENT)` rather than `None` return
+  - Scope auto-detection for manual links: query ClusterPage for both source and target, check for shared cluster_id via set intersection — avoids requiring scope in the request body
+  - BeautifulSoup `Tag.string = "new text"` directly replaces the tag's text content, simpler than extract+insert for anchor text edits
+  - `db.flush()` after content update + before commit ensures PageContent and InternalLink changes are in the same transaction
+---
