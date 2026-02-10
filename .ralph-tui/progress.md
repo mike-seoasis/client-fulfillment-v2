@@ -176,3 +176,19 @@ after each iteration and it's included in prompts for context.
   - `BeautifulSoup.replace_with()` accepts another BeautifulSoup object for swapping entire paragraph HTML
   - Paragraph relevance scoring via simple word overlap (`set.intersection`) is sufficient per spec — no need for TF-IDF or embeddings
 ---
+
+## 2026-02-10 - S9-011
+- Implemented `strip_internal_links(html, site_domain=None)` as a module-level function in `link_injection.py`
+- Internal link detection: relative paths (starts with `/`) and same-domain (href netloc contains `site_domain`)
+- Uses BeautifulSoup `.unwrap()` to replace `<a>` tags with their text content
+- External links (absolute URLs to other domains) left unchanged
+- Content structure (headings, paragraphs, lists) fully preserved
+- Helper `_is_internal_link(href, site_domain)` uses `urlparse` for robust domain matching
+- **Files changed:**
+  - `backend/app/services/link_injection.py` (added `strip_internal_links` + `_is_internal_link` + `urlparse` import)
+  - `backend/app/services/__init__.py` (added `strip_internal_links` import + `__all__` entry)
+- **Learnings:**
+  - `a_tag.get("href", "")` returns `str | AttributeValueList` per BS4 type stubs — need `isinstance(href, str)` guard for mypy
+  - BeautifulSoup `.unwrap()` is perfect for "replace tag with its text content" — no manual text extraction needed
+  - Collecting tags to unwrap in a list first avoids modification-during-iteration issues with `find_all`
+---

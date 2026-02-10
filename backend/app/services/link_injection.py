@@ -10,6 +10,7 @@ no keyword match exists in the HTML (~30% of links).
 """
 
 import re
+from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup, NavigableString, Tag  # type: ignore[attr-defined]
 
@@ -405,3 +406,61 @@ class LinkInjector:
             return False
 
         return True
+
+
+def strip_internal_links(html: str, site_domain: str | None = None) -> str:
+    """Remove internal links from HTML, replacing <a> tags with their text content.
+
+    Internal links are identified as:
+    - Relative paths: href starts with / (e.g. /collections/shoes)
+    - Same-domain: href contains the site_domain
+
+    External links (absolute URLs to other domains) are left unchanged.
+    Content structure (headings, paragraphs, lists) is preserved.
+
+    Args:
+        html: The HTML content to strip links from.
+        site_domain: The site's domain (e.g. "example.com"). If provided,
+            links matching this domain are also treated as internal.
+
+    Returns:
+        HTML with internal links unwrapped (replaced by their text content).
+    """
+    soup = BeautifulSoup(html, "html.parser")
+
+    # Collect internal <a> tags first to avoid modifying while iterating
+    to_unwrap: list[Tag] = []
+
+    for a_tag in soup.find_all("a"):
+        href = a_tag.get("href", "")
+        if not href or not isinstance(href, str):
+            continue
+
+        if _is_internal_link(href, site_domain):
+            to_unwrap.append(a_tag)
+
+    for a_tag in to_unwrap:
+        a_tag.unwrap()
+
+    return str(soup)
+
+
+def _is_internal_link(href: str, site_domain: str | None) -> bool:
+    """Determine if an href is an internal link.
+
+    Internal if:
+    - Starts with / (relative path)
+    - Contains the site_domain (same-domain absolute URL)
+    """
+    # Relative path
+    if href.startswith("/"):
+        return True
+
+    # Same-domain check
+    if site_domain:
+        parsed = urlparse(href)
+        # parsed.netloc gives the domain from an absolute URL
+        if parsed.netloc and site_domain in parsed.netloc:
+            return True
+
+    return False

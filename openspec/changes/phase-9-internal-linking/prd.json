@@ -211,11 +211,12 @@
         "Content structure (headings, paragraphs, lists) preserved after stripping"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "S9-009"
       ],
-      "notes": "Use BeautifulSoup .unwrap() method to replace <a> tags with their text content. The site_domain can be derived from Project.site_url."
+      "notes": "Use BeautifulSoup .unwrap() method to replace <a> tags with their text content. The site_domain can be derived from Project.site_url.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S9-012",
@@ -696,6 +697,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-10T18:33:48.914Z"
+    "updatedAt": "2026-02-10T18:35:22.996Z"
   }
 }

@@ -46,6 +46,7 @@ from app.services.link_injection import (
     MAX_LINKS_PER_PARAGRAPH,
     MIN_WORDS_BETWEEN_LINKS,
     LinkInjector,
+    strip_internal_links,
 )
 from app.services.link_planning import (
     ANCHOR_LLM_MODEL,
@@ -107,6 +108,7 @@ __all__ = [
     "run_content_pipeline",
     "run_quality_checks",
     "SiloLinkPlanner",
+    "strip_internal_links",
     "calculate_budget",
     "select_targets_cluster",
     "select_targets_onboarding",
