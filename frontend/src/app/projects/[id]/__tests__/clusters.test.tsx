@@ -44,6 +44,13 @@ vi.mock('@/hooks/useClusters', () => ({
   useClusters: () => mockUseClusters(),
 }));
 
+const mockUseLinkMap = vi.fn();
+const mockUsePlanStatus = vi.fn();
+vi.mock('@/hooks/useLinks', () => ({
+  useLinkMap: (...args: unknown[]) => mockUseLinkMap(...args),
+  usePlanStatus: (...args: unknown[]) => mockUsePlanStatus(...args),
+}));
+
 // ============================================================================
 // Default mock values
 // ============================================================================
@@ -125,6 +132,8 @@ describe('ProjectDetailPage - Cluster Section', () => {
     mockUseStartBrandConfigGeneration.mockReturnValue(defaultMockStartBrandConfig());
     mockUseCrawlStatus.mockReturnValue(defaultMockCrawlStatus());
     mockUseClusters.mockReturnValue({ data: undefined, isLoading: false, error: null });
+    mockUseLinkMap.mockReturnValue({ data: undefined, isLoading: false });
+    mockUsePlanStatus.mockReturnValue({ data: undefined, isLoading: false });
   });
 
   // ============================================================================
