@@ -621,11 +621,12 @@
         "Back button to link map page"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "S9-026"
       ],
-      "notes": "Reference WIREFRAMES.md section 17 for layout. For the target dropdown in Add Link modal: for onboarding, sort by label overlap with current page (most related first). For clusters, show all pages in same cluster. Use Radix Dialog or similar for modals if already in the project, otherwise simple divs."
+      "notes": "Reference WIREFRAMES.md section 17 for layout. For the target dropdown in Add Link modal: for onboarding, sort by label overlap with current page (most related first). For clusters, show all pages in same cluster. Use Radix Dialog or similar for modals if already in the project, otherwise simple divs.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S9-031",
@@ -709,6 +710,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-10T19:14:45.953Z"
+    "updatedAt": "2026-02-10T19:19:52.188Z"
   }
 }

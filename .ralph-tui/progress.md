@@ -412,3 +412,21 @@ after each iteration and it's included in prompts for context.
   - Filter controls above the table (not inside table header) keeps the sortable column headers clean and simple
   - The onboarding variant's page table includes a Labels column (tag chips) instead of the cluster variant's Role column — different metadata is relevant per scope
 ---
+
+## 2026-02-10 - S9-030
+- Created page link detail view at `frontend/src/app/projects/[id]/links/page/[pageId]/page.tsx`
+- Outbound Links section: numbered list ordered by position_in_content, shows target title, anchor text, anchor type badge, placement method, paragraph position. Mandatory parent links show star icon + "mandatory" badge with no Remove button. Edit Anchor and Remove buttons for discretionary links. "+ Add" button in section header.
+- Inbound Links section (read-only): shows source page title (via pageTitleMap lookup from useLinkMap), anchor text, and anchor type badge
+- Anchor Diversity section: counts unique anchor texts pointing to this page via inbound links, shows usage counts, diversity score (High >80% unique, Medium 50-80%, Low <50%)
+- Add Link modal: searchable target page dropdown filtered from useLinkMap pages (same silo), anchor text input, clickable suggested anchors from useAnchorSuggestions (POP variations + primary keyword with usage counts), anchor type radio buttons. Validates no duplicate/self-link before submit.
+- Edit Anchor modal: read-only target name, editable anchor text, suggested variations from useAnchorSuggestions, anchor type radio buttons. Calls useEditLink on save.
+- Remove Link: ConfirmDialog with danger button, calls useRemoveLink, refreshes list via query invalidation
+- Back button to link map page + breadcrumb navigation (project → Link Map → page title)
+- **Files changed:**
+  - `frontend/src/app/projects/[id]/links/page/[pageId]/page.tsx` (new)
+- **Learnings:**
+  - `InternalLinkResponse` from the backend only includes `target_title`/`target_url`, not source equivalents — for inbound links where the target is the current page, source page title must be looked up separately via `useLinkMap` pages
+  - Building a `pageTitleMap` (Map<page_id, title>) from `linkMap.pages` is the cleanest way to resolve page titles for inbound link source display without needing backend API changes
+  - The `useAnchorSuggestions` hook enables on target page ID — setting `targetPageId` to empty string effectively disables it, enabling lazy loading when user selects a target in the Add Link modal
+  - Pre-existing TS error in `GenerationProgress.test.tsx:425` (tuple index out of bounds) is unrelated to links work
+---
