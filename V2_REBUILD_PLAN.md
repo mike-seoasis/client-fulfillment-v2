@@ -8,10 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Phase** | 8 - Keyword Cluster Creation (Complete) |
-| **Slice** | Phase 8 complete + staging deployment fix |
-| **Last Session** | 2026-02-09 |
-| **Next Action** | Phase 9: Internal Linking |
+| **Phase** | 9 - Internal Linking (Complete) |
+| **Slice** | Phase 9 complete |
+| **Last Session** | 2026-02-10 |
+| **Next Action** | Phase 10: Blog Planning & Writing |
 | **Auth Decision** | WorkOS AuthKit (free tier, 1M MAU) — see Phase 11 |
 
 ### Session Log
@@ -38,6 +38,7 @@
 | 2026-02-08 | Phase 7 complete (S7-001 through S7-010): ExportService with URL handle extraction + filename sanitization, Matrixify CSV generation with UTF-8 BOM, export API endpoint with page_ids filter + 400/404 error handling, frontend export API client with blob download, export page with onboarding stepper + page selection list + select all/deselect all + export summary + download button, Back/Finish Onboarding navigation, 23 tests. Phase 7 polish: Added 7 Matrixify columns (Command, Sort Order, Published, Must Match, Rule: Product Column, Rule: Relation, Rule: Condition), shopify_placeholder_tag field in vocabulary section (backend schema + frontend editor/display), fixed export to read tag from BrandConfig table, updated filename to "Project Name - Onboarding - Matrixify Export via SEOasis.csv", exposed Content-Disposition header via CORS. | Phase 8: Keyword Cluster Creation |
 | 2026-02-08 | Phase 8 complete (S8-001 through S8-022): KeywordCluster + ClusterPage models with Alembic migration, CrawledPage source column, Pydantic v2 schemas, ClusterKeywordService (3-stage pipeline: Claude candidate generation with 11 expansion strategies, DataForSEO volume enrichment, Claude filtering/role assignment with composite scoring), bulk approve bridging to CrawledPage + PageKeywords, 6 API endpoints (create/list/detail/update-page/approve/delete), frontend API client + TanStack Query hooks with optimistic updates, seed keyword input page with progress indicator, cluster suggestions page with inline editing + approve/reject + parent reassignment, project detail cluster list with status badges, 52 backend unit tests + 20 integration tests + 71 frontend component tests. | Phase 9: Internal Linking |
 | 2026-02-09 | Railway staging fix + production CSS hardening: diagnosed Next.js 14.2.x CSS ordering bug (production chunks load in different order than dev, causing `disabled:opacity-50` cascade issues), added CSS cascade layers (`@layer base, components, utilities`) to lock ordering, created `ButtonLink` component to eliminate invalid `<button>` inside `<a>` HTML nesting, migrated project dashboard buttons, fixed lint error blocking production builds, deployed to Railway via `railway up` (git-triggered deploys were building from stale commit). | Phase 9: Internal Linking |
+| 2026-02-10 | Phase 9 complete (S9-001 through S9-032): InternalLink + LinkPlanSnapshot models with Alembic migrations (0024+0025), Pydantic v2 schemas, SiloLinkPlanner (cluster graph with parent/child/sibling edges, onboarding graph with label overlap), budget calculation (clamp 3-5 based on word count), target selection (mandatory parent-first for clusters, priority bonus for onboarding), AnchorTextSelector (POP variations + natural phrase generation via Haiku, diversity-weighted scoring), LinkInjector (rule-based BeautifulSoup scanning + LLM fallback paragraph rewriting, density limits), strip_internal_links for re-planning, LinkValidator (8 rules: budget, silo integrity, self-links, duplicates, density, anchor diversity, first-link, direction), full pipeline orchestrator with progress tracking, re-plan with snapshot/rollback, 8 API endpoints (plan trigger, status polling, link map, page links, suggestions, add/remove/edit), frontend API client + TanStack Query hooks, link planning trigger pages (onboarding + cluster), cluster link map with tree visualization + stats + sortable table, onboarding link map with label grouping + filters, page link detail with add/edit/remove modals + anchor suggestions, project detail link status badges, 28 graph/budget/target unit tests, 21 anchor text tests, 24 injection tests, 36 validation tests, 5 integration pipeline tests, 21 API tests, 86 frontend component tests. | Phase 10: Blog Planning & Writing |
 
 ---
 
@@ -221,20 +222,20 @@
 - [x] Wire into shared components
 - [x] **Verify:** Full cluster flow works (create → generate → export)
 
-### Phase 9: Internal Linking
-- [ ] `InternalLink` model + edge table migration (source_page, target_page, cluster, anchor_text, position, status)
-- [ ] `LinkPlanSnapshot` model for auditing/rollback
-- [ ] SiloLinkPlanner algorithm (budget calculation, target selection, anchor text selection)
-- [ ] AnchorTextSelector with diversity tracking (POP keyword variations as source)
-- [ ] Link injection — hybrid approach:
-  - [ ] Generation-time: mandatory parent link in content generation prompt
-  - [ ] Post-processing: BeautifulSoup keyword scanning for discretionary links
-  - [ ] LLM fallback for links that can't be placed rule-based (~30%)
-- [ ] Link validation layer (first-link rule, silo integrity, density, anchor diversity)
-- [ ] API endpoints (link plan per page, link map per silo, manual link adjustment)
-- [ ] Link map UI (per-silo visualization, per-page link list, manual add/remove)
-- [ ] Integration with content pipeline (run link planning AFTER all silo content is generated)
-- [ ] **Hard rules enforced:**
+### Phase 9: Internal Linking ✅
+- [x] `InternalLink` model + edge table migration (source_page, target_page, cluster, anchor_text, position, status)
+- [x] `LinkPlanSnapshot` model for auditing/rollback
+- [x] SiloLinkPlanner algorithm (budget calculation, target selection, anchor text selection)
+- [x] AnchorTextSelector with diversity tracking (POP keyword variations as source)
+- [x] Link injection — hybrid approach:
+  - [x] Generation-time: mandatory parent link in content generation prompt
+  - [x] Post-processing: BeautifulSoup keyword scanning for discretionary links
+  - [x] LLM fallback for links that can't be placed rule-based (~30%)
+- [x] Link validation layer (first-link rule, silo integrity, density, anchor diversity)
+- [x] API endpoints (link plan per page, link map per silo, manual link adjustment)
+- [x] Link map UI (per-silo visualization, per-page link list, manual add/remove)
+- [x] Integration with content pipeline (run link planning AFTER all silo content is generated)
+- [x] **Hard rules enforced:**
   - First link on every sub-page → parent/hub collection
   - No cross-silo links
   - Every page in a silo
@@ -244,8 +245,8 @@
   - Parent collection outbound links go to sub-collections only
   - Blog → blog sibling links allowed (1-2)
   - Sub-collection → sub-collection sibling links allowed
-- [ ] **Verify:** Full linking flow works (generate content → plan links → inject → validate → view link map)
-- [ ] **Research complete:** See `.tmp/linking-research-consensus.md` and supporting reports
+- [x] **Verify:** Full linking flow works (generate content → plan links → inject → validate → view link map)
+- [x] **Research complete:** See `.tmp/linking-research-consensus.md` and supporting reports
 
 ### Phase 10: Blog Planning & Writing
 - [ ] BlogCampaign and BlogPost models + migration
