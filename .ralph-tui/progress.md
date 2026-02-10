@@ -156,3 +156,23 @@ after each iteration and it's included in prompts for context.
   - `list(parent.children).index(text_node)` gives the correct insertion index for splicing a text node into [before, link, after]
   - Word distance check uses character offsets in the paragraph's full text to calculate word count between proposed link position and existing links
 ---
+
+## 2026-02-10 - S9-010
+- Implemented `inject_llm_fallback(html, anchor_text, target_url, target_keyword, *, mandatory_parent=False)` async method on `LinkInjector`
+- Best paragraph selection: scores by `word_overlap(paragraph, target_keyword) - existing_link_count`, skips paragraphs at density limit
+- Mandatory parent links target paragraph index 1 or 0 specifically (not best-scored)
+- Haiku prompt matches spec exactly: "Rewrite this paragraph to naturally include a hyperlink..."
+- Validates LLM response: exactly 1 `<a>` tag with correct `href`; returns `(original_html, None)` on malformed response
+- Uses `claude-haiku-4-5-20251001` with `temperature=0.0`, `max_tokens=500`
+- Strips markdown code fences from LLM response (same pattern as `generate_natural_phrases`)
+- ClaudeClient created with `get_api_key()` and closed in `finally` block (background task pattern)
+- Added constants `LLM_FALLBACK_MODEL`, `LLM_FALLBACK_MAX_TOKENS`, `LLM_FALLBACK_TEMPERATURE`
+- Registered `LLM_FALLBACK_MODEL` in `backend/app/services/__init__.py`
+- **Files changed:**
+  - `backend/app/services/link_injection.py` (added async `inject_llm_fallback` + 4 helper methods + constants + claude import)
+  - `backend/app/services/__init__.py` (added `LLM_FALLBACK_MODEL` import + __all__ entry)
+- **Learnings:**
+  - `inject_llm_fallback` is async (because of Claude API call) while `inject_rule_based` is sync — callers need to await the fallback path
+  - `BeautifulSoup.replace_with()` accepts another BeautifulSoup object for swapping entire paragraph HTML
+  - Paragraph relevance scoring via simple word overlap (`set.intersection`) is sufficient per spec — no need for TF-IDF or embeddings
+---

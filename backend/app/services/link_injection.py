@@ -1,9 +1,12 @@
-"""Rule-based link injection service using BeautifulSoup.
+"""Link injection service using BeautifulSoup (rule-based) and Claude Haiku (LLM fallback).
 
 LinkInjector scans HTML paragraph tags for anchor text matches and wraps
 them in <a> tags. Enforces density limits (max 2 links per paragraph,
 min 50 words between links) and skips content inside existing links,
 headings, and list items.
+
+LLM fallback rewrites the best-scoring paragraph via Claude Haiku when
+no keyword match exists in the HTML (~30% of links).
 """
 
 import re
@@ -11,12 +14,18 @@ import re
 from bs4 import BeautifulSoup, NavigableString, Tag  # type: ignore[attr-defined]
 
 from app.core.logging import get_logger
+from app.integrations.claude import ClaudeClient, get_api_key
 
 logger = get_logger(__name__)
 
 # Density limits
 MAX_LINKS_PER_PARAGRAPH = 2
 MIN_WORDS_BETWEEN_LINKS = 50
+
+# LLM fallback settings
+LLM_FALLBACK_MODEL = "claude-haiku-4-5-20251001"
+LLM_FALLBACK_MAX_TOKENS = 500
+LLM_FALLBACK_TEMPERATURE = 0.0
 
 
 class LinkInjector:
@@ -192,3 +201,207 @@ class LinkInjector:
                 return True
             parent = parent.parent
         return False
+
+    async def inject_llm_fallback(
+        self,
+        html: str,
+        anchor_text: str,
+        target_url: str,
+        target_keyword: str,
+        *,
+        mandatory_parent: bool = False,
+    ) -> tuple[str, int | None]:
+        """Inject a link by rewriting a paragraph via Claude Haiku.
+
+        Selects the best paragraph (fewest existing links + most relevant to
+        target_keyword) and asks Haiku to rewrite it with the link included.
+
+        For mandatory parent links (cluster parent→child), targets paragraph
+        1 or 2 specifically instead of the 'best' paragraph.
+
+        Args:
+            html: The HTML content to inject into.
+            anchor_text: The desired anchor text for the link.
+            target_url: The URL for the injected link's href.
+            target_keyword: The target keyword for relevance scoring.
+            mandatory_parent: If True, target paragraph 1 or 2 specifically.
+
+        Returns:
+            Tuple of (modified_html, paragraph_index) if injected, or
+            (original_html, None) if LLM call fails or response is malformed.
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        paragraphs = soup.find_all("p")
+
+        if not paragraphs:
+            return html, None
+
+        # Select target paragraph
+        if mandatory_parent:
+            p_idx = self._select_mandatory_parent_paragraph(paragraphs)
+        else:
+            p_idx = self._select_best_paragraph(paragraphs, target_keyword)
+
+        if p_idx is None:
+            return html, None
+
+        target_p = paragraphs[p_idx]
+        original_p_html = str(target_p)
+
+        # Call Claude Haiku to rewrite the paragraph
+        rewritten_p_html = await self._rewrite_paragraph_with_link(
+            original_p_html,
+            anchor_text,
+            target_url,
+        )
+
+        if rewritten_p_html is None:
+            return html, None
+
+        # Validate the LLM response
+        if not self._validate_llm_response(rewritten_p_html, target_url):
+            logger.warning(
+                "LLM fallback response failed validation",
+                extra={
+                    "target_url": target_url,
+                    "anchor_text": anchor_text,
+                    "paragraph_index": p_idx,
+                },
+            )
+            return html, None
+
+        # Replace the paragraph in the soup
+        new_p = BeautifulSoup(rewritten_p_html, "html.parser")
+        target_p.replace_with(new_p)
+
+        logger.info(
+            "LLM fallback link injected",
+            extra={
+                "anchor_text": anchor_text,
+                "target_url": target_url,
+                "paragraph_index": p_idx,
+                "mandatory_parent": mandatory_parent,
+            },
+        )
+        return str(soup), p_idx
+
+    def _select_best_paragraph(
+        self,
+        paragraphs: list[Tag],
+        target_keyword: str,
+    ) -> int | None:
+        """Select the best paragraph for LLM injection.
+
+        Scores paragraphs by: fewest existing links + most word overlap with
+        target_keyword. Skips paragraphs at density limit.
+
+        Returns the paragraph index, or None if all are at density limit.
+        """
+        keyword_words = set(target_keyword.lower().split())
+        best_idx: int | None = None
+        best_score = -1.0
+
+        for idx, p_tag in enumerate(paragraphs):
+            if self._is_at_density_limit(p_tag):
+                continue
+
+            link_count = len(p_tag.find_all("a"))
+            p_text = p_tag.get_text().lower()
+            p_words = set(p_text.split())
+
+            # Relevance = number of keyword words found in paragraph
+            overlap = len(keyword_words & p_words)
+
+            # Score: prioritize fewer links, then more relevance
+            # Subtract link_count so fewer links = higher score
+            score = overlap - link_count
+
+            if score > best_score:
+                best_score = score
+                best_idx = idx
+
+        return best_idx
+
+    def _select_mandatory_parent_paragraph(
+        self,
+        paragraphs: list[Tag],
+    ) -> int | None:
+        """Select paragraph 1 or 2 for mandatory parent links.
+
+        Prefers paragraph index 1 (second paragraph), falls back to 0 (first).
+        Returns None if both are at density limit.
+        """
+        # Prefer paragraph 1 (second), fall back to 0 (first)
+        for idx in (1, 0):
+            if idx < len(paragraphs) and not self._is_at_density_limit(paragraphs[idx]):
+                return idx
+        return None
+
+    async def _rewrite_paragraph_with_link(
+        self,
+        paragraph_html: str,
+        anchor_text: str,
+        target_url: str,
+    ) -> str | None:
+        """Call Claude Haiku to rewrite a paragraph with a link inserted.
+
+        Returns the rewritten paragraph HTML, or None on failure.
+        """
+        prompt = (
+            f"Rewrite this paragraph to naturally include a hyperlink to {target_url} "
+            f'with anchor text "{anchor_text}". Keep the meaning identical. '
+            f"Only modify 1-2 sentences. Return ONLY the rewritten paragraph HTML "
+            f"including the <a> tag.\n\n{paragraph_html}"
+        )
+
+        client = ClaudeClient(api_key=get_api_key())
+        try:
+            result = await client.complete(
+                user_prompt=prompt,
+                model=LLM_FALLBACK_MODEL,
+                max_tokens=LLM_FALLBACK_MAX_TOKENS,
+                temperature=LLM_FALLBACK_TEMPERATURE,
+            )
+        finally:
+            await client.close()
+
+        if not result.success or not result.text:
+            logger.warning(
+                "LLM fallback call failed",
+                extra={"error": result.error},
+            )
+            return None
+
+        # Strip markdown code fences if present
+        text = result.text.strip()
+        if text.startswith("```"):
+            lines = text.split("\n")
+            lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            text = "\n".join(lines)
+
+        return text.strip()
+
+    def _validate_llm_response(self, rewritten_html: str, target_url: str) -> bool:
+        """Validate that the LLM response contains exactly one <a> with correct href."""
+        check_soup = BeautifulSoup(rewritten_html, "html.parser")
+        links = check_soup.find_all("a")
+
+        if len(links) != 1:
+            logger.warning(
+                "LLM response has %d <a> tags, expected 1",
+                len(links),
+                extra={"link_count": len(links)},
+            )
+            return False
+
+        href = links[0].get("href", "")
+        if href != target_url:
+            logger.warning(
+                "LLM response href mismatch",
+                extra={"expected": target_url, "got": href},
+            )
+            return False
+
+        return True

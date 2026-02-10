@@ -42,6 +42,7 @@ from app.services.label_taxonomy import (
     validate_page_labels,
 )
 from app.services.link_injection import (
+    LLM_FALLBACK_MODEL,
     MAX_LINKS_PER_PARAGRAPH,
     MIN_WORDS_BETWEEN_LINKS,
     LinkInjector,
@@ -89,6 +90,7 @@ __all__ = [
     "get_project_taxonomy_labels",
     "KeywordGenerationStats",
     "LABEL_OVERLAP_THRESHOLD",
+    "LLM_FALLBACK_MODEL",
     "LinkInjector",
     "LabelAssignment",
     "LabelTaxonomyService",
