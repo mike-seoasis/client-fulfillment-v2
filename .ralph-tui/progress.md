@@ -192,3 +192,28 @@ after each iteration and it's included in prompts for context.
   - BeautifulSoup `.unwrap()` is perfect for "replace tag with its text content" — no manual text extraction needed
   - Collecting tags to unwrap in a list first avoids modification-during-iteration issues with `find_all`
 ---
+
+## 2026-02-10 - S9-012
+- Created `LinkValidator` class in `backend/app/services/link_injection.py`
+- Implemented `validate_links(links, pages_html, scope, cluster_data)` → returns `{passed: bool, results: [{page_id, rules: [{rule, passed, message}]}]}`
+- 8 validation rules implemented:
+  1. `budget_check` — 3-5 outbound links per page (WARN only, always passes)
+  2. `silo_integrity` — all targets within same scope; cluster links checked against cluster page set
+  3. `no_self_links` — source_page_id != target_page_id
+  4. `no_duplicate_links` — Counter-based check for same target linked twice from one page
+  5. `density` — max 2 links per paragraph + min 50 words between links (reuses existing constants)
+  6. `anchor_diversity` — same anchor text for same target max 3x across project
+  7. `first_link` (cluster only) — first `<a>` tag in bottom_description points to parent URL
+  8. `direction` (cluster only) — parent links to children only, children link to parent + siblings
+- Status update: links marked `status='verified'` if all rules pass, `status='failed:rule1,rule2'` if any fail
+- Constants added: `BUDGET_MIN=3`, `BUDGET_MAX=5`, `MAX_ANCHOR_REUSE_VALIDATION=3`
+- Registered `LinkValidator`, `BUDGET_MIN`, `BUDGET_MAX`, `MAX_ANCHOR_REUSE_VALIDATION` in `backend/app/services/__init__.py`
+- **Files changed:**
+  - `backend/app/services/link_injection.py` (added LinkValidator class + constants + imports)
+  - `backend/app/services/__init__.py` (added 4 new imports + __all__ entries)
+- **Learnings:**
+  - Ruff E741 rejects `l` as a variable name (ambiguous) — use `lnk` instead in generator expressions
+  - `dict.get()` returns `Any` when the dict value type is `Any` — assign to typed local variable to satisfy mypy `no-any-return`
+  - `cluster_data` uses `crawled_page_id` as the primary identifier for pages within a cluster (maps to InternalLink's source/target_page_id), with `page_id` as fallback (ClusterPage.id)
+  - The `budget_check` rule intentionally always passes (WARN semantics) — it reports outside-range counts but never fails validation
+---

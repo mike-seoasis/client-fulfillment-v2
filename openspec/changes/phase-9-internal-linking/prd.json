@@ -236,12 +236,13 @@
         "Each InternalLink marked status='verified' if all rules pass, otherwise flagged with failing rule names"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "S9-009",
         "S9-010"
       ],
-      "notes": "For first_link rule: parse bottom_description HTML, find first <a> tag, check its href matches the parent page's URL. For direction rules: use ClusterPage.role to determine allowed targets."
+      "notes": "For first_link rule: parse bottom_description HTML, find first <a> tag, check its href matches the parent page's URL. For direction rules: use ClusterPage.role to determine allowed targets.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S9-013",
@@ -697,6 +698,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-10T18:35:22.996Z"
+    "updatedAt": "2026-02-10T18:39:28.279Z"
   }
 }

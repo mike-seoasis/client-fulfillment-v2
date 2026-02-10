@@ -42,10 +42,14 @@ from app.services.label_taxonomy import (
     validate_page_labels,
 )
 from app.services.link_injection import (
+    BUDGET_MAX,
+    BUDGET_MIN,
     LLM_FALLBACK_MODEL,
+    MAX_ANCHOR_REUSE_VALIDATION,
     MAX_LINKS_PER_PARAGRAPH,
     MIN_WORDS_BETWEEN_LINKS,
     LinkInjector,
+    LinkValidator,
     strip_internal_links,
 )
 from app.services.link_planning import (
@@ -71,11 +75,14 @@ from app.services.project import ProjectService
 __all__ = [
     "ANCHOR_LLM_MODEL",
     "AnchorTextSelector",
+    "BUDGET_MAX",
+    "BUDGET_MIN",
     "BrandConfigService",
     "ContentBriefResult",
     "ContentWritingResult",
     "CrawlingService",
     "MAX_ANCHOR_REUSE",
+    "MAX_ANCHOR_REUSE_VALIDATION",
     "MAX_LINKS_PER_PARAGRAPH",
     "MIN_WORDS_BETWEEN_LINKS",
     "QualityIssue",
@@ -93,6 +100,7 @@ __all__ = [
     "LABEL_OVERLAP_THRESHOLD",
     "LLM_FALLBACK_MODEL",
     "LinkInjector",
+    "LinkValidator",
     "LabelAssignment",
     "LabelTaxonomyService",
     "LabelValidationError",

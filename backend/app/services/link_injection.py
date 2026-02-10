@@ -7,9 +7,14 @@ headings, and list items.
 
 LLM fallback rewrites the best-scoring paragraph via Claude Haiku when
 no keyword match exists in the HTML (~30% of links).
+
+LinkValidator runs post-injection validation rules to verify all hard
+constraints are satisfied before marking links as 'verified'.
 """
 
 import re
+from collections import Counter
+from typing import Any
 from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup, NavigableString, Tag  # type: ignore[attr-defined]
@@ -406,6 +411,457 @@ class LinkInjector:
             return False
 
         return True
+
+
+# Budget range for validation
+BUDGET_MIN = 3
+BUDGET_MAX = 5
+
+# Maximum reuse of same anchor text for same target across project
+MAX_ANCHOR_REUSE_VALIDATION = 3
+
+
+class LinkValidator:
+    """Validates injected internal links against hard rules.
+
+    Runs post-injection checks to ensure link quality and silo integrity.
+    Each rule returns a pass/fail with a message. Links that pass all rules
+    are marked 'verified'; failing links are flagged with rule names.
+    """
+
+    def validate_links(
+        self,
+        links: list[Any],
+        pages_html: dict[str, str],
+        scope: str,
+        cluster_data: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Run all validation rules against a set of injected links.
+
+        Args:
+            links: List of InternalLink model instances.
+            pages_html: Dict mapping page_id to its HTML content.
+            scope: 'onboarding' or 'cluster'.
+            cluster_data: For cluster scope, dict with 'pages' list (each has
+                page_id, crawled_page_id, role, url) and 'parent_url'.
+                Required for first_link and direction rules.
+
+        Returns:
+            Dict with:
+                passed: bool — True if ALL rules pass for ALL pages
+                results: list of {page_id, rules: [{rule, passed, message}]}
+        """
+        # Group links by source page
+        links_by_page: dict[str, list[Any]] = {}
+        for link in links:
+            source_id = link.source_page_id
+            if source_id not in links_by_page:
+                links_by_page[source_id] = []
+            links_by_page[source_id].append(link)
+
+        all_passed = True
+        results: list[dict[str, Any]] = []
+
+        for page_id, page_links in links_by_page.items():
+            page_html = pages_html.get(page_id, "")
+            rule_results: list[dict[str, Any]] = []
+
+            # Rule 1: budget_check (WARN, not FAIL)
+            rule_results.append(self._check_budget(page_links))
+
+            # Rule 2: silo_integrity
+            result = self._check_silo_integrity(page_links, scope, cluster_data)
+            rule_results.append(result)
+            if not result["passed"]:
+                all_passed = False
+
+            # Rule 3: no_self_links
+            result = self._check_no_self_links(page_links)
+            rule_results.append(result)
+            if not result["passed"]:
+                all_passed = False
+
+            # Rule 4: no_duplicate_links
+            result = self._check_no_duplicate_links(page_links)
+            rule_results.append(result)
+            if not result["passed"]:
+                all_passed = False
+
+            # Rule 5: density
+            result = self._check_density(page_html)
+            rule_results.append(result)
+            if not result["passed"]:
+                all_passed = False
+
+            # Rule 6: anchor_diversity (checked across all links, not per-page)
+            result = self._check_anchor_diversity(links)
+            rule_results.append(result)
+            if not result["passed"]:
+                all_passed = False
+
+            # Cluster-only rules
+            if scope == "cluster" and cluster_data:
+                # Rule 7: first_link
+                result = self._check_first_link(page_id, page_html, cluster_data)
+                rule_results.append(result)
+                if not result["passed"]:
+                    all_passed = False
+
+                # Rule 8: direction
+                result = self._check_direction(page_id, page_links, cluster_data)
+                rule_results.append(result)
+                if not result["passed"]:
+                    all_passed = False
+
+            results.append({"page_id": page_id, "rules": rule_results})
+
+        # Update link statuses based on results
+        self._update_link_statuses(links, results)
+
+        return {"passed": all_passed, "results": results}
+
+    def _check_budget(self, page_links: list[Any]) -> dict[str, Any]:
+        """Rule: budget_check — 3-5 outbound links per page (WARN, not FAIL)."""
+        count = len(page_links)
+        if BUDGET_MIN <= count <= BUDGET_MAX:
+            return {
+                "rule": "budget_check",
+                "passed": True,
+                "message": f"Page has {count} outbound links (within {BUDGET_MIN}-{BUDGET_MAX} range)",
+            }
+        return {
+            "rule": "budget_check",
+            "passed": True,  # WARN, not FAIL
+            "message": f"WARN: Page has {count} outbound links (outside {BUDGET_MIN}-{BUDGET_MAX} range)",
+        }
+
+    def _check_silo_integrity(
+        self,
+        page_links: list[Any],
+        scope: str,
+        cluster_data: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """Rule: silo_integrity — all targets within same scope."""
+        violations: list[str] = []
+
+        for link in page_links:
+            # Check scope matches
+            if link.scope != scope:
+                violations.append(
+                    f"Link {link.id} has scope '{link.scope}' but expected '{scope}'"
+                )
+
+            # For cluster scope, check targets are in the same cluster
+            if scope == "cluster" and cluster_data:
+                cluster_page_ids = {
+                    p.get("crawled_page_id") or p.get("page_id")
+                    for p in cluster_data.get("pages", [])
+                }
+                if link.target_page_id not in cluster_page_ids:
+                    violations.append(
+                        f"Link {link.id} targets page outside cluster"
+                    )
+
+        if violations:
+            return {
+                "rule": "silo_integrity",
+                "passed": False,
+                "message": "; ".join(violations),
+            }
+        return {
+            "rule": "silo_integrity",
+            "passed": True,
+            "message": "All targets within same scope",
+        }
+
+    def _check_no_self_links(self, page_links: list[Any]) -> dict[str, Any]:
+        """Rule: no_self_links — source != target."""
+        violations: list[str] = []
+
+        for link in page_links:
+            if link.source_page_id == link.target_page_id:
+                violations.append(f"Link {link.id} is a self-link")
+
+        if violations:
+            return {
+                "rule": "no_self_links",
+                "passed": False,
+                "message": "; ".join(violations),
+            }
+        return {
+            "rule": "no_self_links",
+            "passed": True,
+            "message": "No self-links found",
+        }
+
+    def _check_no_duplicate_links(self, page_links: list[Any]) -> dict[str, Any]:
+        """Rule: no_duplicate_links — no page links to same target twice."""
+        target_counts = Counter(link.target_page_id for link in page_links)
+        duplicates = {
+            target_id: count
+            for target_id, count in target_counts.items()
+            if count > 1
+        }
+
+        if duplicates:
+            msgs = [
+                f"Target {tid} linked {count}x"
+                for tid, count in duplicates.items()
+            ]
+            return {
+                "rule": "no_duplicate_links",
+                "passed": False,
+                "message": "; ".join(msgs),
+            }
+        return {
+            "rule": "no_duplicate_links",
+            "passed": True,
+            "message": "No duplicate target links",
+        }
+
+    def _check_density(self, page_html: str) -> dict[str, Any]:
+        """Rule: density — max 2 links per paragraph, min 50 words between links."""
+        if not page_html:
+            return {
+                "rule": "density",
+                "passed": True,
+                "message": "No HTML content to check",
+            }
+
+        soup = BeautifulSoup(page_html, "html.parser")
+        violations: list[str] = []
+
+        for p_idx, p_tag in enumerate(soup.find_all("p")):
+            links_in_p = p_tag.find_all("a")
+
+            # Check max links per paragraph
+            if len(links_in_p) > MAX_LINKS_PER_PARAGRAPH:
+                violations.append(
+                    f"Paragraph {p_idx} has {len(links_in_p)} links "
+                    f"(max {MAX_LINKS_PER_PARAGRAPH})"
+                )
+
+            # Check word distance between links
+            if len(links_in_p) >= 2:
+                full_text = p_tag.get_text()
+                link_positions: list[int] = []
+
+                for a_tag in links_in_p:
+                    link_text = a_tag.get_text()
+                    pos = full_text.find(link_text)
+                    if pos >= 0:
+                        link_positions.append(pos)
+
+                link_positions.sort()
+                for i in range(len(link_positions) - 1):
+                    between = full_text[link_positions[i] : link_positions[i + 1]]
+                    word_count = len(between.split())
+                    if word_count < MIN_WORDS_BETWEEN_LINKS:
+                        violations.append(
+                            f"Paragraph {p_idx}: only {word_count} words "
+                            f"between links (min {MIN_WORDS_BETWEEN_LINKS})"
+                        )
+
+        if violations:
+            return {
+                "rule": "density",
+                "passed": False,
+                "message": "; ".join(violations),
+            }
+        return {
+            "rule": "density",
+            "passed": True,
+            "message": "Link density within limits",
+        }
+
+    def _check_anchor_diversity(self, all_links: list[Any]) -> dict[str, Any]:
+        """Rule: anchor_diversity — same anchor for same target max 3x across project."""
+        # Count (anchor_text, target_page_id) occurrences
+        anchor_target_counts: Counter[tuple[str, str]] = Counter()
+        for link in all_links:
+            key = (link.anchor_text.lower(), link.target_page_id)
+            anchor_target_counts[key] += 1
+
+        violations: list[str] = []
+        for (anchor, target_id), count in anchor_target_counts.items():
+            if count > MAX_ANCHOR_REUSE_VALIDATION:
+                violations.append(
+                    f"Anchor '{anchor}' used {count}x for target {target_id} "
+                    f"(max {MAX_ANCHOR_REUSE_VALIDATION})"
+                )
+
+        if violations:
+            return {
+                "rule": "anchor_diversity",
+                "passed": False,
+                "message": "; ".join(violations),
+            }
+        return {
+            "rule": "anchor_diversity",
+            "passed": True,
+            "message": "Anchor text diversity within limits",
+        }
+
+    def _check_first_link(
+        self,
+        page_id: str,
+        page_html: str,
+        cluster_data: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Rule: first_link (cluster only) — first <a> in bottom_description points to parent URL."""
+        # Determine if this page is a child (only children need first_link check)
+        page_role = self._get_page_role(page_id, cluster_data)
+        if page_role != "child":
+            return {
+                "rule": "first_link",
+                "passed": True,
+                "message": "Page is parent, first_link rule not applicable",
+            }
+
+        parent_url = cluster_data.get("parent_url", "")
+        if not parent_url:
+            return {
+                "rule": "first_link",
+                "passed": True,
+                "message": "No parent URL configured, skipping first_link check",
+            }
+
+        # Parse the page HTML and find first <a> tag
+        # The acceptance criteria says "first <a> tag in bottom_description"
+        # page_html is the bottom_description content
+        soup = BeautifulSoup(page_html, "html.parser")
+        first_link = soup.find("a")
+
+        if first_link is None:
+            return {
+                "rule": "first_link",
+                "passed": False,
+                "message": "No links found in bottom_description",
+            }
+
+        href = first_link.get("href", "")
+        if not isinstance(href, str):
+            href = str(href)
+
+        if href == parent_url:
+            return {
+                "rule": "first_link",
+                "passed": True,
+                "message": "First link points to parent URL",
+            }
+        return {
+            "rule": "first_link",
+            "passed": False,
+            "message": f"First link href '{href}' does not match parent URL '{parent_url}'",
+        }
+
+    def _check_direction(
+        self,
+        page_id: str,
+        page_links: list[Any],
+        cluster_data: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Rule: direction (cluster only) — parent links to children only, children link to parent + siblings."""
+        page_role = self._get_page_role(page_id, cluster_data)
+        if not page_role:
+            return {
+                "rule": "direction",
+                "passed": True,
+                "message": "Page not found in cluster data, skipping direction check",
+            }
+
+        # Build sets of allowed targets based on role
+        pages = cluster_data.get("pages", [])
+        parent_ids: set[str] = set()
+        child_ids: set[str] = set()
+
+        for p in pages:
+            pid = p.get("crawled_page_id") or p.get("page_id")
+            if p.get("role") == "parent":
+                parent_ids.add(pid)
+            else:
+                child_ids.add(pid)
+
+        violations: list[str] = []
+
+        if page_role == "parent":
+            # Parent can only link to children
+            for link in page_links:
+                if link.target_page_id not in child_ids:
+                    violations.append(
+                        f"Parent page links to non-child target {link.target_page_id}"
+                    )
+        else:
+            # Child can link to parent + siblings (other children)
+            allowed = parent_ids | child_ids
+            # Remove self from allowed
+            allowed.discard(page_id)
+            for link in page_links:
+                if link.target_page_id not in allowed:
+                    violations.append(
+                        f"Child page links to disallowed target {link.target_page_id}"
+                    )
+
+        if violations:
+            return {
+                "rule": "direction",
+                "passed": False,
+                "message": "; ".join(violations),
+            }
+        return {
+            "rule": "direction",
+            "passed": True,
+            "message": f"All links follow {page_role} direction rules",
+        }
+
+    def _get_page_role(
+        self, page_id: str, cluster_data: dict[str, Any]
+    ) -> str | None:
+        """Get the role of a page within the cluster (parent/child)."""
+        for p in cluster_data.get("pages", []):
+            pid = p.get("crawled_page_id") or p.get("page_id")
+            if pid == page_id:
+                role: str | None = p.get("role")
+                return role
+        return None
+
+    def _update_link_statuses(
+        self,
+        links: list[Any],
+        results: list[dict[str, Any]],
+    ) -> None:
+        """Mark links as 'verified' if all rules pass, or flag with failing rule names."""
+        # Build a map of page_id -> set of failing rule names
+        failing_rules_by_page: dict[str, list[str]] = {}
+        for page_result in results:
+            page_id = page_result["page_id"]
+            failing = [
+                r["rule"]
+                for r in page_result["rules"]
+                if not r["passed"]
+            ]
+            if failing:
+                failing_rules_by_page[page_id] = failing
+
+        for link in links:
+            source_id = link.source_page_id
+            failing_rules = failing_rules_by_page.get(source_id, [])
+            if not failing_rules:
+                link.status = "verified"
+            else:
+                # Flag with failing rule names joined by comma
+                link.status = f"failed:{','.join(failing_rules)}"
+
+        logger.info(
+            "Updated link statuses",
+            extra={
+                "total_links": len(links),
+                "verified": sum(1 for lnk in links if lnk.status == "verified"),
+                "flagged": sum(
+                    1 for lnk in links if lnk.status.startswith("failed:")
+                ),
+            },
+        )
 
 
 def strip_internal_links(html: str, site_domain: str | None = None) -> str:
