@@ -271,3 +271,19 @@ after each iteration and it's included in prompts for context.
   - `type: ignore[arg-type]` needed on `replan_links`/`run_link_planning_pipeline` calls because the Literal["onboarding", "cluster"] param doesn't match `str` from the request body
   - The `_active_plans` set uses tuples `(project_id, scope, cluster_id)` rather than just project_id (unlike content_generation.py) because link planning can run independently per scope/cluster
 ---
+
+## 2026-02-10 - S9-022
+- Added 3 new GET endpoints to `backend/app/api/v1/links.py` for link map display and per-page details
+- GET `/api/v1/projects/{project_id}/links` — accepts `scope` and `cluster_id` query params, returns LinkMapResponse with aggregate stats (total_links, total_pages, avg_links_per_page, validation_pass_rate), method breakdown, anchor diversity percentages, per-page summaries. For cluster scope, includes hierarchy tree with parent at root and children array.
+- GET `/api/v1/projects/{project_id}/links/page/{page_id}` — returns PageLinksResponse with outbound links (ordered by position_in_content), inbound links, anchor diversity counts, and diversity_score ('good'/'needs_variation'/'poor')
+- GET `/api/v1/projects/{project_id}/links/suggestions/{target_page_id}` — returns AnchorSuggestionsResponse with primary keyword from PageKeywords, POP variations from ContentBrief.keyword_targets, and usage counts from existing InternalLink rows grouped by anchor_text
+- All endpoints return 404 for invalid project/page IDs; empty results (not errors) when no links exist
+- Helper functions: `_build_link_response`, `_compute_anchor_diversity_percentages`, `_compute_diversity_score`, `_build_hierarchy_tree`
+- **Files changed:**
+  - `backend/app/api/v1/links.py` (added 3 endpoints, 4 helper functions, expanded imports)
+- **Learnings:**
+  - Reusing variable name `page` in different loop scopes within the same async function triggers mypy `name-defined` error — use distinct names like `crawled` for the second loop
+  - `selectinload` chaining (e.g., `selectinload(InternalLink.target_page).selectinload(CrawledPage.keywords)`) works for multi-hop eager loading and requires `result.unique().scalars().all()` to deduplicate
+  - `ContentBrief.page_id` (not `crawled_page_id`) is the FK column name — inconsistent with other models like PageContent/PageKeywords which use `crawled_page_id`
+  - `func.count().label("count")` with `.group_by()` returns tuples — access via positional index `row[0]`, `row[1]`
+---
