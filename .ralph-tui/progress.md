@@ -104,3 +104,18 @@ after each iteration and it's included in prompts for context.
   - Import sorting in `__init__.py` is alphabetical by module name — `link_planning` sorts after `label_taxonomy`
   - `itertools.combinations` is the clean way to generate pairwise edges for the overlap graph
 ---
+
+## 2026-02-10 - S9-007
+- Implemented `calculate_budget(word_count)` → `clamp(word_count // 250, 3, 5)`
+- Implemented `select_targets_cluster(graph, budgets)` → parent gets children by composite_score; children get mandatory parent + siblings by composite_score then least-linked-to
+- Implemented `select_targets_onboarding(graph, budgets)` → scores targets by label_overlap + priority_bonus - diversity_penalty, updates running inbound_counts after each page
+- Added `composite_score` field to cluster graph page dicts (needed for target ranking)
+- Registered `calculate_budget`, `select_targets_cluster`, `select_targets_onboarding` in `backend/app/services/__init__.py`
+- **Files changed:**
+  - `backend/app/services/link_planning.py` (added 3 functions + composite_score to graph pages)
+  - `backend/app/services/__init__.py` (added 3 new exports)
+- **Learnings:**
+  - Target selection functions are pure (no DB calls) — they operate on graph dicts from build_*_graph, making them easy to test
+  - The diversity_penalty formula `max(0, (inbound - avg_inbound) * 0.5)` only penalizes pages above average, preventing any single page from hogging all links
+  - `replace_all=true` in Edit tool matches literal text — if formatting differs between occurrences, some won't match
+---

@@ -44,6 +44,9 @@ from app.services.label_taxonomy import (
 from app.services.link_planning import (
     LABEL_OVERLAP_THRESHOLD,
     SiloLinkPlanner,
+    calculate_budget,
+    select_targets_cluster,
+    select_targets_onboarding,
 )
 from app.services.pop_content_brief import (
     ContentBriefResult,
@@ -88,6 +91,9 @@ __all__ = [
     "run_content_pipeline",
     "run_quality_checks",
     "SiloLinkPlanner",
+    "calculate_budget",
+    "select_targets_cluster",
+    "select_targets_onboarding",
     "TaxonomyLabel",
     "truncate_body_content",
     "validate_labels",

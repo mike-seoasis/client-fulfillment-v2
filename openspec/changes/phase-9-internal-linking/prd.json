@@ -133,11 +133,12 @@
         "Onboarding pages with no eligible targets (all below threshold) get 0 links without error"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "S9-006"
       ],
-      "notes": "Budget uses PageContent word_count (bottom_description). For onboarding diversity_penalty: track a running dict of inbound_counts per target. diversity_penalty = max(0, (inbound_counts[target] - avg_inbound) * 0.5). This prevents any single page from hogging all links."
+      "notes": "Budget uses PageContent word_count (bottom_description). For onboarding diversity_penalty: track a running dict of inbound_counts per target. diversity_penalty = max(0, (inbound_counts[target] - avg_inbound) * 0.5). This prevents any single page from hogging all links.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S9-008",
@@ -692,6 +693,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-10T18:19:10.432Z"
+    "updatedAt": "2026-02-10T18:23:15.446Z"
   }
 }
