@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useProject } from '@/hooks/use-projects';
 import { useContentGeneration } from '@/hooks/useContentGeneration';
 import { usePlanLinks, usePlanStatus } from '@/hooks/useLinks';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button, Toast } from '@/components/ui';
 
 // 4-step link planning pipeline
@@ -162,6 +163,7 @@ export default function OnboardingLinksPage() {
 
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
   const contentGen = useContentGeneration(projectId);
+  const queryClient = useQueryClient();
   const planLinksMutation = usePlanLinks();
   const planStatus = usePlanStatus(projectId, 'onboarding', undefined, true);
 
@@ -170,24 +172,30 @@ export default function OnboardingLinksPage() {
   const isComplete = planStatus.data?.status === 'complete';
   const isFailed = planStatus.data?.status === 'failed';
 
-  // Derive prerequisites from content gen status
-  const pages = contentGen.pages;
+  // Filter to onboarding pages only
+  const pages = useMemo(
+    () => contentGen.pages.filter((p) => p.source === 'onboarding'),
+    [contentGen.pages]
+  );
   const pagesTotal = pages.length;
   const allKeywordsApproved = pagesTotal > 0 && pages.every((p) => p.is_approved);
   const pagesCompleted = pages.filter((p) => p.status === 'complete').length;
   const allContentGenerated = pagesTotal > 0 && pagesCompleted === pagesTotal;
-  const allQaPassed = pagesTotal > 0 && pages.every((p) => p.qa_passed === true);
-  const allPrerequisitesMet = allKeywordsApproved && allContentGenerated && allQaPassed;
+  const allPrerequisitesMet = allKeywordsApproved && allContentGenerated;
 
   // Auto-redirect to link map on completion
   useEffect(() => {
     if (isComplete) {
+      // Invalidate link map cache so the map page fetches fresh data
+      queryClient.invalidateQueries({
+        queryKey: ['projects', projectId, 'links', 'map'],
+      });
       const timer = setTimeout(() => {
         router.push(`/projects/${projectId}/links/map`);
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [isComplete, projectId, router]);
+  }, [isComplete, projectId, router, queryClient]);
 
   const handlePlanLinks = async () => {
     try {
@@ -280,16 +288,6 @@ export default function OnboardingLinksPage() {
             )}
             <span className={`text-sm ${allContentGenerated ? 'text-warm-gray-900' : 'text-warm-gray-500'}`}>
               All content generated ({pagesCompleted}/{pagesTotal} complete)
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            {allQaPassed ? (
-              <CheckIcon className="w-5 h-5 text-palm-500 shrink-0" />
-            ) : (
-              <XCircleIcon className="w-5 h-5 text-coral-400 shrink-0" />
-            )}
-            <span className={`text-sm ${allQaPassed ? 'text-warm-gray-900' : 'text-warm-gray-500'}`}>
-              Quality checks passed
             </span>
           </div>
         </div>

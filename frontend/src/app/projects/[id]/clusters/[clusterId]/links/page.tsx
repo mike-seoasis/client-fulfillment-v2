@@ -7,6 +7,7 @@ import { useProject } from '@/hooks/use-projects';
 import { useCluster } from '@/hooks/useClusters';
 import { useContentGeneration } from '@/hooks/useContentGeneration';
 import { usePlanLinks, usePlanStatus } from '@/hooks/useLinks';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button, Toast } from '@/components/ui';
 
 // 4-step link planning pipeline
@@ -166,6 +167,7 @@ export default function ClusterLinksPage() {
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
   const { data: cluster, isLoading: isClusterLoading } = useCluster(projectId, clusterId);
   const contentGen = useContentGeneration(projectId);
+  const queryClient = useQueryClient();
   const planLinksMutation = usePlanLinks();
   const planStatus = usePlanStatus(projectId, 'cluster', clusterId, true);
 
@@ -194,18 +196,20 @@ export default function ClusterLinksPage() {
   const allKeywordsApproved = pagesTotal > 0 && clusterPages.every((p) => p.is_approved);
   const pagesCompleted = clusterPages.filter((p) => p.status === 'complete').length;
   const allContentGenerated = pagesTotal > 0 && pagesCompleted === pagesTotal;
-  const allQaPassed = pagesTotal > 0 && clusterPages.every((p) => p.qa_passed === true);
-  const allPrerequisitesMet = allKeywordsApproved && allContentGenerated && allQaPassed;
+  const allPrerequisitesMet = allKeywordsApproved && allContentGenerated;
 
   // Auto-redirect to link map on completion
   useEffect(() => {
     if (isComplete) {
+      queryClient.invalidateQueries({
+        queryKey: ['projects', projectId, 'links', 'map'],
+      });
       const timer = setTimeout(() => {
         router.push(`/projects/${projectId}/clusters/${clusterId}/links/map`);
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [isComplete, projectId, clusterId, router]);
+  }, [isComplete, projectId, clusterId, router, queryClient]);
 
   const handlePlanLinks = async () => {
     try {
@@ -303,16 +307,6 @@ export default function ClusterLinksPage() {
             )}
             <span className={`text-sm ${allContentGenerated ? 'text-warm-gray-900' : 'text-warm-gray-500'}`}>
               All content generated ({pagesCompleted}/{pagesTotal} complete)
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            {allQaPassed ? (
-              <CheckIcon className="w-5 h-5 text-palm-500 shrink-0" />
-            ) : (
-              <XCircleIcon className="w-5 h-5 text-coral-400 shrink-0" />
-            )}
-            <span className={`text-sm ${allQaPassed ? 'text-warm-gray-900' : 'text-warm-gray-500'}`}>
-              Quality checks passed
             </span>
           </div>
         </div>

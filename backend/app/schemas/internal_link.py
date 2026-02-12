@@ -132,6 +132,16 @@ class PageLinksResponse(BaseModel):
 # =============================================================================
 
 
+class LinkMapOutboundLink(BaseModel):
+    """A single outbound link from a page in the link map."""
+
+    anchor_text: str = Field(..., description="Anchor text of the link")
+    target_url: str = Field(..., description="Target page URL")
+    target_title: str = Field("", description="Target page title")
+    anchor_type: str = Field(..., description="Anchor type: exact_match, partial_match, natural")
+    placement_method: str = Field(..., description="How placed: rule_based or llm_fallback")
+
+
 class LinkMapPageSummary(BaseModel):
     """Summary of a single page within the link map."""
 
@@ -149,6 +159,10 @@ class LinkMapPageSummary(BaseModel):
     )
     outbound_count: int = Field(..., description="Number of outbound links from this page")
     inbound_count: int = Field(..., description="Number of inbound links to this page")
+    outbound_links: list[LinkMapOutboundLink] = Field(
+        default_factory=list,
+        description="Individual outbound link details (anchor text + target)",
+    )
     methods: dict[str, int] = Field(
         default_factory=dict,
         description="Placement method breakdown: {'rule_based': N, 'llm_fallback': N}",

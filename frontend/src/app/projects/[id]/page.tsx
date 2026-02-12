@@ -367,7 +367,7 @@ function ClusterCard({
   cluster,
   projectId,
 }: {
-  cluster: { id: string; name: string; seed_keyword: string; page_count: number; status: string };
+  cluster: { id: string; name: string; seed_keyword: string; page_count: number; approved_count: number; status: string };
   projectId: string;
 }) {
   const { data: linkMap } = useLinkMap(projectId, 'cluster', cluster.id);
@@ -381,7 +381,7 @@ function ClusterCard({
       </h3>
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm text-warm-gray-600">
-          {cluster.page_count} {cluster.page_count === 1 ? 'page' : 'pages'}
+          {cluster.approved_count} of {cluster.page_count} {cluster.page_count === 1 ? 'page' : 'pages'} approved
         </span>
         <ClusterStatusBadge status={cluster.status} />
       </div>

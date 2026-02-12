@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import OnboardingLinksPage from '../page';
 
 // ============================================================================
@@ -37,6 +38,18 @@ vi.mock('@/hooks/useLinks', () => ({
 }));
 
 // ============================================================================
+// Test wrapper with QueryClientProvider
+// ============================================================================
+function createWrapper() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+}
+
+// ============================================================================
 // Mock data factories
 // ============================================================================
 const mockProject = {
@@ -55,6 +68,7 @@ interface ContentGenPage {
   is_approved: boolean;
   status: string;
   qa_passed: boolean | null;
+  source: string;
 }
 
 const createContentGenData = (
@@ -89,8 +103,8 @@ describe('OnboardingLinksPage', () => {
     mockUseProject.mockReturnValue(defaultProjectReturn());
     mockUseContentGeneration.mockReturnValue(
       createContentGenData([
-        { is_approved: true, status: 'complete', qa_passed: true },
-        { is_approved: true, status: 'complete', qa_passed: true },
+        { is_approved: true, status: 'complete', qa_passed: true, source: 'onboarding' },
+        { is_approved: true, status: 'complete', qa_passed: true, source: 'onboarding' },
       ])
     );
     mockUsePlanStatus.mockReturnValue(createPlanStatusData());
@@ -107,7 +121,7 @@ describe('OnboardingLinksPage', () => {
   // --------------------------------------------------------------------------
   describe('rendering', () => {
     it('displays the page title and breadcrumb', () => {
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
       // Title contains both "Internal Links" and "Onboarding Pages" via mdash
       const heading = screen.getByRole('heading', { level: 1 });
       expect(heading).toHaveTextContent(/Internal Links/);
@@ -115,33 +129,33 @@ describe('OnboardingLinksPage', () => {
     });
 
     it('displays breadcrumb with project name', () => {
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
       expect(screen.getByText('Test Project')).toBeInTheDocument();
     });
 
     it('displays loading skeleton when project is loading', () => {
       mockUseProject.mockReturnValue({ data: null, isLoading: true, error: null });
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
       expect(screen.getByText('All Projects')).toBeInTheDocument();
       expect(document.querySelector('.animate-pulse')).toBeInTheDocument();
     });
 
     it('displays not found state when project errors', () => {
       mockUseProject.mockReturnValue({ data: null, isLoading: false, error: new Error('Not found') });
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
       expect(screen.getByText('Project Not Found')).toBeInTheDocument();
       expect(screen.getByText('Back to Dashboard')).toBeInTheDocument();
     });
 
     it('displays link rules section', () => {
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
       expect(screen.getByText('Link Rules (applied automatically):')).toBeInTheDocument();
       expect(screen.getByText(/Priority pages receive more inbound links/)).toBeInTheDocument();
       expect(screen.getByText(/Links stay within onboarding pages only/)).toBeInTheDocument();
     });
 
     it('displays back to project button', () => {
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
       expect(screen.getByText('Back to Project')).toBeInTheDocument();
     });
   });
@@ -151,21 +165,20 @@ describe('OnboardingLinksPage', () => {
   // --------------------------------------------------------------------------
   describe('prerequisites', () => {
     it('shows all prerequisites as passed when all met', () => {
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
       expect(screen.getByText('Prerequisites')).toBeInTheDocument();
       expect(screen.getByText('All pages have approved keywords')).toBeInTheDocument();
       expect(screen.getByText(/All content generated/)).toBeInTheDocument();
-      expect(screen.getByText('Quality checks passed')).toBeInTheDocument();
     });
 
     it('shows keywords prerequisite as failed when not all approved', () => {
       mockUseContentGeneration.mockReturnValue(
         createContentGenData([
-          { is_approved: false, status: 'complete', qa_passed: true },
-          { is_approved: true, status: 'complete', qa_passed: true },
+          { is_approved: false, status: 'complete', qa_passed: true, source: 'onboarding' },
+          { is_approved: true, status: 'complete', qa_passed: true, source: 'onboarding' },
         ])
       );
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
       const text = screen.getByText('All pages have approved keywords');
       expect(text).toHaveClass('text-warm-gray-500');
     });
@@ -173,24 +186,26 @@ describe('OnboardingLinksPage', () => {
     it('shows content generation prerequisite as failed when incomplete', () => {
       mockUseContentGeneration.mockReturnValue(
         createContentGenData([
-          { is_approved: true, status: 'complete', qa_passed: true },
-          { is_approved: true, status: 'pending', qa_passed: null },
+          { is_approved: true, status: 'complete', qa_passed: true, source: 'onboarding' },
+          { is_approved: true, status: 'pending', qa_passed: null, source: 'onboarding' },
         ])
       );
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
       expect(screen.getByText(/1\/2 complete/)).toBeInTheDocument();
     });
 
-    it('shows QA prerequisite as failed when not all passed', () => {
+    it('only counts onboarding pages for prerequisites', () => {
       mockUseContentGeneration.mockReturnValue(
         createContentGenData([
-          { is_approved: true, status: 'complete', qa_passed: true },
-          { is_approved: true, status: 'complete', qa_passed: false },
+          { is_approved: true, status: 'complete', qa_passed: true, source: 'onboarding' },
+          { is_approved: true, status: 'complete', qa_passed: true, source: 'onboarding' },
+          { is_approved: true, status: 'complete', qa_passed: true, source: 'cluster' },
+          { is_approved: false, status: 'pending', qa_passed: null, source: 'cluster' },
         ])
       );
-      render(<OnboardingLinksPage />);
-      const text = screen.getByText('Quality checks passed');
-      expect(text).toHaveClass('text-warm-gray-500');
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
+      // Should show 2/2 (onboarding only), not 3/4
+      expect(screen.getByText(/2\/2 complete/)).toBeInTheDocument();
     });
   });
 
@@ -199,7 +214,7 @@ describe('OnboardingLinksPage', () => {
   // --------------------------------------------------------------------------
   describe('plan button', () => {
     it('is enabled when all prerequisites are met', () => {
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
       const button = screen.getByRole('button', { name: 'Plan & Inject Links' });
       expect(button).not.toBeDisabled();
     });
@@ -207,23 +222,23 @@ describe('OnboardingLinksPage', () => {
     it('is disabled when prerequisites are not met', () => {
       mockUseContentGeneration.mockReturnValue(
         createContentGenData([
-          { is_approved: false, status: 'pending', qa_passed: null },
+          { is_approved: false, status: 'pending', qa_passed: null, source: 'onboarding' },
         ])
       );
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
       const button = screen.getByRole('button', { name: 'Plan & Inject Links' });
       expect(button).toBeDisabled();
     });
 
     it('is disabled when mutation is pending', () => {
       mockPlanLinksMutation.isPending = true;
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
       const button = screen.getByRole('button', { name: /Starting/ });
       expect(button).toBeDisabled();
     });
 
     it('calls planLinks mutation on click', async () => {
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'Plan & Inject Links' }));
       });
@@ -237,7 +252,7 @@ describe('OnboardingLinksPage', () => {
       mockUsePlanStatus.mockReturnValue(
         createPlanStatusData({ status: 'planning', current_step: 1, total_pages: 10 })
       );
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
       expect(screen.queryByRole('button', { name: 'Plan & Inject Links' })).not.toBeInTheDocument();
     });
 
@@ -245,7 +260,7 @@ describe('OnboardingLinksPage', () => {
       mockUsePlanStatus.mockReturnValue(
         createPlanStatusData({ status: 'complete', total_links: 15 })
       );
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
       expect(screen.queryByRole('button', { name: 'Plan & Inject Links' })).not.toBeInTheDocument();
     });
   });
@@ -263,7 +278,7 @@ describe('OnboardingLinksPage', () => {
           pages_processed: 3,
         })
       );
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
       expect(screen.getByText('Building link graph')).toBeInTheDocument();
       expect(screen.getByText('Selecting targets & anchor text')).toBeInTheDocument();
       expect(screen.getByText('Injecting links into content')).toBeInTheDocument();
@@ -279,7 +294,7 @@ describe('OnboardingLinksPage', () => {
           pages_processed: 5,
         })
       );
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
       expect(screen.getByText('Step 3 of 4')).toBeInTheDocument();
     });
 
@@ -292,7 +307,7 @@ describe('OnboardingLinksPage', () => {
           pages_processed: 3,
         })
       );
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
       expect(screen.getByText('(3/10 pages)')).toBeInTheDocument();
     });
 
@@ -305,7 +320,7 @@ describe('OnboardingLinksPage', () => {
           pages_processed: 0,
         })
       );
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
       expect(screen.queryByText(/pages\)/)).not.toBeInTheDocument();
     });
   });
@@ -318,7 +333,7 @@ describe('OnboardingLinksPage', () => {
       mockUsePlanStatus.mockReturnValue(
         createPlanStatusData({ status: 'complete', total_links: 42 })
       );
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
       expect(screen.getByText(/Link planning complete!/)).toBeInTheDocument();
       expect(screen.getByText(/42 links created/)).toBeInTheDocument();
       expect(screen.getByText(/Redirecting to link map/)).toBeInTheDocument();
@@ -329,7 +344,7 @@ describe('OnboardingLinksPage', () => {
       mockUsePlanStatus.mockReturnValue(
         createPlanStatusData({ status: 'complete', total_links: 10 })
       );
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
 
       act(() => {
         vi.advanceTimersByTime(1500);
@@ -344,7 +359,7 @@ describe('OnboardingLinksPage', () => {
       mockUsePlanStatus.mockReturnValue(
         createPlanStatusData({ status: 'failed', error: 'API timeout' })
       );
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
       expect(screen.getByText(/Link planning failed/)).toBeInTheDocument();
       expect(screen.getByText(/API timeout/)).toBeInTheDocument();
     });
@@ -353,7 +368,7 @@ describe('OnboardingLinksPage', () => {
       mockUsePlanStatus.mockReturnValue(
         createPlanStatusData({ status: 'failed', error: 'Something went wrong' })
       );
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
       expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
     });
 
@@ -361,7 +376,7 @@ describe('OnboardingLinksPage', () => {
       mockUsePlanStatus.mockReturnValue(
         createPlanStatusData({ status: 'failed', error: 'Error' })
       );
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
       });
@@ -377,7 +392,7 @@ describe('OnboardingLinksPage', () => {
   // --------------------------------------------------------------------------
   describe('toast notifications', () => {
     it('shows success toast on plan start', async () => {
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'Plan & Inject Links' }));
       });
@@ -386,7 +401,7 @@ describe('OnboardingLinksPage', () => {
 
     it('shows error toast on plan failure', async () => {
       mockPlanLinksMutation.mutateAsync.mockRejectedValue(new Error('Server error'));
-      render(<OnboardingLinksPage />);
+      render(<OnboardingLinksPage />, { wrapper: createWrapper() });
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'Plan & Inject Links' }));
       });

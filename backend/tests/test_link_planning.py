@@ -375,10 +375,10 @@ class TestBuildOnboardingGraph:
         bc_key = tuple(sorted([page_b.id, page_c.id]))
         assert edge_map[bc_key] == 3
     @pytest.mark.asyncio
-    async def test_pages_below_threshold_have_no_edge(
+    async def test_small_page_set_uses_lower_threshold(
         self, db_session: AsyncSession
     ):
-        """Pages with only 1 shared label (below threshold of 2) have no edge."""
+        """With <=5 pages, threshold drops to 1, so 1 shared label creates an edge."""
         project = _make_project(db_session)
 
         # Page A: labels ["seo", "marketing"]
@@ -391,7 +391,7 @@ class TestBuildOnboardingGraph:
         _make_page_content(db_session, page_a.id, status="complete")
         _make_page_keywords(db_session, page_a.id, primary_keyword="kw a")
 
-        # Page B: labels ["seo", "analytics"] — only "seo" overlaps (1 < 2)
+        # Page B: labels ["seo", "analytics"] — only "seo" overlaps (1 >= 1 for small sets)
         page_b = _make_crawled_page(
             db_session,
             project.id,
@@ -407,7 +407,9 @@ class TestBuildOnboardingGraph:
         graph = await planner.build_onboarding_graph(project.id, db_session)
 
         assert len(graph["pages"]) == 2
-        assert graph["edges"] == []
+        # With <=5 pages, threshold is 1, so 1 shared label creates an edge
+        assert len(graph["edges"]) == 1
+        assert graph["edges"][0]["weight"] == 1
 
     @pytest.mark.asyncio
     async def test_pages_with_no_labels_have_no_edges(

@@ -193,26 +193,28 @@ describe('ProjectDetailPage - Cluster Section', () => {
       expect(screen.getByText('Hiking Boots')).toBeInTheDocument();
     });
 
-    it('displays page count for each cluster', () => {
+    it('displays approved count of page count for each cluster', () => {
       const clusters = [
-        createMockClusterListItem('c1', 'Running Shoes', 'running shoes', 'suggestions_ready', 8),
+        createMockClusterListItem('c1', 'Running Shoes', 'running shoes', 'suggestions_ready', 8, 3),
       ];
       mockUseClusters.mockReturnValue({ data: clusters, isLoading: false, error: null });
 
       render(<ProjectDetailPage />);
 
-      expect(screen.getByText('8 pages')).toBeInTheDocument();
+      expect(screen.getByText(/3 of 8/)).toBeInTheDocument();
+      expect(screen.getByText(/pages approved/)).toBeInTheDocument();
     });
 
     it('displays singular "page" when count is 1', () => {
       const clusters = [
-        createMockClusterListItem('c1', 'Single Page Cluster', 'test', 'generating', 1),
+        createMockClusterListItem('c1', 'Single Page Cluster', 'test', 'generating', 1, 1),
       ];
       mockUseClusters.mockReturnValue({ data: clusters, isLoading: false, error: null });
 
       render(<ProjectDetailPage />);
 
-      expect(screen.getByText('1 page')).toBeInTheDocument();
+      expect(screen.getByText(/1 of 1/)).toBeInTheDocument();
+      expect(screen.getByText(/page approved/)).toBeInTheDocument();
     });
 
     it('falls back to seed_keyword when name is empty', () => {

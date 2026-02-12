@@ -1,13 +1,15 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { useProject } from '@/hooks/use-projects';
 import { useCluster } from '@/hooks/useClusters';
 import { useContentGeneration, useBulkApproveContent } from '@/hooks/useContentGeneration';
 import { Button, Toast } from '@/components/ui';
 import { PromptInspector } from '@/components/PromptInspector';
+import { usePlanLinks, usePlanStatus } from '@/hooks/useLinks';
 import type { PageGenerationStatusItem } from '@/lib/api';
 
 // Pipeline step definitions for status indicator
@@ -15,11 +17,12 @@ const PIPELINE_STEPS = [
   { key: 'brief', label: 'Brief' },
   { key: 'write', label: 'Write' },
   { key: 'check', label: 'Check' },
+  { key: 'links', label: 'Links' },
   { key: 'done', label: 'Done' },
 ] as const;
 
-/** Map backend status to which pipeline step is active (0-indexed) */
-function getActiveStep(status: string): number {
+/** Map backend content-gen status to step index (0-2 for Brief/Write/Check) */
+function getContentStep(status: string): number {
   switch (status) {
     case 'pending':
       return -1;
@@ -30,9 +33,9 @@ function getActiveStep(status: string): number {
     case 'checking':
       return 2;
     case 'complete':
-      return 3;
+      return 3; // past all content-gen steps
     case 'failed':
-      return -2; // special sentinel for failed
+      return -2;
     default:
       return -1;
   }
@@ -161,23 +164,40 @@ function NotFoundState() {
   );
 }
 
-/** Pipeline step indicator showing Brief > Write > Check > Done */
-function PipelineIndicator({ status }: { status: string }) {
-  const activeStep = getActiveStep(status);
+/** Pipeline step indicator showing Brief → Write → Check → Links → Done */
+function PipelineIndicator({ status, linkPlanningStatus }: { status: string; linkPlanningStatus?: string }) {
+  const contentStep = getContentStep(status);
   const isFailed = status === 'failed';
+  const isPageComplete = status === 'complete';
 
   return (
     <div className="flex items-center gap-1">
       {PIPELINE_STEPS.map((step, index) => {
-        const isComplete = activeStep > index || (activeStep === 3 && index === 3);
-        const isCurrent = activeStep === index;
+        let isComplete = false;
+        let isCurrent = false;
+
+        if (index <= 2) {
+          // Brief (0), Write (1), Check (2) — driven by content gen
+          if (isPageComplete) {
+            isComplete = true;
+          } else {
+            isComplete = contentStep > index;
+            isCurrent = contentStep === index;
+          }
+        } else if (index === 3) {
+          // Links — driven by link planning status
+          isComplete = isPageComplete && linkPlanningStatus === 'complete';
+          isCurrent = isPageComplete && linkPlanningStatus === 'planning';
+        } else if (index === 4) {
+          // Done — complete only when links are done
+          isComplete = isPageComplete && linkPlanningStatus === 'complete';
+        }
 
         let dotClass = 'bg-cream-300'; // default: not reached
         let labelClass = 'text-warm-gray-400';
 
         if (isFailed) {
-          // Show completed steps as green, rest as gray
-          if (isComplete) {
+          if (contentStep > index) {
             dotClass = 'bg-palm-500';
             labelClass = 'text-palm-700';
           }
@@ -249,12 +269,14 @@ function PageRow({
   projectId,
   clusterId,
   isGenerating,
+  linkPlanningStatus,
   onInspect,
 }: {
   page: PageGenerationStatusItem;
   projectId: string;
   clusterId: string;
   isGenerating: boolean;
+  linkPlanningStatus?: string;
   onInspect: (pageId: string, pageUrl: string) => void;
 }) {
   // Extract path from URL for compact display
@@ -300,7 +322,7 @@ function PageRow({
 
         {/* Right side: pipeline indicator + actions */}
         <div className="flex items-center gap-3 shrink-0">
-          <PipelineIndicator status={page.status} />
+          <PipelineIndicator status={page.status} linkPlanningStatus={linkPlanningStatus} />
           <div className="flex items-center gap-1">
             {isComplete && (
               <Link
@@ -542,6 +564,14 @@ export default function ClusterContentGenerationPage() {
   const contentGen = useContentGeneration(projectId);
   const bulkApproveMutation = useBulkApproveContent();
 
+  // Link planning — auto-trigger when content gen completes
+  const queryClient = useQueryClient();
+  const planLinksMutation = usePlanLinks();
+  const { data: linkStatus } = usePlanStatus(projectId, 'cluster', clusterId);
+  const shouldPlanLinksRef = useRef(false);
+  const prevIsCompleteRef = useRef(true); // init true so page-load doesn't trigger
+  const prevLinkStatusRef = useRef<string | undefined>(undefined);
+
   const isLoading = isProjectLoading || isClusterLoading || contentGen.isLoading;
 
   // Filter content generation pages to only those belonging to this cluster
@@ -574,8 +604,40 @@ export default function ClusterContentGenerationPage() {
   // Partial: some pages done but not all, pipeline not running (e.g. 3/4 complete, 1 pending)
   const isPartial = !isGenerating && !isIdle && !isComplete && !isFailed && hasPages;
 
+  const isLinkPlanning = linkStatus?.status === 'planning' || planLinksMutation.isPending;
+
+  // Auto-trigger link planning when isComplete transitions false → true
+  // (only if user initiated generation during this session)
+  useEffect(() => {
+    const justCompleted = isComplete && !prevIsCompleteRef.current;
+    prevIsCompleteRef.current = isComplete;
+
+    if (justCompleted && shouldPlanLinksRef.current) {
+      shouldPlanLinksRef.current = false;
+      planLinksMutation.mutate({ projectId, scope: 'cluster', clusterId });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isComplete, projectId, clusterId]);
+
+  // Invalidate content cache when link planning transitions planning → complete
+  useEffect(() => {
+    const prev = prevLinkStatusRef.current;
+    const curr = linkStatus?.status;
+    prevLinkStatusRef.current = curr;
+
+    if (prev === 'planning' && curr === 'complete') {
+      queryClient.invalidateQueries({
+        queryKey: ['projects', projectId, 'pages'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['projects', projectId, 'content-generation', 'status'],
+      });
+    }
+  }, [linkStatus?.status, projectId, queryClient]);
+
   // Handle trigger generation
   const handleGenerate = async () => {
+    shouldPlanLinksRef.current = true;
     try {
       await contentGen.startGenerationAsync();
       setToastMessage('Content generation started');
@@ -591,6 +653,7 @@ export default function ClusterContentGenerationPage() {
 
   // Handle retry (re-triggers the full pipeline, which skips already-complete pages)
   const handleRetry = async () => {
+    shouldPlanLinksRef.current = true;
     try {
       await contentGen.startGenerationAsync();
       setToastMessage('Retrying content generation for failed pages');
@@ -606,6 +669,7 @@ export default function ClusterContentGenerationPage() {
 
   // Handle regenerate (force refresh — rewrites all content, optionally re-fetches briefs)
   const handleRegenerate = async () => {
+    shouldPlanLinksRef.current = true;
     try {
       await contentGen.regenerateAsync({ refreshBriefs });
       setToastMessage(
@@ -828,6 +892,70 @@ export default function ClusterContentGenerationPage() {
           </div>
         )}
 
+        {/* Link planning status — auto-triggered after content gen */}
+        {isComplete && !isGenerating && (
+          <div className="mb-4">
+            {isLinkPlanning && (
+              <div className="flex items-center gap-3 px-4 py-3 bg-lagoon-50 border border-lagoon-200 rounded-sm">
+                <SpinnerIcon className="w-4 h-4 text-lagoon-500 animate-spin shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-lagoon-700">Planning internal links...</p>
+                  {linkStatus?.step_label && (
+                    <p className="text-xs text-lagoon-600 mt-0.5">
+                      {linkStatus.step_label}
+                      {linkStatus.total_pages > 0 && ` \u2014 ${linkStatus.pages_processed}/${linkStatus.total_pages} pages`}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+            {linkStatus?.status === 'complete' && (
+              <div className="flex items-center justify-between px-4 py-3 bg-palm-50 border border-palm-200 rounded-sm">
+                <div className="flex items-center gap-2">
+                  <CheckIcon className="w-4 h-4 text-palm-600 shrink-0" />
+                  <p className="text-sm font-medium text-palm-700">
+                    Internal links planned{linkStatus.total_links != null ? ` \u2014 ${linkStatus.total_links} links across ${linkStatus.total_pages} pages` : ''}
+                  </p>
+                </div>
+                <Link href={`/projects/${projectId}/clusters/${clusterId}/links/map`}>
+                  <Button variant="secondary">View Link Map</Button>
+                </Link>
+              </div>
+            )}
+            {linkStatus?.status === 'failed' && (
+              <div className="flex items-center justify-between px-4 py-3 bg-coral-50 border border-coral-200 rounded-sm">
+                <div className="flex items-center gap-2">
+                  <XCircleIcon className="w-4 h-4 text-coral-500 shrink-0" />
+                  <p className="text-sm text-coral-700">
+                    Link planning failed{linkStatus.error ? `: ${linkStatus.error}` : ''}
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    planLinksMutation.mutate({ projectId, scope: 'cluster', clusterId });
+                  }}
+                >
+                  Retry
+                </Button>
+              </div>
+            )}
+            {linkStatus?.status === 'idle' && !isLinkPlanning && (
+              <div className="flex items-center justify-between px-4 py-3 bg-cream-50 border border-cream-400 rounded-sm">
+                <p className="text-sm text-warm-gray-600">Internal links haven&apos;t been planned yet.</p>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    planLinksMutation.mutate({ projectId, scope: 'cluster', clusterId });
+                  }}
+                >
+                  Plan Links
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Idle state - no pages */}
         {isIdle && !hasPages && (
           <div className="text-center py-8">
@@ -865,6 +993,7 @@ export default function ClusterContentGenerationPage() {
                   projectId={projectId}
                   clusterId={clusterId}
                   isGenerating={isGenerating}
+                  linkPlanningStatus={linkStatus?.status}
                   onInspect={handleInspect}
                 />
               ))}
@@ -872,8 +1001,8 @@ export default function ClusterContentGenerationPage() {
           </div>
         )}
 
-        {/* Review table - shown after generation complete/failed */}
-        {hasPages && !isGenerating && (isComplete || isFailed) && (
+        {/* Review table - shown after generation AND link planning complete */}
+        {hasPages && !isGenerating && !isLinkPlanning && (isComplete || isFailed) && (
           <ReviewTable pages={clusterPages} projectId={projectId} clusterId={clusterId} onInspect={handleInspect} />
         )}
 
@@ -887,7 +1016,7 @@ export default function ClusterContentGenerationPage() {
         <hr className="border-cream-500 my-6" />
 
         {/* Summary + actions for review state */}
-        {(isComplete || isFailed) && !isGenerating && completedPages.length > 0 && (
+        {(isComplete || isFailed) && !isGenerating && !isLinkPlanning && completedPages.length > 0 && (
           <div className="flex items-center justify-between mb-6">
             <p className="text-sm text-warm-gray-700">
               Approved: <span className="font-semibold text-warm-gray-900">{clusterPagesApproved} of {completedPages.length}</span>
@@ -924,7 +1053,7 @@ export default function ClusterContentGenerationPage() {
           <Link href={`/projects/${projectId}/clusters/${clusterId}`}>
             <Button variant="secondary">Back</Button>
           </Link>
-          {(isComplete || isFailed) && !isGenerating && (
+          {(isComplete || isFailed) && !isGenerating && !isLinkPlanning && (
             clusterPagesApproved > 0 ? (
               <Button onClick={() => router.push(`/projects/${projectId}/clusters/${clusterId}/export`)}>
                 Continue to Export

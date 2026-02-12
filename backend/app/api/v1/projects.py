@@ -568,8 +568,11 @@ async def get_crawl_status(
     # Verify project exists (raises 404 if not)
     await ProjectService.get_project(db, project_id)
 
-    # Get all pages for this project
-    stmt = select(CrawledPage).where(CrawledPage.project_id == project_id)
+    # Get onboarding pages for this project (crawl status is for onboarding flow only)
+    stmt = select(CrawledPage).where(
+        CrawledPage.project_id == project_id,
+        CrawledPage.source == "onboarding",
+    )
     result = await db.execute(stmt)
     pages = result.scalars().all()
 

@@ -29,7 +29,14 @@ vi.mock('@/hooks/use-projects', () => ({
 
 vi.mock('@/hooks/useClusters', () => ({
   useCluster: vi.fn(() => ({
-    data: { id: 'cluster-1', name: 'Test Cluster' },
+    data: {
+      id: 'cluster-1',
+      name: 'Test Cluster',
+      pages: [
+        { crawled_page_id: 'page-1' },
+        { crawled_page_id: 'page-2' },
+      ],
+    },
     isLoading: false,
     error: null,
   })),
@@ -55,6 +62,7 @@ vi.mock('@/hooks/useContentGeneration', () => ({
         page_id: 'page-1',
         url: 'https://example.com/page-1',
         keyword: 'test keyword',
+        source: 'cluster',
         status: 'complete',
         is_approved: false,
         qa_passed: true,
@@ -65,6 +73,7 @@ vi.mock('@/hooks/useContentGeneration', () => ({
         page_id: 'page-2',
         url: 'https://example.com/page-2',
         keyword: 'other keyword',
+        source: 'cluster',
         status: 'complete',
         is_approved: true,
         qa_passed: true,

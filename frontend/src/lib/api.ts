@@ -269,6 +269,7 @@ export interface PageGenerationStatusItem {
   page_id: string;
   url: string;
   keyword: string;
+  source: string;
   status: string;
   error: string | null;
   qa_passed: boolean | null;
@@ -638,6 +639,15 @@ export interface InternalLink {
   status: string;
 }
 
+/** A single outbound link from a page in the link map. */
+export interface LinkMapOutboundLink {
+  anchor_text: string;
+  target_url: string;
+  target_title: string;
+  anchor_type: string;
+  placement_method: string;
+}
+
 /** Summary of a page within the link map overview. */
 export interface LinkMapPage {
   page_id: string;
@@ -648,6 +658,7 @@ export interface LinkMapPage {
   labels: string[] | null;
   outbound_count: number;
   inbound_count: number;
+  outbound_links: LinkMapOutboundLink[];
   methods: Record<string, number>;
   validation_status: string;
 }

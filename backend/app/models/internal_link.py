@@ -147,7 +147,7 @@ class InternalLink(Base):
     )
 
     status: Mapped[str] = mapped_column(
-        String(20),
+        String(100),
         nullable=False,
         default=LinkStatus.PLANNED.value,
         server_default=text("'planned'"),

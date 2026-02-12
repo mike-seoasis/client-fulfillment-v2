@@ -76,6 +76,7 @@ class PageGenerationStatusItem(BaseModel):
     page_id: str = Field(..., description="CrawledPage UUID")
     url: str = Field(..., description="Normalized page URL")
     keyword: str = Field(..., description="Primary keyword for this page")
+    source: str = Field(..., description="Page source: 'onboarding' or 'cluster'")
     status: str = Field(
         ...,
         description="Page generation status (pending, generating_brief, writing, checking, complete, failed)",

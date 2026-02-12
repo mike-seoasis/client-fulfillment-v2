@@ -178,7 +178,7 @@ async def get_content_generation_status(
     # Verify project exists (raises 404 if not)
     await ProjectService.get_project(db, project_id)
 
-    # Get all approved-keyword pages with their content status
+    # Get all pages with approved keywords and their content status
     stmt = (
         select(CrawledPage)
         .join(PageKeywords, PageKeywords.crawled_page_id == CrawledPage.id)
@@ -233,6 +233,7 @@ async def get_content_generation_status(
                 page_id=page.id,
                 url=page.normalized_url,
                 keyword=keyword,
+                source=page.source or "onboarding",
                 status=page_status,
                 error=error,
                 qa_passed=qa_passed,
@@ -406,7 +407,11 @@ async def update_page_content(
 
     # Apply partial updates — only set fields that were provided
     update_data = body.model_dump(exclude_unset=True)
+    content_fields = {"page_title", "meta_description", "top_description", "bottom_description"}
+    has_content_change = False
     for field, value in update_data.items():
+        if field in content_fields and getattr(content, field) != value:
+            has_content_change = True
         setattr(content, field, value)
 
     # Recalculate word_count from all 4 fields (strip HTML tags, count words)
@@ -418,9 +423,10 @@ async def update_page_content(
             total_words += len(text_only.split())
     content.word_count = total_words
 
-    # Clear approval on edit
-    content.is_approved = False
-    content.approved_at = None
+    # Clear approval only when content actually changed
+    if has_content_change:
+        content.is_approved = False
+        content.approved_at = None
 
     await db.commit()
     await db.refresh(content)

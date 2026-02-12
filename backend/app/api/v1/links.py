@@ -27,6 +27,7 @@ from app.schemas.internal_link import (
     AnchorSuggestionsResponse,
     EditLinkRequest,
     InternalLinkResponse,
+    LinkMapOutboundLink,
     LinkMapPageSummary,
     LinkMapResponse,
     LinkPlanRequest,
@@ -141,7 +142,7 @@ async def plan_links(
             kw_stmt = select(PageKeywords).where(
                 PageKeywords.crawled_page_id == page.id,
                 PageKeywords.is_approved.is_(True),
-            )
+            ).limit(1)
             kw_result = await db.execute(kw_stmt)
             kw = kw_result.scalar_one_or_none()
             if not kw:
@@ -174,7 +175,7 @@ async def plan_links(
             kw_stmt = select(PageKeywords).where(
                 PageKeywords.crawled_page_id == cp.crawled_page_id,
                 PageKeywords.is_approved.is_(True),
-            )
+            ).limit(1)
             kw_result = await db.execute(kw_stmt)
             kw = kw_result.scalar_one_or_none()
             if not kw:
@@ -486,12 +487,13 @@ async def get_link_map(
         for page in pages_result.unique().scalars().all():
             pages_map[page.id] = page
 
-    # Count outbound/inbound per page
+    # Count outbound/inbound per page + collect outbound link details
     outbound_counts: Counter[str] = Counter()
     inbound_counts: Counter[str] = Counter()
     method_counts: Counter[str] = Counter()
     page_methods: dict[str, Counter[str]] = {}
     page_statuses: dict[str, list[str]] = {}
+    page_outbound_links: dict[str, list[InternalLink]] = {}
 
     for lnk in links:
         outbound_counts[lnk.source_page_id] += 1
@@ -508,6 +510,11 @@ async def get_link_map(
             page_statuses[lnk.source_page_id] = []
         page_statuses[lnk.source_page_id].append(lnk.status)
 
+        # Collect outbound link objects per source page
+        if lnk.source_page_id not in page_outbound_links:
+            page_outbound_links[lnk.source_page_id] = []
+        page_outbound_links[lnk.source_page_id].append(lnk)
+
     # Build page summaries
     page_summaries: dict[str, LinkMapPageSummary] = {}
     for pid in page_ids:
@@ -523,6 +530,20 @@ async def get_link_map(
         else:
             validation_status = "pass"
 
+        # Build outbound link details
+        outbound_detail: list[LinkMapOutboundLink] = []
+        for olnk in page_outbound_links.get(pid, []):
+            target_page = pages_map.get(olnk.target_page_id)
+            outbound_detail.append(
+                LinkMapOutboundLink(
+                    anchor_text=olnk.anchor_text,
+                    target_url=target_page.normalized_url if target_page else "",
+                    target_title=target_page.title or "" if target_page else "",
+                    anchor_type=olnk.anchor_type,
+                    placement_method=olnk.placement_method,
+                )
+            )
+
         page_summaries[pid] = LinkMapPageSummary(
             page_id=pid,
             url=crawled.normalized_url,
@@ -532,6 +553,7 @@ async def get_link_map(
             labels=crawled.labels if crawled.labels else None,
             outbound_count=outbound_counts.get(pid, 0),
             inbound_count=inbound_counts.get(pid, 0),
+            outbound_links=outbound_detail,
             methods=dict(page_methods.get(pid, Counter())),
             validation_status=validation_status,
         )
@@ -686,7 +708,7 @@ async def get_anchor_suggestions(
     # Get primary keyword
     kw_stmt = select(PageKeywords).where(
         PageKeywords.crawled_page_id == target_page_id,
-    )
+    ).limit(1)
     kw_result = await db.execute(kw_stmt)
     page_kw = kw_result.scalar_one_or_none()
     primary_keyword = page_kw.primary_keyword if page_kw else ""
@@ -871,7 +893,7 @@ async def add_link(
         # Get target keyword for relevance scoring
         kw_stmt = select(PageKeywords).where(
             PageKeywords.crawled_page_id == target_page_id,
-        )
+        ).limit(1)
         kw_result = await db.execute(kw_stmt)
         target_kw = kw_result.scalar_one_or_none()
         target_keyword = target_kw.primary_keyword if target_kw else ""

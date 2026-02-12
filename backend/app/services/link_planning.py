@@ -76,7 +76,10 @@ class SiloLinkPlanner:
             .where(ClusterPage.cluster_id == cluster_id)
         )
         result = await db.execute(stmt)
-        cluster_pages = result.unique().scalars().all()
+        all_cluster_pages = result.unique().scalars().all()
+
+        # Filter to only pages with a valid crawled_page_id (approved pages with content)
+        cluster_pages = [cp for cp in all_cluster_pages if cp.crawled_page_id is not None]
 
         if len(cluster_pages) <= 1:
             pages = [
@@ -183,19 +186,24 @@ class SiloLinkPlanner:
             for cp in crawled_pages
         ]
 
+        # Build a fully-connected graph: every page can potentially link to
+        # every other page. Label overlap is used as the edge weight so that
+        # target selection prefers topically related pages, but no page is
+        # excluded. Budgets (3-5 links per page) constrain link density.
         edges: list[dict[str, Any]] = []
         for a, b in combinations(crawled_pages, 2):
             labels_a = set(a.labels or [])
             labels_b = set(b.labels or [])
             overlap = len(labels_a & labels_b)
-            if overlap >= LABEL_OVERLAP_THRESHOLD:
-                edges.append(
-                    {
-                        "source": a.id,
-                        "target": b.id,
-                        "weight": overlap,
-                    }
-                )
+            # Minimum weight of 1 so even pages with no label overlap
+            # get a non-zero base score in target selection
+            edges.append(
+                {
+                    "source": a.id,
+                    "target": b.id,
+                    "weight": max(overlap, 1),
+                }
+            )
 
         logger.info(
             "Built onboarding graph",
@@ -247,6 +255,14 @@ def select_targets_cluster(
         else:
             children.append(page)
 
+    # Build ClusterPage.id → crawled_page_id lookup for target dicts
+    cp_to_crawled: dict[str, str] = {}
+    for page in graph["pages"]:
+        cp_id = page.get("page_id", "")
+        crawled_id = page.get("crawled_page_id")
+        if cp_id and crawled_id:
+            cp_to_crawled[cp_id] = crawled_id
+
     # Sort children by composite_score descending for consistent ordering
     children_sorted = sorted(
         children, key=lambda p: p.get("composite_score", 0.0), reverse=True
@@ -268,6 +284,7 @@ def select_targets_cluster(
             targets.append(
                 {
                     "page_id": child["page_id"],
+                    "crawled_page_id": cp_to_crawled.get(child["page_id"]),
                     "keyword": child["keyword"],
                     "url": child["url"],
                     "is_mandatory": False,
@@ -289,6 +306,7 @@ def select_targets_cluster(
             targets.append(
                 {
                     "page_id": parent["page_id"],
+                    "crawled_page_id": cp_to_crawled.get(parent["page_id"]),
                     "keyword": parent["keyword"],
                     "url": parent["url"],
                     "is_mandatory": True,
@@ -314,6 +332,7 @@ def select_targets_cluster(
             targets.append(
                 {
                     "page_id": sibling["page_id"],
+                    "crawled_page_id": cp_to_crawled.get(sibling["page_id"]),
                     "keyword": sibling["keyword"],
                     "url": sibling["url"],
                     "is_mandatory": False,
@@ -885,6 +904,19 @@ async def run_link_planning_pipeline(
         )
 
         # ------------------------------------------------------------------
+        # Resolve slug-only URLs to full URLs using project site_url
+        # (Cluster pages have slug-only normalized_url, e.g. "best-camping-coffee-maker")
+        # ------------------------------------------------------------------
+        project_obj = await db.get(Project, project_id)
+        site_base = (project_obj.site_url or "").rstrip("/") if project_obj else ""
+
+        for _source_id, link_list in page_link_plans.items():
+            for lp in link_list:
+                url = lp.get("url", "")
+                if url and not url.startswith("http"):
+                    lp["url"] = f"{site_base}/{url.lstrip('/')}"
+
+        # ------------------------------------------------------------------
         # Step 3: Inject links into content
         # ------------------------------------------------------------------
         progress["current_step"] = 3
@@ -1090,6 +1122,7 @@ async def run_link_planning_pipeline(
 
         progress["status"] = "complete"
         progress["pages_processed"] = len(pages)
+        progress["total_links"] = len(injection_results)
 
         return {
             "status": "complete",
