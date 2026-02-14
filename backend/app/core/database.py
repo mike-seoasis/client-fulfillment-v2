@@ -81,8 +81,8 @@ class DatabaseManager:
                 connect_args={
                     "timeout": settings.db_connect_timeout,
                     "command_timeout": settings.db_command_timeout,
-                    # Only require SSL in production (Railway), disable for local dev
-                    **({"ssl": "require"} if settings.environment == "production" else {}),
+                    # Require SSL for all non-local environments (Neon requires SSL)
+                    **({"ssl": "require"} if settings.environment != "development" else {}),
                 },
             )
 
