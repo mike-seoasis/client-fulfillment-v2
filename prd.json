@@ -381,8 +381,9 @@
         "This is NOT Matrixify CSV — it's HTML for Shopify blog editor"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "This is the only genuinely NEW UI in Phase 11. The clipboard pattern exists in PromptInspector.tsx (CopyButton component, lines 127-155) — reuse that pattern. For file download, create a Blob with type 'text/html' and trigger download via hidden anchor element (same pattern as the existing CSV export but with HTML content type). The export cards should show title and meta as copyable text fields above the action buttons."
+      "passes": true,
+      "notes": "This is the only genuinely NEW UI in Phase 11. The clipboard pattern exists in PromptInspector.tsx (CopyButton component, lines 127-155) — reuse that pattern. For file download, create a Blob with type 'text/html' and trigger download via hidden anchor element (same pattern as the existing CSV export but with HTML content type). The export cards should show title and meta as copyable text fields above the action buttons.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S11-021",
@@ -436,6 +437,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-14T22:20:27.093Z"
+    "updatedAt": "2026-02-14T22:24:36.139Z"
   }
 }

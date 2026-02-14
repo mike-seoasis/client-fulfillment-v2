@@ -35,6 +35,8 @@ import {
   triggerBlogLinkPlanning,
   getBlogLinkStatus,
   getBlogLinkMap,
+  getBlogExport,
+  downloadBlogPostHtml,
   type BlogCampaign,
   type BlogCampaignCreate,
   type BlogCampaignListItem,
@@ -45,6 +47,7 @@ import {
   type BlogContentTriggerResponse,
   type BlogBulkApproveResponse,
   type BlogLinkPlanTriggerResponse,
+  type BlogExportItem,
   type BlogLinkStatusResponse,
   type BlogLinkMapResponse,
 } from '@/lib/api';
@@ -463,5 +466,45 @@ export function useBlogLinkMap(
     queryKey: blogKeys.linkMap(projectId, blogId, postId),
     queryFn: () => getBlogLinkMap(projectId, blogId, postId),
     enabled: options?.enabled ?? (!!projectId && !!blogId && !!postId),
+  });
+}
+
+// =============================================================================
+// EXPORT HOOKS
+// =============================================================================
+
+/**
+ * Fetch all approved blog posts formatted for export (clean HTML, metadata).
+ */
+export function useBlogExport(
+  projectId: string,
+  blogId: string,
+  options?: { enabled?: boolean }
+): UseQueryResult<BlogExportItem[]> {
+  return useQuery({
+    queryKey: blogKeys.export(projectId, blogId),
+    queryFn: () => getBlogExport(projectId, blogId),
+    enabled: options?.enabled ?? (!!projectId && !!blogId),
+  });
+}
+
+/**
+ * Download a single blog post as an HTML file.
+ */
+export function useDownloadBlogPostHtml(): UseMutationResult<
+  void,
+  Error,
+  { projectId: string; blogId: string; postId: string }
+> {
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      blogId,
+      postId,
+    }: {
+      projectId: string;
+      blogId: string;
+      postId: string;
+    }) => downloadBlogPostHtml(projectId, blogId, postId),
   });
 }

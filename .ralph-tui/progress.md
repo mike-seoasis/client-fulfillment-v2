@@ -243,3 +243,16 @@ after each iteration and it's included in prompts for context.
   - Pre-existing TS errors (3) unchanged — none in new files
 ---
 
+## 2026-02-14 - S11-020
+- Created blog HTML export page with per-post Copy HTML / Download .html actions and Copy All HTML bulk action
+- Files changed:
+  - `frontend/src/app/projects/[id]/blogs/[blogId]/export/page.tsx` (new) — Export page with StepIndicator (step 5: Export), ready count badge, approved post cards (keyword, slug, word count, title, meta description, Copy HTML with checkmark feedback, Download .html), unapproved posts grayed out at bottom, bottom bar with Back button and Copy All HTML button
+  - `frontend/src/hooks/useBlogs.ts` — added `useBlogExport` query hook and `useDownloadBlogPostHtml` mutation hook; added `getBlogExport`, `downloadBlogPostHtml`, `BlogExportItem` imports from api.ts
+- **Learnings:**
+  - Export API returns only approved+content_complete posts as `BlogExportItem[]` — unapproved posts are derived by diffing campaign.posts against exported post IDs
+  - CopyButton pattern from PromptInspector uses `navigator.clipboard.writeText()` with 2s auto-reset — adapted for per-card copy with toast notification callback
+  - Download uses existing `downloadBlogPostHtml()` API function which handles Content-Disposition header parsing and hidden anchor download pattern
+  - Copy All HTML concatenates posts with `<!-- POST: keyword -->` separator comments between each post
+  - Pre-existing TS errors (3) unchanged — none in new/changed files
+---
+
