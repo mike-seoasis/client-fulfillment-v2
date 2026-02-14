@@ -185,8 +185,9 @@
         "HTML cleaning reuses the strip pattern from the existing Lexical editor export (removing highlight nodes)"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Blog export is HTML for pasting into Shopify's blog editor. NOT Matrixify CSV (that's collection pages only). The highlight stripping logic exists in the frontend Lexical editor (HighlightPlugin.tsx lines 68-80) — replicate server-side with BeautifulSoup for the backend export."
+      "passes": true,
+      "notes": "Blog export is HTML for pasting into Shopify's blog editor. NOT Matrixify CSV (that's collection pages only). The highlight stripping logic exists in the frontend Lexical editor (HighlightPlugin.tsx lines 68-80) — replicate server-side with BeautifulSoup for the backend export.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S11-011",
@@ -427,6 +428,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-14T21:50:11.605Z"
+    "updatedAt": "2026-02-14T21:54:26.106Z"
   }
 }

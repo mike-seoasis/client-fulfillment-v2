@@ -130,3 +130,15 @@ after each iteration and it's included in prompts for context.
   - Pre-existing mypy pattern: Pydantic models with `Field(None, ...)` defaults trigger "Missing named argument" mypy errors when not passed explicitly. Same pattern as `LinkPlanStatusResponse`, `WPProgressResponse`, etc. throughout the codebase
 ---
 
+## 2026-02-14 - S11-010
+- Created blog HTML export service and added 3 export API endpoints
+- Files changed:
+  - `backend/app/services/blog_export.py` (new) — BlogExportService with `generate_clean_html()` (strips highlights, data attrs, fixes H1→H2) and `generate_export_package()` (queries approved+complete posts, returns BlogExportItem list)
+  - `backend/app/api/v1/blogs.py` — added 3 export endpoints: GET `/{blog_id}/export` (all approved posts), GET `/{blog_id}/posts/{post_id}/export` (single post), GET `/{blog_id}/posts/{post_id}/download` (HTML file with Content-Disposition)
+- **Learnings:**
+  - BeautifulSoup `span.unwrap()` is the server-side equivalent of Lexical's `insertBefore + remove` pattern for stripping highlight wrappers — much simpler than manual tree traversal
+  - The `type: ignore[attr-defined]` on `from bs4 import BeautifulSoup` is NOT needed in this codebase (mypy flags it as unused-ignore). Other files like `link_injection.py` use it, but it's not required by current mypy config
+  - Highlight spans in the Lexical editor render as `<span class="hl-keyword">`, `<span class="hl-keyword-var">`, `<span class="hl-lsi">`, `<span class="hl-trope">` — these are the 4 CSS classes to strip
+  - FastAPI `Response` class is needed for the download endpoint (returns raw HTML with Content-Disposition header instead of JSON)
+---
+

@@ -6,7 +6,7 @@ plus content generation trigger/poll, content CRUD, approval, and quality rechec
 
 import asyncio
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -28,6 +28,7 @@ from app.schemas.blog import (
     BlogContentGenerationStatus,
     BlogContentTriggerResponse,
     BlogContentUpdateRequest,
+    BlogExportItem,
     BlogLinkMapItem,
     BlogLinkMapResponse,
     BlogLinkPlanTriggerResponse,
@@ -1135,6 +1136,138 @@ async def get_blog_link_map(
         crawled_page_id=crawled_page.id,
         total_links=len(link_items),
         links=link_items,
+    )
+
+
+# =============================================================================
+# Export Endpoints
+# =============================================================================
+
+
+@router.get(
+    "/{project_id}/blogs/{blog_id}/export",
+    response_model=list[BlogExportItem],
+)
+async def export_blog_campaign(
+    project_id: str,
+    blog_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> list[BlogExportItem]:
+    """Export all approved posts in a blog campaign as clean HTML.
+
+    Returns a JSON array of BlogExportItem, each with cleaned HTML content
+    suitable for pasting into Shopify's blog editor.
+    """
+    await ProjectService.get_project(db, project_id)
+
+    # Verify campaign belongs to project
+    campaign_stmt = select(BlogCampaign).where(
+        BlogCampaign.id == blog_id,
+        BlogCampaign.project_id == project_id,
+    )
+    campaign_result = await db.execute(campaign_stmt)
+    if campaign_result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Blog campaign {blog_id} not found",
+        )
+
+    from app.services.blog_export import BlogExportService
+
+    items = await BlogExportService.generate_export_package(blog_id, db)
+    return items
+
+
+@router.get(
+    "/{project_id}/blogs/{blog_id}/posts/{post_id}/export",
+    response_model=BlogExportItem,
+)
+async def export_blog_post(
+    project_id: str,
+    blog_id: str,
+    post_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> BlogExportItem:
+    """Export a single blog post as clean HTML.
+
+    Returns a BlogExportItem with cleaned HTML content.
+    """
+    await ProjectService.get_project(db, project_id)
+
+    post = await _get_blog_post(db, project_id, blog_id, post_id)
+
+    if post.content is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Content has not been generated yet for this post",
+        )
+
+    from app.services.blog_export import BlogExportService, _count_words
+
+    clean_html = BlogExportService.generate_clean_html(post)
+
+    return BlogExportItem(
+        post_id=post.id,
+        primary_keyword=post.primary_keyword,
+        url_slug=post.url_slug,
+        title=post.title,
+        meta_description=post.meta_description,
+        html_content=clean_html,
+        word_count=_count_words(clean_html),
+    )
+
+
+@router.get(
+    "/{project_id}/blogs/{blog_id}/posts/{post_id}/download",
+)
+async def download_blog_post_html(
+    project_id: str,
+    blog_id: str,
+    post_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> Response:
+    """Download a blog post as an HTML file.
+
+    Returns the cleaned HTML as a downloadable file with Content-Disposition header.
+    """
+    await ProjectService.get_project(db, project_id)
+
+    post = await _get_blog_post(db, project_id, blog_id, post_id)
+
+    if post.content is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Content has not been generated yet for this post",
+        )
+
+    from app.services.blog_export import BlogExportService
+
+    clean_html = BlogExportService.generate_clean_html(post)
+
+    # Build a minimal HTML document
+    html_doc = (
+        "<!DOCTYPE html>\n"
+        "<html lang=\"en\">\n"
+        "<head>\n"
+        f"  <meta charset=\"utf-8\">\n"
+        f"  <title>{post.title or post.primary_keyword}</title>\n"
+        f"  <meta name=\"description\" content=\"{post.meta_description or ''}\">\n"
+        "</head>\n"
+        "<body>\n"
+        f"{clean_html}\n"
+        "</body>\n"
+        "</html>"
+    )
+
+    # Sanitize filename from slug
+    filename = f"{post.url_slug or post.primary_keyword.replace(' ', '-')}.html"
+
+    return Response(
+        content=html_doc,
+        media_type="text/html",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
     )
 
 
