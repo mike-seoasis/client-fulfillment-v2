@@ -256,3 +256,19 @@ after each iteration and it's included in prompts for context.
   - Pre-existing TS errors (3) unchanged — none in new/changed files
 ---
 
+## 2026-02-14 - S11-011
+- Created comprehensive backend tests for blog services and API (81 test cases total)
+- Files changed:
+  - `backend/tests/services/test_blog_topic_discovery.py` (new) — 19 tests: POP seed extraction (4), topic expansion (4), volume enrichment (4), filter/rank (3), slug generation (5), brand context (2)
+  - `backend/tests/services/test_blog_content_generation.py` (new) — 20 tests: JSON parsing (8), quality checks (6), pipeline result dataclasses (6)
+  - `backend/tests/services/test_blog_export.py` (new) — 15 tests: HTML cleaning (9), word counting (4), export package generation (2)
+  - `backend/tests/api/test_blogs.py` (new) — 27 tests: campaign CRUD (8), post update (2), bulk approve (1), content generation trigger/poll (5), content CRUD (4), recheck (2), export (4)
+- **Learnings:**
+  - `KeywordCluster` requires `seed_keyword` field (NOT NULL) — test fixtures must include it
+  - `ClusterPage` requires `role` field (NOT NULL, values: "parent" or "child") and `url_slug` — must be included in fixtures
+  - Use `_FakeBlogPost` / `_FakePageContent` stand-in classes instead of real model instances for pure function tests to avoid SQLAlchemy identity map pollution in shared in-memory SQLite
+  - Blog content JSON uses 3 keys (`page_title`, `meta_description`, `content`) vs collection's 4 keys — `_parse_blog_content_json` correctly rejects collection-format JSON
+  - The `_run_blog_quality_checks` function reuses all individual check functions from `content_quality.py` but operates on blog field names (`title`, `meta_description`, `content`) instead of PageContent fields
+  - Pre-existing test failures (26) across content_quality, crawling, cluster_api, link_pipeline, link_planning — none related to blog changes
+---
+
