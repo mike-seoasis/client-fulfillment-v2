@@ -190,3 +190,16 @@ after each iteration and it's included in prompts for context.
   - Pre-existing TS errors (3) unchanged — none in new file
 ---
 
+## 2026-02-14 - S11-016
+- Created blog keywords step page with 5-step indicator, inline editing, approval toggles, and source page display
+- Files changed:
+  - `frontend/src/app/projects/[id]/blogs/[blogId]/page.tsx` (new) — BlogKeywordsPage with StepIndicator, BlogPostRow (inline editable keyword + slug, approve toggle, source page, volume), Approve All bulk action, Delete Campaign with 2-click confirmation, Generate Content navigation
+- **Learnings:**
+  - Blog posts are simpler than cluster pages: no parent/child roles, no CPC/competition/composite_score columns. Only columns: approve checkbox, topic keyword (editable), source page, volume, URL slug (editable)
+  - `BlogPost.source_page_id` references `ClusterPage.id` — to show source page keyword, fetch the cluster via `campaign.cluster_id` and build a `Map<ClusterPage.id, ClusterPage.keyword>` lookup
+  - `useBulkApproveBlogPosts` returns `{ approved_count, campaign_status }` — use `approved_count` for the toast message
+  - Blog Approve All uses the dedicated `bulkApproveBlogPosts` API endpoint (not individual per-row mutations like clusters), which is cleaner
+  - Column headers row added (unlike cluster page) since the Source Page column needs labeling for clarity
+  - Pre-existing TS errors (3) unchanged — none in new file
+---
+
