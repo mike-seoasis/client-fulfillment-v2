@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from app.api.v1.blogs import router as blogs_router
 from app.api.v1.brand_config import router as brand_config_router
 from app.api.v1.clusters import router as clusters_router
 from app.api.v1.content_generation import router as content_generation_router
@@ -20,3 +21,4 @@ router.include_router(content_generation_router)
 router.include_router(clusters_router)
 router.include_router(links_router)
 router.include_router(wordpress_router)
+router.include_router(blogs_router)

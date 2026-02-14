@@ -61,3 +61,16 @@ after each iteration and it's included in prompts for context.
   - Pre-existing mypy errors in `brand_config.py`, `config.py`, `crawling.py` — unrelated to this change
 ---
 
+## 2026-02-14 - S11-005
+- Created blog campaign CRUD API endpoints following the clusters.py CRUD pattern
+- Files changed:
+  - `backend/app/api/v1/blogs.py` (new) — 6 endpoints: POST create, GET list, GET detail, PATCH post, POST approve, DELETE
+  - `backend/app/api/v1/__init__.py` — registered blogs_router
+- **Learnings:**
+  - Blog creation endpoint mirrors cluster creation: inline pipeline with asyncio.wait_for timeout (90s)
+  - For list endpoints with computed counts from different conditions (approved vs content_complete), a separate query for content_complete_count is cleaner than trying to fit multiple func.nullif conditions into a single grouped query
+  - Cluster "completed content" validation uses status set {approved, content_generating, complete} — these are the statuses where POP briefs exist on approved pages
+  - The discovery service handles its own commit/rollback, so the endpoint just needs to reload the campaign with selectinload after success
+  - Pre-existing mypy errors (51 total across 7 files) — none in blogs.py
+---
+
