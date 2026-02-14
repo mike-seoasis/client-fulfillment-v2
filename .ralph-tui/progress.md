@@ -217,3 +217,16 @@ after each iteration and it's included in prompts for context.
   - Pre-existing TS errors (3) unchanged — none in new file
 ---
 
+## 2026-02-14 - S11-018
+- Created blog content editor page with 3 fields (title, meta description, content), QA sidebar, and auto-save
+- Files changed:
+  - `frontend/src/app/projects/[id]/blogs/[blogId]/content/[postId]/page.tsx` (new) — BlogContentEditorPage with 3-field editor (Page Title with 70-char counter, Meta Description with 160-char counter, Content via ContentEditorWithSource Lexical editor), highlight toggle controls, sidebar (QualityStatusCard, FlaggedPassagesCard, ContentStatsCard, LsiTermsCard, HeadingOutlineCard), auto-save on blur with dirty field tracking, bottom action bar (auto-save status, Re-run Checks, Save Draft, Approve)
+- **Learnings:**
+  - Blog posts use `title`/`meta_description`/`content` field names in `BlogContentUpdate` (not `page_title`/`bottom_description` like cluster's `PageContent`)
+  - Blog approval uses `content_approved` (not `is_approved` which is for keyword-level approval) — Approve button navigates back to content list
+  - Blog QA issues reference `field === 'content'` (not `'bottom_description'`) for jump-to functionality in FlaggedPassagesCard
+  - Blog brief data comes from `BlogPost.pop_brief` JSONB (not `content.brief` like cluster editor) — LSI terms and heading targets extracted from pop_brief
+  - Blog editor reuses all existing content-editor components (ContentEditorWithSource, HighlightToggleControls, HighlightPlugin) with no modifications needed
+  - Pre-existing TS errors (3) unchanged — none in new file
+---
+
