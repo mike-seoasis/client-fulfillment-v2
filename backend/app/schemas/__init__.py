@@ -4,6 +4,17 @@ Schemas define the shape of data for API requests and responses.
 They handle validation, serialization, and documentation.
 """
 
+from app.schemas.blog import (
+    BlogCampaignCreate,
+    BlogCampaignListItem,
+    BlogCampaignResponse,
+    BlogContentGenerationStatus,
+    BlogContentUpdateRequest,
+    BlogExportItem,
+    BlogPostGenerationStatusItem,
+    BlogPostResponse,
+    BlogPostUpdate,
+)
 from app.schemas.brand_config import (
     VALID_SECTION_NAMES,
     BrandConfigResponse,
@@ -289,6 +300,16 @@ __all__ = [
     "AddLinkRequest",
     "EditLinkRequest",
     "AnchorSuggestionsResponse",
+    # Blog schemas
+    "BlogCampaignCreate",
+    "BlogPostResponse",
+    "BlogCampaignResponse",
+    "BlogCampaignListItem",
+    "BlogPostUpdate",
+    "BlogContentUpdateRequest",
+    "BlogPostGenerationStatusItem",
+    "BlogContentGenerationStatus",
+    "BlogExportItem",
     # CrawledPage schemas
     "CrawledPageCreate",
     "CrawledPageFullResponse",

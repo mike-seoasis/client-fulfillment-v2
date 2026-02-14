@@ -54,8 +54,9 @@
         "BlogExportItem: post_id, primary_keyword, url_slug, title, meta_description, html_content, word_count"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Follow pattern from backend/app/schemas/cluster.py. Use Pydantic v2 style: BaseModel, ConfigDict(from_attributes=True), Field(...) for validation. The BlogPostResponse should NOT include full content in list views — truncate or omit."
+      "passes": true,
+      "notes": "Follow pattern from backend/app/schemas/cluster.py. Use Pydantic v2 style: BaseModel, ConfigDict(from_attributes=True), Field(...) for validation. The BlogPostResponse should NOT include full content in list views — truncate or omit.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S11-004",
@@ -420,6 +421,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-14T21:24:23.753Z"
+    "updatedAt": "2026-02-14T21:26:05.272Z"
   }
 }

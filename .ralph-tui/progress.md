@@ -37,3 +37,15 @@ after each iteration and it's included in prompts for context.
   - `down_revision` type annotation for merge revisions: `str | tuple[str, ...] | None`
 ---
 
+## 2026-02-14 - S11-003
+- Created Pydantic v2 schemas for all blog API endpoints
+- Files changed:
+  - `backend/app/schemas/blog.py` (new) — 9 schema classes covering create, response, list, update, generation status, and export
+  - `backend/app/schemas/__init__.py` — registered all 9 blog schemas with imports and `__all__`
+- **Learnings:**
+  - Schema registration pattern: import block at top of `__init__.py`, add to `__all__` list with a comment section header
+  - Pre-existing mypy errors in `brand_config.py` and `config.py` — unrelated to this change
+  - `BlogPostResponse` includes all model fields; content truncation for list views will be handled at the endpoint/service layer, not in the schema itself
+  - Added `BlogPostGenerationStatusItem` as a sub-schema for per-post status within `BlogContentGenerationStatus`
+---
+
