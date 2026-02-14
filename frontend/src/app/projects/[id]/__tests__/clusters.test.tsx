@@ -44,6 +44,11 @@ vi.mock('@/hooks/useClusters', () => ({
   useClusters: () => mockUseClusters(),
 }));
 
+const mockUseBlogCampaigns = vi.fn();
+vi.mock('@/hooks/useBlogs', () => ({
+  useBlogCampaigns: (...args: unknown[]) => mockUseBlogCampaigns(...args),
+}));
+
 const mockUseLinkMap = vi.fn();
 const mockUsePlanStatus = vi.fn();
 vi.mock('@/hooks/useLinks', () => ({
@@ -132,6 +137,7 @@ describe('ProjectDetailPage - Cluster Section', () => {
     mockUseStartBrandConfigGeneration.mockReturnValue(defaultMockStartBrandConfig());
     mockUseCrawlStatus.mockReturnValue(defaultMockCrawlStatus());
     mockUseClusters.mockReturnValue({ data: undefined, isLoading: false, error: null });
+    mockUseBlogCampaigns.mockReturnValue({ data: undefined, isLoading: false, error: null });
     mockUseLinkMap.mockReturnValue({ data: undefined, isLoading: false });
     mockUsePlanStatus.mockReturnValue({ data: undefined, isLoading: false });
   });

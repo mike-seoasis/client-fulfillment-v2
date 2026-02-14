@@ -272,3 +272,23 @@ after each iteration and it's included in prompts for context.
   - Pre-existing test failures (26) across content_quality, crawling, cluster_api, link_pipeline, link_planning — none related to blog changes
 ---
 
+## 2026-02-14 - S11-021
+- Created comprehensive frontend component tests for all blog UI components (63 test cases across 7 test files)
+- Files changed:
+  - `frontend/src/hooks/__tests__/useBlogs.test.ts` (new) — 14 tests: blogKeys factory (7), query enabled/disabled (3), mutation API calls (3), content status polling (1)
+  - `frontend/src/app/projects/[id]/__tests__/blogs.test.tsx` (new) — 9 tests: empty state (4), campaign cards (3), section header (2)
+  - `frontend/src/app/projects/[id]/blogs/new/__tests__/page.test.tsx` (new) — 8 tests: loading/404 (2), form rendering (3), validation (2), submission (1)
+  - `frontend/src/app/projects/[id]/blogs/[blogId]/__tests__/page.test.tsx` (new) — 8 tests: loading/404 (3), keyword rendering (3), approval (2)
+  - `frontend/src/app/projects/[id]/blogs/[blogId]/content/__tests__/page.test.tsx` (new) — 8 tests: loading/404 (2), generation states (3), review table (3)
+  - `frontend/src/app/projects/[id]/blogs/[blogId]/content/[postId]/__tests__/page.test.tsx` (new) — 8 tests: loading/error (2), editor layout (3), char counters (2), approval (1)
+  - `frontend/src/app/projects/[id]/blogs/[blogId]/export/__tests__/page.test.tsx` (new) — 8 tests: loading/404 (2), export rendering (3), clipboard (2), unapproved section (1)
+  - `frontend/src/app/projects/[id]/__tests__/clusters.test.tsx` — fixed pre-existing failure: added missing `useBlogCampaigns` mock
+  - `frontend/src/app/projects/[id]/__tests__/linkStatus.test.tsx` — fixed pre-existing failure: added missing `useBlogCampaigns` mock
+- **Learnings:**
+  - Pre-existing `clusters.test.tsx` and `linkStatus.test.tsx` were failing because S11-014 added `useBlogCampaigns` to `ProjectDetailPage` but didn't update test mocks — fixed by adding the missing mock
+  - For hook tests with `renderHook`, must wrap in `QueryClientProvider` with a fresh `QueryClient` per test (`retry: false` for predictable behavior)
+  - Polling tests (useBlogContentStatus) need longer timeouts (~20s) to observe actual refetch behavior with real timers + `waitFor`
+  - `navigator.clipboard.writeText` mock: `Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } })` in `beforeEach`
+  - Components using `ContentEditorWithSource` (Lexical) need it mocked as a textarea — same pattern as cluster content editor tests
+---
+

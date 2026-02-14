@@ -39,6 +39,11 @@ vi.mock('@/hooks/useClusters', () => ({
   useClusters: () => mockUseClusters(),
 }));
 
+const mockUseBlogCampaigns = vi.fn();
+vi.mock('@/hooks/useBlogs', () => ({
+  useBlogCampaigns: (...args: unknown[]) => mockUseBlogCampaigns(...args),
+}));
+
 const mockUseLinkMap = vi.fn();
 const mockUsePlanStatus = vi.fn();
 vi.mock('@/hooks/useLinks', () => ({
@@ -88,6 +93,7 @@ describe('ProjectDetailPage - Link Status Indicators', () => {
       },
     });
     mockUseClusters.mockReturnValue({ data: [] });
+    mockUseBlogCampaigns.mockReturnValue({ data: undefined, isLoading: false, error: null });
 
     // Default: onboarding links not planned
     mockUseLinkMap.mockReturnValue({ data: null });
