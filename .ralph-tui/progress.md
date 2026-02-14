@@ -86,3 +86,17 @@ after each iteration and it's included in prompts for context.
   - Pre-existing mypy/ruff errors unchanged — no new errors introduced
 ---
 
+## 2026-02-14 - S11-007
+- Created blog content generation pipeline orchestrator following the content_generation.py pattern
+- Files changed:
+  - `backend/app/services/blog_content_generation.py` (new) — `run_blog_content_pipeline()` orchestrator with per-post brief→write→check pipeline, semaphore concurrency, error isolation, campaign status update
+- **Learnings:**
+  - Blog posts store content directly on `BlogPost` (title, meta_description, content) vs collection pages using a separate `PageContent` table — this means no `_ensure_page_content` helper needed
+  - Blog content JSON uses 3 keys (page_title, meta_description, content) vs collection's 4 keys (adds top_description, bottom_description) — separate `_parse_blog_content_json` function needed
+  - Blog posts don't have a CrawledPage, so POP brief fetching uses the POP client directly instead of `fetch_content_brief()` which requires a CrawledPage. Brief data stored in `BlogPost.pop_brief` JSONB
+  - For QA checks: reused individual `_check_*` functions from `content_quality.py` directly rather than `run_quality_checks()` which is coupled to `PageContent` field names
+  - `ContentBrief.__new__(ContentBrief)` used to create transient in-memory briefs from cached POP data without DB persistence
+  - Campaign status auto-transitions to 'review' when all approved posts reach content_status='complete'
+  - Pre-existing mypy errors (29 across 4 files) — none in new file
+---
+
