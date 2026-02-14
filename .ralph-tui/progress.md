@@ -166,3 +166,15 @@ after each iteration and it's included in prompts for context.
   - Pre-existing TS errors (3) unchanged — none in new file
 ---
 
+## 2026-02-14 - S11-014
+- Added Blogs section to project detail page below New Content section
+- Files changed:
+  - `frontend/src/app/projects/[id]/page.tsx` — added `useBlogCampaigns` import, `PencilIcon`, `BlogCampaignStatusBadge`, `BlogCampaignCard` components, and full Blogs section with campaign grid + empty state
+- **Learnings:**
+  - Blog section follows exact same layout pattern as New Content section: header with icon + title + chip badge, description text, conditional grid/empty state
+  - `BlogCampaignCard` mirrors `ClusterCard` styling: `bg-white rounded-sm border border-sand-500 p-4 shadow-sm hover:shadow-md transition-shadow`
+  - `BlogCampaignListItem` provides `content_complete_count` (not `approved_count`) for tracking post completion — used for "X of Y posts done" display
+  - Status badge colors: planning=cream, writing=lagoon, review=coral, complete=palm — matches the design spec
+  - Pre-existing TS errors (3) unchanged — none in changed file
+---
+

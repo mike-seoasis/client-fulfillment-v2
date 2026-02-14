@@ -7,6 +7,7 @@ import { useProject, useDeleteProject } from '@/hooks/use-projects';
 import { useStartBrandConfigGeneration, useBrandConfigGeneration } from '@/hooks/useBrandConfigGeneration';
 import { useCrawlStatus, getOnboardingStep } from '@/hooks/use-crawl-status';
 import { useClusters } from '@/hooks/useClusters';
+import { useBlogCampaigns } from '@/hooks/useBlogs';
 import { useLinkMap, usePlanStatus } from '@/hooks/useLinks';
 import { Button, ButtonLink, Toast } from '@/components/ui';
 
@@ -114,6 +115,22 @@ function FileIcon({ className }: { className?: string }) {
     >
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
       <polyline points="14 2 14 8 20 8" />
+    </svg>
+  );
+}
+
+function PencilIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
     </svg>
   );
 }
@@ -397,6 +414,63 @@ function ClusterCard({
   );
 }
 
+function BlogCampaignStatusBadge({ status }: { status: string }) {
+  switch (status) {
+    case 'complete':
+      return (
+        <span className="inline-flex items-center gap-1 text-xs bg-palm-50 text-palm-700 px-2 py-0.5 rounded-sm">
+          <CheckCircleIcon className="w-3 h-3" />
+          Complete
+        </span>
+      );
+    case 'review':
+      return (
+        <span className="inline-flex items-center gap-1 text-xs bg-coral-50 text-coral-700 px-2 py-0.5 rounded-sm">
+          <CircleIcon className="w-3 h-3" />
+          Review
+        </span>
+      );
+    case 'writing':
+      return (
+        <span className="inline-flex items-center gap-1 text-xs bg-lagoon-50 text-lagoon-700 px-2 py-0.5 rounded-sm">
+          <SpinnerIcon className="w-3 h-3" />
+          Writing
+        </span>
+      );
+    case 'planning':
+    default:
+      return (
+        <span className="inline-flex items-center gap-1 text-xs bg-cream-100 text-warm-gray-600 px-2 py-0.5 rounded-sm">
+          <CircleIcon className="w-3 h-3" />
+          Planning
+        </span>
+      );
+  }
+}
+
+function BlogCampaignCard({
+  campaign,
+}: {
+  campaign: { id: string; name: string; status: string; cluster_name: string; post_count: number; content_complete_count: number };
+}) {
+  return (
+    <div className="bg-white rounded-sm border border-sand-500 p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+      <h3 className="font-medium text-warm-gray-900 mb-1 truncate">
+        {campaign.name}
+      </h3>
+      <p className="text-xs text-warm-gray-500 mb-2 truncate">
+        {campaign.cluster_name}
+      </p>
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-warm-gray-600">
+          {campaign.content_complete_count} of {campaign.post_count} {campaign.post_count === 1 ? 'post' : 'posts'} done
+        </span>
+        <BlogCampaignStatusBadge status={campaign.status} />
+      </div>
+    </div>
+  );
+}
+
 export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -415,6 +489,11 @@ export default function ProjectDetailPage() {
 
   // Fetch clusters for New Content section
   const { data: clusters } = useClusters(projectId, {
+    enabled: !!projectId && !isLoading && !error,
+  });
+
+  // Fetch blog campaigns for Blogs section
+  const { data: blogCampaigns } = useBlogCampaigns(projectId, {
     enabled: !!projectId && !isLoading && !error,
   });
 
@@ -800,6 +879,48 @@ export default function ProjectDetailPage() {
                     cluster={cluster}
                     projectId={projectId}
                   />
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Blogs section */}
+        <div className="bg-white rounded-sm border border-cream-500 p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <PencilIcon className="w-5 h-5 text-palm-500" />
+              <h2 className="text-lg font-semibold text-warm-gray-900">
+                Blogs
+              </h2>
+              <span className="text-xs bg-cream-100 text-warm-gray-600 px-2 py-0.5 rounded-full">
+                Supporting Content
+              </span>
+            </div>
+            {blogCampaigns && blogCampaigns.length > 0 && (
+              <ButtonLink href={`/projects/${projectId}/blogs/new`}>+ New Campaign</ButtonLink>
+            )}
+          </div>
+          <p className="text-warm-gray-600 text-sm mb-4">
+            Create blog posts to support your keyword clusters
+          </p>
+
+          {/* Blog campaign cards or empty state */}
+          {!blogCampaigns || blogCampaigns.length === 0 ? (
+            <div className="text-center py-6">
+              <p className="text-warm-gray-500 text-sm mb-2">No blog campaigns yet</p>
+              <p className="text-warm-gray-400 text-xs mb-4">Blog campaigns create supporting content around your keyword clusters</p>
+              <ButtonLink href={`/projects/${projectId}/blogs/new`}>+ New Campaign</ButtonLink>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {blogCampaigns.map((campaign) => (
+                <Link
+                  key={campaign.id}
+                  href={`/projects/${projectId}/blogs/${campaign.id}`}
+                  className="block"
+                >
+                  <BlogCampaignCard campaign={campaign} />
                 </Link>
               ))}
             </div>
