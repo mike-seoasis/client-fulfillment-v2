@@ -8,10 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Phase** | 10 - Database Backup & Recovery (COMPLETE) |
-| **Slice** | Phase 10 complete |
+| **Phase** | 11 - Blog Planning & Writing (COMPLETE) |
+| **Slice** | Phase 11 complete |
 | **Last Session** | 2026-02-14 |
-| **Next Action** | Phase 11: Blog Planning & Writing |
+| **Next Action** | Phase 12: Authentication |
 | **Auth Decision** | Neon Auth (free tier, 60K MAU, Better Auth SDK) — see Phase 12 |
 | **Backup Decision** | Neon free tier (PITR) + Railway pg_dump template → Cloudflare R2 — see Phase 10 |
 | **Database** | Neon PostgreSQL (project: `spring-fog-49733273`, region: `aws-us-east-1`) |
@@ -44,6 +44,7 @@
 | 2026-02-10 | Phase 9 complete (S9-001 through S9-032): InternalLink + LinkPlanSnapshot models with Alembic migrations (0024+0025), Pydantic v2 schemas, SiloLinkPlanner (cluster graph with parent/child/sibling edges, onboarding graph with label overlap), budget calculation (clamp 3-5 based on word count), target selection (mandatory parent-first for clusters, priority bonus for onboarding), AnchorTextSelector (POP variations + natural phrase generation via Haiku, diversity-weighted scoring), LinkInjector (rule-based BeautifulSoup scanning + LLM fallback paragraph rewriting, density limits), strip_internal_links for re-planning, LinkValidator (8 rules: budget, silo integrity, self-links, duplicates, density, anchor diversity, first-link, direction), full pipeline orchestrator with progress tracking, re-plan with snapshot/rollback, 8 API endpoints (plan trigger, status polling, link map, page links, suggestions, add/remove/edit), frontend API client + TanStack Query hooks, link planning trigger pages (onboarding + cluster), cluster link map with tree visualization + stats + sortable table, onboarding link map with label grouping + filters, page link detail with add/edit/remove modals + anchor suggestions, project detail link status badges, 28 graph/budget/target unit tests, 21 anchor text tests, 24 injection tests, 36 validation tests, 5 integration pipeline tests, 21 API tests, 86 frontend component tests. | Phase 10: Database Backup & Recovery |
 | 2026-02-14 | Phase 9 wrapped up, OpenSpec changes archived (keyword-cluster-creation + phase-9-internal-linking). Phase 10 added: Database Backup & Recovery (Neon free tier + Railway pg_dump → Cloudflare R2). Research complete: evaluated 5 backup strategies (Railway template + R2, Railway template + B2, SimpleBackups SaaS, Neon/Supabase migration, custom Docker cron). Decision: Neon free tier for PITR + R2 for off-platform redundancy. | Phase 10a: Neon migration |
 | 2026-02-14 | Phase 10 complete. 10a: Migrated DB from Railway Postgres to Neon (pg_dump → pg_restore → Alembic upgrade, 24 tables, 3 projects). Fixed SSL for asyncpg (use `ssl` connect_arg, not `sslmode` URL param). Updated staging + production DATABASE_URL. 10b: Created Cloudflare R2 bucket with 30-day lifecycle, deployed Railway postgres-s3-backups template, verified first backup (15.98 KB). Created INFRASTRUCTURE.md and BACKUP_RESTORE_RUNBOOK.md. | Phase 11: Blog Planning & Writing |
+| 2026-02-14 | Phase 11 complete (S11-001 through S11-021): BlogCampaign + BlogPost models with Alembic migration, blog topic discovery service (4-stage pipeline from POP briefs), blog campaign CRUD API (6 endpoints), blog content prompt builder, blog content generation pipeline orchestrator, blog content API (7 endpoints), blog link planning (per-post graph building, target selection, injection), blog HTML export service + 3 API endpoints, frontend TypeScript types + 18 API functions, TanStack Query hooks (17 hooks), blog section on project detail, campaign creation page, keyword approval page, content generation/review page, content editor (3-field + QA sidebar), link planning trigger + link map visualization, HTML export page with Copy/Download, 81 backend tests + 63 frontend component tests. | Phase 12: Authentication |
 
 ---
 
@@ -281,16 +282,16 @@
 - [x] Document restore procedure in a runbook — see `BACKUP_RESTORE_RUNBOOK.md`
 - [x] **Verify:** First backup confirmed in R2 bucket
 
-### Phase 11: Blog Planning & Writing
-- [ ] BlogCampaign and BlogPost models + migration
-- [ ] Blog topic discovery service (POP API)
-- [ ] Blog keyword approval (reuse shared UI)
-- [ ] Blog content generation (reuse pipeline, blog template)
-- [ ] Lexical rich editor integration
-- [ ] Live POP scoring sidebar
-- [ ] Blog internal linking (reuse Phase 9 infrastructure, siloed to cluster + sibling blogs)
-- [ ] Blog export (HTML + copy to clipboard)
-- [ ] **Verify:** Full blog flow works (campaign → keywords → generate → edit → export)
+### Phase 11: Blog Planning & Writing ✅
+- [x] BlogCampaign and BlogPost models + migration
+- [x] Blog topic discovery service (POP API)
+- [x] Blog keyword approval (reuse shared UI)
+- [x] Blog content generation (reuse pipeline, blog template)
+- [x] Lexical rich editor integration
+- [x] Live POP scoring sidebar
+- [x] Blog internal linking (reuse Phase 9 infrastructure, siloed to cluster + sibling blogs)
+- [x] Blog export (HTML + copy to clipboard)
+- [x] **Verify:** Full blog flow works (campaign → keywords → generate → edit → export)
 
 ### Phase 12: Authentication (Neon Auth)
 
