@@ -114,3 +114,19 @@ after each iteration and it's included in prompts for context.
   - Pre-existing mypy errors (58 across 10 files) — none in changed files
 ---
 
+## 2026-02-14 - S11-009
+- Added blog scope to internal link planning: BLOG enum, build_blog_graph, target selection, pipeline, and 3 API endpoints
+- Files changed:
+  - `backend/app/models/internal_link.py` — added `BLOG = "blog"` to `LinkScope` enum
+  - `backend/app/services/link_planning.py` — added `build_blog_graph()` method to `SiloLinkPlanner`, `select_targets_blog()` function, `run_blog_link_planning()` pipeline orchestrator, `get_blog_link_progress()` helper; imported `BlogCampaign`, `BlogPost`, `CrawlStatus`
+  - `backend/app/api/v1/blogs.py` — added 3 endpoints: POST `plan-links` (trigger, 202+background), GET `link-status` (poll), GET `link-map` (results); added `_active_blog_link_plans` set and background task wrapper
+  - `backend/app/schemas/blog.py` — added `BlogLinkPlanTriggerResponse`, `BlogLinkStatusResponse`, `BlogLinkMapItem`, `BlogLinkMapResponse` schemas
+  - `backend/app/schemas/__init__.py` — registered 4 new blog link schemas
+- **Learnings:**
+  - Blog posts need CrawledPage bridging records (source='blog') to use InternalLink infrastructure — same pattern as `bulk_approve_cluster` which creates CrawledPage records (source='cluster') for cluster pages
+  - Blog graph is directional: blogs link UP to cluster pages (parent mandatory first, then children) and SIDEWAYS to sibling blogs. Total budget 3-6 links per post. Links never cross the cluster silo boundary
+  - Blog link planning pipeline is per-post (not per-campaign) since each blog post gets its own link budget and injection run. The background task creates its own DB session via `db_manager.session_factory()`
+  - Edge type annotations: use `dict[str, Any]` not `dict[str, str]` when edge dicts contain optional values from model fields
+  - Pre-existing mypy pattern: Pydantic models with `Field(None, ...)` defaults trigger "Missing named argument" mypy errors when not passed explicitly. Same pattern as `LinkPlanStatusResponse`, `WPProgressResponse`, etc. throughout the codebase
+---
+

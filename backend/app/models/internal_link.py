@@ -32,6 +32,7 @@ class LinkScope(str, Enum):
 
     ONBOARDING = "onboarding"
     CLUSTER = "cluster"
+    BLOG = "blog"
 
 
 class AnchorType(str, Enum):

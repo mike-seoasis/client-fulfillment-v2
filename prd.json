@@ -169,8 +169,9 @@
         "After link injection, update BlogPost.content with injected HTML"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Reuse existing SiloLinkPlanner, AnchorTextSelector, LinkInjector, and LinkValidator from backend/app/services/link_planning.py and link_injection.py. The blog-specific part is just the graph building (which pages can link to which). The CrawledPage bridging follows the same pattern as bulk_approve_cluster in clusters.py which creates CrawledPage records for cluster pages."
+      "passes": true,
+      "notes": "Reuse existing SiloLinkPlanner, AnchorTextSelector, LinkInjector, and LinkValidator from backend/app/services/link_planning.py and link_injection.py. The blog-specific part is just the graph building (which pages can link to which). The CrawledPage bridging follows the same pattern as bulk_approve_cluster in clusters.py which creates CrawledPage records for cluster pages.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S11-010",
@@ -426,6 +427,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-14T21:43:31.553Z"
+    "updatedAt": "2026-02-14T21:50:11.605Z"
   }
 }

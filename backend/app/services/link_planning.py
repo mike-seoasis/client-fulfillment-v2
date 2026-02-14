@@ -1,9 +1,10 @@
 """Link planning service for building link graphs, selecting targets, and orchestrating
 the full link planning pipeline.
 
-SiloLinkPlanner constructs two types of graphs:
+SiloLinkPlanner constructs three types of graphs:
 - Cluster graph: parent/child + sibling adjacency from ClusterPage records
 - Onboarding graph: pairwise label-overlap edges from onboarding CrawledPages
+- Blog graph: blog posts link UP to cluster pages and sideways to sibling blogs
 
 Target selection uses budgets (based on word count) to determine how many
 outbound links each page gets, then selects the best targets per scope rules.
@@ -31,8 +32,9 @@ from sqlalchemy.orm import joinedload
 from app.core.database import db_manager
 from app.core.logging import get_logger
 from app.integrations.claude import ClaudeClient, get_api_key
+from app.models.blog import BlogCampaign, BlogPost
 from app.models.content_brief import ContentBrief
-from app.models.crawled_page import CrawledPage
+from app.models.crawled_page import CrawledPage, CrawlStatus
 from app.models.internal_link import InternalLink, LinkPlanSnapshot
 from app.models.keyword_cluster import ClusterPage
 from app.models.page_content import PageContent
@@ -218,6 +220,152 @@ class SiloLinkPlanner:
         )
 
         return {"pages": pages, "edges": edges}
+
+    async def build_blog_graph(
+        self,
+        campaign_id: str,
+        db: AsyncSession,
+    ) -> dict[str, Any]:
+        """Build link graph for blog posts within a campaign's cluster silo.
+
+        Blog posts are leaf nodes. They link:
+        - UP to cluster pages (2-4 links, parent page mandatory as first)
+        - SIDEWAYS to sibling blogs (1-2 links)
+        Total budget: 3-6 per blog post. Links never cross outside the cluster.
+
+        Creates CrawledPage records (source='blog') to bridge blog posts into
+        the InternalLink infrastructure which uses CrawledPage IDs.
+
+        Returns {blog_posts: [...], cluster_pages: [...], edges: [...]}
+        where each blog_post has a crawled_page_id for InternalLink bridging.
+        """
+        # Load campaign to get cluster_id and project_id
+        campaign_stmt = (
+            select(BlogCampaign)
+            .where(BlogCampaign.id == campaign_id)
+        )
+        campaign_result = await db.execute(campaign_stmt)
+        campaign = campaign_result.scalar_one_or_none()
+        if campaign is None:
+            raise ValueError(f"Blog campaign {campaign_id} not found")
+
+        cluster_id = campaign.cluster_id
+        project_id = campaign.project_id
+
+        # Load approved blog posts for this campaign
+        posts_stmt = select(BlogPost).where(
+            BlogPost.campaign_id == campaign_id,
+            BlogPost.is_approved.is_(True),
+            BlogPost.content.isnot(None),
+        )
+        posts_result = await db.execute(posts_stmt)
+        blog_posts = list(posts_result.scalars().all())
+
+        if not blog_posts:
+            return {"blog_posts": [], "cluster_pages": [], "edges": []}
+
+        # Load approved cluster pages (link targets)
+        cluster_stmt = (
+            select(ClusterPage)
+            .options(joinedload(ClusterPage.crawled_page))
+            .where(
+                ClusterPage.cluster_id == cluster_id,
+                ClusterPage.is_approved.is_(True),
+            )
+        )
+        cluster_result = await db.execute(cluster_stmt)
+        cluster_pages = [
+            cp for cp in cluster_result.unique().scalars().all()
+            if cp.crawled_page_id is not None
+        ]
+
+        # Create or reuse CrawledPage records for blog posts (source='blog')
+        blog_crawled_map: dict[str, str] = {}  # blog_post.id -> crawled_page_id
+        for post in blog_posts:
+            # Check if CrawledPage already exists for this blog post slug
+            existing_stmt = select(CrawledPage).where(
+                CrawledPage.project_id == project_id,
+                CrawledPage.normalized_url == post.url_slug,
+                CrawledPage.source == "blog",
+            )
+            existing_result = await db.execute(existing_stmt)
+            crawled_page = existing_result.scalar_one_or_none()
+
+            if crawled_page is None:
+                crawled_page = CrawledPage(
+                    project_id=project_id,
+                    normalized_url=post.url_slug,
+                    source="blog",
+                    status=CrawlStatus.COMPLETED.value,
+                    category="blog",
+                    title=post.title or post.primary_keyword,
+                    word_count=len((post.content or "").split()),
+                )
+                db.add(crawled_page)
+                await db.flush()
+
+            blog_crawled_map[post.id] = crawled_page.id
+
+        # Build graph nodes
+        blog_post_nodes = [
+            {
+                "post_id": post.id,
+                "crawled_page_id": blog_crawled_map[post.id],
+                "keyword": post.primary_keyword,
+                "url_slug": post.url_slug,
+                "role": "blog",
+            }
+            for post in blog_posts
+        ]
+
+        cluster_page_nodes = [
+            {
+                "page_id": cp.id,
+                "crawled_page_id": cp.crawled_page_id,
+                "keyword": cp.keyword,
+                "role": cp.role,
+                "url": cp.crawled_page.normalized_url if cp.crawled_page else None,
+            }
+            for cp in cluster_pages
+        ]
+
+        # Build edges: blog → cluster pages (UP) and blog → sibling blogs (SIDEWAYS)
+        edges: list[dict[str, Any]] = []
+
+        for post_node in blog_post_nodes:
+            # UP edges: blog → each cluster page
+            for cp_node in cluster_page_nodes:
+                edges.append({
+                    "source": post_node["crawled_page_id"],
+                    "target": cp_node["crawled_page_id"],
+                    "type": "blog_to_cluster",
+                    "target_role": cp_node["role"],
+                })
+
+            # SIDEWAYS edges: blog → sibling blogs
+            for sibling_node in blog_post_nodes:
+                if sibling_node["post_id"] != post_node["post_id"]:
+                    edges.append({
+                        "source": post_node["crawled_page_id"],
+                        "target": sibling_node["crawled_page_id"],
+                        "type": "blog_to_blog",
+                    })
+
+        logger.info(
+            "Built blog graph",
+            extra={
+                "campaign_id": campaign_id,
+                "blog_count": len(blog_post_nodes),
+                "cluster_page_count": len(cluster_page_nodes),
+                "edge_count": len(edges),
+            },
+        )
+
+        return {
+            "blog_posts": blog_post_nodes,
+            "cluster_pages": cluster_page_nodes,
+            "edges": edges,
+        }
 
 
 def calculate_budget(word_count: int) -> int:
@@ -442,6 +590,105 @@ def select_targets_onboarding(
         "Selected onboarding targets",
         extra={
             "page_count": len(result),
+            "total_links": sum(len(t) for t in result.values()),
+        },
+    )
+
+    return result
+
+
+def select_targets_blog(
+    graph: dict[str, Any],
+) -> dict[str, list[dict[str, Any]]]:
+    """Select link targets for each blog post in a blog graph.
+
+    Blog posts link UP to cluster pages (2-4, parent mandatory as first)
+    and SIDEWAYS to sibling blogs (1-2). Total budget: 3-6.
+
+    Args:
+        graph: Output from build_blog_graph with blog_posts, cluster_pages, edges.
+
+    Returns:
+        Dict mapping blog crawled_page_id to list of target dicts.
+    """
+    blog_posts = graph["blog_posts"]
+    cluster_pages = graph["cluster_pages"]
+
+    # Identify parent and child cluster pages
+    parent_pages = [cp for cp in cluster_pages if cp["role"] == "parent"]
+    child_pages = [cp for cp in cluster_pages if cp["role"] != "parent"]
+
+    # Track inbound counts for diversity
+    inbound_counts: dict[str, int] = {}
+    for cp in cluster_pages:
+        inbound_counts[cp["crawled_page_id"]] = 0
+    for bp in blog_posts:
+        inbound_counts[bp["crawled_page_id"]] = 0
+
+    result: dict[str, list[dict[str, Any]]] = {}
+
+    for blog_node in blog_posts:
+        source_id = blog_node["crawled_page_id"]
+        targets: list[dict[str, Any]] = []
+
+        # Slot 1: mandatory parent link (first link)
+        if parent_pages:
+            parent = parent_pages[0]
+            targets.append({
+                "crawled_page_id": parent["crawled_page_id"],
+                "keyword": parent["keyword"],
+                "url": parent.get("url"),
+                "is_mandatory": True,
+                "role": "parent",
+            })
+            inbound_counts[parent["crawled_page_id"]] += 1
+
+        # Slots 2-4: additional cluster pages (children), sorted by least-linked
+        children_ranked = sorted(
+            child_pages,
+            key=lambda c: inbound_counts.get(c["crawled_page_id"], 0),
+        )
+        cluster_link_budget = min(3, len(children_ranked))  # 2-4 total cluster links (1 parent + up to 3 children)
+        for child in children_ranked:
+            if len(targets) >= 1 + cluster_link_budget:
+                break
+            targets.append({
+                "crawled_page_id": child["crawled_page_id"],
+                "keyword": child["keyword"],
+                "url": child.get("url"),
+                "is_mandatory": False,
+                "role": "child",
+            })
+            inbound_counts[child["crawled_page_id"]] += 1
+
+        # Sideways slots: 1-2 sibling blogs
+        siblings = [
+            bp for bp in blog_posts
+            if bp["post_id"] != blog_node["post_id"]
+        ]
+        siblings_ranked = sorted(
+            siblings,
+            key=lambda s: inbound_counts.get(s["crawled_page_id"], 0),
+        )
+        sibling_budget = min(2, len(siblings_ranked))
+        for sibling in siblings_ranked[:sibling_budget]:
+            targets.append({
+                "crawled_page_id": sibling["crawled_page_id"],
+                "keyword": sibling["keyword"],
+                "url": sibling.get("url_slug"),
+                "is_mandatory": False,
+                "role": "blog",
+            })
+            inbound_counts[sibling["crawled_page_id"]] += 1
+
+        # Enforce total budget cap of 6
+        targets = targets[:6]
+        result[source_id] = targets
+
+    logger.info(
+        "Selected blog targets",
+        extra={
+            "blog_count": len(result),
             "total_links": sum(len(t) for t in result.values()),
         },
     )
@@ -1401,3 +1648,289 @@ async def _load_bottom_description(db: AsyncSession, page_id: str) -> str:
     if pc and pc.bottom_description:
         return pc.bottom_description
     return ""
+
+
+# ---------------------------------------------------------------------------
+# Blog link planning pipeline
+# ---------------------------------------------------------------------------
+
+# Module-level dict for blog link planning progress, keyed by blog_post_id.
+_blog_link_progress: dict[str, dict[str, Any]] = {}
+
+
+def get_blog_link_progress(blog_post_id: str) -> dict[str, Any] | None:
+    """Return the current blog link planning progress for a post, or None."""
+    return _blog_link_progress.get(blog_post_id)
+
+
+async def run_blog_link_planning(
+    blog_post_id: str,
+    campaign_id: str,
+    db: AsyncSession,
+) -> dict[str, Any]:
+    """Run link planning for a single blog post.
+
+    Steps:
+    1. Build blog graph (creates CrawledPage bridging records)
+    2. Select targets (UP to cluster + SIDEWAYS to siblings)
+    3. Generate anchor text and inject links into blog content
+    4. Validate and persist InternalLink rows
+    5. Update BlogPost.content with injected HTML
+
+    Args:
+        blog_post_id: UUID of the BlogPost to plan links for.
+        campaign_id: UUID of the BlogCampaign.
+        db: Async database session.
+
+    Returns:
+        Dict with pipeline result summary.
+    """
+    progress: dict[str, Any] = {
+        "status": "planning",
+        "step": "building_graph",
+        "links_planned": 0,
+    }
+    _blog_link_progress[blog_post_id] = progress
+
+    planner = SiloLinkPlanner()
+    injector = LinkInjector()
+    validator = LinkValidator()
+    anchor_selector = AnchorTextSelector()
+
+    try:
+        # Step 1: Build blog graph
+        graph = await planner.build_blog_graph(campaign_id, db)
+
+        if not graph["blog_posts"]:
+            progress["status"] = "complete"
+            return {"status": "complete", "links_planned": 0}
+
+        # Find our blog post's crawled_page_id
+        source_crawled_id: str | None = None
+        for bp in graph["blog_posts"]:
+            if bp["post_id"] == blog_post_id:
+                source_crawled_id = bp["crawled_page_id"]
+                break
+
+        if source_crawled_id is None:
+            progress["status"] = "failed"
+            progress["error"] = "Blog post not found in graph (not approved or no content?)"
+            return {"status": "failed", "error": progress["error"]}
+
+        # Step 2: Select targets
+        progress["step"] = "selecting_targets"
+        targets_map = select_targets_blog(graph)
+        my_targets = targets_map.get(source_crawled_id, [])
+
+        if not my_targets:
+            progress["status"] = "complete"
+            return {"status": "complete", "links_planned": 0}
+
+        # Get project info for URL resolution
+        campaign_stmt = select(BlogCampaign).where(BlogCampaign.id == campaign_id)
+        campaign_result = await db.execute(campaign_stmt)
+        campaign = campaign_result.scalar_one()
+        project_obj = await db.get(Project, campaign.project_id)
+        site_base = (project_obj.site_url or "").rstrip("/") if project_obj else ""
+
+        # Step 3: Generate anchor text and inject
+        progress["step"] = "injecting_links"
+
+        # Load the blog post content for injection
+        post_stmt = select(BlogPost).where(BlogPost.id == blog_post_id)
+        post_result = await db.execute(post_stmt)
+        blog_post = post_result.scalar_one()
+
+        current_html = blog_post.content or ""
+        if not current_html:
+            progress["status"] = "failed"
+            progress["error"] = "Blog post has no content"
+            return {"status": "failed", "error": progress["error"]}
+
+        # Generate anchor text candidates
+        keyword_map: dict[str, str] = {}
+        for target in my_targets:
+            tid = target["crawled_page_id"]
+            kw = target.get("keyword", "")
+            if kw:
+                keyword_map[tid] = kw
+
+        natural_phrases = await anchor_selector.generate_natural_phrases(keyword_map)
+
+        usage_tracker: dict[str, dict[str, int]] = {}
+        injection_results: list[dict[str, Any]] = []
+
+        for target in my_targets:
+            target_id = target["crawled_page_id"]
+            target_keyword = target.get("keyword", "")
+            is_mandatory = target.get("is_mandatory", False)
+
+            # Resolve URL
+            target_url = target.get("url") or target.get("url_slug", "")
+            if target_url and not target_url.startswith("http"):
+                target_url = f"{site_base}/{target_url.lstrip('/')}"
+
+            # Gather anchor candidates from DB (if target has PageKeywords/ContentBrief)
+            candidates = await anchor_selector.gather_candidates(target_id, db)
+
+            # Append natural phrases
+            if target_id in natural_phrases:
+                candidates.extend(natural_phrases[target_id])
+
+            # If no candidates from DB, use the keyword directly
+            if not candidates:
+                candidates = [{"anchor_text": target_keyword, "anchor_type": "exact_match"}]
+
+            anchor_result = anchor_selector.select_anchor(
+                candidates, current_html, target_id, usage_tracker
+            )
+            if anchor_result is None:
+                anchor_result = {
+                    "anchor_text": target_keyword or "link",
+                    "anchor_type": "exact_match",
+                    "score": 0.0,
+                }
+
+            anchor_text = anchor_result["anchor_text"]
+
+            # Try rule-based injection
+            modified_html, p_idx = injector.inject_rule_based(
+                current_html, anchor_text, target_url
+            )
+
+            if p_idx is not None:
+                current_html = modified_html
+                injection_results.append({
+                    "source_page_id": source_crawled_id,
+                    "target_page_id": target_id,
+                    "anchor_text": anchor_text,
+                    "anchor_type": anchor_result["anchor_type"],
+                    "placement_method": "rule_based",
+                    "position_in_content": p_idx,
+                    "is_mandatory": is_mandatory,
+                })
+            else:
+                # LLM fallback
+                modified_html, p_idx = await injector.inject_llm_fallback(
+                    current_html,
+                    anchor_text,
+                    target_url,
+                    target_keyword,
+                    mandatory_parent=is_mandatory,
+                )
+                if p_idx is not None:
+                    current_html = modified_html
+                    injection_results.append({
+                        "source_page_id": source_crawled_id,
+                        "target_page_id": target_id,
+                        "anchor_text": anchor_text,
+                        "anchor_type": anchor_result["anchor_type"],
+                        "placement_method": "llm_fallback",
+                        "position_in_content": p_idx,
+                        "is_mandatory": is_mandatory,
+                    })
+                else:
+                    logger.warning(
+                        "Blog link injection failed for target",
+                        extra={
+                            "blog_post_id": blog_post_id,
+                            "target_id": target_id,
+                            "anchor_text": anchor_text,
+                        },
+                    )
+
+        # Step 4: Validate
+        progress["step"] = "validating"
+
+        # Build cluster_data for silo validation
+        all_page_ids = {bp["crawled_page_id"] for bp in graph["blog_posts"]}
+        all_page_ids |= {cp["crawled_page_id"] for cp in graph["cluster_pages"]}
+
+        blog_cluster_data: dict[str, Any] = {
+            "pages": [
+                *[
+                    {
+                        "crawled_page_id": cp["crawled_page_id"],
+                        "role": cp["role"],
+                        "url": cp.get("url"),
+                    }
+                    for cp in graph["cluster_pages"]
+                ],
+                *[
+                    {
+                        "crawled_page_id": bp["crawled_page_id"],
+                        "role": "blog",
+                        "url": bp.get("url_slug"),
+                    }
+                    for bp in graph["blog_posts"]
+                ],
+            ],
+        }
+
+        temp_links = [_LinkProxy({**r, "scope": "blog"}) for r in injection_results]
+        pages_html = {source_crawled_id: current_html}
+
+        validation = validator.validate_links(
+            temp_links, pages_html, "blog", blog_cluster_data
+        )
+
+        # Step 5: Persist InternalLink rows and update BlogPost.content
+        progress["step"] = "persisting"
+
+        async with db_manager.session_factory() as write_db:
+            for result_dict in injection_results:
+                link_status = "verified" if validation["passed"] else "injected"
+                link = InternalLink(
+                    source_page_id=result_dict["source_page_id"],
+                    target_page_id=result_dict["target_page_id"],
+                    project_id=campaign.project_id,
+                    cluster_id=campaign.cluster_id,
+                    scope="blog",
+                    anchor_text=result_dict["anchor_text"],
+                    anchor_type=result_dict["anchor_type"],
+                    placement_method=result_dict["placement_method"],
+                    position_in_content=result_dict["position_in_content"],
+                    is_mandatory=result_dict["is_mandatory"],
+                    status=link_status,
+                )
+                write_db.add(link)
+
+            # Update BlogPost.content with injected HTML
+            post_update_stmt = select(BlogPost).where(BlogPost.id == blog_post_id)
+            post_update_result = await write_db.execute(post_update_stmt)
+            post_to_update = post_update_result.scalar_one()
+            post_to_update.content = current_html
+
+            await write_db.commit()
+
+        progress["status"] = "complete"
+        progress["links_planned"] = len(injection_results)
+
+        logger.info(
+            "Blog link planning complete",
+            extra={
+                "blog_post_id": blog_post_id,
+                "links_injected": len(injection_results),
+                "validation_passed": validation["passed"],
+            },
+        )
+
+        return {
+            "status": "complete",
+            "links_planned": len(injection_results),
+            "validation_passed": validation["passed"],
+        }
+
+    except Exception as exc:
+        progress["status"] = "failed"
+        progress["error"] = str(exc)
+        logger.error(
+            "Blog link planning failed",
+            extra={"blog_post_id": blog_post_id, "error": str(exc)},
+            exc_info=True,
+        )
+        raise
+    finally:
+        # Clean up progress after a delay (let polling catch final state)
+        # In production this would be cleaned by a TTL; here we leave it
+        pass

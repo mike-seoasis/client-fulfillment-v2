@@ -17,6 +17,8 @@ from app.integrations.claude import ClaudeClient, get_claude
 from app.integrations.dataforseo import DataForSEOClient, get_dataforseo
 from app.models.blog import BlogCampaign, BlogPost, CampaignStatus, ContentStatus
 from app.models.brand_config import BrandConfig
+from app.models.crawled_page import CrawledPage
+from app.models.internal_link import InternalLink
 from app.models.keyword_cluster import ClusterStatus, KeywordCluster
 from app.schemas.blog import (
     BlogBulkApproveResponse,
@@ -26,6 +28,10 @@ from app.schemas.blog import (
     BlogContentGenerationStatus,
     BlogContentTriggerResponse,
     BlogContentUpdateRequest,
+    BlogLinkMapItem,
+    BlogLinkMapResponse,
+    BlogLinkPlanTriggerResponse,
+    BlogLinkStatusResponse,
     BlogPostGenerationStatusItem,
     BlogPostResponse,
     BlogPostUpdate,
@@ -873,6 +879,263 @@ async def bulk_approve_blog_content(
     )
 
     return BlogBulkApproveResponse(approved_count=approved_count)
+
+
+# =============================================================================
+# Link Planning Endpoints
+# =============================================================================
+
+# Module-level set to track posts with active link planning tasks.
+_active_blog_link_plans: set[str] = set()
+
+
+@router.post(
+    "/{project_id}/blogs/{blog_id}/posts/{post_id}/plan-links",
+    response_model=BlogLinkPlanTriggerResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def plan_blog_links(
+    project_id: str,
+    blog_id: str,
+    post_id: str,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_session),
+) -> BlogLinkPlanTriggerResponse:
+    """Trigger link planning for a blog post.
+
+    Creates CrawledPage bridging records, builds the blog link graph,
+    selects targets, injects links into blog content, and persists
+    InternalLink rows. Updates BlogPost.content with injected HTML.
+
+    Returns 202 Accepted with a status poll URL.
+    """
+    await ProjectService.get_project(db, project_id)
+
+    post = await _get_blog_post(db, project_id, blog_id, post_id)
+
+    if post.content is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Blog post has no content. Generate content before planning links.",
+        )
+
+    if not post.is_approved:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Blog post must be approved before planning links.",
+        )
+
+    if post_id in _active_blog_link_plans:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Link planning is already in progress for this post",
+        )
+
+    _active_blog_link_plans.add(post_id)
+
+    background_tasks.add_task(
+        _run_blog_link_plan_background,
+        blog_post_id=post_id,
+        campaign_id=blog_id,
+    )
+
+    logger.info(
+        "Blog link planning triggered",
+        extra={
+            "project_id": project_id,
+            "campaign_id": blog_id,
+            "post_id": post_id,
+        },
+    )
+
+    return BlogLinkPlanTriggerResponse(
+        status="accepted",
+        message=f"Link planning started for blog post {post_id}",
+    )
+
+
+async def _run_blog_link_plan_background(
+    blog_post_id: str,
+    campaign_id: str,
+) -> None:
+    """Background task wrapper for blog link planning."""
+    from app.core.database import db_manager
+    from app.services.link_planning import run_blog_link_planning
+
+    try:
+        async with db_manager.session_factory() as db:
+            result = await run_blog_link_planning(
+                blog_post_id=blog_post_id,
+                campaign_id=campaign_id,
+                db=db,
+            )
+            logger.info(
+                "Blog link planning complete",
+                extra={
+                    "blog_post_id": blog_post_id,
+                    "campaign_id": campaign_id,
+                    "links_planned": result.get("links_planned", 0),
+                },
+            )
+    except Exception as e:
+        logger.error(
+            "Blog link planning failed",
+            extra={
+                "blog_post_id": blog_post_id,
+                "campaign_id": campaign_id,
+                "error": str(e),
+            },
+            exc_info=True,
+        )
+    finally:
+        _active_blog_link_plans.discard(blog_post_id)
+
+
+@router.get(
+    "/{project_id}/blogs/{blog_id}/posts/{post_id}/link-status",
+    response_model=BlogLinkStatusResponse,
+)
+async def get_blog_link_status(
+    project_id: str,
+    blog_id: str,
+    post_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> BlogLinkStatusResponse:
+    """Poll link planning status for a blog post.
+
+    Returns current planning status including step and link count.
+    """
+    await ProjectService.get_project(db, project_id)
+    await _get_blog_post(db, project_id, blog_id, post_id)
+
+    from app.services.link_planning import get_blog_link_progress
+
+    progress = get_blog_link_progress(post_id)
+
+    if progress is not None:
+        return BlogLinkStatusResponse(
+            status=progress.get("status", "planning"),
+            step=progress.get("step"),
+            links_planned=progress.get("links_planned", 0),
+            error=progress.get("error"),
+        )
+
+    # Check if planning is active but no progress yet
+    if post_id in _active_blog_link_plans:
+        return BlogLinkStatusResponse(
+            status="planning",
+            step="initializing",
+            links_planned=0,
+        )
+
+    # Check if links already exist (completed previously)
+    crawled_stmt = select(CrawledPage).where(
+        CrawledPage.normalized_url == (
+            select(BlogPost.url_slug).where(BlogPost.id == post_id).scalar_subquery()
+        ),
+        CrawledPage.source == "blog",
+    )
+    crawled_result = await db.execute(crawled_stmt)
+    crawled_page = crawled_result.scalar_one_or_none()
+
+    if crawled_page is not None:
+        link_count_stmt = select(func.count(InternalLink.id)).where(
+            InternalLink.source_page_id == crawled_page.id,
+            InternalLink.scope == "blog",
+        )
+        link_count_result = await db.execute(link_count_stmt)
+        link_count = link_count_result.scalar() or 0
+
+        if link_count > 0:
+            return BlogLinkStatusResponse(
+                status="complete",
+                links_planned=link_count,
+            )
+
+    return BlogLinkStatusResponse(
+        status="pending",
+        links_planned=0,
+    )
+
+
+@router.get(
+    "/{project_id}/blogs/{blog_id}/posts/{post_id}/link-map",
+    response_model=BlogLinkMapResponse,
+)
+async def get_blog_link_map(
+    project_id: str,
+    blog_id: str,
+    post_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> BlogLinkMapResponse:
+    """Get the link map (all planned/injected links) for a blog post.
+
+    Returns the full list of InternalLink records for this blog post,
+    including target keywords and URLs.
+    """
+    await ProjectService.get_project(db, project_id)
+
+    post = await _get_blog_post(db, project_id, blog_id, post_id)
+
+    # Find the CrawledPage bridging record for this blog post
+    crawled_stmt = select(CrawledPage).where(
+        CrawledPage.normalized_url == post.url_slug,
+        CrawledPage.source == "blog",
+    )
+    crawled_result = await db.execute(crawled_stmt)
+    crawled_page = crawled_result.scalar_one_or_none()
+
+    if crawled_page is None:
+        return BlogLinkMapResponse(
+            blog_post_id=post_id,
+            crawled_page_id=None,
+            total_links=0,
+            links=[],
+        )
+
+    # Load InternalLink records for this source page
+    links_stmt = (
+        select(InternalLink)
+        .where(
+            InternalLink.source_page_id == crawled_page.id,
+            InternalLink.scope == "blog",
+        )
+        .order_by(InternalLink.position_in_content)
+    )
+    links_result = await db.execute(links_stmt)
+    links = links_result.scalars().all()
+
+    # Resolve target keywords and URLs
+    target_ids = [lnk.target_page_id for lnk in links]
+    target_info: dict[str, dict[str, str | None]] = {}
+    if target_ids:
+        targets_stmt = select(CrawledPage).where(CrawledPage.id.in_(target_ids))
+        targets_result = await db.execute(targets_stmt)
+        for tp in targets_result.scalars().all():
+            target_info[tp.id] = {
+                "keyword": tp.title,
+                "url": tp.normalized_url,
+            }
+
+    link_items = [
+        BlogLinkMapItem(
+            target_page_id=lnk.target_page_id,
+            anchor_text=lnk.anchor_text,
+            anchor_type=lnk.anchor_type,
+            target_keyword=target_info.get(lnk.target_page_id, {}).get("keyword"),
+            target_url=target_info.get(lnk.target_page_id, {}).get("url"),
+            placement_method=lnk.placement_method,
+            status=lnk.status,
+        )
+        for lnk in links
+    ]
+
+    return BlogLinkMapResponse(
+        blog_post_id=post_id,
+        crawled_page_id=crawled_page.id,
+        total_links=len(link_items),
+        links=link_items,
+    )
 
 
 # =============================================================================
