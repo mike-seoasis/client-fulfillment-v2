@@ -898,6 +898,454 @@ export async function exportProject(
 }
 
 // =============================================================================
+// BLOG CAMPAIGN API TYPES
+// =============================================================================
+
+/** Request to create a new blog campaign from a keyword cluster. */
+export interface BlogCampaignCreate {
+  cluster_id: string;
+  name?: string | null;
+}
+
+/** A single blog post within a campaign. */
+export interface BlogPost {
+  id: string;
+  campaign_id: string;
+  primary_keyword: string;
+  url_slug: string;
+  search_volume: number | null;
+  source_page_id: string | null;
+  title: string | null;
+  meta_description: string | null;
+  content: string | null;
+  is_approved: boolean;
+  content_status: string;
+  content_approved: boolean;
+  pop_brief: Record<string, unknown> | null;
+  qa_results: Record<string, unknown> | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Full blog campaign with nested posts. */
+export interface BlogCampaign {
+  id: string;
+  project_id: string;
+  cluster_id: string;
+  name: string;
+  status: string;
+  generation_metadata: Record<string, unknown> | null;
+  posts: BlogPost[];
+  created_at: string;
+  updated_at: string;
+}
+
+/** Summary campaign for list views. */
+export interface BlogCampaignListItem {
+  id: string;
+  name: string;
+  status: string;
+  cluster_name: string;
+  post_count: number;
+  approved_count: number;
+  content_complete_count: number;
+  created_at: string;
+}
+
+/** Request to update keyword-level fields on a blog post. */
+export interface BlogPostUpdate {
+  primary_keyword?: string | null;
+  url_slug?: string | null;
+  is_approved?: boolean | null;
+}
+
+/** Request to update content fields on a blog post. */
+export interface BlogContentUpdate {
+  title?: string | null;
+  meta_description?: string | null;
+  content?: string | null;
+}
+
+/** Per-post status within a content generation run. */
+export interface BlogPostGenerationStatusItem {
+  post_id: string;
+  primary_keyword: string;
+  content_status: string;
+}
+
+/** Status of content generation across a blog campaign. */
+export interface BlogContentGenerationStatus {
+  overall_status: string;
+  posts_total: number;
+  posts_completed: number;
+  posts_failed: number;
+  posts: BlogPostGenerationStatusItem[];
+}
+
+/** Response when blog content generation is triggered. */
+export interface BlogContentTriggerResponse {
+  status: string;
+  message: string;
+}
+
+/** Response for bulk blog content approval. */
+export interface BlogBulkApproveResponse {
+  approved_count: number;
+}
+
+/** Single post export with full HTML content and metadata. */
+export interface BlogExportItem {
+  post_id: string;
+  primary_keyword: string;
+  url_slug: string;
+  title: string | null;
+  meta_description: string | null;
+  html_content: string | null;
+  word_count: number;
+}
+
+/** Response when blog link planning is triggered. */
+export interface BlogLinkPlanTriggerResponse {
+  status: string;
+  message: string;
+}
+
+/** Status of blog link planning for a post. */
+export interface BlogLinkStatusResponse {
+  status: string;
+  step: string | null;
+  links_planned: number;
+  error: string | null;
+}
+
+/** A single planned/injected link for a blog post. */
+export interface BlogLinkMapItem {
+  target_page_id: string;
+  anchor_text: string;
+  anchor_type: string;
+  target_keyword: string | null;
+  target_url: string | null;
+  placement_method: string;
+  status: string;
+}
+
+/** Full link map for a blog post. */
+export interface BlogLinkMapResponse {
+  blog_post_id: string;
+  crawled_page_id: string | null;
+  total_links: number;
+  links: BlogLinkMapItem[];
+}
+
+// =============================================================================
+// BLOG CAMPAIGN API FUNCTIONS
+// =============================================================================
+
+/**
+ * Create a new blog campaign from a keyword cluster.
+ * Runs the 4-stage topic discovery pipeline (~5-10s).
+ */
+export function createBlogCampaign(
+  projectId: string,
+  data: BlogCampaignCreate
+): Promise<BlogCampaign> {
+  return apiClient.post<BlogCampaign>(
+    `/projects/${projectId}/blogs`,
+    data
+  );
+}
+
+/**
+ * List all blog campaigns for a project.
+ * Returns summary data with post counts.
+ */
+export function getBlogCampaigns(
+  projectId: string
+): Promise<BlogCampaignListItem[]> {
+  return apiClient.get<BlogCampaignListItem[]>(
+    `/projects/${projectId}/blogs`
+  );
+}
+
+/**
+ * Get a single blog campaign with all its posts.
+ */
+export function getBlogCampaign(
+  projectId: string,
+  blogId: string
+): Promise<BlogCampaign> {
+  return apiClient.get<BlogCampaign>(
+    `/projects/${projectId}/blogs/${blogId}`
+  );
+}
+
+/**
+ * Update keyword-level fields on a blog post.
+ * Only provided fields are updated.
+ */
+export function updateBlogPost(
+  projectId: string,
+  blogId: string,
+  postId: string,
+  data: BlogPostUpdate
+): Promise<BlogPost> {
+  return apiClient.patch<BlogPost>(
+    `/projects/${projectId}/blogs/${blogId}/posts/${postId}`,
+    data
+  );
+}
+
+/**
+ * Bulk approve all unapproved posts in a blog campaign.
+ * Returns approved count and campaign status.
+ */
+export function bulkApproveBlogPosts(
+  projectId: string,
+  blogId: string
+): Promise<{ approved_count: number; campaign_status: string }> {
+  return apiClient.post<{ approved_count: number; campaign_status: string }>(
+    `/projects/${projectId}/blogs/${blogId}/approve`
+  );
+}
+
+/**
+ * Delete a blog campaign and all its posts.
+ */
+export function deleteBlogCampaign(
+  projectId: string,
+  blogId: string
+): Promise<void> {
+  return apiClient.delete<void>(
+    `/projects/${projectId}/blogs/${blogId}`
+  );
+}
+
+// =============================================================================
+// BLOG CONTENT API FUNCTIONS
+// =============================================================================
+
+/**
+ * Trigger blog content generation for all approved posts in a campaign.
+ * Returns 202 on success. Background task runs the pipeline.
+ */
+export function triggerBlogContentGeneration(
+  projectId: string,
+  blogId: string
+): Promise<BlogContentTriggerResponse> {
+  return apiClient.post<BlogContentTriggerResponse>(
+    `/projects/${projectId}/blogs/${blogId}/generate-content`
+  );
+}
+
+/**
+ * Poll content generation status for a blog campaign.
+ * Returns overall status and per-post breakdown.
+ */
+export function getBlogContentStatus(
+  projectId: string,
+  blogId: string
+): Promise<BlogContentGenerationStatus> {
+  return apiClient.get<BlogContentGenerationStatus>(
+    `/projects/${projectId}/blogs/${blogId}/content-status`
+  );
+}
+
+/**
+ * Get full content for a specific blog post.
+ * Returns 404 if content has not been generated yet.
+ */
+export function getBlogPostContent(
+  projectId: string,
+  blogId: string,
+  postId: string
+): Promise<BlogPost> {
+  return apiClient.get<BlogPost>(
+    `/projects/${projectId}/blogs/${blogId}/posts/${postId}/content`
+  );
+}
+
+/**
+ * Update content fields on a blog post (partial update).
+ * Clears content approval when content changes.
+ */
+export function updateBlogPostContent(
+  projectId: string,
+  blogId: string,
+  postId: string,
+  data: BlogContentUpdate
+): Promise<BlogPost> {
+  return apiClient.put<BlogPost>(
+    `/projects/${projectId}/blogs/${blogId}/posts/${postId}/content`,
+    data
+  );
+}
+
+/**
+ * Approve or unapprove content for a blog post.
+ * Pass value=false to unapprove.
+ */
+export function approveBlogPostContent(
+  projectId: string,
+  blogId: string,
+  postId: string,
+  value: boolean = true
+): Promise<BlogPost> {
+  const queryParam = value ? "" : "?value=false";
+  return apiClient.post<BlogPost>(
+    `/projects/${projectId}/blogs/${blogId}/posts/${postId}/approve-content${queryParam}`
+  );
+}
+
+/**
+ * Re-run quality checks on current blog post content.
+ * Returns updated post with fresh qa_results.
+ */
+export function recheckBlogPostContent(
+  projectId: string,
+  blogId: string,
+  postId: string
+): Promise<BlogPost> {
+  return apiClient.post<BlogPost>(
+    `/projects/${projectId}/blogs/${blogId}/posts/${postId}/recheck`
+  );
+}
+
+/**
+ * Bulk approve all eligible blog posts (complete + QA passed) in a campaign.
+ * Returns count of newly approved posts.
+ */
+export function bulkApproveBlogContent(
+  projectId: string,
+  blogId: string
+): Promise<BlogBulkApproveResponse> {
+  return apiClient.post<BlogBulkApproveResponse>(
+    `/projects/${projectId}/blogs/${blogId}/bulk-approve-content`
+  );
+}
+
+// =============================================================================
+// BLOG LINK API FUNCTIONS
+// =============================================================================
+
+/**
+ * Trigger link planning for a blog post.
+ * Returns 202 Accepted. Poll with getBlogLinkStatus for progress.
+ */
+export function triggerBlogLinkPlanning(
+  projectId: string,
+  blogId: string,
+  postId: string
+): Promise<BlogLinkPlanTriggerResponse> {
+  return apiClient.post<BlogLinkPlanTriggerResponse>(
+    `/projects/${projectId}/blogs/${blogId}/posts/${postId}/plan-links`
+  );
+}
+
+/**
+ * Poll link planning status for a blog post.
+ */
+export function getBlogLinkStatus(
+  projectId: string,
+  blogId: string,
+  postId: string
+): Promise<BlogLinkStatusResponse> {
+  return apiClient.get<BlogLinkStatusResponse>(
+    `/projects/${projectId}/blogs/${blogId}/posts/${postId}/link-status`
+  );
+}
+
+/**
+ * Get the link map (all planned/injected links) for a blog post.
+ */
+export function getBlogLinkMap(
+  projectId: string,
+  blogId: string,
+  postId: string
+): Promise<BlogLinkMapResponse> {
+  return apiClient.get<BlogLinkMapResponse>(
+    `/projects/${projectId}/blogs/${blogId}/posts/${postId}/link-map`
+  );
+}
+
+// =============================================================================
+// BLOG EXPORT API FUNCTIONS
+// =============================================================================
+
+/**
+ * Export all approved posts in a blog campaign as clean HTML.
+ * Returns JSON array of export items.
+ */
+export function getBlogExport(
+  projectId: string,
+  blogId: string
+): Promise<BlogExportItem[]> {
+  return apiClient.get<BlogExportItem[]>(
+    `/projects/${projectId}/blogs/${blogId}/export`
+  );
+}
+
+/**
+ * Export a single blog post as clean HTML.
+ */
+export function getBlogPostExport(
+  projectId: string,
+  blogId: string,
+  postId: string
+): Promise<BlogExportItem> {
+  return apiClient.get<BlogExportItem>(
+    `/projects/${projectId}/blogs/${blogId}/posts/${postId}/export`
+  );
+}
+
+/**
+ * Download a blog post as an HTML file.
+ * Triggers browser download via hidden anchor (same pattern as exportProject).
+ */
+export async function downloadBlogPostHtml(
+  projectId: string,
+  blogId: string,
+  postId: string
+): Promise<void> {
+  const url = `${API_BASE_URL}/projects/${projectId}/blogs/${blogId}/posts/${postId}/download`;
+
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    let message: string | undefined;
+    try {
+      const data = await response.json();
+      message = data.error || data.detail || data.message;
+    } catch {
+      // Response body is not JSON
+    }
+    throw new ApiError(response.status, response.statusText, message);
+  }
+
+  const blob = await response.blob();
+
+  // Extract filename from Content-Disposition header
+  const disposition = response.headers.get("Content-Disposition");
+  let filename = "blog-post.html";
+  if (disposition) {
+    const match = disposition.match(/filename="?([^";\n]+)"?/);
+    if (match) {
+      filename = match[1];
+    }
+  }
+
+  // Trigger browser download via hidden anchor
+  const blobUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = blobUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(blobUrl);
+}
+
+// =============================================================================
 // WORDPRESS LINKER API TYPES & FUNCTIONS
 // =============================================================================
 

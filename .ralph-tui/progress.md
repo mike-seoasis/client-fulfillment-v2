@@ -142,3 +142,15 @@ after each iteration and it's included in prompts for context.
   - FastAPI `Response` class is needed for the download endpoint (returns raw HTML with Content-Disposition header instead of JSON)
 ---
 
+## 2026-02-14 - S11-012
+- Added TypeScript types and API functions for all blog endpoints to the frontend API client
+- Files changed:
+  - `frontend/src/lib/api.ts` — added 14 interfaces (BlogCampaign, BlogPost, BlogCampaignCreate, BlogCampaignListItem, BlogPostUpdate, BlogContentUpdate, BlogPostGenerationStatusItem, BlogContentGenerationStatus, BlogContentTriggerResponse, BlogBulkApproveResponse, BlogExportItem, BlogLinkPlanTriggerResponse, BlogLinkStatusResponse, BlogLinkMapItem, BlogLinkMapResponse) and 18 API functions covering CRUD, content, links, and export
+- **Learnings:**
+  - Blog API functions follow exact same patterns as cluster/content functions: `apiClient.get/post/put/patch/delete` for JSON endpoints, raw `fetch` for blob downloads
+  - The `bulkApproveBlogPosts` endpoint returns an untyped dict `{approved_count, campaign_status}` (not a named schema) — used inline type for the return
+  - Blog link planning endpoints are per-post (not per-campaign), so `triggerBlogLinkPlanning`, `getBlogLinkStatus`, and `getBlogLinkMap` all take `postId` as a parameter
+  - The `downloadBlogPostHtml` function mirrors the `exportProject` pattern: direct `fetch` → blob → hidden anchor download, with Content-Disposition header parsing
+  - Pre-existing TS errors (3) in link map tests and GenerationProgress test — unrelated to this change
+---
+
