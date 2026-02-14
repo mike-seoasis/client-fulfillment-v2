@@ -5,6 +5,7 @@ All models inherit from the Base class defined in core.database.
 """
 
 from app.core.database import Base
+from app.models.blog import BlogCampaign, BlogPost
 from app.models.brand_config import BrandConfig
 from app.models.competitor import Competitor
 from app.models.content_brief import ContentBrief
@@ -32,6 +33,8 @@ from app.models.prompt_log import PromptLog
 
 __all__ = [
     "Base",
+    "BlogCampaign",
+    "BlogPost",
     "BrandConfig",
     "Competitor",
     "ContentBrief",

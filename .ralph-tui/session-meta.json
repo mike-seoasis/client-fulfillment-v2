@@ -1,14 +1,14 @@
 {
-  "id": "7ea6927e-18ee-42e8-9880-238d858eeb41",
+  "id": "7a04ad6e-04d1-4f7f-981d-dc737a128af5",
   "status": "running",
-  "startedAt": "2026-02-10T18:08:43.563Z",
-  "updatedAt": "2026-02-10T19:58:50.946Z",
+  "startedAt": "2026-02-14T21:20:01.137Z",
+  "updatedAt": "2026-02-14T21:20:10.666Z",
   "agentPlugin": "claude",
   "trackerPlugin": "json",
-  "prdPath": "openspec/changes/phase-9-internal-linking/prd.json",
-  "currentIteration": 33,
+  "prdPath": "prd.json",
+  "currentIteration": 0,
   "maxIterations": 100,
   "totalTasks": 0,
-  "tasksCompleted": 33,
+  "tasksCompleted": 0,
   "cwd": "/Users/mike/Projects (1)/client-onboarding-v2"
 }

@@ -18,6 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
 if TYPE_CHECKING:
+    from app.models.blog import BlogCampaign
     from app.models.keyword_cluster import KeywordCluster
 
 
@@ -118,6 +119,12 @@ class Project(Base):
     # Relationships
     clusters: Mapped[list["KeywordCluster"]] = relationship(
         "KeywordCluster",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+
+    blog_campaigns: Mapped[list["BlogCampaign"]] = relationship(
+        "BlogCampaign",
         back_populates="project",
         cascade="all, delete-orphan",
     )

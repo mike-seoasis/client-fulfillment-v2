@@ -28,6 +28,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
 if TYPE_CHECKING:
+    from app.models.blog import BlogCampaign
     from app.models.crawled_page import CrawledPage
     from app.models.project import Project
 
@@ -120,6 +121,12 @@ class KeywordCluster(Base):
         "ClusterPage",
         back_populates="cluster",
         cascade="all, delete-orphan",
+    )
+
+    blog_campaign: Mapped["BlogCampaign | None"] = relationship(
+        "BlogCampaign",
+        back_populates="cluster",
+        uselist=False,
     )
 
     def __repr__(self) -> str:

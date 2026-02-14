@@ -1,219 +1,424 @@
 {
-  "name": "Brand Config & UX Rework",
-  "description": "Implement comprehensive 11-part brand guidelines framework with Perplexity research, 7-step wizard UI, fix WebSocket indicator, and rename phases",
+  "name": "Phase 11: Blog Planning & Writing",
+  "description": "Add blog post creation tied to keyword clusters. BlogCampaign (1:1 with cluster) + BlogPost models, topic discovery service (4-stage: POP seeds → Claude expand → DataForSEO enrich → Claude filter), blog content generation pipeline (reuse existing brief→write→check pattern with blog template), blog internal linking (blogs link UP to cluster pages + sideways to sibling blogs, siloed), HTML/clipboard export (NOT Matrixify), and full frontend UI (campaign cards on project detail, create campaign, keyword approval, content generation progress, 3-field Lexical editor, link planning, link map, HTML export page).",
+  "branchName": "v2-rebuild",
   "userStories": [
     {
-      "id": "brand-rework.1.1",
-      "title": "Add PERPLEXITY_API_KEY to config and .env.example",
-      "description": "Add PERPLEXITY_API_KEY environment variable to backend/app/core/config.py settings class and document it in .env.example",
-      "acceptanceCriteria": ["PERPLEXITY_API_KEY in config.py", "PERPLEXITY_API_KEY documented in .env.example"],
-      "passes": false
+      "id": "S11-001",
+      "title": "Create BlogCampaign and BlogPost SQLAlchemy models",
+      "description": "As a developer, I need BlogCampaign and BlogPost models so that blog data can be stored with a 1:1 relationship to keyword clusters.",
+      "acceptanceCriteria": [
+        "Create backend/app/models/blog.py with BlogCampaign class extending Base",
+        "BlogCampaign fields: id (UUID PK), project_id (FK projects, CASCADE), cluster_id (FK keyword_clusters, UNIQUE — 1:1), name (String 255), status (String 50, default 'planning', values: planning/writing/review/complete), generation_metadata (JSONB nullable), created_at (DateTime TZ), updated_at (DateTime TZ)",
+        "Create BlogPost class extending Base in same file",
+        "BlogPost fields: id (UUID PK), campaign_id (FK blog_campaigns, CASCADE), primary_keyword (Text), url_slug (String 255), search_volume (Integer nullable), source_page_id (FK cluster_pages nullable — which POP report seeded this topic), title (Text nullable — page_title), meta_description (Text nullable), content (Text nullable — single HTML field, NOT top/bottom split), pop_brief (JSONB nullable), is_approved (Boolean default false — keyword approved), content_status (String 50 default 'pending', values: pending/generating/complete/failed), content_approved (Boolean default false), qa_results (JSONB nullable), status (String 50 default 'keyword_pending', values: keyword_pending/generating/editing/complete), created_at (DateTime TZ), updated_at (DateTime TZ)",
+        "Add relationships: BlogCampaign.posts (one-to-many), BlogCampaign.cluster, BlogCampaign.project, BlogPost.campaign with back_populates",
+        "Register both models in backend/app/models/__init__.py",
+        "Follow UUID/timestamp/relationship patterns from backend/app/models/keyword_cluster.py"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Key design decision: BlogPost stores content directly (title, meta_description, content) instead of bridging to CrawledPage/PageContent. Blogs have 3 content fields not 4, and don't need crawl-related fields. Follow the KeywordCluster + ClusterPage parent/child pattern from backend/app/models/keyword_cluster.py.",
+      "completionNotes": "Completed by agent"
     },
     {
-      "id": "brand-rework.1.2",
-      "title": "Create skills/ directory and move brand_guidelines_bible.md there",
-      "description": "Create skills/ directory at project root with README.md explaining purpose. Move brand_guideilnes_bible.md from root to skills/brand_guidelines_bible.md",
-      "acceptanceCriteria": ["skills/ directory exists", "skills/README.md exists", "brand_guidelines_bible.md moved to skills/"],
-      "passes": false
+      "id": "S11-002",
+      "title": "Create Alembic migration for blog tables",
+      "description": "As a developer, I need database tables for blog_campaigns and blog_posts so that blog data can be persisted.",
+      "acceptanceCriteria": [
+        "Create migration file backend/alembic/versions/0026_create_blog_tables.py",
+        "Migration creates blog_campaigns table with UNIQUE constraint on cluster_id (enforces 1:1)",
+        "Migration creates blog_posts table with all fields from BlogPost model",
+        "Add appropriate indexes: blog_campaigns(project_id), blog_campaigns(cluster_id), blog_posts(campaign_id), blog_posts(source_page_id)",
+        "Migration runs successfully: cd backend && alembic upgrade head",
+        "Migration has proper downgrade function that drops both tables"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Follow pattern from backend/alembic/versions/ existing migrations. The cluster_id UNIQUE constraint is critical — it prevents multiple campaigns per cluster."
     },
     {
-      "id": "brand-rework.2.1",
-      "title": "Create PerplexityClient with research_brand() method",
-      "description": "Create backend/app/integrations/perplexity.py with PerplexityClient class. Implement research_brand(domain: str) method that calls Perplexity API to research a brand from their website URL. Handle API errors gracefully.",
-      "acceptanceCriteria": ["PerplexityClient class exists", "research_brand() method works", "Handles missing API key gracefully"],
-      "passes": false
+      "id": "S11-003",
+      "title": "Create Pydantic v2 schemas for blog endpoints",
+      "description": "As a developer, I need request/response schemas for all blog API endpoints.",
+      "acceptanceCriteria": [
+        "Create backend/app/schemas/blog.py with Pydantic v2 models",
+        "BlogCampaignCreate: cluster_id (UUID required), name (str optional)",
+        "BlogPostResponse: id, campaign_id, primary_keyword, url_slug, search_volume, source_page_id, title, meta_description, content (truncated for list views), is_approved, content_status, content_approved, qa_results, status, created_at, updated_at — with ConfigDict(from_attributes=True)",
+        "BlogCampaignResponse: id, project_id, cluster_id, name, status, generation_metadata, posts (list[BlogPostResponse]), created_at, updated_at — with ConfigDict(from_attributes=True)",
+        "BlogCampaignListItem: id, name, status, cluster_name (str), post_count (int), approved_count (int), content_complete_count (int), created_at",
+        "BlogPostUpdate: primary_keyword (str optional), url_slug (str optional), is_approved (bool optional)",
+        "BlogContentUpdateRequest: title (str optional), meta_description (str optional), content (str optional)",
+        "BlogContentGenerationStatus: overall_status, posts_total, posts_completed, posts_failed, posts (list of per-post status items)",
+        "BlogExportItem: post_id, primary_keyword, url_slug, title, meta_description, html_content, word_count"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Follow pattern from backend/app/schemas/cluster.py. Use Pydantic v2 style: BaseModel, ConfigDict(from_attributes=True), Field(...) for validation. The BlogPostResponse should NOT include full content in list views — truncate or omit."
     },
     {
-      "id": "brand-rework.2.2",
-      "title": "Add caching (24hr TTL) and rate limiting (5/hr/project) to Perplexity",
-      "description": "Add Redis-based caching for Perplexity research results with 24-hour TTL. Add rate limiting of 5 requests per hour per project using Redis.",
-      "acceptanceCriteria": ["Research results cached in Redis", "Rate limiting enforced", "Cache bypass option for force refresh"],
-      "passes": false
+      "id": "S11-004",
+      "title": "Create blog topic discovery service",
+      "description": "As a developer, I need a service that discovers blog topics from existing POP reports using a 4-stage pipeline.",
+      "acceptanceCriteria": [
+        "Create backend/app/services/blog_topic_discovery.py with BlogTopicDiscoveryService class",
+        "Constructor takes ClaudeClient and DataForSEOClient (same pattern as ClusterKeywordService)",
+        "Stage 1 — extract_pop_seeds(cluster_id, db): query approved ClusterPages with POP briefs, extract related_searches and related_questions from each brief's JSONB, deduplicate, return seeds with source_page_id",
+        "Stage 2 — expand_topics(seeds, brand_context): Claude Haiku expands seeds into 15-25 blog topic candidates, focuses on informational intent (how-to, guide, comparison, listicle), tags each with source_page_id",
+        "Stage 3 — enrich_with_volume(candidates): DataForSEO batch volume lookup, filter zero-volume topics, merge volume/CPC/competition data (reuse exact pattern from ClusterKeywordService._enrich_with_volume)",
+        "Stage 4 — filter_and_rank(candidates, cluster_name): Claude Haiku filters to best 8-15 topics, removes near-duplicates, generates URL slugs, assigns relevance scores",
+        "Orchestrator discover_topics(cluster_id, project_id, brand_config, db, name): runs stages 1-4, creates BlogCampaign with status='planning', creates BlogPost records with status='keyword_pending', returns result dict with campaign_id and suggestion count",
+        "Error handling: if DataForSEO fails, continue without volume data; if Claude fails, return error to user"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Follow the 4-stage pattern from backend/app/services/cluster_keyword.py (ClusterKeywordService). The key difference is Stage 1: instead of taking a seed keyword from the user, we extract seeds from existing POP content briefs stored on cluster pages. POP briefs are stored as JSONB on the ContentBrief model — look for related_searches and related_questions fields. Brand context building follows the same pattern as cluster keywords."
     },
     {
-      "id": "brand-rework.3.1",
-      "title": "Create V3 Pydantic schemas for all 11 Brand Guidelines Bible sections",
-      "description": "Create backend/app/schemas/brand_config_v3.py with Pydantic models for: foundation, personas, voice_dimensions, voice_characteristics, writing_rules, vocabulary, proof_elements, examples_bank, competitor_context, ai_prompts, quick_reference. Include root V3BrandConfigSchema with _version, _generated_at, _sources_used fields.",
-      "acceptanceCriteria": ["All 11 section schemas defined", "Root V3BrandConfigSchema combines all sections", "Version marker _version: 3.0"],
-      "passes": false
+      "id": "S11-005",
+      "title": "Create blog campaign CRUD API endpoints",
+      "description": "As a developer, I need REST endpoints to create, list, view, update, and delete blog campaigns.",
+      "acceptanceCriteria": [
+        "Create backend/app/api/v1/blogs.py with APIRouter (prefix='/projects/{project_id}/blogs')",
+        "POST / — Create campaign: validate cluster exists and has completed content, validate no existing campaign for that cluster (409), run BlogTopicDiscoveryService.discover_topics with timeout, return BlogCampaignResponse",
+        "GET / — List campaigns: return BlogCampaignListItem[] with post counts and cluster name, ordered by created_at desc",
+        "GET /{blog_id} — Get campaign with all posts: return BlogCampaignResponse with nested BlogPostResponse[]",
+        "PATCH /{blog_id}/posts/{post_id} — Update post: edit keyword, url_slug, is_approved via BlogPostUpdate schema",
+        "POST /{blog_id}/approve — Bulk approve all unapproved posts, update campaign status to 'writing' if all approved",
+        "DELETE /{blog_id} — Delete campaign and all posts (cascade)",
+        "Register router in backend/app/api/v1/__init__.py",
+        "All endpoints validate project exists (404), use proper HTTP status codes, follow Depends(get_session) pattern"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Follow CRUD pattern from backend/app/api/v1/clusters.py. The creation endpoint is the heaviest — it triggers the 4-stage discovery pipeline inline (not as a background task, since it takes ~10-30s like cluster creation). Use the same timeout and error handling pattern as the cluster creation endpoint."
     },
     {
-      "id": "brand-rework.3.2",
-      "title": "Add is_v3_config() / is_v2_config() detection helpers",
-      "description": "Add helper functions to detect schema version: is_v3_config(config) checks for _version: 3.0, is_v2_config(config) checks for v2 structure without _version or _version: 2.0",
-      "acceptanceCriteria": ["is_v3_config() correctly identifies V3", "is_v2_config() correctly identifies V2", "Functions handle edge cases"],
-      "passes": false
+      "id": "S11-006",
+      "title": "Create blog content prompt template",
+      "description": "As a developer, I need a blog-specific prompt template for Claude content generation that outputs 3 fields instead of 4.",
+      "acceptanceCriteria": [
+        "Add build_blog_content_prompt(blog_post, keyword, brand_config, content_brief) function to backend/app/services/content_writing.py",
+        "Reuse _build_system_prompt() for the system prompt (same writing rules, AI trope avoidance, formatting standards)",
+        "User prompt specifies 3-field JSON output: { page_title, meta_description, content }",
+        "page_title: SEO-optimized, includes primary keyword, under 60 chars",
+        "meta_description: optimized for CTR, includes primary keyword, 150-160 chars",
+        "content: full article HTML with Introduction (hook + thesis), Body H2 sections, FAQ section (from POP related_questions), Conclusion with CTA",
+        "No top_description field (that's collection-page specific)",
+        "Reuse _build_seo_targets_section() for LSI terms and heading targets from POP brief",
+        "Inject brand voice from brand config ai_prompt_snippet",
+        "Filter competitor names from LSI terms (reuse existing competitor filtering logic)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "This modifies an existing file: backend/app/services/content_writing.py. The existing build_content_prompt() handles collection pages with 4 fields. The new build_blog_content_prompt() is a separate function that outputs 3 fields. The system prompt is shared via _build_system_prompt(). Reference the copywriting skill bible integration from Phase 5."
     },
     {
-      "id": "brand-rework.4.1",
-      "title": "Create BrandResearchService with Perplexity→Claude synthesis pipeline",
-      "description": "Create backend/app/services/brand_research.py with BrandResearchService class. Implement: research_brand() calls Perplexity, synthesize_to_v3() calls Claude to structure results into V3 schema, research_and_synthesize() combines both steps.",
-      "acceptanceCriteria": ["BrandResearchService class exists", "Two-stage pipeline: Perplexity research then Claude synthesis", "Returns valid V3 schema"],
-      "passes": false
+      "id": "S11-007",
+      "title": "Create blog content generation pipeline orchestrator",
+      "description": "As a developer, I need a pipeline that orchestrates brief→write→check for each approved blog post with concurrency control.",
+      "acceptanceCriteria": [
+        "Create backend/app/services/blog_content_generation.py with run_blog_content_pipeline(campaign_id, db, force_refresh=False, refresh_briefs=False) function",
+        "Load approved BlogPost records (is_approved=True) for the campaign",
+        "Per-post pipeline: (1) set content_status='generating', fetch POP brief with page_not_built_yet=True, store as pop_brief JSONB, (2) call Claude via build_blog_content_prompt, parse JSON response into title/meta_description/content, (3) run quality checks (reuse content_quality.py), store qa_results, (4) set content_status='complete'",
+        "Uses asyncio.Semaphore for concurrency (CONTENT_GENERATION_CONCURRENCY env var, default 1)",
+        "Error isolation: if one post fails, others continue; failed post gets content_status='failed'",
+        "Skips posts already with content_status='complete' unless force_refresh=True",
+        "Updates campaign status to 'review' when all posts complete"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Follow the exact pattern from backend/app/services/content_generation.py (run_content_pipeline). Key difference: content is stored directly on BlogPost (title, meta_description, content) not in a separate PageContent table. Reuse pop_content_brief.py for POP API calls and content_quality.py for QA checks."
     },
     {
-      "id": "brand-rework.4.2",
-      "title": "Create Claude prompt for V3 schema synthesis",
-      "description": "Create Claude system prompt that takes Perplexity research results and synthesizes them into V3 brand config schema. Reference brand_guidelines_bible.md for the 11-part structure. Prompt should handle partial data gracefully.",
-      "acceptanceCriteria": ["Prompt generates valid V3 JSON", "All 11 sections populated where data available", "Missing sections have sensible defaults"],
-      "passes": false
+      "id": "S11-008",
+      "title": "Create blog content generation API endpoints",
+      "description": "As a developer, I need API endpoints to trigger blog content generation, poll progress, and manage blog content.",
+      "acceptanceCriteria": [
+        "Add to backend/app/api/v1/blogs.py:",
+        "POST /{blog_id}/generate-content — Returns 202 Accepted, starts background task, validates campaign status is 'writing' and has approved posts (400 if not), prevents duplicate runs (409 if already generating)",
+        "GET /{blog_id}/content-status — Returns BlogContentGenerationStatus with per-post status breakdown",
+        "GET /{blog_id}/posts/{post_id}/content — Returns full BlogPost content fields + qa_results + pop_brief summary",
+        "PUT /{blog_id}/posts/{post_id}/content — Partial update of title/meta_description/content via BlogContentUpdateRequest, clears content_approved on change",
+        "POST /{blog_id}/posts/{post_id}/approve-content — Set content_approved=True (with ?value=false to unapprove)",
+        "POST /{blog_id}/posts/{post_id}/recheck — Re-run quality checks on current content, return updated qa_results",
+        "POST /{blog_id}/bulk-approve-content — Approve all posts with content_status='complete' and qa passed"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Follow the trigger/poll pattern from backend/app/api/v1/content_generation.py. Use background_tasks.add_task() for the pipeline. Track active generations in a module-level set to prevent duplicates."
     },
     {
-      "id": "brand-rework.5.1",
-      "title": "Add brand_wizard_state column to projects table (migration)",
-      "description": "Create Alembic migration to add brand_wizard_state JSONB column to projects table with default empty object {}",
-      "acceptanceCriteria": ["Migration file created", "Column added with JSONB type", "Default value is empty object"],
-      "passes": false
+      "id": "S11-009",
+      "title": "Add blog scope to internal link planning",
+      "description": "As a developer, I need the link planning infrastructure to support blog posts siloed to their parent cluster.",
+      "acceptanceCriteria": [
+        "Add BLOG = 'blog' to LinkScope enum in backend/app/models/internal_link.py",
+        "Add build_blog_graph(campaign_id, db) method to SiloLinkPlanner in backend/app/services/link_planning.py",
+        "Blog graph: blog posts are leaf nodes, cluster pages are targets. Blogs link UP to cluster pages (2-4 links, parent page mandatory as first link) and sideways to sibling blogs (1-2 links). Total budget: 3-6 per blog post",
+        "Create CrawledPage records with source='blog' for blog posts when link planning runs (bridges blog posts to existing InternalLink infrastructure which uses CrawledPage IDs)",
+        "Blog links NEVER cross outside the cluster silo",
+        "Add blog link planning API endpoints to blogs.py: POST /{blog_id}/plan-links (trigger, 202), GET /{blog_id}/link-status (poll), GET /{blog_id}/link-map (results)",
+        "After link injection, update BlogPost.content with injected HTML"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reuse existing SiloLinkPlanner, AnchorTextSelector, LinkInjector, and LinkValidator from backend/app/services/link_planning.py and link_injection.py. The blog-specific part is just the graph building (which pages can link to which). The CrawledPage bridging follows the same pattern as bulk_approve_cluster in clusters.py which creates CrawledPage records for cluster pages."
     },
     {
-      "id": "brand-rework.5.2",
-      "title": "Create wizard API endpoints (GET/PUT state, POST research, POST generate)",
-      "description": "Create backend/app/api/v1/brand_wizard.py router with: GET /projects/{id}/brand-wizard (get state), PUT /projects/{id}/brand-wizard (save step), POST /projects/{id}/brand-wizard/research (trigger Perplexity), POST /projects/{id}/brand-wizard/generate (create V3 config). Register router.",
-      "acceptanceCriteria": ["All 4 endpoints working", "Router registered in __init__.py", "Proper error handling"],
-      "passes": false
+      "id": "S11-010",
+      "title": "Create blog HTML export service",
+      "description": "As a developer, I need an export service that generates clean HTML for blog posts (NOT Matrixify CSV).",
+      "acceptanceCriteria": [
+        "Create backend/app/services/blog_export.py with BlogExportService class",
+        "generate_clean_html(blog_post): strip editor artifacts (highlight spans, data attributes), preserve internal links, ensure proper heading hierarchy (H2/H3), return semantic HTML string",
+        "generate_export_package(campaign_id, db, post_ids=None): query approved posts (content_approved=True, content_status='complete'), generate clean HTML + metadata for each, return list of BlogExportItem",
+        "Add export API endpoints to blogs.py: GET /{blog_id}/export (all approved posts as JSON array of BlogExportItem), GET /{blog_id}/posts/{post_id}/export (single post), GET /{blog_id}/posts/{post_id}/download (HTML file with Content-Disposition header)",
+        "HTML cleaning reuses the strip pattern from the existing Lexical editor export (removing highlight nodes)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Blog export is HTML for pasting into Shopify's blog editor. NOT Matrixify CSV (that's collection pages only). The highlight stripping logic exists in the frontend Lexical editor (HighlightPlugin.tsx lines 68-80) — replicate server-side with BeautifulSoup for the backend export."
     },
     {
-      "id": "brand-rework.6.1",
-      "title": "Create migration to rename phases (discovery→brand_setup, etc.)",
-      "description": "Create Alembic migration with SQL to rename phase keys in all existing project records: discovery→brand_setup, requirements→site_analysis, implementation→content_generation, review→review_edit, launch→export. Include rollback.",
-      "acceptanceCriteria": ["Migration updates existing records", "All 5 phase names renamed", "Rollback SQL included"],
-      "passes": false
+      "id": "S11-011",
+      "title": "Write backend tests for blog services and API",
+      "description": "As a developer, I need comprehensive tests for blog topic discovery, content generation, export, and API endpoints.",
+      "acceptanceCriteria": [
+        "Tests for blog topic discovery: mock Claude + DataForSEO, test 4-stage pipeline, test seed extraction from POP briefs, test deduplication, test error handling",
+        "Tests for blog content generation pipeline: mock POP + Claude, test per-post pipeline phases, test error isolation, test concurrency control, test skip-if-complete logic",
+        "Tests for blog export: test HTML cleaning (highlight strip, link preservation), test export package generation",
+        "Tests for blog API endpoints: test campaign CRUD (create/list/get/update/delete), test content generation trigger/poll, test content edit/approve/recheck, test export endpoints, test validation (no duplicate campaigns per cluster, must have approved posts for generation)",
+        "All tests pass: cd backend && python -m pytest tests/ -x",
+        "Minimum 40 test cases across services and API"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Follow existing test patterns in backend/tests/services/ and backend/tests/api/. Use conftest.py fixtures. Mock external APIs (Claude, DataForSEO, POP) — never make real API calls in tests."
     },
     {
-      "id": "brand-rework.6.2",
-      "title": "Update PHASE_NAMES constant in project model",
-      "description": "Update backend/app/models/project.py PHASE_NAMES constant (or equivalent) to use new phase names: brand_setup, site_analysis, content_generation, review_edit, export",
-      "acceptanceCriteria": ["PHASE_NAMES updated", "Any other backend references updated"],
-      "passes": false
+      "id": "S11-012",
+      "title": "Add blog types and API functions to frontend API client",
+      "description": "As a developer, I need TypeScript types and API functions for all blog endpoints so the frontend can interact with them.",
+      "acceptanceCriteria": [
+        "Add to frontend/src/lib/api.ts: BlogCampaign, BlogPost, BlogCampaignCreate, BlogCampaignListItem, BlogPostUpdate, BlogContentUpdate, BlogContentGenerationStatus, BlogExportItem TypeScript interfaces",
+        "Add API functions: createBlogCampaign(projectId, data), getBlogCampaigns(projectId), getBlogCampaign(projectId, blogId), updateBlogPost(projectId, blogId, postId, data), bulkApproveBlogPosts(projectId, blogId), deleteBlogCampaign(projectId, blogId)",
+        "Add content API functions: triggerBlogContentGeneration(projectId, blogId), getBlogContentStatus(projectId, blogId), getBlogPostContent(projectId, blogId, postId), updateBlogPostContent(projectId, blogId, postId, data), approveBlogPostContent(projectId, blogId, postId, value?), recheckBlogPostContent(projectId, blogId, postId), bulkApproveBlogContent(projectId, blogId)",
+        "Add link API functions: triggerBlogLinkPlanning(projectId, blogId), getBlogLinkStatus(projectId, blogId), getBlogLinkMap(projectId, blogId)",
+        "Add export API functions: getBlogExport(projectId, blogId), getBlogPostExport(projectId, blogId, postId), downloadBlogPostHtml(projectId, blogId, postId)",
+        "Follow exact patterns from existing cluster/content API functions in the same file"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "All blog endpoints are under /projects/{projectId}/blogs/{blogId}/... prefix. Follow the existing apiClient.get/post/put/patch/delete patterns. The download function should handle blob response like the existing exportProject function."
     },
     {
-      "id": "brand-rework.7.1",
-      "title": "Create wizard layout components (WizardProgress, WizardNavigation, WizardContainer)",
-      "description": "Create frontend/src/components/brand-wizard/ directory with: WizardProgress.tsx (step indicator showing 1-7), WizardNavigation.tsx (prev/next buttons), WizardContainer.tsx (layout wrapper). Export from index.ts",
-      "acceptanceCriteria": ["All 3 components created", "WizardProgress shows clickable steps", "Proper styling"],
-      "passes": false
+      "id": "S11-013",
+      "title": "Create useBlogs TanStack Query hooks",
+      "description": "As a developer, I need React Query hooks for blog campaigns, content generation, and export so the frontend components can fetch and mutate data.",
+      "acceptanceCriteria": [
+        "Create frontend/src/hooks/useBlogs.ts",
+        "Query key factory: blogKeys with list, detail, contentStatus, postContent, linkStatus, linkMap, export keys",
+        "Campaign hooks: useBlogCampaigns(projectId), useBlogCampaign(projectId, blogId), useCreateBlogCampaign(), useUpdateBlogPost(), useBulkApproveBlogPosts(), useDeleteBlogCampaign()",
+        "Content hooks: useTriggerBlogContentGeneration(), useBlogContentStatus(projectId, blogId) with 3s polling while generating, useBlogPostContent(projectId, blogId, postId), useUpdateBlogPostContent(), useApproveBlogPostContent(), useRecheckBlogPostContent(), useBulkApproveBlogContent()",
+        "Link hooks: useTriggerBlogLinkPlanning(), useBlogLinkStatus(projectId, blogId) with polling, useBlogLinkMap(projectId, blogId)",
+        "All mutations invalidate relevant queries on success",
+        "Follow exact patterns from frontend/src/hooks/useClusters.ts and frontend/src/hooks/useContentGeneration.ts"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "The polling pattern for content status: refetchInterval: (query) => query.state.data?.overall_status === 'generating' ? 3000 : false. Same pattern for link planning status. Query key hierarchy enables cache invalidation at list vs detail level."
     },
     {
-      "id": "brand-rework.7.2",
-      "title": "Create VoiceDimensionSlider component with 1-10 scale and example text",
-      "description": "Create VoiceDimensionSlider.tsx with slider 1-10, value display, and example text at low/high ends. Props: name, value, onChange, lowExample, highExample. Style with brand colors.",
-      "acceptanceCriteria": ["Slider works 1-10", "Shows current value", "Displays low/high examples"],
-      "passes": false
+      "id": "S11-014",
+      "title": "Add Blogs section to project detail page",
+      "description": "As a user, I need to see my blog campaigns on the project detail page alongside onboarding and clusters.",
+      "acceptanceCriteria": [
+        "Modify frontend/src/app/projects/[id]/page.tsx to add a third section below 'New Content'",
+        "Section header: pencil icon + 'Blogs' title + 'Supporting Content' chip badge (matching onboarding/cluster header pattern)",
+        "When campaigns exist: show grid of campaign cards (1-3 columns), each card shows: campaign name, cluster name (small text), post count ('X of Y posts done'), status badge (Planning/Writing/Review/Complete), link status badge",
+        "When no campaigns: empty state with 'No blog campaigns yet' + description + '+ New Campaign' button",
+        "'+ New Campaign' button in header (when campaigns exist) links to /projects/[id]/blogs/new",
+        "Each campaign card links to /projects/[id]/blogs/[blogId]",
+        "Card styling matches ClusterCard: bg-white rounded-sm border border-sand-500 p-4 shadow-sm hover:shadow-md transition-shadow",
+        "Fetch campaigns with useBlogCampaigns hook"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Follow the exact layout pattern of the existing 'New Content' section (lines 765-807 of the project detail page). The BlogCampaignCard component should mirror ClusterCard (lines 367-398). Status badge colors: planning=cream, writing=lagoon, review=coral, complete=palm."
     },
     {
-      "id": "brand-rework.7.3",
-      "title": "Create form components (ChipInput, PersonaCard, ExampleEditor)",
-      "description": "Create: ChipInput.tsx (add/remove chips for power_words, banned_words), PersonaCard.tsx (display/edit persona with all fields), ExampleEditor.tsx (good/bad example pairs)",
-      "acceptanceCriteria": ["ChipInput adds/removes chips", "PersonaCard shows all persona fields", "ExampleEditor handles good/bad pairs"],
-      "passes": false
+      "id": "S11-015",
+      "title": "Create blog campaign creation page",
+      "description": "As a user, I need a page to create a blog campaign by selecting a cluster and triggering topic discovery.",
+      "acceptanceCriteria": [
+        "Create frontend/src/app/projects/[id]/blogs/new/page.tsx",
+        "Form: dropdown to select parent cluster (only clusters with completed content are eligible — filter by status), optional campaign name input",
+        "Ineligible clusters (no completed content) shown grayed out with reason",
+        "Clusters that already have a campaign are excluded from dropdown",
+        "On submit: call createBlogCampaign mutation, show 4-step progress animation during discovery (Extracting seeds → Expanding topics → Checking volume → Filtering results)",
+        "On success: redirect to campaign detail page (keywords step)",
+        "On error: show error message with retry option",
+        "Cancel button returns to project detail page",
+        "Follow creation page pattern from frontend/src/app/projects/[id]/clusters/new/page.tsx",
+        "Tropical oasis styling: rounded-sm, palm/sand/cream colors, warm-gray text"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "The cluster dropdown needs data from useClusters hook to show available clusters. The progress animation follows the ProgressIndicator pattern from clusters/new/page.tsx (lines 32-70). The discovery takes ~10-30s, similar to cluster creation."
     },
     {
-      "id": "brand-rework.8.1",
-      "title": "Create Step 1: Brand Setup (name, domain, research button)",
-      "description": "Create Step1BrandSetup.tsx with: brand name input (required), domain URL input (optional), 'Research Brand' button that triggers Perplexity API call. Show loading state during research.",
-      "acceptanceCriteria": ["Brand name required validation", "Research button calls API", "Loading state shown"],
-      "passes": false
+      "id": "S11-016",
+      "title": "Create blog keywords step page",
+      "description": "As a user, I need to view, edit, and approve discovered blog topics before content generation.",
+      "acceptanceCriteria": [
+        "Create frontend/src/app/projects/[id]/blogs/[blogId]/page.tsx",
+        "5-step indicator at top: Keywords (active) → Content → Links → Review → Export",
+        "Table showing all blog posts with columns: Approve checkbox, Topic Keyword (inline editable), Source Page (which cluster page seeded it), Volume, URL Slug (inline editable)",
+        "Inline editing: click keyword or slug cell to enter edit mode, blur to save via useUpdateBlogPost mutation",
+        "Approve checkbox per row toggles is_approved via useUpdateBlogPost",
+        "Bulk 'Approve All' button approves all unapproved posts",
+        "Bottom actions: 'Delete Campaign' (left, danger), 'Generate Content →' (right, primary — disabled until ≥1 approved)",
+        "'Generate Content' navigates to content step and triggers generation",
+        "Follow keyword approval pattern from frontend/src/app/projects/[id]/clusters/[clusterId]/page.tsx",
+        "Tropical oasis styling consistent with cluster keywords page"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Follow the ClusterPageRow pattern (lines 293-471 of cluster detail page). Key difference from clusters: no parent/child roles, no CPC/competition/score columns (blogs are simpler). Add Source Page column showing which cluster page's POP report seeded the topic. The step indicator follows the StepIndicator pattern (lines 79-122)."
     },
     {
-      "id": "brand-rework.8.2",
-      "title": "Create Step 2: Foundation (company info, positioning, differentiators)",
-      "description": "Create Step2Foundation.tsx with editable fields for: company overview, industry, business model, positioning statement, mission statement, core values (chips), key differentiators (chips), products/services. Pre-fill from research.",
-      "acceptanceCriteria": ["All foundation fields editable", "Pre-fills from research if available", "Chips for values/differentiators"],
-      "passes": false
+      "id": "S11-017",
+      "title": "Create blog content generation and review page",
+      "description": "As a user, I need to trigger blog content generation, watch progress, and review generated content in a tabbed table.",
+      "acceptanceCriteria": [
+        "Create frontend/src/app/projects/[id]/blogs/[blogId]/content/page.tsx",
+        "Step indicator shows Content (active, step 2)",
+        "Generation state: 'Generate Content' button, progress bar with per-post pipeline indicator (Brief → Write → Check → Done), per-post status rows with View/Inspect actions",
+        "Polls every 3s while generating via useBlogContentStatus hook",
+        "Review state (after generation): two tabs 'Needs Review' / 'Approved' with table showing topic keyword, word count, QA status (pass/fail), content approval toggle, Edit link",
+        "Edit link navigates to /blogs/[blogId]/content/[postId] (content editor)",
+        "'Approve All Ready' button approves all QA-passed posts",
+        "After all content generated, auto-trigger link planning (same pattern as cluster content page)",
+        "Navigation: '← Back' to keywords, 'Continue →' to links/export",
+        "Follow content generation page pattern from frontend/src/app/projects/[id]/clusters/[clusterId]/content/page.tsx"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "This page is a near-copy of the cluster content page. The main structural difference: it queries BlogPost records instead of CrawledPage+PageContent. The pipeline indicator, polling, tabs, and approval flow are identical patterns. Reference the PipelineIndicator (lines 168-230), PageRow (lines 267-353), and ReviewTable (lines 374-537) from the cluster content page."
     },
     {
-      "id": "brand-rework.8.3",
-      "title": "Create Step 3: Audience (persona cards with add/edit/remove)",
-      "description": "Create Step3Audience.tsx with: list of PersonaCards, add persona button, ability to mark one as primary. Each persona has: name, demographics, psychographics, pain points, motivations, buying triggers.",
-      "acceptanceCriteria": ["Add/edit/remove personas", "Mark primary persona", "All persona fields editable"],
-      "passes": false
+      "id": "S11-018",
+      "title": "Create blog content editor page (3 fields)",
+      "description": "As a user, I need a rich text editor for blog posts with 3 fields (title, meta description, content), QA sidebar, and auto-save.",
+      "acceptanceCriteria": [
+        "Create frontend/src/app/projects/[id]/blogs/[blogId]/content/[postId]/page.tsx",
+        "Two-column layout: editor (65%) + sidebar (35%)",
+        "Editor has 3 fields (NOT 4 — no top_description): Page Title (input, 70 char counter), Meta Description (textarea, 160 char counter), Content (ContentEditorWithSource Lexical editor with HTML source toggle)",
+        "Content field shows word count + heading count footer: 'X words · Y H2 · Z H3'",
+        "Highlight toggle controls for keyword, LSI, trope highlighting (reuse HighlightPlugin)",
+        "Sidebar: QualityStatusCard (pass/fail checks), ContentStatsCard (word count, headings, keyword density), LsiTermsCard (LSI term usage), HeadingOutlineCard (H2/H3 structure)",
+        "Auto-save on blur with dirty field tracking (same pattern as existing editor)",
+        "Bottom action bar: auto-save status, 'Re-run Checks' button, 'Save Draft' button, 'Approve' button",
+        "Approve button navigates back to content list",
+        "Follow editor pattern from frontend/src/app/projects/[id]/clusters/[clusterId]/content/[pageId]/page.tsx (adapt from 4 fields to 3)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "This is the existing content editor with one field removed (top_description). The ContentEditorWithSource component, HighlightPlugin, ToolbarPlugin, and all sidebar components are reused from existing code in frontend/src/components/content-editor/. The auto-save logic (lines 700-761 of existing editor) needs minor adaptation for 3 fields instead of 4. QA results come from BlogPost.qa_results instead of PageContent.qa_results."
     },
     {
-      "id": "brand-rework.8.4",
-      "title": "Create Step 4: Voice (4 dimension sliders + characteristics)",
-      "description": "Create Step4Voice.tsx with: 4 VoiceDimensionSliders (formality, humor, reverence, enthusiasm) with appropriate example text, and voice characteristics editor (we are/we are not with trait, description, example fields).",
-      "acceptanceCriteria": ["4 sliders with examples", "Voice characteristics add/edit/remove", "Each characteristic has trait/description/example"],
-      "passes": false
+      "id": "S11-019",
+      "title": "Create blog link planning and link map pages",
+      "description": "As a user, I need to trigger link planning for blog posts and view the resulting link map.",
+      "acceptanceCriteria": [
+        "Create frontend/src/app/projects/[id]/blogs/[blogId]/links/page.tsx — link planning trigger page",
+        "Prerequisites checklist: all keywords approved, all content generated",
+        "'Plan & Inject Links' button (disabled if prerequisites not met)",
+        "Progress indicator during planning (4 steps: Building graph → Selecting targets → Injecting links → Validating)",
+        "Link rules card explaining blog-specific rules (2-4 links to cluster pages, 1-2 to sibling blogs, siloed)",
+        "Create frontend/src/app/projects/[id]/blogs/[blogId]/links/map/page.tsx — link map visualization",
+        "Two sections: Cluster Pages (link targets, showing inbound counts) and Blog Posts (showing outbound links with anchor text and target)",
+        "Stats header: total links, total posts, avg links/post",
+        "'Re-plan Links' button for re-planning",
+        "Follow link planning pattern from cluster links page at frontend/src/app/projects/[id]/clusters/[clusterId]/links/page.tsx and links/map/page.tsx"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "These pages are structural copies of the cluster link pages. The blog link map has a different visual structure: cluster pages shown as 'targets' at the top, blog posts shown below with their outbound links. This makes the silo relationship clear — blogs link UP to cluster pages and sideways to sibling blogs."
     },
     {
-      "id": "brand-rework.8.5",
-      "title": "Create Step 5: Writing Rules (toggles, vocabulary editors)",
-      "description": "Create Step5WritingRules.tsx with: sentence/paragraph length inputs, toggles (contractions, oxford comma), exclamation limit, capitalization rules, and vocabulary editors (power words chips, banned words chips, preferred terms key-value, industry terms).",
-      "acceptanceCriteria": ["All writing rule fields", "Vocabulary editors working", "Chips and key-value inputs"],
-      "passes": false
+      "id": "S11-020",
+      "title": "Create blog HTML export page",
+      "description": "As a user, I need to export blog posts as clean HTML to paste into Shopify's blog editor.",
+      "acceptanceCriteria": [
+        "Create frontend/src/app/projects/[id]/blogs/[blogId]/export/page.tsx",
+        "Step indicator shows Export (active, step 5)",
+        "Header: 'Export Blog Posts' + subtitle 'Copy HTML to paste into Shopify, or download as files'",
+        "Show count: 'Ready to export: X of Y posts approved'",
+        "List of approved blog posts, each as a card showing: keyword, URL slug, word count, title, meta description (truncated)",
+        "Per-post actions: 'Copy HTML' button (copies clean HTML body to clipboard via navigator.clipboard.writeText), 'Download .html' button (triggers file download)",
+        "'Copy HTML' shows 'Copied!' toast on success (2s timeout), button icon changes to checkmark briefly",
+        "Bottom bar: '← Back' button, 'Copy All HTML' button (copies all posts concatenated with <!-- POST: keyword --> separators)",
+        "Unapproved posts shown grayed out at bottom",
+        "This is NOT Matrixify CSV — it's HTML for Shopify blog editor"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "This is the only genuinely NEW UI in Phase 11. The clipboard pattern exists in PromptInspector.tsx (CopyButton component, lines 127-155) — reuse that pattern. For file download, create a Blob with type 'text/html' and trigger download via hidden anchor element (same pattern as the existing CSV export but with HTML content type). The export cards should show title and meta as copyable text fields above the action buttons."
     },
     {
-      "id": "brand-rework.8.6",
-      "title": "Create Step 6: Proof & Examples (stats, quotes, good/bad examples)",
-      "description": "Create Step6ProofExamples.tsx with: statistics editor (stat + context), credentials list, customer quotes (quote + attribution), guarantees list, and examples bank with ExampleEditors for headlines, product descriptions, CTAs.",
-      "acceptanceCriteria": ["All proof element fields", "Examples bank with good/bad pairs", "Add/remove for all lists"],
-      "passes": false
+      "id": "S11-021",
+      "title": "Write frontend component tests",
+      "description": "As a developer, I need tests for blog UI components to ensure they render and behave correctly.",
+      "acceptanceCriteria": [
+        "Tests for useBlogs hooks: query/mutation behavior, polling, cache invalidation",
+        "Tests for project detail Blogs section: renders campaign cards, empty state, status badges",
+        "Tests for campaign creation page: form validation, cluster dropdown filtering, progress animation",
+        "Tests for keywords step: table rendering, inline editing, approve/bulk-approve",
+        "Tests for content generation page: progress display, tab switching, approve flow",
+        "Tests for content editor page: 3-field layout, auto-save, sidebar rendering",
+        "Tests for export page: clipboard copy, download trigger, card rendering",
+        "All tests pass: cd frontend && npm test",
+        "Minimum 40 frontend test cases"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Follow existing test patterns in frontend/src/__tests__/. Mock API calls and TanStack Query. Use renderHook for hook tests, render for component tests. The clipboard API (navigator.clipboard.writeText) needs to be mocked in tests."
     },
     {
-      "id": "brand-rework.8.7",
-      "title": "Create Step 7: Review & Generate (summary, quick reference, generate button)",
-      "description": "Create Step7Review.tsx with: summary of all sections with edit links, quick reference editor (voice in 3 words, one-sentence summary, primary audience, key CTA, avoid list), and 'Generate Brand Config' button with loading state.",
-      "acceptanceCriteria": ["Summary shows all sections", "Quick reference editable", "Generate button saves V3 and redirects"],
-      "passes": false
+      "id": "S11-098",
+      "title": "Update V2_REBUILD_PLAN.md",
+      "description": "As a developer, I need to update the plan status so that progress is tracked.",
+      "acceptanceCriteria": [
+        "Mark all Phase 11 checkboxes as [x] complete in V2_REBUILD_PLAN.md",
+        "Update Current Status table: Phase=11 Blog Planning & Writing (COMPLETE), Last Session=today's date, Next Action=Phase 12: Authentication",
+        "Add new row to Session Log table with date, completed items summary, next up"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "This task maintains our planning discipline."
     },
     {
-      "id": "brand-rework.9.1",
-      "title": "Create BrandWizardPage with state management and auto-save",
-      "description": "Create frontend/src/pages/BrandWizardPage.tsx with: wizard state in useState/useReducer, load existing state via useApiQuery, auto-save on step change via mutation, step navigation logic (block 2-7 until step 1 complete).",
-      "acceptanceCriteria": ["State management working", "Auto-save on step change", "Step 1 required first"],
-      "passes": false
-    },
-    {
-      "id": "brand-rework.9.2",
-      "title": "Add route and link from ProjectDetailPage",
-      "description": "Add route /projects/:projectId/brand-wizard in App.tsx. Add 'Configure Brand' button to ProjectDetailPage that links to wizard.",
-      "acceptanceCriteria": ["Route works", "Button visible on project detail", "Navigation works"],
-      "passes": false
-    },
-    {
-      "id": "brand-rework.9.3",
-      "title": "Update BrandConfigPanel to detect V3 and show 'Launch Wizard' button",
-      "description": "Update BrandConfigPanel.tsx to: detect V3 vs V2 configs, show 'Launch Brand Wizard' for projects without config, show 'Upgrade to V3' for V2 configs, display V3 quick reference when V3 exists.",
-      "acceptanceCriteria": ["V3 detection working", "Appropriate buttons shown", "V3 quick reference displayed"],
-      "passes": false
-    },
-    {
-      "id": "brand-rework.10.1",
-      "title": "Hide WebSocket indicator until 3+ failed reconnection attempts",
-      "description": "Update useWebSocket.ts to track reconnection attempt count. Update ProjectDetailPage.tsx to hide indicator when connected or reconnecting (<3 attempts). Show subtle 'Updates may be delayed' after 3+ failures with static icon (no spinning).",
-      "acceptanceCriteria": ["Indicator hidden by default", "Only shows after 3+ failures", "No alarming animation"],
-      "passes": false
-    },
-    {
-      "id": "brand-rework.10.2",
-      "title": "Update phaseLabels to user-friendly names",
-      "description": "Update frontend/src/lib/phaseUtils.ts: change PHASE_ORDER to new names (brand_setup, site_analysis, content_generation, review_edit, export), update phaseLabels mapping to 'Brand Setup', 'Site Analysis', 'Content Generation', 'Review & Edit', 'Export'.",
-      "acceptanceCriteria": ["PHASE_ORDER updated", "phaseLabels updated", "UI shows new labels"],
-      "passes": false
-    },
-    {
-      "id": "brand-rework.11.1",
-      "title": "Test complete wizard flow end-to-end",
-      "description": "Test: create new project → enter wizard → research brand → complete all 7 steps → generate V3 config → verify config saved correctly. Test resume (leave mid-wizard, return).",
-      "acceptanceCriteria": ["Full flow works", "V3 config saved", "Resume works"],
-      "passes": false
-    },
-    {
-      "id": "brand-rework.11.2",
-      "title": "Test V2 backward compatibility and Perplexity fallback",
-      "description": "Test: load existing V2 config displays correctly, upgrade to V3 works. Test: remove PERPLEXITY_API_KEY, verify wizard allows manual entry without research.",
-      "acceptanceCriteria": ["V2 displays correctly", "Upgrade works", "Manual entry fallback works"],
-      "passes": false
-    },
-    {
-      "id": "brand-rework.11.3",
-      "title": "Add PERPLEXITY_API_KEY to Railway and deploy",
-      "description": "Add PERPLEXITY_API_KEY environment variable in Railway dashboard for backend service. Run database migrations. Verify deployment works end-to-end.",
-      "acceptanceCriteria": ["Env var set in Railway", "Migrations run", "Production works"],
-      "passes": false
+      "id": "S11-099",
+      "title": "Verify Phase 11 completion",
+      "description": "As a developer, I need to verify all Phase 11 criteria are met before moving on.",
+      "acceptanceCriteria": [
+        "All backend tests pass: cd backend && python -m pytest tests/ -x",
+        "All frontend tests pass: cd frontend && npm test",
+        "Manual verification: full blog flow works end-to-end (create campaign from cluster → approve topics → generate content → edit in Lexical → plan links → view link map → copy HTML to clipboard)",
+        "Blog export produces clean HTML (no editor artifacts, links preserved)",
+        "Blog linking is siloed (only cluster pages + sibling blogs, never outside silo)",
+        "Project detail page shows blog campaigns section",
+        "Git commit created with message: feat(phase-11): Add blog planning & writing",
+        "No uncommitted changes remain"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Do not proceed to Phase 12 until this passes. The critical path: campaign creation, content generation, and HTML export."
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-02T12:00:00.000Z"
+    "updatedAt": "2026-02-14T21:22:14.935Z"
   }
 }

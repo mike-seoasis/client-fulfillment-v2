@@ -1,559 +1,162 @@
 {
   "version": 1,
-  "sessionId": "7ea6927e-18ee-42e8-9880-238d858eeb41",
+  "sessionId": "7a04ad6e-04d1-4f7f-981d-dc737a128af5",
   "status": "running",
-  "startedAt": "2026-02-10T18:08:46.514Z",
-  "updatedAt": "2026-02-10T20:05:25.964Z",
-  "currentIteration": 33,
+  "startedAt": "2026-02-14T21:20:01.206Z",
+  "updatedAt": "2026-02-14T21:22:14.938Z",
+  "currentIteration": 0,
   "maxIterations": 10,
-  "tasksCompleted": 33,
+  "tasksCompleted": 0,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
     "plugin": "json",
-    "prdPath": "openspec/changes/phase-9-internal-linking/prd.json",
-    "totalTasks": 34,
+    "prdPath": "prd.json",
+    "totalTasks": 23,
     "tasks": [
       {
-        "id": "S9-001",
-        "title": "Create InternalLink database model",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S11-001",
+        "title": "Create BlogCampaign and BlogPost SQLAlchemy models",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S9-002",
-        "title": "Create LinkPlanSnapshot database model",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S11-002",
+        "title": "Create Alembic migration for blog tables",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S9-003",
-        "title": "Add relationships to CrawledPage and register models",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S11-003",
+        "title": "Create Pydantic v2 schemas for blog endpoints",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S9-004",
-        "title": "Create Alembic migration for internal links tables",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S11-004",
+        "title": "Create blog topic discovery service",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S9-005",
-        "title": "Create Pydantic v2 schemas for internal links",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S11-005",
+        "title": "Create blog campaign CRUD API endpoints",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S9-006",
-        "title": "Implement link graph construction (cluster + onboarding)",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S11-006",
+        "title": "Create blog content prompt template",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S9-007",
-        "title": "Implement budget calculation and target selection",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S11-007",
+        "title": "Create blog content generation pipeline orchestrator",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S9-008",
-        "title": "Implement anchor text selection with diversity tracking",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S11-008",
+        "title": "Create blog content generation API endpoints",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S9-009",
-        "title": "Implement rule-based link injection (BeautifulSoup)",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S11-009",
+        "title": "Add blog scope to internal link planning",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S9-010",
-        "title": "Implement LLM fallback injection",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S11-010",
+        "title": "Create blog HTML export service",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S9-011",
-        "title": "Implement link stripping for re-planning",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S11-011",
+        "title": "Write backend tests for blog services and API",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S9-012",
-        "title": "Implement link validation rules",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S11-012",
+        "title": "Add blog types and API functions to frontend API client",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S9-013",
-        "title": "Implement link planning pipeline orchestrator",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S11-013",
+        "title": "Create useBlogs TanStack Query hooks",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S9-014",
-        "title": "Implement re-plan flow (snapshot, strip, delete, re-run)",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S11-014",
+        "title": "Add Blogs section to project detail page",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S9-015",
-        "title": "Write unit tests for link graph construction",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S11-015",
+        "title": "Create blog campaign creation page",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S9-016",
-        "title": "Write unit tests for target selection and budget",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S11-016",
+        "title": "Create blog keywords step page",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S9-017",
-        "title": "Write unit tests for anchor text selection",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S11-017",
+        "title": "Create blog content generation and review page",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S9-018",
-        "title": "Write unit tests for link injection and stripping",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S11-018",
+        "title": "Create blog content editor page (3 fields)",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S9-019",
-        "title": "Write unit tests for link validation",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S11-019",
+        "title": "Create blog link planning and link map pages",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S9-020",
-        "title": "Write integration test for full planning pipeline",
-        "status": "completed",
-        "completedInSession": true
+        "id": "S11-020",
+        "title": "Create blog HTML export page",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S9-021",
-        "title": "Create link management API router with plan and status endpoints",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "S9-022",
-        "title": "Add link map and page detail API endpoints",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "S9-023",
-        "title": "Add manual link management endpoints (add, remove, edit)",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "S9-024",
-        "title": "Register links router and write API tests",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "S9-025",
-        "title": "Add TypeScript types and API client for links",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "S9-026",
-        "title": "Create TanStack Query hooks for links",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "S9-027",
-        "title": "Create link planning trigger page (onboarding + cluster)",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "S9-028",
-        "title": "Create link map overview page (cluster variant)",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "S9-029",
-        "title": "Create link map overview page (onboarding variant)",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "S9-030",
-        "title": "Create page link detail view",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "S9-031",
-        "title": "Update project detail page with link status indicators",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "S9-032",
+        "id": "S11-021",
         "title": "Write frontend component tests",
-        "status": "completed",
-        "completedInSession": true
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S9-098",
+        "id": "S11-098",
         "title": "Update V2_REBUILD_PLAN.md",
-        "status": "completed",
-        "completedInSession": true
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "S9-099",
-        "title": "Verify Phase 9 completion",
+        "id": "S11-099",
+        "title": "Verify Phase 11 completion",
         "status": "open",
         "completedInSession": false
       }
     ]
   },
-  "iterations": [
-    {
-      "iteration": 1,
-      "status": "completed",
-      "taskId": "S9-001",
-      "taskTitle": "Create InternalLink database model",
-      "taskCompleted": true,
-      "durationMs": 148183,
-      "startedAt": "2026-02-10T18:08:50.558Z",
-      "endedAt": "2026-02-10T18:11:18.741Z"
-    },
-    {
-      "iteration": 2,
-      "status": "completed",
-      "taskId": "S9-002",
-      "taskTitle": "Create LinkPlanSnapshot database model",
-      "taskCompleted": true,
-      "durationMs": 86790,
-      "startedAt": "2026-02-10T18:11:19.907Z",
-      "endedAt": "2026-02-10T18:12:46.697Z"
-    },
-    {
-      "iteration": 3,
-      "status": "completed",
-      "taskId": "S9-003",
-      "taskTitle": "Add relationships to CrawledPage and register models",
-      "taskCompleted": true,
-      "durationMs": 58715,
-      "startedAt": "2026-02-10T18:12:47.823Z",
-      "endedAt": "2026-02-10T18:13:46.538Z"
-    },
-    {
-      "iteration": 4,
-      "status": "completed",
-      "taskId": "S9-004",
-      "taskTitle": "Create Alembic migration for internal links tables",
-      "taskCompleted": true,
-      "durationMs": 68459,
-      "startedAt": "2026-02-10T18:13:47.660Z",
-      "endedAt": "2026-02-10T18:14:56.119Z"
-    },
-    {
-      "iteration": 5,
-      "status": "completed",
-      "taskId": "S9-005",
-      "taskTitle": "Create Pydantic v2 schemas for internal links",
-      "taskCompleted": true,
-      "durationMs": 124257,
-      "startedAt": "2026-02-10T18:14:57.231Z",
-      "endedAt": "2026-02-10T18:17:01.488Z"
-    },
-    {
-      "iteration": 6,
-      "status": "completed",
-      "taskId": "S9-006",
-      "taskTitle": "Implement link graph construction (cluster + onboarding)",
-      "taskCompleted": true,
-      "durationMs": 127792,
-      "startedAt": "2026-02-10T18:17:02.639Z",
-      "endedAt": "2026-02-10T18:19:10.431Z"
-    },
-    {
-      "iteration": 7,
-      "status": "completed",
-      "taskId": "S9-007",
-      "taskTitle": "Implement budget calculation and target selection",
-      "taskCompleted": true,
-      "durationMs": 243838,
-      "startedAt": "2026-02-10T18:19:11.607Z",
-      "endedAt": "2026-02-10T18:23:15.445Z"
-    },
-    {
-      "iteration": 8,
-      "status": "completed",
-      "taskId": "S9-008",
-      "taskTitle": "Implement anchor text selection with diversity tracking",
-      "taskCompleted": true,
-      "durationMs": 253140,
-      "startedAt": "2026-02-10T18:23:16.566Z",
-      "endedAt": "2026-02-10T18:27:29.706Z"
-    },
-    {
-      "iteration": 9,
-      "status": "completed",
-      "taskId": "S9-009",
-      "taskTitle": "Implement rule-based link injection (BeautifulSoup)",
-      "taskCompleted": true,
-      "durationMs": 245051,
-      "startedAt": "2026-02-10T18:27:30.833Z",
-      "endedAt": "2026-02-10T18:31:35.884Z"
-    },
-    {
-      "iteration": 10,
-      "status": "completed",
-      "taskId": "S9-010",
-      "taskTitle": "Implement LLM fallback injection",
-      "taskCompleted": true,
-      "durationMs": 131877,
-      "startedAt": "2026-02-10T18:31:37.036Z",
-      "endedAt": "2026-02-10T18:33:48.913Z"
-    },
-    {
-      "iteration": 11,
-      "status": "completed",
-      "taskId": "S9-011",
-      "taskTitle": "Implement link stripping for re-planning",
-      "taskCompleted": true,
-      "durationMs": 92948,
-      "startedAt": "2026-02-10T18:33:50.047Z",
-      "endedAt": "2026-02-10T18:35:22.995Z"
-    },
-    {
-      "iteration": 12,
-      "status": "completed",
-      "taskId": "S9-012",
-      "taskTitle": "Implement link validation rules",
-      "taskCompleted": true,
-      "durationMs": 244173,
-      "startedAt": "2026-02-10T18:35:24.104Z",
-      "endedAt": "2026-02-10T18:39:28.277Z"
-    },
-    {
-      "iteration": 13,
-      "status": "completed",
-      "taskId": "S9-013",
-      "taskTitle": "Implement link planning pipeline orchestrator",
-      "taskCompleted": true,
-      "durationMs": 204091,
-      "startedAt": "2026-02-10T18:39:29.397Z",
-      "endedAt": "2026-02-10T18:42:53.488Z"
-    },
-    {
-      "iteration": 14,
-      "status": "completed",
-      "taskId": "S9-014",
-      "taskTitle": "Implement re-plan flow (snapshot, strip, delete, re-run)",
-      "taskCompleted": true,
-      "durationMs": 179646,
-      "startedAt": "2026-02-10T18:42:54.618Z",
-      "endedAt": "2026-02-10T18:45:54.264Z"
-    },
-    {
-      "iteration": 15,
-      "status": "completed",
-      "taskId": "S9-021",
-      "taskTitle": "Create link management API router with plan and status endpoints",
-      "taskCompleted": true,
-      "durationMs": 154986,
-      "startedAt": "2026-02-10T18:45:55.403Z",
-      "endedAt": "2026-02-10T18:48:30.389Z"
-    },
-    {
-      "iteration": 16,
-      "status": "completed",
-      "taskId": "S9-022",
-      "taskTitle": "Add link map and page detail API endpoints",
-      "taskCompleted": true,
-      "durationMs": 202078,
-      "startedAt": "2026-02-10T18:48:31.514Z",
-      "endedAt": "2026-02-10T18:51:53.592Z"
-    },
-    {
-      "iteration": 17,
-      "status": "completed",
-      "taskId": "S9-023",
-      "taskTitle": "Add manual link management endpoints (add, remove, edit)",
-      "taskCompleted": true,
-      "durationMs": 176694,
-      "startedAt": "2026-02-10T18:51:54.722Z",
-      "endedAt": "2026-02-10T18:54:51.416Z"
-    },
-    {
-      "iteration": 18,
-      "status": "completed",
-      "taskId": "S9-024",
-      "taskTitle": "Register links router and write API tests",
-      "taskCompleted": true,
-      "durationMs": 263584,
-      "startedAt": "2026-02-10T18:54:52.547Z",
-      "endedAt": "2026-02-10T18:59:16.131Z"
-    },
-    {
-      "iteration": 19,
-      "status": "completed",
-      "taskId": "S9-025",
-      "taskTitle": "Add TypeScript types and API client for links",
-      "taskCompleted": true,
-      "durationMs": 81098,
-      "startedAt": "2026-02-10T18:59:17.259Z",
-      "endedAt": "2026-02-10T19:00:38.357Z"
-    },
-    {
-      "iteration": 20,
-      "status": "completed",
-      "taskId": "S9-026",
-      "taskTitle": "Create TanStack Query hooks for links",
-      "taskCompleted": true,
-      "durationMs": 74523,
-      "startedAt": "2026-02-10T19:00:39.486Z",
-      "endedAt": "2026-02-10T19:01:54.009Z"
-    },
-    {
-      "iteration": 21,
-      "status": "completed",
-      "taskId": "S9-027",
-      "taskTitle": "Create link planning trigger page (onboarding + cluster)",
-      "taskCompleted": true,
-      "durationMs": 323271,
-      "startedAt": "2026-02-10T19:01:55.150Z",
-      "endedAt": "2026-02-10T19:07:18.421Z"
-    },
-    {
-      "iteration": 22,
-      "status": "completed",
-      "taskId": "S9-028",
-      "taskTitle": "Create link map overview page (cluster variant)",
-      "taskCompleted": true,
-      "durationMs": 225715,
-      "startedAt": "2026-02-10T19:07:19.554Z",
-      "endedAt": "2026-02-10T19:11:05.269Z"
-    },
-    {
-      "iteration": 23,
-      "status": "completed",
-      "taskId": "S9-029",
-      "taskTitle": "Create link map overview page (onboarding variant)",
-      "taskCompleted": true,
-      "durationMs": 219536,
-      "startedAt": "2026-02-10T19:11:06.415Z",
-      "endedAt": "2026-02-10T19:14:45.951Z"
-    },
-    {
-      "iteration": 24,
-      "status": "completed",
-      "taskId": "S9-030",
-      "taskTitle": "Create page link detail view",
-      "taskCompleted": true,
-      "durationMs": 305083,
-      "startedAt": "2026-02-10T19:14:47.103Z",
-      "endedAt": "2026-02-10T19:19:52.186Z"
-    },
-    {
-      "iteration": 25,
-      "status": "completed",
-      "taskId": "S9-031",
-      "taskTitle": "Update project detail page with link status indicators",
-      "taskCompleted": true,
-      "durationMs": 131025,
-      "startedAt": "2026-02-10T19:19:53.352Z",
-      "endedAt": "2026-02-10T19:22:04.377Z"
-    },
-    {
-      "iteration": 26,
-      "status": "completed",
-      "taskId": "S9-015",
-      "taskTitle": "Write unit tests for link graph construction",
-      "taskCompleted": true,
-      "durationMs": 215441,
-      "startedAt": "2026-02-10T19:22:05.533Z",
-      "endedAt": "2026-02-10T19:25:40.974Z"
-    },
-    {
-      "iteration": 27,
-      "status": "completed",
-      "taskId": "S9-016",
-      "taskTitle": "Write unit tests for target selection and budget",
-      "taskCompleted": true,
-      "durationMs": 158206,
-      "startedAt": "2026-02-10T19:25:42.142Z",
-      "endedAt": "2026-02-10T19:28:20.348Z"
-    },
-    {
-      "iteration": 28,
-      "status": "completed",
-      "taskId": "S9-017",
-      "taskTitle": "Write unit tests for anchor text selection",
-      "taskCompleted": true,
-      "durationMs": 206375,
-      "startedAt": "2026-02-10T19:28:21.482Z",
-      "endedAt": "2026-02-10T19:31:47.857Z"
-    },
-    {
-      "iteration": 29,
-      "status": "completed",
-      "taskId": "S9-018",
-      "taskTitle": "Write unit tests for link injection and stripping",
-      "taskCompleted": true,
-      "durationMs": 172056,
-      "startedAt": "2026-02-10T19:31:49.020Z",
-      "endedAt": "2026-02-10T19:34:41.076Z"
-    },
-    {
-      "iteration": 30,
-      "status": "completed",
-      "taskId": "S9-019",
-      "taskTitle": "Write unit tests for link validation",
-      "taskCompleted": true,
-      "durationMs": 192496,
-      "startedAt": "2026-02-10T19:34:42.242Z",
-      "endedAt": "2026-02-10T19:37:54.738Z"
-    },
-    {
-      "iteration": 31,
-      "status": "completed",
-      "taskId": "S9-020",
-      "taskTitle": "Write integration test for full planning pipeline",
-      "taskCompleted": true,
-      "durationMs": 407372,
-      "startedAt": "2026-02-10T19:37:55.874Z",
-      "endedAt": "2026-02-10T19:44:43.246Z"
-    },
-    {
-      "iteration": 32,
-      "status": "completed",
-      "taskId": "S9-032",
-      "taskTitle": "Write frontend component tests",
-      "taskCompleted": true,
-      "durationMs": 777376,
-      "startedAt": "2026-02-10T19:44:44.434Z",
-      "endedAt": "2026-02-10T19:57:41.810Z"
-    },
-    {
-      "iteration": 33,
-      "status": "completed",
-      "taskId": "S9-098",
-      "taskTitle": "Update V2_REBUILD_PLAN.md",
-      "taskCompleted": true,
-      "durationMs": 67827,
-      "startedAt": "2026-02-10T19:57:43.010Z",
-      "endedAt": "2026-02-10T19:58:50.837Z"
-    }
-  ],
+  "iterations": [],
   "skippedTaskIds": [],
   "cwd": "/Users/mike/Projects (1)/client-onboarding-v2",
   "activeTaskIds": [],
-  "subagentPanelVisible": true
+  "subagentPanelVisible": false
 }
