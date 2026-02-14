@@ -154,3 +154,15 @@ after each iteration and it's included in prompts for context.
   - Pre-existing TS errors (3) in link map tests and GenerationProgress test — unrelated to this change
 ---
 
+## 2026-02-14 - S11-013
+- Created TanStack Query hooks for all blog operations (campaigns, content generation, link planning)
+- Files changed:
+  - `frontend/src/hooks/useBlogs.ts` (new) — 17 hooks: `blogKeys` factory (7 keys), 6 campaign hooks, 7 content hooks, 3 link hooks
+- **Learnings:**
+  - Blog hooks follow the exact same patterns as `useClusters.ts` and `useContentGeneration.ts`: query key factory, `useQuery` for reads, `useMutation` with `onSuccess` invalidation for writes
+  - Polling pattern for content status: `refetchInterval: (query) => query.state.data?.overall_status === 'generating' ? 3000 : false` — same as `useContentGenerationStatus`
+  - Link planning polling uses `status === 'planning'` (not 'generating') since link endpoints use different status values
+  - Content approval mutations invalidate 3 query keys (post content, content status, campaign detail) since approval affects counts at multiple levels
+  - Pre-existing TS errors (3) unchanged — none in new file
+---
+
