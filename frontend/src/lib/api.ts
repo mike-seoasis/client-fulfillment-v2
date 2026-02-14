@@ -896,3 +896,159 @@ export async function exportProject(
   document.body.removeChild(anchor);
   URL.revokeObjectURL(blobUrl);
 }
+
+// =============================================================================
+// WORDPRESS LINKER API TYPES & FUNCTIONS
+// =============================================================================
+
+/** WordPress connect response. */
+export interface WPConnectResponse {
+  site_name: string;
+  site_url: string;
+  total_posts: number;
+  valid: boolean;
+}
+
+/** WordPress import response (202 with job_id). */
+export interface WPImportResponse {
+  project_id: string;
+  posts_imported: number;
+  job_id: string;
+}
+
+/** Progress response for any WP background operation. */
+export interface WPProgressResponse {
+  job_id: string;
+  step: string;
+  step_label: string;
+  status: "running" | "complete" | "failed";
+  current: number;
+  total: number;
+  error?: string;
+  result?: Record<string, unknown>;
+}
+
+/** Single taxonomy label. */
+export interface WPTaxonomyLabel {
+  name: string;
+  description: string;
+  post_count: number;
+}
+
+/** Label assignment for a single post. */
+export interface WPLabelAssignment {
+  page_id: string;
+  title: string;
+  url: string;
+  labels: string[];
+  primary_label: string;
+}
+
+/** Label review response with taxonomy and assignments. */
+export interface WPLabelReviewResponse {
+  taxonomy: WPTaxonomyLabel[];
+  assignments: WPLabelAssignment[];
+  total_groups: number;
+}
+
+/** Silo group stats for review. */
+export interface WPReviewGroup {
+  group_name: string;
+  post_count: number;
+  link_count: number;
+  avg_links_per_post: number;
+}
+
+/** Link review response. */
+export interface WPReviewResponse {
+  total_posts: number;
+  total_links: number;
+  avg_links_per_post: number;
+  groups: WPReviewGroup[];
+  validation_pass_rate: number;
+}
+
+/** Validate WP credentials. */
+export function wpConnect(
+  siteUrl: string,
+  username: string,
+  appPassword: string
+): Promise<WPConnectResponse> {
+  return apiClient.post<WPConnectResponse>("/wordpress/connect", {
+    site_url: siteUrl,
+    username,
+    app_password: appPassword,
+  });
+}
+
+/** Import WP posts (returns 202 with job_id). */
+export function wpImport(
+  siteUrl: string,
+  username: string,
+  appPassword: string,
+  titleFilter?: string[],
+  postStatus: string = "publish"
+): Promise<WPImportResponse> {
+  return apiClient.post<WPImportResponse>("/wordpress/import", {
+    site_url: siteUrl,
+    username,
+    app_password: appPassword,
+    title_filter: titleFilter || null,
+    post_status: postStatus,
+  });
+}
+
+/** Poll progress for a background job. */
+export function wpGetProgress(jobId: string): Promise<WPProgressResponse> {
+  return apiClient.get<WPProgressResponse>(`/wordpress/progress/${jobId}`);
+}
+
+/** Start POP analysis (returns 202 with job_id). */
+export function wpAnalyze(projectId: string): Promise<WPProgressResponse> {
+  return apiClient.post<WPProgressResponse>("/wordpress/analyze", {
+    project_id: projectId,
+  });
+}
+
+/** Start blog labeling (returns 202 with job_id). */
+export function wpLabel(projectId: string): Promise<WPProgressResponse> {
+  return apiClient.post<WPProgressResponse>("/wordpress/label", {
+    project_id: projectId,
+  });
+}
+
+/** Get taxonomy + label assignments for review. */
+export function wpGetLabels(projectId: string): Promise<WPLabelReviewResponse> {
+  return apiClient.get<WPLabelReviewResponse>(
+    `/wordpress/labels/${projectId}`
+  );
+}
+
+/** Start link planning (returns 202 with job_id). */
+export function wpPlanLinks(projectId: string): Promise<WPProgressResponse> {
+  return apiClient.post<WPProgressResponse>("/wordpress/plan", {
+    project_id: projectId,
+  });
+}
+
+/** Get link review stats. */
+export function wpGetReview(projectId: string): Promise<WPReviewResponse> {
+  return apiClient.get<WPReviewResponse>(`/wordpress/review/${projectId}`);
+}
+
+/** Start export to WordPress (returns 202 with job_id). */
+export function wpExport(
+  projectId: string,
+  siteUrl: string,
+  username: string,
+  appPassword: string,
+  titleFilter?: string[]
+): Promise<WPProgressResponse> {
+  return apiClient.post<WPProgressResponse>("/wordpress/export", {
+    project_id: projectId,
+    site_url: siteUrl,
+    username,
+    app_password: appPassword,
+    title_filter: titleFilter || null,
+  });
+}

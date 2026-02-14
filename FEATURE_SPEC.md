@@ -39,94 +39,104 @@
 
 ---
 
-## Feature 1: Authentication (WorkOS AuthKit) — Phase 10
+## Feature 1: Authentication (Neon Auth) — Phase 12
 
 **Priority:** Post-MVP (implement after core workflows are complete)
-**Decision:** WorkOS AuthKit free tier (1M MAU, $0/mo). No SSO needed.
-**Docs:** https://workos.com/docs/authkit | https://github.com/workos/authkit-nextjs
+**Decision (updated 2026-02-14):** Switched from WorkOS AuthKit to Neon Auth. Since database is already on Neon (Phase 10), keeping auth in the same provider simplifies the stack. Auth data lives in the same database (`neon_auth` schema), enabling Row Level Security for per-user project isolation without JWT verification middleware.
+**Docs:** https://neon.com/docs/auth/overview | Built on Better Auth (https://www.better-auth.com)
 
-### What WorkOS Provides (Free Tier)
+### What Neon Auth Provides (Free Tier)
 - Email/password authentication
-- Social login (Google, GitHub, etc.)
-- Magic link / passwordless login
-- MFA (TOTP, SMS)
-- Hosted login UI (AuthKit) — no custom login forms to build
-- User management dashboard in WorkOS console
-- Session management with encrypted cookies
-- 1M MAU included free
+- Social login (Google, GitHub, etc. — shared OAuth credentials for testing)
+- Session management (cookie-based, stored in Neon DB)
+- Built-in sign-in/sign-up UI components (`<AuthView>`)
+- Row Level Security integration (auth data in same DB)
+- Database branching includes auth state (test auth flows in isolation)
+- Org/role hierarchies for multi-tenancy
+- 60,000 MAU included free
 
 ### Integration Architecture
 
 ```
-User → Next.js middleware (authkitMiddleware)
+User → Next.js middleware (Better Auth)
          ↓ (unauthenticated)
-       Redirect to WorkOS AuthKit (hosted login UI)
+       Redirect to sign-in page (<AuthView> component)
          ↓ (user authenticates)
-       Redirect to /auth/callback (OAuth code exchange)
+       Session stored in neon_auth schema (same DB)
          ↓ (session cookie set)
        Access app normally
          ↓ (API requests)
-       FastAPI validates accessToken JWT
+       FastAPI reads session from neon_auth tables (same DB, no JWT needed)
+         ↓ (data access)
+       RLS policies filter projects by user — SELECT * FROM projects automatically scoped
 ```
 
 ### Frontend Changes
 
-**Package:** `@workos-inc/authkit-nextjs`
+**Packages:** `better-auth`, `@better-auth/nextjs`
 
 **Files to create/modify:**
-1. `middleware.ts` — `authkitMiddleware()` protects all routes, redirects unauthenticated users
-2. `/app/auth/callback/route.ts` — OAuth callback, exchanges code for session via `handleAuth()`
-3. `layout.tsx` — Wrap with `AuthKitProvider` (alongside `QueryProvider`)
-4. `Header` component — Add user display + sign-out button via `useAuth()` hook
+1. `lib/auth.ts` — Better Auth configuration (connects to Neon)
+2. `/app/api/auth/[...all]/route.ts` — Auth API catch-all route
+3. `middleware.ts` — Protect all app routes, redirect unauthenticated users
+4. Sign-in page — Use `<AuthView>` built-in component or custom form
+5. `Header` component — Add user display + sign-out via `useSession()` hook
 
 **Key patterns:**
 ```typescript
-// Server components — get user via withAuth
-import { withAuth } from '@workos-inc/authkit-nextjs';
-export default withAuth(async function Page({ user }) { ... });
+// Get session in client components
+import { useSession } from '@/lib/auth-client';
+const { data: session } = useSession();
 
-// Client components — get user via useAuth hook
-import { useAuth } from '@workos-inc/authkit-nextjs/client';
-const { user, signIn, signOut } = useAuth();
+// Get session in server components
+import { auth } from '@/lib/auth';
+const session = await auth.api.getSession({ headers });
 ```
 
 ### Backend Changes
 
-**Minimal.** Add a FastAPI middleware that:
-1. Extracts the `accessToken` JWT from the `Authorization: Bearer <token>` header
-2. Verifies the JWT signature against WorkOS's JWKS endpoint
-3. Rejects unauthenticated requests to protected API routes
-4. Passes through requests to any health/public endpoints
+**Simpler than WorkOS.** Since auth data lives in the same Neon database:
+1. FastAPI reads session directly from `neon_auth` tables — no JWT verification needed
+2. Add `created_by` column to `projects` table (FK to `neon_auth.users_sync.id`)
+3. Enable RLS on `projects` (and downstream tables) so users only see their own data
+4. Backfill existing projects with a default user ID
+
+### Row Level Security (Per-User Project Isolation)
+
+```sql
+-- Enable RLS on projects
+ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
+
+-- Users can only see/modify their own projects
+CREATE POLICY user_projects ON projects
+  USING (created_by = current_setting('app.current_user_id')::uuid);
+
+-- Downstream tables (clusters, pages, content, etc.) inherit via FK joins
+```
 
 ### Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `WORKOS_CLIENT_ID` | Yes | From WorkOS dashboard |
-| `WORKOS_API_KEY` | Yes | From WorkOS dashboard (use test key for dev) |
-| `WORKOS_COOKIE_PASSWORD` | Yes | 32+ char secret for encrypting session cookies |
-| `NEXT_PUBLIC_WORKOS_REDIRECT_URI` | Yes | `http://localhost:3000/auth/callback` (dev) |
+| `BETTER_AUTH_SECRET` | Yes | Secret for session encryption |
+| `BETTER_AUTH_URL` | Yes | App URL (`http://localhost:3000` dev, production URL prod) |
 
-### WorkOS Dashboard Configuration
-- Set redirect URI: `http://localhost:3000/auth/callback` (dev), production URL (prod)
-- Set sign-in endpoint
-- Set sign-out redirect: `http://localhost:3000` (dev), production URL (prod)
-- Enable desired auth methods (email/password + Google OAuth at minimum)
+Neon Auth is configured in the Neon dashboard — no separate auth provider account needed.
 
 ### User Object (from session)
 ```typescript
 {
-  id: string;           // WorkOS user ID
+  id: string;           // Neon Auth user ID (in neon_auth.users_sync)
   email: string;
-  firstName: string;
-  lastName: string;
-  // + accessToken, refreshToken, organizationId (if applicable)
+  name: string;
+  image?: string;
 }
 ```
 
 ### Scope Boundaries
-- **In scope:** Sign in, sign out, session management, route protection, user display in header
-- **Out of scope:** User roles/permissions (single-team internal tool), organizations, SSO/SAML, user registration management (handled via WorkOS dashboard)
+- **In scope:** Sign in, sign out, session management, route protection, user display in header, per-user project isolation via RLS
+- **Out of scope:** User roles/permissions beyond basic ownership (single-team internal tool), organizations, SSO/SAML
+- **Note:** Neon Auth is currently beta. Acceptable risk for internal tool with 1-5 users. Re-evaluate if going customer-facing.
 
 ---
 

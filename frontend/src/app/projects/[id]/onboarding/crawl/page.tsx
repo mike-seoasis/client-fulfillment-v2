@@ -15,6 +15,7 @@ const ONBOARDING_STEPS = [
   { key: 'crawl', label: 'Crawl' },
   { key: 'keywords', label: 'Keywords' },
   { key: 'content', label: 'Content' },
+  { key: 'links', label: 'Links' },
   { key: 'export', label: 'Export' },
 ] as const;
 

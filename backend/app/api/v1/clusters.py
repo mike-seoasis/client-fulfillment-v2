@@ -15,6 +15,7 @@ from app.core.logging import get_logger
 from app.integrations.claude import ClaudeClient, get_claude
 from app.integrations.dataforseo import DataForSEOClient, get_dataforseo
 from app.models.brand_config import BrandConfig
+from app.models.crawled_page import CrawledPage, CrawlStatus
 from app.models.keyword_cluster import ClusterPage, ClusterStatus, KeywordCluster
 from app.models.page_keywords import PageKeywords
 from app.schemas.cluster import (
@@ -290,24 +291,67 @@ async def update_cluster_page(
     for field, value in update_data.items():
         setattr(page, field, value)
 
-    # Sync approval state to PageKeywords when toggling is_approved
-    if data.is_approved is not None and page.crawled_page_id is not None:
-        pk_stmt = select(PageKeywords).where(
-            PageKeywords.crawled_page_id == page.crawled_page_id
-        )
-        pk_result = await db.execute(pk_stmt)
-        page_keywords = pk_result.scalar_one_or_none()
-        if page_keywords is not None:
-            page_keywords.is_approved = data.is_approved
-            logger.info(
-                "Synced PageKeywords.is_approved=%s for crawled_page_id=%s",
-                data.is_approved,
-                page.crawled_page_id,
+    # Sync approval state to content pipeline
+    if data.is_approved is not None:
+        if page.crawled_page_id is not None:
+            # Page already bridged — sync PageKeywords.is_approved
+            pk_stmt = select(PageKeywords).where(
+                PageKeywords.crawled_page_id == page.crawled_page_id
             )
-        else:
-            logger.warning(
-                "No PageKeywords found for crawled_page_id=%s during approval sync",
-                page.crawled_page_id,
+            pk_result = await db.execute(pk_stmt)
+            page_keywords = pk_result.scalar_one_or_none()
+            if page_keywords is not None:
+                page_keywords.is_approved = data.is_approved
+                logger.info(
+                    "Synced PageKeywords.is_approved=%s for crawled_page_id=%s",
+                    data.is_approved,
+                    page.crawled_page_id,
+                )
+            else:
+                logger.warning(
+                    "No PageKeywords found for crawled_page_id=%s during approval sync",
+                    page.crawled_page_id,
+                )
+        elif data.is_approved and cluster.status in {
+            ClusterStatus.APPROVED.value,
+            ClusterStatus.CONTENT_GENERATING.value,
+            ClusterStatus.COMPLETE.value,
+        }:
+            # Page approved after initial bulk approve — bridge it now
+            existing_stmt = select(CrawledPage).where(
+                CrawledPage.project_id == project_id,
+                CrawledPage.normalized_url == page.url_slug,
+            )
+            existing_result = await db.execute(existing_stmt)
+            crawled_page = existing_result.scalar_one_or_none()
+
+            if crawled_page is None:
+                crawled_page = CrawledPage(
+                    project_id=project_id,
+                    normalized_url=page.url_slug,
+                    source="cluster",
+                    status=CrawlStatus.COMPLETED.value,
+                    category="collection",
+                    title=page.keyword,
+                )
+                db.add(crawled_page)
+                await db.flush()
+
+            pk = PageKeywords(
+                crawled_page_id=crawled_page.id,
+                primary_keyword=page.keyword,
+                is_approved=True,
+                is_priority=page.role == "parent",
+                search_volume=page.search_volume,
+                composite_score=page.composite_score,
+            )
+            db.add(pk)
+
+            page.crawled_page_id = crawled_page.id
+            logger.info(
+                "Bridged newly approved page %s → crawled_page_id=%s",
+                page.id,
+                crawled_page.id,
             )
 
     await db.commit()

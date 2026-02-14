@@ -18,6 +18,7 @@ import type { ClusterPage } from '@/lib/api';
 const CLUSTER_STEPS = [
   { key: 'keywords', label: 'Keywords' },
   { key: 'content', label: 'Content' },
+  { key: 'links', label: 'Links' },
   { key: 'review', label: 'Review' },
   { key: 'export', label: 'Export' },
 ] as const;

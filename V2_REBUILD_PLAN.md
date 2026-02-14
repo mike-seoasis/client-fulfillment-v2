@@ -8,11 +8,14 @@
 
 | Field | Value |
 |-------|-------|
-| **Phase** | 9 - Internal Linking (Complete) |
-| **Slice** | Phase 9 complete |
-| **Last Session** | 2026-02-10 |
-| **Next Action** | Phase 10: Blog Planning & Writing |
-| **Auth Decision** | WorkOS AuthKit (free tier, 1M MAU) — see Phase 11 |
+| **Phase** | 10 - Database Backup & Recovery (COMPLETE) |
+| **Slice** | Phase 10 complete |
+| **Last Session** | 2026-02-14 |
+| **Next Action** | Phase 11: Blog Planning & Writing |
+| **Auth Decision** | Neon Auth (free tier, 60K MAU, Better Auth SDK) — see Phase 12 |
+| **Backup Decision** | Neon free tier (PITR) + Railway pg_dump template → Cloudflare R2 — see Phase 10 |
+| **Database** | Neon PostgreSQL (project: `spring-fog-49733273`, region: `aws-us-east-1`) |
+| **Backups** | Cloudflare R2 bucket `client-fullfilment-backups` — every 6 hours via Railway template |
 
 ### Session Log
 
@@ -38,7 +41,9 @@
 | 2026-02-08 | Phase 7 complete (S7-001 through S7-010): ExportService with URL handle extraction + filename sanitization, Matrixify CSV generation with UTF-8 BOM, export API endpoint with page_ids filter + 400/404 error handling, frontend export API client with blob download, export page with onboarding stepper + page selection list + select all/deselect all + export summary + download button, Back/Finish Onboarding navigation, 23 tests. Phase 7 polish: Added 7 Matrixify columns (Command, Sort Order, Published, Must Match, Rule: Product Column, Rule: Relation, Rule: Condition), shopify_placeholder_tag field in vocabulary section (backend schema + frontend editor/display), fixed export to read tag from BrandConfig table, updated filename to "Project Name - Onboarding - Matrixify Export via SEOasis.csv", exposed Content-Disposition header via CORS. | Phase 8: Keyword Cluster Creation |
 | 2026-02-08 | Phase 8 complete (S8-001 through S8-022): KeywordCluster + ClusterPage models with Alembic migration, CrawledPage source column, Pydantic v2 schemas, ClusterKeywordService (3-stage pipeline: Claude candidate generation with 11 expansion strategies, DataForSEO volume enrichment, Claude filtering/role assignment with composite scoring), bulk approve bridging to CrawledPage + PageKeywords, 6 API endpoints (create/list/detail/update-page/approve/delete), frontend API client + TanStack Query hooks with optimistic updates, seed keyword input page with progress indicator, cluster suggestions page with inline editing + approve/reject + parent reassignment, project detail cluster list with status badges, 52 backend unit tests + 20 integration tests + 71 frontend component tests. | Phase 9: Internal Linking |
 | 2026-02-09 | Railway staging fix + production CSS hardening: diagnosed Next.js 14.2.x CSS ordering bug (production chunks load in different order than dev, causing `disabled:opacity-50` cascade issues), added CSS cascade layers (`@layer base, components, utilities`) to lock ordering, created `ButtonLink` component to eliminate invalid `<button>` inside `<a>` HTML nesting, migrated project dashboard buttons, fixed lint error blocking production builds, deployed to Railway via `railway up` (git-triggered deploys were building from stale commit). | Phase 9: Internal Linking |
-| 2026-02-10 | Phase 9 complete (S9-001 through S9-032): InternalLink + LinkPlanSnapshot models with Alembic migrations (0024+0025), Pydantic v2 schemas, SiloLinkPlanner (cluster graph with parent/child/sibling edges, onboarding graph with label overlap), budget calculation (clamp 3-5 based on word count), target selection (mandatory parent-first for clusters, priority bonus for onboarding), AnchorTextSelector (POP variations + natural phrase generation via Haiku, diversity-weighted scoring), LinkInjector (rule-based BeautifulSoup scanning + LLM fallback paragraph rewriting, density limits), strip_internal_links for re-planning, LinkValidator (8 rules: budget, silo integrity, self-links, duplicates, density, anchor diversity, first-link, direction), full pipeline orchestrator with progress tracking, re-plan with snapshot/rollback, 8 API endpoints (plan trigger, status polling, link map, page links, suggestions, add/remove/edit), frontend API client + TanStack Query hooks, link planning trigger pages (onboarding + cluster), cluster link map with tree visualization + stats + sortable table, onboarding link map with label grouping + filters, page link detail with add/edit/remove modals + anchor suggestions, project detail link status badges, 28 graph/budget/target unit tests, 21 anchor text tests, 24 injection tests, 36 validation tests, 5 integration pipeline tests, 21 API tests, 86 frontend component tests. | Phase 10: Blog Planning & Writing |
+| 2026-02-10 | Phase 9 complete (S9-001 through S9-032): InternalLink + LinkPlanSnapshot models with Alembic migrations (0024+0025), Pydantic v2 schemas, SiloLinkPlanner (cluster graph with parent/child/sibling edges, onboarding graph with label overlap), budget calculation (clamp 3-5 based on word count), target selection (mandatory parent-first for clusters, priority bonus for onboarding), AnchorTextSelector (POP variations + natural phrase generation via Haiku, diversity-weighted scoring), LinkInjector (rule-based BeautifulSoup scanning + LLM fallback paragraph rewriting, density limits), strip_internal_links for re-planning, LinkValidator (8 rules: budget, silo integrity, self-links, duplicates, density, anchor diversity, first-link, direction), full pipeline orchestrator with progress tracking, re-plan with snapshot/rollback, 8 API endpoints (plan trigger, status polling, link map, page links, suggestions, add/remove/edit), frontend API client + TanStack Query hooks, link planning trigger pages (onboarding + cluster), cluster link map with tree visualization + stats + sortable table, onboarding link map with label grouping + filters, page link detail with add/edit/remove modals + anchor suggestions, project detail link status badges, 28 graph/budget/target unit tests, 21 anchor text tests, 24 injection tests, 36 validation tests, 5 integration pipeline tests, 21 API tests, 86 frontend component tests. | Phase 10: Database Backup & Recovery |
+| 2026-02-14 | Phase 9 wrapped up, OpenSpec changes archived (keyword-cluster-creation + phase-9-internal-linking). Phase 10 added: Database Backup & Recovery (Neon free tier + Railway pg_dump → Cloudflare R2). Research complete: evaluated 5 backup strategies (Railway template + R2, Railway template + B2, SimpleBackups SaaS, Neon/Supabase migration, custom Docker cron). Decision: Neon free tier for PITR + R2 for off-platform redundancy. | Phase 10a: Neon migration |
+| 2026-02-14 | Phase 10 complete. 10a: Migrated DB from Railway Postgres to Neon (pg_dump → pg_restore → Alembic upgrade, 24 tables, 3 projects). Fixed SSL for asyncpg (use `ssl` connect_arg, not `sslmode` URL param). Updated staging + production DATABASE_URL. 10b: Created Cloudflare R2 bucket with 30-day lifecycle, deployed Railway postgres-s3-backups template, verified first backup (15.98 KB). Created INFRASTRUCTURE.md and BACKUP_RESTORE_RUNBOOK.md. | Phase 11: Blog Planning & Writing |
 
 ---
 
@@ -80,7 +85,9 @@
 |------|---------|
 | **GitHub Actions** | CI/CD pipeline |
 | **Pre-commit hooks** | Ruff + mypy before every commit |
-| **Railway** | Staging + production environments |
+| **Railway** | Staging + production app hosting (backend, frontend, Redis, Crawl4AI) |
+| **Neon** | PostgreSQL database (free tier, `aws-us-east-1`) |
+| **Cloudflare R2** | Off-platform database backups (every 6 hours, 30-day retention) |
 | **Docker** | Optimized builds |
 
 **All tools predate Claude Opus 4.5's May 2025 training cutoff** — safe to use.
@@ -136,7 +143,7 @@
 - Bottom description
 
 ### Later (Not MVP)
-- Authentication — **Moved to Phase 10** (WorkOS AuthKit, free tier)
+- Authentication — **Moved to Phase 12** (Neon Auth, free tier — switched from WorkOS 2026-02-14)
 - SEMrush integration (auto-import keywords, tag by cluster)
 - Schema markup generation
 - Template code updates
@@ -248,7 +255,33 @@
 - [x] **Verify:** Full linking flow works (generate content → plan links → inject → validate → view link map)
 - [x] **Research complete:** See `.tmp/linking-research-consensus.md` and supporting reports
 
-### Phase 10: Blog Planning & Writing
+### Phase 10: Database Backup & Recovery
+
+> **Strategy:** Two-layer approach. Migrate PostgreSQL to Neon (free tier) for built-in PITR, plus off-platform pg_dump backups to Cloudflare R2 via Railway template for redundancy. Total cost: ~$0/mo.
+
+#### 10a: Migrate Database to Neon (Free Tier) ✅
+- [x] Create Neon project in `us-east-1` (match Railway region) — `spring-fog-49733273`
+- [x] Export Railway database: `pg_dump -Fc -v --no-tablespaces -f backup.dump`
+- [x] Restore to Neon: `pg_restore -v -d "$NEON_DATABASE_URL" backup.dump`
+- [x] Run `alembic upgrade head` against Neon to verify schema (11 migrations applied, 24 tables)
+- [x] Update `DATABASE_URL` in Railway backend service to Neon connection string (staging + production)
+- [x] Configure SQLAlchemy for Neon (direct connection, `pool_pre_ping=True`, SSL via `connect_args`)
+- [x] ~~Disable Neon scale-to-zero~~ — Free tier limitation, can't disable (5 min timeout, ~1-3s cold start acceptable)
+- [x] Test full application flow — projects load on staging
+- [ ] Keep Railway Postgres running 48 hours as fallback, then deprovision
+- [x] **Verify:** App works end-to-end on Neon, PITR available in Neon dashboard
+
+#### 10b: Off-Platform Backups (Railway Template + Cloudflare R2) ✅
+- [x] Create Cloudflare account + R2 bucket (`client-fullfilment-backups`)
+- [x] Generate R2 API token (read/write permissions for bucket)
+- [x] Set R2 lifecycle rule: auto-delete objects after 30 days
+- [x] Deploy Railway `postgres-s3-backups` template (separate Railway project)
+- [x] Configure template env vars: `BACKUP_DATABASE_URL`, `AWS_S3_BUCKET`, `AWS_S3_ENDPOINT`, `BACKUP_CRON_SCHEDULE=0 */6 * * *`
+- [x] Set `SINGLE_SHOT_MODE=true`, verified first backup in R2 (15.98 KB), then switch to `false` for cron
+- [x] Document restore procedure in a runbook — see `BACKUP_RESTORE_RUNBOOK.md`
+- [x] **Verify:** First backup confirmed in R2 bucket
+
+### Phase 11: Blog Planning & Writing
 - [ ] BlogCampaign and BlogPost models + migration
 - [ ] Blog topic discovery service (POP API)
 - [ ] Blog keyword approval (reuse shared UI)
@@ -259,31 +292,34 @@
 - [ ] Blog export (HTML + copy to clipboard)
 - [ ] **Verify:** Full blog flow works (campaign → keywords → generate → edit → export)
 
-### Phase 11: Authentication (WorkOS AuthKit)
-- [ ] Install `@workos-inc/authkit-nextjs` package
-- [ ] Configure WorkOS environment variables (`WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `WORKOS_COOKIE_PASSWORD`, `NEXT_PUBLIC_WORKOS_REDIRECT_URI`)
-- [ ] Create WorkOS account and configure AuthKit in dashboard (redirect URIs, sign-out redirect)
-- [ ] Create `/app/auth/callback/route.ts` (OAuth callback handler via `handleAuth()`)
-- [ ] Add `authkitMiddleware()` in `middleware.ts` (protect all app routes)
-- [ ] Wrap root layout with `AuthKitProvider` (alongside existing `QueryProvider`)
-- [ ] Add sign-in/sign-out to Header component (via `useAuth()` hook)
-- [ ] Display current user name/email in Header
-- [ ] Create login landing page (unauthenticated users see sign-in prompt)
-- [ ] Pass `accessToken` JWT in API requests to FastAPI backend
-- [ ] Add FastAPI middleware to verify WorkOS JWT on protected endpoints
-- [ ] Update Railway environment variables (staging + production)
-- [ ] **Verify:** Full auth flow works (sign in → use app → sign out → redirected to login)
+### Phase 12: Authentication (Neon Auth)
 
-### Phase 12: Polish & UX Foundations
+> **Decision (2026-02-14):** Switched from WorkOS AuthKit to Neon Auth. Since we're already on Neon for the database (Phase 10), Neon Auth keeps auth + data in one provider. Auth data lives in the same DB (neon_auth schema), enabling Row Level Security for per-user project isolation. Built on Better Auth, free for 60K MAU. Currently beta — acceptable risk for an internal tool with 1-5 users.
 
-#### 11a: Quick Wins (< 30 min each, no new deps)
+- [ ] Enable Neon Auth in Neon dashboard (configure OAuth providers: email/password + Google)
+- [ ] Install Better Auth SDK (`better-auth` + `@better-auth/nextjs`)
+- [ ] Create auth configuration (`lib/auth.ts` — configure Better Auth with Neon connection)
+- [ ] Add auth API route (`/app/api/auth/[...all]/route.ts`)
+- [ ] Add auth middleware in `middleware.ts` (protect all app routes, redirect unauthenticated)
+- [ ] Add `<AuthView>` sign-in/sign-up page (Neon Auth built-in components)
+- [ ] Add sign-in/sign-out + user display to Header component (via `useSession()` hook)
+- [ ] Add `created_by` column to `projects` table (Alembic migration, references `neon_auth.users_sync.id`)
+- [ ] Enable Row Level Security on `projects` table (users see only their own projects)
+- [ ] Update FastAPI to read session from Neon Auth (session data lives in same DB, no JWT verification needed)
+- [ ] Backfill existing projects with a default user ID
+- [ ] Update Railway environment variables
+- [ ] **Verify:** Full auth flow works (sign in → see only your projects → sign out → redirected to login)
+
+### Phase 13: Polish & UX Foundations
+
+#### 13a: Quick Wins (< 30 min each, no new deps)
 - [ ] Relative timestamps everywhere (`date-fns` `formatDistanceToNow` — already installed)
 - [ ] Disable submit buttons during mutations (`isPending` from TanStack Query)
 - [ ] Pluralization helper (simple `pluralize(count, word)` util)
 - [ ] Inline form validation on blur (`mode: "onBlur"` in react-hook-form — already installed)
 - [ ] Active nav states (highlight current page in sidebar/header via `usePathname`)
 
-#### 11b: Small Additions (30 min – 1 hr each, minimal deps)
+#### 13b: Small Additions (30 min – 1 hr each, minimal deps)
 - [ ] Toast notifications — install **sonner**, add `<Toaster />` to layout, replace alerts/console
 - [ ] Debounced search hook — install **use-debounce**, wire into list pages
 - [ ] Retry error pattern — reusable `<ErrorWithRetry>` component using TanStack Query `refetch()`
@@ -307,7 +343,13 @@
 - [ ] TanStack Table — headless table for sortable/filterable/paginated lists (keywords, content, clusters)
 - [ ] Deep linking — persist filters/tabs/sort in URL query params via `useSearchParams`
 
-#### New deps for Phase 11
+#### New deps for Phase 12 (Auth)
+| Package | Size | Purpose |
+|---------|------|---------|
+| `better-auth` | ~15kb | Neon Auth SDK (Better Auth) |
+| `@better-auth/nextjs` | ~5kb | Next.js integration |
+
+#### New deps for Phase 13
 | Package | Size | Purpose |
 |---------|------|---------|
 | `sonner` | ~5kb | Toast notifications |
@@ -349,11 +391,28 @@ feature/add-crawling → staging (test) → main (production)
 
 ---
 
-## Railway Setup
+## Infrastructure Setup
 
-### Environments
-- **Staging:** Separate Railway project/environment, deploys from `staging` branch
+### Database: Neon PostgreSQL
+- **Project:** `spring-fog-49733273` (org: `org-cold-waterfall-84590723`)
+- **Region:** `aws-us-east-1`
+- **Plan:** Free tier (0.5 GB storage, 100 compute hours/mo, 6-hour PITR)
+- **Scale-to-zero:** 5 minutes (free tier limit, ~1-3s cold start on first request)
+- **SSL:** Required. App uses `connect_args={"ssl": "require"}` for all non-development environments
+- **Dashboard:** https://console.neon.tech
+
+### Backups: Cloudflare R2
+- **Bucket:** `client-fullfilment-backups`
+- **Account:** `fa80d2f9a9e3a5f7971ca70c11cd0458`
+- **Schedule:** Every 6 hours via Railway `postgres-s3-backups` template (separate Railway project)
+- **Retention:** 30-day lifecycle rule (auto-delete after 30 days)
+- **Restore procedure:** See `BACKUP_RESTORE_RUNBOOK.md`
+
+### App Hosting: Railway
+- **Staging:** Deploys from `staging` branch
 - **Production:** Deploys from `main` branch
+- **Services:** Backend (FastAPI), Frontend (Next.js), Redis, Crawl4AI
+- **DATABASE_URL:** Points to Neon (not Railway Postgres)
 
 ### Optimization
 - Slim Docker base image (`python:3.11-slim`)
@@ -408,7 +467,7 @@ Decisions made during planning session:
 | **POP Score Threshold** | Aim for 100, research meaning | Higher = better, need to understand metric |
 | **Retry Logic** | 2-3 retries before human review | Balance automation vs. human oversight |
 | **Real-time Updates** | Polling (2-3s) for MVP | Simpler than WebSockets, good enough UX |
-| **Auth** | WorkOS AuthKit (Phase 10) | Free tier (1M MAU), hosted login UI, no SSO needed. Evaluated Keycloak/SuperTokens/Ory/Authentik — WorkOS wins for our use case (zero infra, zero cost). See `auth-evaluation-report.md`. |
+| **Auth** | Neon Auth (Phase 12) | Switched from WorkOS to Neon Auth (2026-02-14). Since DB is on Neon (Phase 10), auth in same provider simplifies stack. Built on Better Auth, free 60K MAU, RLS for per-user project isolation, auth data in same DB. Beta — acceptable for internal tool. |
 | **Delete Confirmation** | Two-step for items, type-to-confirm for projects | Prevent accidents |
 | **Keyword Change** | Rerun downstream for that page only | Don't redo everything |
 | **Pause/Resume** | Table if complex | Nice-to-have, not critical |
