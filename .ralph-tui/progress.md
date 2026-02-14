@@ -49,3 +49,15 @@ after each iteration and it's included in prompts for context.
   - Added `BlogPostGenerationStatusItem` as a sub-schema for per-post status within `BlogContentGenerationStatus`
 ---
 
+## 2026-02-14 - S11-004
+- Created BlogTopicDiscoveryService with 4-stage pipeline for discovering blog topics from POP briefs
+- Files changed:
+  - `backend/app/services/blog_topic_discovery.py` (new) — BlogTopicDiscoveryService class with 4 stages + orchestrator
+- **Learnings:**
+  - ContentBrief stores `related_searches` and `related_questions` as `list[str]` JSONB columns (simple string lists, not nested objects)
+  - To get POP briefs for a cluster: ClusterPage.crawled_page_id → ContentBrief.page_id (two separate queries, not a direct join)
+  - ClusterKeywordService uses `_enrich_with_volume` with `result.keywords` from DataForSEO — each keyword data object has `.keyword`, `.search_volume`, `.cpc`, `.competition`, `.competition_level` attributes
+  - Blog topic slugs use 80-char max (vs 60 for collection pages) since blog titles tend to be longer
+  - Pre-existing mypy errors in `brand_config.py`, `config.py`, `crawling.py` — unrelated to this change
+---
+
