@@ -43,7 +43,9 @@ class BlogPostResponse(BaseModel):
     campaign_id: str = Field(..., description="Parent campaign UUID")
     primary_keyword: str = Field(..., description="Target keyword for this post")
     url_slug: str = Field(..., description="Generated URL slug")
-    search_volume: int | None = Field(None, description="Estimated monthly search volume")
+    search_volume: int | None = Field(
+        None, description="Estimated monthly search volume"
+    )
     source_page_id: str | None = Field(
         None, description="Link to cluster page that seeded this topic"
     )
@@ -55,6 +57,7 @@ class BlogPostResponse(BaseModel):
     is_approved: bool = Field(..., description="Whether the keyword is approved")
     content_status: str = Field(..., description="Content generation status")
     content_approved: bool = Field(..., description="Whether the content is approved")
+    pop_brief: dict[str, Any] | None = Field(None, description="POP brief data summary")
     qa_results: dict[str, Any] | None = Field(None, description="QA check results")
     status: str = Field(..., description="Overall post status")
     created_at: datetime = Field(..., description="Creation timestamp")
@@ -135,6 +138,27 @@ class BlogContentGenerationStatus(BaseModel):
     posts_failed: int = Field(..., description="Number of posts that failed generation")
     posts: list[BlogPostGenerationStatusItem] = Field(
         default_factory=list, description="Per-post status items"
+    )
+
+
+class BlogContentTriggerResponse(BaseModel):
+    """Response returned when blog content generation is triggered."""
+
+    status: str = Field(
+        "accepted",
+        description="Request status (always 'accepted' on success)",
+    )
+    message: str = Field(
+        ...,
+        description="Human-readable message about what was triggered",
+    )
+
+
+class BlogBulkApproveResponse(BaseModel):
+    """Response for bulk content approval endpoint."""
+
+    approved_count: int = Field(
+        ..., ge=0, description="Number of posts approved in this request"
     )
 
 

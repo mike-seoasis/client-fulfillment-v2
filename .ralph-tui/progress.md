@@ -100,3 +100,17 @@ after each iteration and it's included in prompts for context.
   - Pre-existing mypy errors (29 across 4 files) — none in new file
 ---
 
+## 2026-02-14 - S11-008
+- Created 7 blog content generation API endpoints following the content_generation.py trigger/poll pattern
+- Files changed:
+  - `backend/app/api/v1/blogs.py` — added 7 endpoints: POST generate-content (202+background), GET content-status, GET post content, PUT post content, POST approve-content, POST recheck, POST bulk-approve-content; added `_active_blog_generations` set and `_get_blog_post` helper
+  - `backend/app/schemas/blog.py` — added `BlogContentTriggerResponse`, `BlogBulkApproveResponse` schemas; added `pop_brief` field to `BlogPostResponse`
+  - `backend/app/schemas/__init__.py` — registered 2 new blog schemas
+- **Learnings:**
+  - Blog content generation uses the same trigger/poll pattern as content_generation.py: module-level `_active_blog_generations` set prevents duplicate runs, `BackgroundTasks.add_task()` starts the pipeline, content-status endpoint checks the set for "generating" state
+  - The blog pipeline's `run_blog_content_pipeline()` takes a `db` parameter but ignores it (creates its own sessions) — pass `None` with `type: ignore` from the background task wrapper
+  - `_run_blog_quality_checks()` from `blog_content_generation.py` is reused directly for the recheck endpoint — it returns a `QualityResult` with `.to_dict()` method
+  - JSONB path filtering with `BlogPost.qa_results["passed"].as_boolean().is_(True)` works the same way for blog posts as for PageContent in the collection bulk-approve
+  - Pre-existing mypy errors (58 across 10 files) — none in changed files
+---
+

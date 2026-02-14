@@ -5,10 +5,12 @@ They handle validation, serialization, and documentation.
 """
 
 from app.schemas.blog import (
+    BlogBulkApproveResponse,
     BlogCampaignCreate,
     BlogCampaignListItem,
     BlogCampaignResponse,
     BlogContentGenerationStatus,
+    BlogContentTriggerResponse,
     BlogContentUpdateRequest,
     BlogExportItem,
     BlogPostGenerationStatusItem,
@@ -309,6 +311,8 @@ __all__ = [
     "BlogContentUpdateRequest",
     "BlogPostGenerationStatusItem",
     "BlogContentGenerationStatus",
+    "BlogContentTriggerResponse",
+    "BlogBulkApproveResponse",
     "BlogExportItem",
     # CrawledPage schemas
     "CrawledPageCreate",
