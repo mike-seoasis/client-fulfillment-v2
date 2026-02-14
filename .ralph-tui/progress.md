@@ -203,3 +203,17 @@ after each iteration and it's included in prompts for context.
   - Pre-existing TS errors (3) unchanged — none in new file
 ---
 
+## 2026-02-14 - S11-017
+- Created blog content generation and review page with generation progress, pipeline indicators, polling, and tabbed review table
+- Files changed:
+  - `frontend/src/app/projects/[id]/blogs/[blogId]/content/page.tsx` (new) — BlogContentPage with StepIndicator (step 2: Content), generation trigger, progress bar with per-post PipelineIndicator (Brief → Write → Check → Done), polling via useBlogContentStatus, ReviewTable with Needs Review/Approved tabs showing keyword/word count/QA status/approval toggle/Edit link, Approve All Ready button, navigation (← Back to Keywords, Continue → to export)
+- **Learnings:**
+  - Blog content status uses `BlogPostGenerationStatusItem` with `content_status` field (not `status` like cluster's `PageGenerationStatusItem`) — different field name requires separate `getContentStep()` mapping
+  - Blog pipeline is 4 steps (Brief → Write → Check → Done) vs cluster's 5 (adds Links step) — blog link planning is per-post and happens separately
+  - Blog posts store content directly on `BlogPost` model (content, title, meta_description, qa_results, content_approved) vs clusters which use separate PageContent model — simpler data flow for review table
+  - Word count derived client-side by stripping HTML tags from `BlogPost.content` — no dedicated word_count field on the model
+  - Blog content approval uses `content_approved` field (not `is_approved` which is for keyword approval) — two separate approval concepts on BlogPost
+  - `useBulkApproveBlogContent` returns `BlogBulkApproveResponse` with `approved_count` — different from keyword bulk approve which returns `{ approved_count, campaign_status }`
+  - Pre-existing TS errors (3) unchanged — none in new file
+---
+
