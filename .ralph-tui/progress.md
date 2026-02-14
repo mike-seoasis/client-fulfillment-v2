@@ -178,3 +178,15 @@ after each iteration and it's included in prompts for context.
   - Pre-existing TS errors (3) unchanged — none in changed file
 ---
 
+## 2026-02-14 - S11-015
+- Created blog campaign creation page with cluster selection, progress animation, and error handling
+- Files changed:
+  - `frontend/src/app/projects/[id]/blogs/new/page.tsx` (new) — full creation page with cluster dropdown, 4-step progress indicator, error/retry, cancel
+- **Learnings:**
+  - `BlogCampaignListItem` has `cluster_name` (not `cluster_id`), so matching clusters to existing campaigns uses name-based Set matching
+  - Cluster eligibility uses `COMPLETED_CONTENT_STATUSES` set (`approved`, `content_generating`, `complete`) — same as backend `_CLUSTER_COMPLETED_STATUSES`
+  - Native `<select>` with `<optgroup>` and `disabled` options is the simplest pattern for showing eligible vs ineligible options without a custom dropdown component
+  - Blog discovery takes 10-30s (longer than cluster ~5-10s), so progress step timers are spaced at 4s, 9s, 15s (4 steps vs cluster's 3)
+  - Pre-existing TS errors (3) unchanged — none in new file
+---
+
