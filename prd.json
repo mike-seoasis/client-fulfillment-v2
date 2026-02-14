@@ -34,8 +34,9 @@
         "Migration has proper downgrade function that drops both tables"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Follow pattern from backend/alembic/versions/ existing migrations. The cluster_id UNIQUE constraint is critical — it prevents multiple campaigns per cluster."
+      "passes": true,
+      "notes": "Follow pattern from backend/alembic/versions/ existing migrations. The cluster_id UNIQUE constraint is critical — it prevents multiple campaigns per cluster.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S11-003",
@@ -419,6 +420,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-14T21:22:14.935Z"
+    "updatedAt": "2026-02-14T21:24:23.753Z"
   }
 }
