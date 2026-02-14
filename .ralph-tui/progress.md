@@ -230,3 +230,16 @@ after each iteration and it's included in prompts for context.
   - Pre-existing TS errors (3) unchanged — none in new file
 ---
 
+## 2026-02-14 - S11-019
+- Created blog link planning trigger page and blog link map visualization page
+- Files changed:
+  - `frontend/src/app/projects/[id]/blogs/[blogId]/links/page.tsx` (new) — Link planning page with StepIndicator (step 3: Links), prerequisites checklist, Plan & Inject Links button, per-post sequential planning with progress indicator (4 steps: Building graph → Selecting targets → Injecting links → Validating), per-post status rows with polling, auto-redirect to link map on completion, blog-specific link rules card
+  - `frontend/src/app/projects/[id]/blogs/[blogId]/links/map/page.tsx` (new) — Link map visualization with aggregated data from per-post link map endpoints, two sections: Cluster Pages (targets with inbound counts sorted by popularity) and Blog Posts (outbound links with anchor text, target keyword, placement method), stats header (total links, posts, avg/post), Re-plan Links button with confirmation dialog
+- **Learnings:**
+  - Blog link planning is per-post (not per-campaign like cluster links) — the planning page orchestrates sequential triggering of each eligible post's link planning, advancing to the next post when the current one completes or fails
+  - Blog link map API (`BlogLinkMapResponse`) returns per-post data (blog_post_id, links[]), so the link map page uses a custom `useAggregatedBlogLinkMap` hook that fetches all eligible posts' link maps and aggregates cluster targets (with inbound counts) and blog post outbound links
+  - Backend link planning steps: `building_graph` → `selecting_targets` → `injecting_links` → `validating` → `persisting` (5 actual steps, but UI shows 4 since persisting is instant)
+  - The link map page doesn't need Toast state since Re-plan just navigates back to the planning page — removed unused state to satisfy ESLint
+  - Pre-existing TS errors (3) unchanged — none in new files
+---
+
