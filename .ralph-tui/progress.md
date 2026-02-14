@@ -74,3 +74,15 @@ after each iteration and it's included in prompts for context.
   - Pre-existing mypy errors (51 total across 7 files) — none in blogs.py
 ---
 
+## 2026-02-14 - S11-006
+- Added `build_blog_content_prompt()` function for blog-specific content generation prompts
+- Files changed:
+  - `backend/app/services/content_writing.py` — added `build_blog_content_prompt()`, `_build_blog_user_prompt()`, `_build_blog_context_section()`, `_build_blog_output_format_section()`; updated `_build_system_prompt()` to accept `content_type` param; added `BlogPost` import
+- **Learnings:**
+  - `_build_system_prompt()` was refactored to accept `content_type="collection"|"blog"` with a default of `"collection"` so existing callers are unaffected
+  - Blog posts use 3-field JSON output (page_title, meta_description, content) vs collection pages' 4-field output (adds top_description, bottom_description)
+  - `_build_seo_targets_section()` and `_build_brand_voice_section()` are fully reusable across content types — no changes needed
+  - FAQ section in blog output format pulls `related_questions` from ContentBrief; falls back to generic FAQ instructions when no brief is available
+  - Pre-existing mypy/ruff errors unchanged — no new errors introduced
+---
+

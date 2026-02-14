@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
 from app.integrations.claude import ClaudeClient, CompletionResult, get_api_key
+from app.models.blog import BlogPost
 from app.models.content_brief import ContentBrief
 from app.models.crawled_page import CrawledPage
 from app.models.page_content import ContentStatus, PageContent
@@ -159,7 +160,34 @@ def build_content_prompt(
     return PromptPair(system_prompt=system_prompt, user_prompt=user_prompt)
 
 
-def _build_system_prompt(brand_config: dict[str, Any]) -> str:
+def build_blog_content_prompt(
+    blog_post: BlogPost,
+    keyword: str,
+    brand_config: dict[str, Any],
+    content_brief: ContentBrief | None = None,
+) -> PromptPair:
+    """Build system and user prompts for blog post content generation.
+
+    Similar to build_content_prompt() but outputs 3 fields (page_title,
+    meta_description, content) instead of 4. The content field is a single
+    HTML article with Introduction, Body H2 sections, FAQ, and Conclusion.
+
+    Args:
+        blog_post: The BlogPost to generate content for.
+        keyword: Primary target keyword for the post.
+        brand_config: The BrandConfig.v2_schema dict (contains ai_prompt_snippet,
+            vocabulary, etc.).
+        content_brief: Optional ContentBrief with LSI terms and word count targets.
+
+    Returns:
+        PromptPair with system_prompt and user_prompt ready for Claude.
+    """
+    system_prompt = _build_system_prompt(brand_config, content_type="blog")
+    user_prompt = _build_blog_user_prompt(blog_post, keyword, brand_config, content_brief)
+    return PromptPair(system_prompt=system_prompt, user_prompt=user_prompt)
+
+
+def _build_system_prompt(brand_config: dict[str, Any], content_type: str = "collection") -> str:
     """Build the system prompt using ai_prompt_snippet from brand config.
 
     Includes copywriting craft guidelines, AI trope avoidance rules, and
@@ -167,6 +195,7 @@ def _build_system_prompt(brand_config: dict[str, Any]) -> str:
 
     Args:
         brand_config: The BrandConfig.v2_schema dict.
+        content_type: "collection" or "blog" to adjust the role description.
 
     Returns:
         System prompt string.
@@ -176,10 +205,21 @@ def _build_system_prompt(brand_config: dict[str, Any]) -> str:
     if isinstance(ai_snippet, dict):
         full_prompt = ai_snippet.get("full_prompt", "")
 
+    if content_type == "blog":
+        role_desc = (
+            "You are an expert SEO blog writer generating long-form article content. "
+            "You write compelling, search-optimized blog posts that drive organic traffic, "
+            "establish topical authority, and engage readers."
+        )
+    else:
+        role_desc = (
+            "You are an expert e-commerce SEO copywriter generating collection page content. "
+            "You write compelling, search-optimized content that drives organic traffic "
+            "and converts visitors into customers."
+        )
+
     parts = [
-        "You are an expert e-commerce SEO copywriter generating collection page content. "
-        "You write compelling, search-optimized content that drives organic traffic "
-        "and converts visitors into customers.",
+        role_desc,
         "",
         "## Writing Rules",
         "- Benefits over features (apply the \"So What?\" test)",
@@ -264,6 +304,136 @@ def _build_user_prompt(
     sections.append(_build_output_format_section(content_brief, brand_config))
 
     return "\n\n".join(sections)
+
+
+def _build_blog_user_prompt(
+    blog_post: BlogPost,
+    keyword: str,
+    brand_config: dict[str, Any],
+    content_brief: ContentBrief | None,
+) -> str:
+    """Build the user prompt for blog post content generation.
+
+    Args:
+        blog_post: The BlogPost to generate content for.
+        keyword: Primary target keyword.
+        brand_config: The BrandConfig.v2_schema dict.
+        content_brief: Optional ContentBrief with LSI terms and word count targets.
+
+    Returns:
+        User prompt string with ## Task, ## Blog Context, ## SEO Targets,
+        ## Brand Voice, and ## Output Format sections.
+    """
+    sections: list[str] = []
+
+    # ## Task
+    sections.append(
+        f"## Task\n"
+        f"Generate an SEO-optimized blog article targeting the keyword "
+        f'"{keyword}". Produce all 3 content fields in a single JSON response.'
+    )
+
+    # ## Blog Context
+    sections.append(_build_blog_context_section(blog_post))
+
+    # ## SEO Targets (reuse existing function)
+    sections.append(_build_seo_targets_section(keyword, content_brief, brand_config))
+
+    # ## Brand Voice
+    brand_voice = _build_brand_voice_section(brand_config)
+    if brand_voice:
+        sections.append(brand_voice)
+
+    # ## Output Format (blog-specific: 3 fields)
+    sections.append(_build_blog_output_format_section(content_brief))
+
+    return "\n\n".join(sections)
+
+
+def _build_blog_context_section(blog_post: BlogPost) -> str:
+    """Build the ## Blog Context section with keyword, slug, and search volume."""
+    lines = ["## Blog Context"]
+    lines.append(f"- **Primary Keyword:** {blog_post.primary_keyword}")
+    lines.append(f"- **URL Slug:** {blog_post.url_slug}")
+    if blog_post.search_volume is not None:
+        lines.append(f"- **Search Volume:** {blog_post.search_volume:,}/mo")
+    return "\n".join(lines)
+
+
+def _build_blog_output_format_section(
+    content_brief: ContentBrief | None = None,
+) -> str:
+    """Build the ## Output Format section for blog posts (3-field JSON).
+
+    Specifies page_title, meta_description, and content (full article HTML).
+    The content field includes Introduction, Body H2 sections, FAQ section
+    from POP related_questions, and Conclusion with CTA.
+    """
+    # Determine FAQ questions from content brief
+    faq_questions: list[str] = []
+    if content_brief is not None:
+        faq_questions = content_brief.related_questions or []
+
+    lines = [
+        "## Output Format",
+        "Respond with ONLY a valid JSON object (no markdown fencing, no extra text) "
+        "containing exactly these 3 keys:",
+        "",
+        "```",
+        "{",
+        '  "page_title": "...",',
+        '  "meta_description": "...",',
+        '  "content": "..."',
+        "}",
+        "```",
+        "",
+        "**Field specifications:**",
+        "- **page_title**: SEO-optimized, include primary keyword, under 60 chars. "
+        "Title Case, benefit-driven.",
+        "- **meta_description**: 150-160 chars, include primary keyword, optimized for "
+        "click-through rate. Include a CTA.",
+        "- **content** (full article HTML):",
+        "",
+        "  Structure the article as follows:",
+        "",
+        "  **1. Introduction**",
+        "  - Open with a hook that addresses the reader's pain point or question",
+        "  - State the thesis or what the reader will learn",
+        "  - 2-3 paragraphs max",
+        "",
+        "  **2. Body Sections**",
+        "  - Use H2 headings for main sections (Title Case, max 7 words)",
+        "  - Use H3 subheadings where appropriate",
+        "  - 2-4 paragraphs per section, benefits-focused",
+        "  - Address the reader directly with \"you\" and \"your\"",
+        "",
+    ]
+
+    # FAQ section with specific questions from POP
+    if faq_questions:
+        lines.append("  **3. FAQ Section**")
+        lines.append('  - Wrap in an H2 heading: "Frequently Asked Questions"')
+        lines.append("  - Answer these questions (use H3 for each question):")
+        for q in faq_questions[:8]:
+            lines.append(f"    - {q}")
+        lines.append("  - Keep answers concise: 2-3 sentences each")
+        lines.append("")
+    else:
+        lines.append("  **3. FAQ Section**")
+        lines.append('  - Wrap in an H2 heading: "Frequently Asked Questions"')
+        lines.append("  - Include 3-5 relevant questions as H3 headings with concise answers")
+        lines.append("")
+
+    lines.extend([
+        "  **4. Conclusion**",
+        "  - Summarize key takeaways",
+        "  - End with a clear call to action",
+        "  - 1-2 paragraphs",
+        "",
+        "Use semantic HTML only (h2, h3, p tags). No inline styles. No div wrappers.",
+    ])
+
+    return "\n".join(lines)
 
 
 def _build_task_section(keyword: str) -> str:
