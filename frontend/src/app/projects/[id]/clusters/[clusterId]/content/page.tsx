@@ -579,6 +579,7 @@ export default function ClusterContentGenerationPage() {
     if (!cluster?.pages) return new Set<string>();
     return new Set(
       cluster.pages
+        .filter((p) => p.is_approved)
         .map((p) => p.crawled_page_id)
         .filter((id): id is string => id != null)
     );

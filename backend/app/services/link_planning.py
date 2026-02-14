@@ -78,8 +78,11 @@ class SiloLinkPlanner:
         result = await db.execute(stmt)
         all_cluster_pages = result.unique().scalars().all()
 
-        # Filter to only pages with a valid crawled_page_id (approved pages with content)
-        cluster_pages = [cp for cp in all_cluster_pages if cp.crawled_page_id is not None]
+        # Filter to only approved pages with a valid crawled_page_id
+        cluster_pages = [
+            cp for cp in all_cluster_pages
+            if cp.crawled_page_id is not None and cp.is_approved
+        ]
 
         if len(cluster_pages) <= 1:
             pages = [

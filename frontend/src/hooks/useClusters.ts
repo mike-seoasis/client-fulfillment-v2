@@ -154,6 +154,9 @@ export function useUpdateClusterPage(): UseMutationResult<
       queryClient.invalidateQueries({
         queryKey: clusterKeys.detail(projectId, clusterId),
       });
+      queryClient.invalidateQueries({
+        queryKey: ['projects', projectId, 'content-generation', 'status'],
+      });
     },
   });
 }

@@ -16,6 +16,7 @@ from app.integrations.claude import ClaudeClient, get_claude
 from app.integrations.dataforseo import DataForSEOClient, get_dataforseo
 from app.models.brand_config import BrandConfig
 from app.models.keyword_cluster import ClusterPage, ClusterStatus, KeywordCluster
+from app.models.page_keywords import PageKeywords
 from app.schemas.cluster import (
     ClusterCreate,
     ClusterListResponse,
@@ -288,6 +289,26 @@ async def update_cluster_page(
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(page, field, value)
+
+    # Sync approval state to PageKeywords when toggling is_approved
+    if data.is_approved is not None and page.crawled_page_id is not None:
+        pk_stmt = select(PageKeywords).where(
+            PageKeywords.crawled_page_id == page.crawled_page_id
+        )
+        pk_result = await db.execute(pk_stmt)
+        page_keywords = pk_result.scalar_one_or_none()
+        if page_keywords is not None:
+            page_keywords.is_approved = data.is_approved
+            logger.info(
+                "Synced PageKeywords.is_approved=%s for crawled_page_id=%s",
+                data.is_approved,
+                page.crawled_page_id,
+            )
+        else:
+            logger.warning(
+                "No PageKeywords found for crawled_page_id=%s during approval sync",
+                page.crawled_page_id,
+            )
 
     await db.commit()
     await db.refresh(page)
