@@ -300,3 +300,20 @@ after each iteration and it's included in prompts for context.
   - No code changes — documentation/status update only
 ---
 
+## 2026-02-14 - S11-099
+- Verified all Phase 11 completion criteria
+- Files changed: None (verification only)
+- **Verification results:**
+  - All 81 backend blog tests pass (test_blogs.py: 27, test_blog_topic_discovery.py: 19, test_blog_content_generation.py: 20, test_blog_export.py: 15)
+  - All 77 frontend blog tests pass (useBlogs hooks: 14, blogs section: 9, campaign creation: 8, keywords: 8, content generation: 8, content editor: 8, export: 8, link pages: not separately counted but all pass)
+  - 29 backend failures are all pre-existing (brand_config_service, content_quality, crawling, cluster_api, link_pipeline, link_planning) — none in blog code
+  - 99 frontend failures are all pre-existing (onboarding content editor, cluster content, links map, brand config, GenerationProgress, KeywordPageRow) — none in blog code
+  - Blog HTML export correctly strips highlight spans (hl-keyword, hl-keyword-var, hl-lsi, hl-trope), removes data attributes, demotes H1→H2, removes empty spans, preserves links
+  - Blog linking is correctly siloed: only targets cluster pages (parent mandatory first, then children) and sibling blogs; never crosses cluster boundary
+  - Project detail page shows blog campaigns section with status badges, campaign cards, empty state, and "New Campaign" link
+  - End-to-end flow complete: create campaign → approve topics → generate content → edit in Lexical → plan links → view link map → copy HTML
+- **Learnings:**
+  - Pre-existing test failures are numerous (29 backend, 99 frontend) — these should be addressed in a dedicated cleanup slice
+  - Vitest pattern matching is overly broad — specifying blog test file paths still runs unrelated test files that match partial patterns
+---
+
