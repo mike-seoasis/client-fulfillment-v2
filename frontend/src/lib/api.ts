@@ -1132,10 +1132,12 @@ export function deleteBlogCampaign(
  */
 export function triggerBlogContentGeneration(
   projectId: string,
-  blogId: string
+  blogId: string,
+  forceRefresh: boolean = false
 ): Promise<BlogContentTriggerResponse> {
+  const params = forceRefresh ? '?force_refresh=true' : '';
   return apiClient.post<BlogContentTriggerResponse>(
-    `/projects/${projectId}/blogs/${blogId}/generate-content`
+    `/projects/${projectId}/blogs/${blogId}/generate-content${params}`
   );
 }
 

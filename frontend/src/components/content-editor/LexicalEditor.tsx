@@ -12,6 +12,8 @@ import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { ListNode, ListItemNode } from '@lexical/list';
 import { LinkNode } from '@lexical/link';
 import { LinkPlugin } from '@lexical/react/LexicalLinkPlugin';
+import { TableNode, TableCellNode, TableRowNode } from '@lexical/table';
+import { TablePlugin } from '@lexical/react/LexicalTablePlugin';
 import { $generateNodesFromDOM } from '@lexical/html';
 import { $generateHtmlFromNodes } from '@lexical/html';
 import { $getRoot, $insertNodes, type EditorState, type LexicalEditor as LexicalEditorType } from 'lexical';
@@ -34,6 +36,10 @@ const theme = {
     listitem: 'mb-1 leading-relaxed',
   },
   link: 'text-lagoon-600 underline hover:text-lagoon-800 cursor-pointer',
+  table: 'w-full border-collapse my-4 text-sm',
+  tableCell: 'border border-sand-300 px-3 py-2 text-warm-gray-800 text-left align-top',
+  tableCellHeader: 'border border-sand-300 px-3 py-2 bg-cream-100 font-semibold text-warm-gray-900 text-left',
+  tableRow: '',
 };
 
 interface HtmlLoaderProps {
@@ -144,7 +150,7 @@ export const LexicalEditor = forwardRef<LexicalEditorHandle, LexicalEditorProps>
     const initialConfig = {
       namespace: 'ContentEditor',
       theme,
-      nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, HighlightNode],
+      nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, TableNode, TableCellNode, TableRowNode, HighlightNode],
       onError: (error: Error) => {
         console.error('Lexical error:', error);
       },
@@ -175,6 +181,7 @@ export const LexicalEditor = forwardRef<LexicalEditorHandle, LexicalEditorProps>
           <HistoryPlugin />
           <ListPlugin />
           <LinkPlugin />
+          <TablePlugin />
           <FilteredOnChangePlugin onChange={handleChange} ignoreSelectionChange />
           <HtmlLoaderPlugin initialHtml={initialHtml} />
           <EditorRefPlugin editorRef={editorRef} />

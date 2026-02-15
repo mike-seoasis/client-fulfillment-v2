@@ -18,7 +18,6 @@ import type { BlogPostGenerationStatusItem, BlogPost } from '@/lib/api';
 const BLOG_STEPS = [
   { key: 'keywords', label: 'Keywords' },
   { key: 'content', label: 'Content' },
-  { key: 'links', label: 'Links' },
   { key: 'review', label: 'Review' },
   { key: 'export', label: 'Export' },
 ] as const;
@@ -27,23 +26,28 @@ const BLOG_STEPS = [
 const PIPELINE_STEPS = [
   { key: 'brief', label: 'Brief' },
   { key: 'write', label: 'Write' },
+  { key: 'links', label: 'Links' },
   { key: 'check', label: 'Check' },
   { key: 'done', label: 'Done' },
 ] as const;
 
-/** Map backend content_status to step index (0-2 for Brief/Write/Check) */
+/** Map backend content_status to step index (0-3 for Brief/Write/Links/Check) */
 function getContentStep(status: string): number {
   switch (status) {
     case 'pending':
       return -1;
     case 'generating_brief':
       return 0;
+    case 'generating':
+      return 0; // backward compat
     case 'writing':
       return 1;
-    case 'checking':
+    case 'linking':
       return 2;
+    case 'checking':
+      return 3;
     case 'complete':
-      return 3; // past all steps
+      return 4; // past all steps
     case 'failed':
       return -2;
     default:
@@ -58,8 +62,12 @@ function getStatusLabel(status: string): string {
       return 'Queued';
     case 'generating_brief':
       return 'Generating brief...';
+    case 'generating':
+      return 'Generating brief...'; // backward compat
     case 'writing':
       return 'Writing content...';
+    case 'linking':
+      return 'Planning links...';
     case 'checking':
       return 'Running quality checks...';
     case 'complete':
@@ -214,10 +222,10 @@ function LoadingSkeleton() {
       <div className="mb-8">
         <div className="h-4 bg-cream-300 rounded w-32 mb-3" />
         <div className="flex items-center gap-1">
-          {[...Array(5)].map((_, i) => (
+          {[...Array(4)].map((_, i) => (
             <div key={i} className="flex items-center">
               <div className="w-3 h-3 rounded-full bg-cream-300" />
-              {i < 4 && <div className="w-12 h-0.5 bg-cream-300" />}
+              {i < 3 && <div className="w-12 h-0.5 bg-cream-300" />}
             </div>
           ))}
         </div>
@@ -596,6 +604,17 @@ export default function BlogContentPage() {
     }
   };
 
+  // Handle regenerate (force refresh all posts)
+  const handleRegenerate = async () => {
+    try {
+      await triggerGeneration.mutateAsync({ projectId, blogId, forceRefresh: true });
+      handleShowToast('Regenerating all content...', 'success');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to start regeneration';
+      handleShowToast(message, 'error');
+    }
+  };
+
   // Handle content approval toggle
   const handleApproveToggle = useCallback(
     (postId: string, value: boolean) => {
@@ -733,6 +752,22 @@ export default function BlogContentPage() {
                 </>
               ) : (
                 `Retry ${postsFailed} Failed`
+              )}
+            </Button>
+          )}
+          {allContentDone && !isGenerating && (
+            <Button
+              variant="secondary"
+              onClick={handleRegenerate}
+              disabled={triggerGeneration.isPending}
+            >
+              {triggerGeneration.isPending ? (
+                <>
+                  <SpinnerIcon className="w-4 h-4 mr-1.5 animate-spin" />
+                  Regenerating...
+                </>
+              ) : (
+                'Regenerate Content'
               )}
             </Button>
           )}

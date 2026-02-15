@@ -15,7 +15,6 @@ import { Button, Toast } from '@/components/ui';
 const BLOG_STEPS = [
   { key: 'keywords', label: 'Keywords' },
   { key: 'content', label: 'Content' },
-  { key: 'links', label: 'Links' },
   { key: 'review', label: 'Review' },
   { key: 'export', label: 'Export' },
 ] as const;
@@ -447,7 +446,7 @@ export default function BlogLinksPage() {
       </nav>
 
       {/* Step indicator */}
-      <StepIndicator currentStep="links" />
+      <StepIndicator currentStep="content" />
 
       {/* Header */}
       <div className="mb-6">

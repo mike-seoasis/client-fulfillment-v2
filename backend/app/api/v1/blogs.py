@@ -488,6 +488,7 @@ async def generate_blog_content(
     project_id: str,
     blog_id: str,
     background_tasks: BackgroundTasks,
+    force_refresh: bool = False,
     db: AsyncSession = Depends(get_session),
 ) -> BlogContentTriggerResponse:
     """Trigger blog content generation for all approved posts in a campaign.
@@ -495,7 +496,10 @@ async def generate_blog_content(
     Starts a background task that processes each approved post through
     the brief -> write -> check pipeline.
 
-    Returns 400 if campaign status is not 'writing' or has no approved posts.
+    Args:
+        force_refresh: If True, regenerate content even for already-complete posts.
+
+    Returns 400 if campaign status is not 'writing'/'review' or has no approved posts.
     Returns 409 if generation is already in progress for this campaign.
     """
     await ProjectService.get_project(db, project_id)
@@ -518,11 +522,12 @@ async def generate_blog_content(
             detail=f"Blog campaign {blog_id} not found",
         )
 
-    # Validate campaign is in 'writing' status
-    if campaign.status != CampaignStatus.WRITING.value:
+    # Validate campaign is in 'writing' or 'review' status (review allows regeneration)
+    allowed_statuses = {CampaignStatus.WRITING.value, CampaignStatus.REVIEW.value}
+    if campaign.status not in allowed_statuses:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Campaign must be in 'writing' status to generate content. Current status: {campaign.status}",
+            detail=f"Campaign must be in 'writing' or 'review' status to generate content. Current status: {campaign.status}",
         )
 
     # Validate has approved posts
@@ -543,9 +548,15 @@ async def generate_blog_content(
     # Mark as active and start background task
     _active_blog_generations.add(blog_id)
 
+    # When regenerating from 'review' status, move back to 'writing'
+    if campaign.status == CampaignStatus.REVIEW.value:
+        campaign.status = CampaignStatus.WRITING.value
+        await db.commit()
+
     background_tasks.add_task(
         _run_blog_generation_background,
         campaign_id=blog_id,
+        force_refresh=force_refresh,
     )
 
     logger.info(
@@ -554,6 +565,7 @@ async def generate_blog_content(
             "project_id": project_id,
             "campaign_id": blog_id,
             "approved_posts": len(approved_posts),
+            "force_refresh": force_refresh,
         },
     )
 
@@ -563,7 +575,10 @@ async def generate_blog_content(
     )
 
 
-async def _run_blog_generation_background(campaign_id: str) -> None:
+async def _run_blog_generation_background(
+    campaign_id: str,
+    force_refresh: bool = False,
+) -> None:
     """Background task wrapper for the blog content generation pipeline."""
     from app.services.blog_content_generation import run_blog_content_pipeline
 
@@ -571,6 +586,7 @@ async def _run_blog_generation_background(campaign_id: str) -> None:
         result = await run_blog_content_pipeline(
             campaign_id=campaign_id,
             db=None,  # type: ignore[arg-type]  # pipeline creates its own sessions
+            force_refresh=force_refresh,
         )
         logger.info(
             "Blog content generation pipeline finished",
@@ -650,10 +666,19 @@ async def get_blog_content_status(
         )
 
     # Determine overall status
+    generating_statuses = {
+        ContentStatus.GENERATING.value,
+        ContentStatus.GENERATING_BRIEF.value,
+        ContentStatus.WRITING.value,
+        ContentStatus.LINKING.value,
+        ContentStatus.CHECKING.value,
+    }
     posts_total = len(approved_posts)
     if posts_total == 0:
         overall_status = "idle"
     elif blog_id in _active_blog_generations:
+        overall_status = "generating"
+    elif any(p.content_status in generating_statuses for p in approved_posts):
         overall_status = "generating"
     elif posts_completed + posts_failed >= posts_total:
         overall_status = "complete" if posts_failed == 0 else "failed"

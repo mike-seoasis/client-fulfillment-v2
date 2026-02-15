@@ -254,15 +254,29 @@ class BlogTopicDiscoveryService:
 Use this context to ensure blog topics are relevant to the brand's audience and products.
 """
 
-        prompt = f"""You are an SEO content strategist specializing in blog content planning. Given a list of seed topics extracted from existing content optimization data, generate 15-25 blog topic candidates.
+        prompt = f"""You are an SEO content strategist specializing in keyword research for blog content. Given seed topics from existing content briefs, generate 15-25 blog keyword candidates that people actually type into Google.
 
 ## Seed Topics (from POP content briefs)
 {seeds_text}
 {brand_section}
+## CRITICAL: Generate Search Keywords, NOT Blog Titles
+Your output must be **real search queries** — the exact phrases people type into Google. These will be validated against search volume data, so they must match how people actually search.
+
+**DO:**
+- "best joint supplements for dogs" (real search query)
+- "glucosamine for dogs" (real search query)
+- "how to help dog with arthritis" (real search query)
+- "dog joint supplement reviews" (real search query)
+
+**DO NOT:**
+- "best joint supplements for senior dogs: a complete guide" (this is a blog title, not a search query)
+- "glucosamine vs chondroitin for dogs: which works better" (nobody types colons into Google)
+- "omega fatty acids for dogs: benefits for joint health and mobility" (way too long, title-style)
+
 ## Requirements
-- Focus on **informational intent** — topics people search to learn, compare, or decide
-- Preferred formats: how-to guides, comparison posts, listicles, ultimate guides, FAQ roundups
-- Each topic should be a specific blog post title/keyword, NOT a collection page keyword
+- Focus on **informational intent** — queries people search to learn, compare, or decide
+- Keep keywords **short and natural** — 3-7 words, like actual Google searches
+- NO colons, subtitles, or editorial phrasing
 - Topics should be related to but distinct from the seed keywords
 - Avoid overly broad topics (e.g., "shoes" is too broad; "how to clean white sneakers" is good)
 - Avoid topics that would cannibalize collection/product pages
@@ -270,13 +284,13 @@ Use this context to ensure blog topics are relevant to the brand's audience and 
 ## Output Format
 Return ONLY a JSON array of objects. No explanations, no markdown code blocks.
 Each object must have:
-- "topic": the blog topic keyword/phrase (lowercase)
+- "topic": the search keyword/phrase people type into Google (lowercase, no colons or subtitles)
 - "format_type": one of "how-to", "guide", "comparison", "listicle", "faq", "review"
 - "rationale": brief reason why this is a good blog topic
 - "source_seed_index": which seed number (1-based) inspired this topic
 
 Example:
-[{{"topic": "how to clean white sneakers at home", "format_type": "how-to", "rationale": "High search intent question related to product care", "source_seed_index": 3}}]"""
+[{{"topic": "how to clean white sneakers", "format_type": "how-to", "rationale": "High search volume question related to product care", "source_seed_index": 3}}]"""
 
         result = await self._claude.complete(
             user_prompt=prompt,

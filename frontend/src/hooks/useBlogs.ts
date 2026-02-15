@@ -217,16 +217,19 @@ export function useDeleteBlogCampaign(): UseMutationResult<
 export function useTriggerBlogContentGeneration(): UseMutationResult<
   BlogContentTriggerResponse,
   Error,
-  { projectId: string; blogId: string }
+  { projectId: string; blogId: string; forceRefresh?: boolean }
 > {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ projectId, blogId }: { projectId: string; blogId: string }) =>
-      triggerBlogContentGeneration(projectId, blogId),
+    mutationFn: ({ projectId, blogId, forceRefresh = false }: { projectId: string; blogId: string; forceRefresh?: boolean }) =>
+      triggerBlogContentGeneration(projectId, blogId, forceRefresh),
     onSuccess: (_data, { projectId, blogId }) => {
       queryClient.invalidateQueries({
         queryKey: blogKeys.contentStatus(projectId, blogId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: blogKeys.detail(projectId, blogId),
       });
     },
   });

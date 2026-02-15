@@ -15,7 +15,6 @@ import type { BlogPost, BlogLinkMapItem } from '@/lib/api';
 const BLOG_STEPS = [
   { key: 'keywords', label: 'Keywords' },
   { key: 'content', label: 'Content' },
-  { key: 'links', label: 'Links' },
   { key: 'review', label: 'Review' },
   { key: 'export', label: 'Export' },
 ] as const;
@@ -313,7 +312,7 @@ export default function BlogLinkMapPage() {
       </nav>
 
       {/* Step indicator */}
-      <StepIndicator currentStep="links" />
+      <StepIndicator currentStep="content" />
 
       {/* Header with stats */}
       <div className="flex items-start justify-between mb-6">

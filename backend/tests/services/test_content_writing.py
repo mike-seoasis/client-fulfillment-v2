@@ -776,7 +776,7 @@ class TestBlogPromptEntityAssociation:
         assert "BootCo" in result
         assert "premium leather boots" in result
         assert "Portland, OR" in result
-        assert "Entity Association" in result
+        assert "Brand Positioning" in result
 
     def test_entity_association_without_location(self) -> None:
         """Entity association works without location."""
@@ -811,7 +811,7 @@ class TestBlogPromptEntityAssociation:
             },
         }
         result = build_blog_content_prompt(fake_post, "boot care", config, None)
-        assert "Entity Association" in result.user_prompt
+        assert "Brand Positioning" in result.user_prompt
         assert "BootCo" in result.user_prompt
 
 

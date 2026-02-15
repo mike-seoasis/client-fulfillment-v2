@@ -16,7 +16,6 @@ import type { BlogExportItem } from '@/lib/api';
 const BLOG_STEPS = [
   { key: 'keywords', label: 'Keywords' },
   { key: 'content', label: 'Content' },
-  { key: 'links', label: 'Links' },
   { key: 'review', label: 'Review' },
   { key: 'export', label: 'Export' },
 ] as const;

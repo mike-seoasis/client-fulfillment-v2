@@ -357,97 +357,6 @@ function HeadingOutlineCard({
   );
 }
 
-const ISSUE_TYPE_LABELS: Record<string, string> = {
-  banned_word: 'Banned Words',
-  em_dash: 'Em Dashes',
-  ai_pattern: 'AI Openers',
-  triplet_excess: 'Triplet Lists',
-  rhetorical_excess: 'Rhetorical Questions',
-  tier1_ai_word: 'Tier 1 AI Words',
-  tier2_ai_excess: 'Tier 2 AI Words',
-  negation_contrast: 'Negation/Contrast',
-  competitor_name: 'Competitor Names',
-};
-
-const FIELD_LABELS: Record<string, string> = {
-  page_title: 'title',
-  meta_description: 'meta',
-  content: 'body',
-};
-
-function FlaggedPassagesCard({
-  issues,
-  onJumpTo,
-}: {
-  issues: QaIssue[];
-  onJumpTo?: (context: string) => void;
-}) {
-  if (!issues || issues.length === 0) return null;
-
-  const groups: { type: string; label: string; items: QaIssue[] }[] = [];
-  const seen = new Set<string>();
-  for (const issue of issues) {
-    if (!seen.has(issue.type)) {
-      seen.add(issue.type);
-      groups.push({
-        type: issue.type,
-        label: ISSUE_TYPE_LABELS[issue.type] ?? issue.type,
-        items: issues.filter((i) => i.type === issue.type),
-      });
-    }
-  }
-
-  const displayContext = (ctx: string) =>
-    ctx.replace(/^\.{3}/, '').replace(/\.{3}$/, '').trim();
-
-  return (
-    <div className="bg-white rounded-sm border border-sand-400/60 overflow-hidden">
-      <div className="px-4 py-3 border-b border-sand-200">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-semibold text-warm-700 uppercase tracking-wider">Flagged Passages</h3>
-          <span className="text-xs font-mono text-coral-600">{issues.length}</span>
-        </div>
-      </div>
-      <div className="divide-y divide-sand-100">
-        {groups.map((group) => (
-          <div key={group.type} className="px-4 py-3">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-xs font-semibold text-warm-800">{group.label}</span>
-              <span className="text-xs font-mono text-coral-500 bg-coral-50 px-1.5 py-0.5 rounded-sm">
-                {group.items.length}
-              </span>
-            </div>
-            <div className="space-y-1.5">
-              {group.items.map((issue, idx) => {
-                const ctx = displayContext(issue.context);
-                const canJump = onJumpTo && issue.field === 'content';
-                return (
-                  <div
-                    key={idx}
-                    className={`flex items-start gap-2 text-xs py-1 px-2 rounded-sm ${canJump ? 'hover:bg-sand-50 cursor-pointer group' : ''}`}
-                    onClick={canJump ? () => onJumpTo(issue.context) : undefined}
-                  >
-                    <span className="text-warm-400 font-mono flex-shrink-0 mt-px">
-                      {FIELD_LABELS[issue.field] ?? issue.field}
-                    </span>
-                    <span className="text-warm-600 leading-relaxed min-w-0 truncate" title={ctx}>
-                      {ctx}
-                    </span>
-                    {canJump && (
-                      <span className="text-lagoon-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-px">
-                        &darr;
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Main Page Component
@@ -559,42 +468,6 @@ export default function BlogContentEditorPage() {
 
   // Ref to the content editor container for jump-to
   const editorContainerRef = useRef<HTMLDivElement>(null);
-
-  // Jump to flagged passage in the Lexical editor
-  const handleJumpTo = useCallback((context: string) => {
-    const container = editorContainerRef.current;
-    if (!container) return;
-
-    const cleaned = cleanContext(context);
-    const searchText = cleaned.slice(0, 40);
-    if (!searchText) return;
-
-    const tropeSpans = Array.from(container.querySelectorAll('.hl-trope'));
-    let target: HTMLElement | null = null;
-    for (const span of tropeSpans) {
-      if (span.textContent && span.textContent.includes(searchText)) {
-        target = span as HTMLElement;
-        break;
-      }
-    }
-
-    if (!target) {
-      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-      let node: Node | null;
-      while ((node = walker.nextNode())) {
-        if (node.textContent && node.textContent.includes(searchText)) {
-          target = node.parentElement;
-          break;
-        }
-      }
-    }
-
-    if (target) {
-      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      target.classList.add('violation-pulse');
-      setTimeout(() => target!.classList.remove('violation-pulse'), 1500);
-    }
-  }, [cleanContext]);
 
   const handleJumpToTerm = useCallback((term: string) => {
     const container = editorContainerRef.current;
@@ -904,7 +777,6 @@ export default function BlogContentEditorPage() {
         {/* Right Sidebar (~35%) */}
         <div className="w-[340px] flex-shrink-0 space-y-4 sticky top-[72px] max-h-[calc(100vh-140px)] overflow-y-auto pb-4 sidebar-scroll">
           <QualityStatusCard qaResults={qaResults} />
-          <FlaggedPassagesCard issues={qaResults?.issues ?? []} onJumpTo={handleJumpTo} />
           <ContentStatsCard
             wordCount={totalWordCount}
             headings={headingCounts}

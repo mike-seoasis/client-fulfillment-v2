@@ -38,7 +38,6 @@ from app.models.blog import (
     ContentStatus,
 )
 from app.models.brand_config import BrandConfig
-from app.models.content_brief import ContentBrief
 from app.services.content_quality import (
     QualityResult,
     run_blog_quality_checks,
@@ -409,8 +408,8 @@ async def _process_single_post(
                     error="BlogPost not found",
                 )
 
-            # --- Step 1: Set generating status + fetch POP brief ---
-            blog_post.content_status = ContentStatus.GENERATING.value
+            # --- Step 1 (Brief): Fetch POP brief + trends ---
+            blog_post.content_status = ContentStatus.GENERATING_BRIEF.value
             await db.commit()
 
             content_brief = await _fetch_blog_brief(
@@ -421,16 +420,17 @@ async def _process_single_post(
                 refresh_briefs=refresh_briefs,
             )
 
-            # --- Step 1.5: Fetch trend context from Perplexity ---
             trend_context = await _fetch_trend_context(keyword, brand_config)
             if trend_context is not None:
-                # Store trend data in pop_brief JSONB under "trend_research" key
                 existing_brief = blog_post.pop_brief or {}
                 existing_brief["trend_research"] = trend_context
                 blog_post.pop_brief = existing_brief
                 await db.flush()
 
-            # --- Step 2: Generate content via Claude ---
+            # --- Step 2 (Write): Generate content via Claude + humanize ---
+            blog_post.content_status = ContentStatus.WRITING.value
+            await db.commit()
+
             write_result = await _generate_blog_content(
                 db=db,
                 blog_post=blog_post,
@@ -451,16 +451,54 @@ async def _process_single_post(
                     error=write_result["error"],
                 )
 
-            # --- Step 2.5: Humanization auto-fix pass ---
             if blog_post.content:
                 blog_post.content = _humanize_content(blog_post.content)
                 await db.flush()
 
-            # --- Step 3: Run quality checks ---
+            # --- Step 3 (Links): Commit content then run link planning ---
+            blog_post.content_status = ContentStatus.LINKING.value
+            await db.commit()
+
+            try:
+                from app.services.link_planning import run_blog_link_planning
+
+                # Load campaign_id for link planning
+                campaign_id = post_data["campaign_id"]
+                link_result = await run_blog_link_planning(
+                    blog_post_id=post_id,
+                    campaign_id=campaign_id,
+                    db=db,
+                )
+                logger.info(
+                    "Blog link planning completed within content pipeline",
+                    extra={
+                        "post_id": post_id,
+                        "keyword": keyword[:50],
+                        "links_planned": link_result.get("links_planned", 0),
+                        "link_status": link_result.get("status"),
+                    },
+                )
+            except Exception as link_exc:
+                logger.warning(
+                    "Blog link planning failed, continuing without links",
+                    extra={
+                        "post_id": post_id,
+                        "keyword": keyword[:50],
+                        "error": str(link_exc),
+                    },
+                )
+
+            # --- Step 4 (Check): Re-load post (link planning writes via own session) + quality checks ---
+            blog_post.content_status = ContentStatus.CHECKING.value
+            await db.commit()
+
+            # Re-load to pick up content changes from link planning's write session
+            await db.refresh(blog_post)
+
             qa_result = _run_blog_quality_checks(blog_post, brand_config)
             blog_post.qa_results = qa_result.to_dict()
 
-            # --- Step 4: Mark complete ---
+            # --- Step 5 (Done): Mark complete ---
             blog_post.content_status = ContentStatus.COMPLETE.value
             await db.commit()
 
@@ -521,7 +559,7 @@ async def _fetch_blog_brief(
     keyword: str,
     url_slug: str,
     refresh_briefs: bool,
-) -> ContentBrief | None:
+) -> Any | None:
     """Fetch POP content brief for a blog post with page_not_built_yet=True.
 
     Blog posts don't have a CrawledPage, so we pass the url_slug as target_url.
@@ -577,14 +615,41 @@ async def _fetch_blog_brief(
 
             response_data, _ = await _run_real_3step_flow(pop_client, keyword, url_slug)
 
-        # Merge POP brief with existing pop_brief (preserve discovery_metadata)
+        # Parse raw POP keys into normalized names for the frontend sidebar
+        from app.services.pop_content_brief import (
+            _parse_competitors,
+            _parse_heading_targets,
+            _parse_keyword_targets,
+            _parse_lsi_terms,
+            _parse_page_score,
+            _parse_related_questions,
+            _parse_related_searches,
+            _parse_word_count_range,
+            _parse_word_count_target,
+        )
+
+        wc_min, wc_max = _parse_word_count_range(response_data)
+        normalized = {
+            "lsi_terms": _parse_lsi_terms(response_data),
+            "related_searches": _parse_related_searches(response_data),
+            "word_count_target": _parse_word_count_target(response_data),
+            "competitors": _parse_competitors(response_data),
+            "related_questions": _parse_related_questions(response_data),
+            "heading_targets": _parse_heading_targets(response_data),
+            "keyword_targets": _parse_keyword_targets(response_data),
+            "word_count_min": wc_min,
+            "word_count_max": wc_max,
+            "page_score_target": _parse_page_score(response_data),
+        }
+
+        # Merge raw + normalized + existing (preserve discovery_metadata)
         existing = blog_post.pop_brief or {}
-        merged = {**existing, **response_data}
+        merged = {**existing, **response_data, **normalized}
         blog_post.pop_brief = merged
         await db.flush()
 
         # Parse into ContentBrief-like structure for prompt building
-        return _brief_from_cached(db, response_data)
+        return _brief_from_cached(db, merged)
 
     except Exception as exc:
         logger.warning(
@@ -598,13 +663,15 @@ async def _fetch_blog_brief(
         return None
 
 
-def _brief_from_cached(db: AsyncSession, data: dict[str, Any]) -> ContentBrief:  # noqa: ARG001
-    """Build a transient ContentBrief from cached POP data.
+def _brief_from_cached(db: AsyncSession, data: dict[str, Any]) -> Any:  # noqa: ARG001
+    """Build a transient brief-like object from cached POP data.
 
-    This creates an in-memory ContentBrief (not persisted to DB) from the
-    blog post's pop_brief JSONB. Used so build_blog_content_prompt can read
-    LSI terms, related searches, etc.
+    Returns a SimpleNamespace (not a ContentBrief ORM instance) to avoid
+    SQLAlchemy session tracking issues. The prompt builder only reads
+    attributes, so a namespace works identically.
     """
+    import types
+
     from app.services.pop_content_brief import (
         _parse_competitors,
         _parse_heading_targets,
@@ -617,18 +684,20 @@ def _brief_from_cached(db: AsyncSession, data: dict[str, Any]) -> ContentBrief: 
         _parse_word_count_target,
     )
 
-    brief = ContentBrief.__new__(ContentBrief)
-    brief.lsi_terms = _parse_lsi_terms(data)
-    brief.related_searches = _parse_related_searches(data)
-    brief.word_count_target = _parse_word_count_target(data)
-    brief.competitors = _parse_competitors(data)
-    brief.related_questions = _parse_related_questions(data)
-    brief.heading_targets = _parse_heading_targets(data)
-    brief.keyword_targets = _parse_keyword_targets(data)
-    brief.word_count_min, brief.word_count_max = _parse_word_count_range(data)
-    brief.page_score_target = _parse_page_score(data)
-    brief.raw_response = data
-    return brief
+    wc_min, wc_max = _parse_word_count_range(data)
+    return types.SimpleNamespace(
+        lsi_terms=_parse_lsi_terms(data),
+        related_searches=_parse_related_searches(data),
+        word_count_target=_parse_word_count_target(data),
+        competitors=_parse_competitors(data),
+        related_questions=_parse_related_questions(data),
+        heading_targets=_parse_heading_targets(data),
+        keyword_targets=_parse_keyword_targets(data),
+        word_count_min=wc_min,
+        word_count_max=wc_max,
+        page_score_target=_parse_page_score(data),
+        raw_response=data,
+    )
 
 
 async def _generate_blog_content(
@@ -636,7 +705,7 @@ async def _generate_blog_content(
     blog_post: BlogPost,
     keyword: str,
     brand_config: dict[str, Any],
-    content_brief: ContentBrief | None,
+    content_brief: Any | None,
     trend_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Generate blog content via Claude and store on BlogPost.

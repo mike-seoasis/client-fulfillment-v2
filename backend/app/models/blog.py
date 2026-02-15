@@ -45,7 +45,11 @@ class ContentStatus(str, Enum):
     """Content generation status for a blog post."""
 
     PENDING = "pending"
-    GENERATING = "generating"
+    GENERATING_BRIEF = "generating_brief"
+    WRITING = "writing"
+    LINKING = "linking"
+    CHECKING = "checking"
+    GENERATING = "generating"  # backward compat
     COMPLETE = "complete"
     FAILED = "failed"
 

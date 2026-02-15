@@ -210,11 +210,31 @@ def _build_system_prompt(brand_config: dict[str, Any], content_type: str = "coll
         full_prompt = ai_snippet.get("full_prompt", "")
 
     if content_type == "blog":
-        role_desc = (
-            "You are an expert SEO blog writer generating long-form article content. "
-            "You write compelling, search-optimized blog posts that drive organic traffic, "
-            "establish topical authority, and engage readers."
-        )
+        # Extract brand identity for the role description
+        brand_foundation = brand_config.get("brand_foundation", {})
+        company_overview = brand_foundation.get("company_overview", {}) if isinstance(brand_foundation, dict) else {}
+        company_name = company_overview.get("company_name", "") if isinstance(company_overview, dict) else ""
+        what_they_sell = brand_foundation.get("what_they_sell", {}) if isinstance(brand_foundation, dict) else {}
+        primary_products = what_they_sell.get("primary_products_services", "") if isinstance(what_they_sell, dict) else ""
+
+        if company_name and primary_products:
+            role_desc = (
+                f"You are an expert SEO blog writer for {company_name}, a brand that specializes in {primary_products}. "
+                f"You write compelling, search-optimized blog posts that position {company_name} as a trusted authority. "
+                "Every article should naturally connect the topic back to the brand's expertise and product offerings."
+            )
+        elif company_name:
+            role_desc = (
+                f"You are an expert SEO blog writer for {company_name}. "
+                f"You write compelling, search-optimized blog posts that position {company_name} as a trusted authority. "
+                "Every article should naturally connect the topic back to the brand's expertise and product offerings."
+            )
+        else:
+            role_desc = (
+                "You are an expert SEO blog writer generating long-form article content. "
+                "You write compelling, search-optimized blog posts that drive organic traffic, "
+                "establish topical authority, and engage readers."
+            )
     else:
         role_desc = (
             "You are an expert e-commerce SEO copywriter generating collection page content. "
@@ -409,11 +429,11 @@ def _build_freshness_section(trend_context: dict[str, Any] | None) -> str | None
 
 
 def _build_entity_association_section(brand_config: dict[str, Any]) -> str | None:
-    """Build the ## Entity Association section for AI visibility.
+    """Build the ## Brand Positioning section for blog content.
 
     Extracts company name, primary products, and location from brand config
-    to inject entity association signals that help AI systems connect the
-    brand with its category.
+    to ensure blog content is written from the brand's perspective and
+    positions their products/services as relevant solutions.
 
     Returns None if no brand foundation data is available.
     """
@@ -438,30 +458,40 @@ def _build_entity_association_section(brand_config: dict[str, Any]) -> str | Non
     if not company_name:
         return None
 
-    lines = ["## Entity Association"]
+    lines = ["## Brand Positioning (Critical)"]
     lines.append(
-        "Naturally weave the following brand associations into the article "
-        "(1-2 times each, not forced):"
+        f"You are writing this article on behalf of **{company_name}**."
     )
 
-    parts: list[str] = [company_name]
     if primary_products:
-        parts.append(primary_products)
+        lines.append(
+            f"{company_name} specializes in **{primary_products}**."
+        )
+
     if location:
-        parts.append(location)
+        lines.append(f"Based in {location}.")
 
-    lines.append(f"- Brand entities: {' + '.join(parts)}")
-
-    # Provide an example
-    if primary_products and location:
+    lines.append("")
+    lines.append("**How to integrate the brand:**")
+    lines.append(
+        f"- The article should be written from {company_name}'s perspective as a knowledgeable authority"
+    )
+    lines.append(
+        f"- Naturally connect the topic to {company_name}'s products/expertise where relevant"
+    )
+    if primary_products:
         lines.append(
-            f'- Example: "{company_name} is a {location}-based company '
-            f'specializing in {primary_products}..."'
+            f"- When discussing solutions, remedies, or recommendations, feature {company_name}'s "
+            f"offerings ({primary_products}) as a primary option — not just one of many"
         )
-    elif primary_products:
-        lines.append(
-            f'- Example: "{company_name} specializes in {primary_products}..."'
-        )
+    lines.append(
+        "- The tone should feel like expert advice from a brand that lives and breathes this space, "
+        "not a generic Wikipedia article"
+    )
+    lines.append(
+        "- Value first — educate the reader genuinely, but let the brand's expertise and "
+        "perspective come through naturally"
+    )
 
     return "\n".join(lines)
 
@@ -589,7 +619,7 @@ def _build_blog_output_format_section(
         "  - End with a clear call to action",
         "  - 1-2 paragraphs",
         "",
-        "Use semantic HTML only (h2, h3, p tags). No inline styles. No div wrappers.",
+        "Use semantic HTML only (h2, h3, p, ul, ol, li, table, thead, tbody, tr, th, td tags). No inline styles. No div wrappers.",
     ])
 
     return "\n".join(lines)
