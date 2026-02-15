@@ -41,15 +41,7 @@ from app.models.brand_config import BrandConfig
 from app.models.content_brief import ContentBrief
 from app.services.content_quality import (
     QualityResult,
-    _check_ai_openers,
-    _check_banned_words,
-    _check_competitor_names,
-    _check_em_dashes,
-    _check_negation_contrast,
-    _check_rhetorical_questions,
-    _check_tier1_ai_words,
-    _check_tier2_ai_words,
-    _check_triplet_lists,
+    run_blog_quality_checks,
 )
 from app.services.content_writing import (
     CONTENT_WRITING_MAX_TOKENS,
@@ -66,6 +58,22 @@ BLOG_CONTENT_KEYS = {"page_title", "meta_description", "content"}
 
 # Content fields to check for blog QA
 BLOG_CONTENT_FIELDS = ("title", "meta_description", "content")
+
+# Humanization replacements: AI-sounding word → natural alternative
+# From skill bible Part 5 humanization table (lines 826-840)
+HUMANIZATION_MAP: list[tuple[str, str]] = [
+    ("crucial", "important"),
+    ("utilize", "use"),
+    ("leverage", "use"),
+    ("in order to", "to"),
+    ("due to the fact that", "because"),
+    ("it's important to note that", ""),
+    ("at the end of the day", ""),
+    ("seamless", "smooth"),
+    ("robust", "strong"),
+    ("comprehensive", "complete"),
+    ("cutting-edge", "modern"),
+]
 
 
 @dataclass
@@ -259,6 +267,99 @@ async def _load_brand_config(
     return config.v2_schema or {}
 
 
+def _humanize_content(content: str) -> str:
+    """Apply deterministic find-and-replace to swap AI-sounding words for natural ones.
+
+    Uses case-insensitive word-boundary matching. Cleans up double spaces
+    left by deletions (empty replacements).
+
+    Returns the cleaned content string with replacement count logged.
+    """
+    result = content
+    total_replacements = 0
+
+    for ai_word, replacement in HUMANIZATION_MAP:
+        pattern = re.compile(r"\b" + re.escape(ai_word) + r"\b", re.IGNORECASE)
+        new_result, count = pattern.subn(replacement, result)
+        total_replacements += count
+        result = new_result
+
+    # Clean up double spaces and leading spaces after deletions
+    result = re.sub(r"  +", " ", result)
+    # Clean up empty sentences left by full-phrase deletions (e.g., ". . " → ". ")
+    result = re.sub(r"\.\s+\.", ".", result)
+
+    if total_replacements > 0:
+        logger.info(
+            "Humanization pass completed",
+            extra={"replacements": total_replacements},
+        )
+
+    return result
+
+
+async def _fetch_trend_context(
+    keyword: str,
+    brand_config: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Fetch recent trend data for a keyword using Perplexity.
+
+    Returns a dict with 'trends', 'citations', and 'fetched_at' keys,
+    or None on failure (graceful degradation).
+    """
+    try:
+        from app.integrations.perplexity import PerplexityClient
+
+        client = PerplexityClient()
+        if not client.available:
+            logger.info("Perplexity not configured, skipping trend research")
+            return None
+
+        current_year = datetime.now(UTC).year
+        query = (
+            f"What are the most recent trends, statistics, and developments "
+            f"related to '{keyword}' in {current_year}? Focus on: recent data "
+            f"points and statistics, industry changes in the last 6 months, "
+            f"expert opinions or notable developments. Provide only factual, "
+            f"citable information."
+        )
+
+        result = await client.research_query(query)
+        await client.close()
+
+        if not result.success or not result.text:
+            logger.warning(
+                "Perplexity trend research returned no results",
+                extra={"keyword": keyword[:50], "error": result.error},
+            )
+            return None
+
+        trend_data = {
+            "trends": result.text,
+            "citations": result.citations or [],
+            "fetched_at": datetime.now(UTC).isoformat(),
+        }
+
+        logger.info(
+            "Perplexity trend research complete",
+            extra={
+                "keyword": keyword[:50],
+                "citation_count": len(result.citations or []),
+                "input_tokens": result.input_tokens,
+                "output_tokens": result.output_tokens,
+            },
+        )
+
+        return trend_data
+
+    except Exception as exc:
+        logger.warning(
+            "Perplexity trend research failed, continuing without trends",
+            extra={"keyword": keyword[:50], "error": str(exc)},
+        )
+        return None
+
+
 async def _process_single_post(
     post_data: dict[str, Any],
     brand_config: dict[str, Any],
@@ -320,6 +421,15 @@ async def _process_single_post(
                 refresh_briefs=refresh_briefs,
             )
 
+            # --- Step 1.5: Fetch trend context from Perplexity ---
+            trend_context = await _fetch_trend_context(keyword, brand_config)
+            if trend_context is not None:
+                # Store trend data in pop_brief JSONB under "trend_research" key
+                existing_brief = blog_post.pop_brief or {}
+                existing_brief["trend_research"] = trend_context
+                blog_post.pop_brief = existing_brief
+                await db.flush()
+
             # --- Step 2: Generate content via Claude ---
             write_result = await _generate_blog_content(
                 db=db,
@@ -327,6 +437,7 @@ async def _process_single_post(
                 keyword=keyword,
                 brand_config=brand_config,
                 content_brief=content_brief,
+                trend_context=trend_context,
             )
 
             if not write_result["success"]:
@@ -339,6 +450,11 @@ async def _process_single_post(
                     success=False,
                     error=write_result["error"],
                 )
+
+            # --- Step 2.5: Humanization auto-fix pass ---
+            if blog_post.content:
+                blog_post.content = _humanize_content(blog_post.content)
+                await db.flush()
 
             # --- Step 3: Run quality checks ---
             qa_result = _run_blog_quality_checks(blog_post, brand_config)
@@ -514,13 +630,16 @@ async def _generate_blog_content(
     keyword: str,
     brand_config: dict[str, Any],
     content_brief: ContentBrief | None,
+    trend_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Generate blog content via Claude and store on BlogPost.
 
     Returns dict with 'success' bool and optionally 'error' string.
     """
     # Build prompts
-    prompts = build_blog_content_prompt(blog_post, keyword, brand_config, content_brief)
+    prompts = build_blog_content_prompt(
+        blog_post, keyword, brand_config, content_brief, trend_context=trend_context,
+    )
 
     # Call Claude
     client = ClaudeClient(
@@ -617,9 +736,8 @@ def _run_blog_quality_checks(
 ) -> QualityResult:
     """Run deterministic quality checks on blog post content.
 
-    Reuses the individual check functions from content_quality.py but operates
-    on BlogPost fields (title, meta_description, content) instead of PageContent
-    fields (page_title, meta_description, top_description, bottom_description).
+    Uses run_blog_quality_checks from content_quality.py which runs all 9
+    standard checks plus 4 blog-specific checks (13 total).
     """
     # Gather field values
     fields: dict[str, str] = {}
@@ -628,24 +746,7 @@ def _run_blog_quality_checks(
         if value:
             fields[field_name] = value
 
-    issues = []
-
-    # Run all checks from content_quality.py
-    issues.extend(_check_banned_words(fields, brand_config))
-    issues.extend(_check_em_dashes(fields))
-    issues.extend(_check_ai_openers(fields))
-    issues.extend(_check_triplet_lists(fields))
-    issues.extend(_check_rhetorical_questions(fields))
-    issues.extend(_check_tier1_ai_words(fields))
-    issues.extend(_check_tier2_ai_words(fields))
-    issues.extend(_check_negation_contrast(fields))
-    issues.extend(_check_competitor_names(fields, brand_config))
-
-    return QualityResult(
-        passed=len(issues) == 0,
-        issues=issues,
-        checked_at=datetime.now(UTC).isoformat(),
-    )
+    return run_blog_quality_checks(fields, brand_config)
 
 
 async def _update_campaign_status(campaign_id: str) -> None:

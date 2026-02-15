@@ -23,7 +23,12 @@ from app.models.prompt_log import PromptLog
 from app.services.content_writing import (
     PromptPair,
     _apply_parsed_content,
+    _build_blog_output_format_section,
+    _build_entity_association_section,
+    _build_freshness_section,
+    _detect_content_type,
     _parse_content_json,
+    build_blog_content_prompt,
     build_content_prompt,
     generate_content,
 )
@@ -723,3 +728,202 @@ class TestGenerateContent:
         assert result.success is False
         assert result.page_content is not None
         assert result.page_content.status == ContentStatus.FAILED.value
+
+
+# ---------------------------------------------------------------------------
+# Blog prompt: direct-answer-first instructions (Step 1)
+# ---------------------------------------------------------------------------
+
+
+class TestBlogPromptDirectAnswer:
+    """Tests for direct-answer-first instructions in blog prompts."""
+
+    def test_blog_prompt_includes_direct_answer_instruction(self) -> None:
+        """Blog output format includes direct answer instruction in Introduction."""
+        result = _build_blog_output_format_section(None, keyword="how to clean boots")
+        assert "direct answer" in result.lower()
+        assert "AI systems extract" in result
+
+    def test_blog_prompt_includes_question_based_headings(self) -> None:
+        """Blog output format instructs question-based H2 headings."""
+        result = _build_blog_output_format_section(None, keyword="boot care guide")
+        assert "question-based H2 headings" in result
+
+
+# ---------------------------------------------------------------------------
+# Blog prompt: entity association (Step 2)
+# ---------------------------------------------------------------------------
+
+
+class TestBlogPromptEntityAssociation:
+    """Tests for entity association injection in blog prompts."""
+
+    def test_entity_association_with_full_config(self) -> None:
+        """Entity association section includes company + products + location."""
+        config: dict[str, Any] = {
+            "brand_foundation": {
+                "company_overview": {
+                    "company_name": "BootCo",
+                    "location": "Portland, OR",
+                },
+                "what_they_sell": {
+                    "primary_products_services": "premium leather boots",
+                },
+            },
+        }
+        result = _build_entity_association_section(config)
+        assert result is not None
+        assert "BootCo" in result
+        assert "premium leather boots" in result
+        assert "Portland, OR" in result
+        assert "Entity Association" in result
+
+    def test_entity_association_without_location(self) -> None:
+        """Entity association works without location."""
+        config: dict[str, Any] = {
+            "brand_foundation": {
+                "company_overview": {"company_name": "BootCo"},
+                "what_they_sell": {"primary_products_services": "boots"},
+            },
+        }
+        result = _build_entity_association_section(config)
+        assert result is not None
+        assert "BootCo" in result
+
+    def test_entity_association_returns_none_without_brand(self) -> None:
+        """Returns None when no brand foundation is configured."""
+        result = _build_entity_association_section({})
+        assert result is None
+
+    def test_entity_association_in_blog_prompt(self) -> None:
+        """Entity association appears in the full blog user prompt."""
+        from app.models.blog import BlogPost as BP
+
+        fake_post = MagicMock(spec=BP)
+        fake_post.primary_keyword = "boot care"
+        fake_post.url_slug = "boot-care"
+        fake_post.search_volume = 500
+
+        config: dict[str, Any] = {
+            "brand_foundation": {
+                "company_overview": {"company_name": "BootCo"},
+                "what_they_sell": {"primary_products_services": "leather boots"},
+            },
+        }
+        result = build_blog_content_prompt(fake_post, "boot care", config, None)
+        assert "Entity Association" in result.user_prompt
+        assert "BootCo" in result.user_prompt
+
+
+# ---------------------------------------------------------------------------
+# Blog prompt: freshness section (Step 4)
+# ---------------------------------------------------------------------------
+
+
+class TestBlogPromptFreshness:
+    """Tests for freshness/trend section in blog prompts."""
+
+    def test_freshness_section_with_trends(self) -> None:
+        """Freshness section renders trend data and citations."""
+        trend_ctx = {
+            "trends": "Boot conditioning increased 20% in 2026.",
+            "citations": ["https://example.com/trends"],
+            "fetched_at": "2026-02-15T00:00:00",
+        }
+        result = _build_freshness_section(trend_ctx)
+        assert result is not None
+        assert "Recent Trends" in result
+        assert "Boot conditioning" in result
+        assert "https://example.com/trends" in result
+        assert "current year" in result.lower()
+
+    def test_freshness_section_returns_none_without_context(self) -> None:
+        """Returns None when no trend context."""
+        assert _build_freshness_section(None) is None
+        assert _build_freshness_section({}) is None
+
+    def test_freshness_section_in_blog_prompt(self) -> None:
+        """Freshness section appears in full blog prompt when trend_context provided."""
+        from app.models.blog import BlogPost as BP
+
+        fake_post = MagicMock(spec=BP)
+        fake_post.primary_keyword = "boot care"
+        fake_post.url_slug = "boot-care"
+        fake_post.search_volume = 500
+
+        trend_ctx = {
+            "trends": "Leather care is trending.",
+            "citations": [],
+            "fetched_at": "2026-02-15T00:00:00",
+        }
+        result = build_blog_content_prompt(
+            fake_post, "boot care", {}, None, trend_context=trend_ctx,
+        )
+        assert "Recent Trends" in result.user_prompt
+        assert "Leather care is trending" in result.user_prompt
+
+
+# ---------------------------------------------------------------------------
+# Content type detection (Step 6)
+# ---------------------------------------------------------------------------
+
+
+class TestDetectContentType:
+    """Tests for keyword-based content type detection."""
+
+    def test_how_to(self) -> None:
+        assert _detect_content_type("how to clean leather boots") == "how-to"
+
+    def test_how_do(self) -> None:
+        assert _detect_content_type("how do you waterproof boots") == "how-to"
+
+    def test_best_comparison(self) -> None:
+        assert _detect_content_type("best hiking boots for beginners") == "comparison"
+
+    def test_vs_comparison(self) -> None:
+        assert _detect_content_type("timberland vs red wing") == "comparison"
+
+    def test_what_is_explainer(self) -> None:
+        assert _detect_content_type("what is goodyear welt") == "explainer"
+
+    def test_guide(self) -> None:
+        assert _detect_content_type("winter boots buying guide") == "guide"
+
+    def test_review(self) -> None:
+        assert _detect_content_type("red wing iron ranger review") == "review"
+
+    def test_default_to_guide(self) -> None:
+        assert _detect_content_type("leather boots care") == "guide"
+
+
+class TestBlogOutputFormatContentType:
+    """Tests for content-type-adapted output format."""
+
+    def test_how_to_format(self) -> None:
+        """How-to keyword produces numbered steps instruction."""
+        result = _build_blog_output_format_section(None, keyword="how to clean boots")
+        assert "Content Type: How-To" in result
+        assert "numbered steps" in result
+
+    def test_comparison_format(self) -> None:
+        """Comparison keyword produces comparison table instruction."""
+        result = _build_blog_output_format_section(None, keyword="best boots vs shoes")
+        assert "Content Type: Comparison" in result
+        assert "comparison table" in result
+
+    def test_explainer_format(self) -> None:
+        """Explainer keyword produces progressive understanding instruction."""
+        result = _build_blog_output_format_section(None, keyword="what is goodyear welt")
+        assert "Content Type: Explainer" in result
+        assert "core concept" in result
+
+    def test_review_format(self) -> None:
+        """Review keyword produces pros/cons instruction."""
+        result = _build_blog_output_format_section(None, keyword="red wing review")
+        assert "Content Type: Review" in result
+        assert "pros/cons" in result
+
+    def test_guide_no_extra_section(self) -> None:
+        """Guide (default) type doesn't add an extra Content Type section."""
+        result = _build_blog_output_format_section(None, keyword="boot care guide")
+        assert "Content Type:" not in result

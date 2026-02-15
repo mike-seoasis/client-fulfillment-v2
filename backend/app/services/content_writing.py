@@ -165,6 +165,7 @@ def build_blog_content_prompt(
     keyword: str,
     brand_config: dict[str, Any],
     content_brief: ContentBrief | None = None,
+    trend_context: dict[str, Any] | None = None,
 ) -> PromptPair:
     """Build system and user prompts for blog post content generation.
 
@@ -178,12 +179,15 @@ def build_blog_content_prompt(
         brand_config: The BrandConfig.v2_schema dict (contains ai_prompt_snippet,
             vocabulary, etc.).
         content_brief: Optional ContentBrief with LSI terms and word count targets.
+        trend_context: Optional dict with trend research data from Perplexity.
 
     Returns:
         PromptPair with system_prompt and user_prompt ready for Claude.
     """
     system_prompt = _build_system_prompt(brand_config, content_type="blog")
-    user_prompt = _build_blog_user_prompt(blog_post, keyword, brand_config, content_brief)
+    user_prompt = _build_blog_user_prompt(
+        blog_post, keyword, brand_config, content_brief, trend_context=trend_context,
+    )
     return PromptPair(system_prompt=system_prompt, user_prompt=user_prompt)
 
 
@@ -311,6 +315,7 @@ def _build_blog_user_prompt(
     keyword: str,
     brand_config: dict[str, Any],
     content_brief: ContentBrief | None,
+    trend_context: dict[str, Any] | None = None,
 ) -> str:
     """Build the user prompt for blog post content generation.
 
@@ -319,10 +324,11 @@ def _build_blog_user_prompt(
         keyword: Primary target keyword.
         brand_config: The BrandConfig.v2_schema dict.
         content_brief: Optional ContentBrief with LSI terms and word count targets.
+        trend_context: Optional dict with trend research data from Perplexity.
 
     Returns:
         User prompt string with ## Task, ## Blog Context, ## SEO Targets,
-        ## Brand Voice, and ## Output Format sections.
+        ## Freshness, ## Entity Association, ## Brand Voice, and ## Output Format sections.
     """
     sections: list[str] = []
 
@@ -339,13 +345,23 @@ def _build_blog_user_prompt(
     # ## SEO Targets (reuse existing function)
     sections.append(_build_seo_targets_section(keyword, content_brief, brand_config))
 
+    # ## Recent Trends & Data (from Perplexity)
+    freshness = _build_freshness_section(trend_context)
+    if freshness:
+        sections.append(freshness)
+
+    # ## Entity Association (brand entity signals for AI visibility)
+    entity = _build_entity_association_section(brand_config)
+    if entity:
+        sections.append(entity)
+
     # ## Brand Voice
     brand_voice = _build_brand_voice_section(brand_config)
     if brand_voice:
         sections.append(brand_voice)
 
-    # ## Output Format (blog-specific: 3 fields)
-    sections.append(_build_blog_output_format_section(content_brief))
+    # ## Output Format (blog-specific: 3 fields, content-type-adapted)
+    sections.append(_build_blog_output_format_section(content_brief, keyword=keyword))
 
     return "\n\n".join(sections)
 
@@ -360,19 +376,136 @@ def _build_blog_context_section(blog_post: BlogPost) -> str:
     return "\n".join(lines)
 
 
+def _build_freshness_section(trend_context: dict[str, Any] | None) -> str | None:
+    """Build the ## Recent Trends & Data section from Perplexity research.
+
+    Returns None if no trend context is available.
+    """
+    if not trend_context:
+        return None
+
+    trends_text = trend_context.get("trends", "")
+    if not trends_text:
+        return None
+
+    current_year = datetime.now(UTC).year
+    lines = [
+        "## Recent Trends & Data",
+        "Incorporate these recent findings naturally into the article where relevant:",
+        trends_text,
+        "",
+        f"Include the current year ({current_year}) in at least one section where "
+        "appropriate. Reference specific recent data points rather than vague claims.",
+    ]
+
+    citations = trend_context.get("citations", [])
+    if citations:
+        lines.append("")
+        lines.append("Source URLs for reference (cite where appropriate):")
+        for url in citations[:5]:
+            lines.append(f"  - {url}")
+
+    return "\n".join(lines)
+
+
+def _build_entity_association_section(brand_config: dict[str, Any]) -> str | None:
+    """Build the ## Entity Association section for AI visibility.
+
+    Extracts company name, primary products, and location from brand config
+    to inject entity association signals that help AI systems connect the
+    brand with its category.
+
+    Returns None if no brand foundation data is available.
+    """
+    brand_foundation = brand_config.get("brand_foundation")
+    if not isinstance(brand_foundation, dict):
+        return None
+
+    company_name = None
+    company_overview = brand_foundation.get("company_overview")
+    if isinstance(company_overview, dict):
+        company_name = company_overview.get("company_name")
+
+    primary_products = None
+    what_they_sell = brand_foundation.get("what_they_sell")
+    if isinstance(what_they_sell, dict):
+        primary_products = what_they_sell.get("primary_products_services")
+
+    location = None
+    if isinstance(company_overview, dict):
+        location = company_overview.get("location")
+
+    if not company_name:
+        return None
+
+    lines = ["## Entity Association"]
+    lines.append(
+        "Naturally weave the following brand associations into the article "
+        "(1-2 times each, not forced):"
+    )
+
+    parts: list[str] = [company_name]
+    if primary_products:
+        parts.append(primary_products)
+    if location:
+        parts.append(location)
+
+    lines.append(f"- Brand entities: {' + '.join(parts)}")
+
+    # Provide an example
+    if primary_products and location:
+        lines.append(
+            f'- Example: "{company_name} is a {location}-based company '
+            f'specializing in {primary_products}..."'
+        )
+    elif primary_products:
+        lines.append(
+            f'- Example: "{company_name} specializes in {primary_products}..."'
+        )
+
+    return "\n".join(lines)
+
+
+def _detect_content_type(keyword: str) -> str:
+    """Detect the content type from keyword patterns.
+
+    Returns one of: "how-to", "comparison", "explainer", "guide", "review".
+    """
+    kw_lower = keyword.lower()
+
+    if re.search(r"\bhow\s+(?:to|do)\b", kw_lower):
+        return "how-to"
+    if re.search(r"\b(?:best|top|vs|versus|comparison|compared)\b", kw_lower):
+        return "comparison"
+    if re.search(r"\b(?:what\s+is|what\s+are|definition|meaning)\b", kw_lower):
+        return "explainer"
+    if re.search(r"\b(?:review|worth\s+it)\b", kw_lower):
+        return "review"
+    if re.search(r"\b(?:guide|tutorial|step\s+by\s+step)\b", kw_lower):
+        return "guide"
+
+    return "guide"
+
+
 def _build_blog_output_format_section(
     content_brief: ContentBrief | None = None,
+    keyword: str = "",
 ) -> str:
     """Build the ## Output Format section for blog posts (3-field JSON).
 
     Specifies page_title, meta_description, and content (full article HTML).
     The content field includes Introduction, Body H2 sections, FAQ section
     from POP related_questions, and Conclusion with CTA.
+
+    Adapts article structure based on detected content type from the keyword.
     """
     # Determine FAQ questions from content brief
     faq_questions: list[str] = []
     if content_brief is not None:
         faq_questions = content_brief.related_questions or []
+
+    # Detect content type for structure adaptation
+    content_type = _detect_content_type(keyword) if keyword else "guide"
 
     lines = [
         "## Output Format",
@@ -397,17 +530,43 @@ def _build_blog_output_format_section(
         "  Structure the article as follows:",
         "",
         "  **1. Introduction**",
-        "  - Open with a hook that addresses the reader's pain point or question",
-        "  - State the thesis or what the reader will learn",
+        "  - Open with a direct answer to the implied query in 1-2 sentences "
+        "(this is what AI systems extract for citations)",
+        "  - Then briefly state who this article is for",
+        "  - Then bullet what the article covers",
         "  - 2-3 paragraphs max",
         "",
         "  **2. Body Sections**",
-        "  - Use H2 headings for main sections (Title Case, max 7 words)",
+        "  - Use question-based H2 headings that match how people search "
+        '(e.g., "How Do You Clean Leather Boots?" not "Cleaning Process")',
+        "  - Start every H2 section with a direct answer in 1-2 sentences "
+        "before supporting details (this makes content extractable by AI)",
         "  - Use H3 subheadings where appropriate",
         "  - 2-4 paragraphs per section, benefits-focused",
         "  - Address the reader directly with \"you\" and \"your\"",
         "",
     ]
+
+    # Content-type-specific structure instructions
+    if content_type == "how-to":
+        lines.append("  **Content Type: How-To**")
+        lines.append("  - Use numbered steps in body sections. Each step should be an H2.")
+        lines.append("")
+    elif content_type == "comparison":
+        lines.append("  **Content Type: Comparison**")
+        lines.append("  - Include a comparison table. Use objective criteria.")
+        lines.append("  - Cover pros/cons for each option.")
+        lines.append("")
+    elif content_type == "explainer":
+        lines.append("  **Content Type: Explainer**")
+        lines.append("  - Define the core concept in the first paragraph.")
+        lines.append("  - Build understanding progressively.")
+        lines.append("")
+    elif content_type == "review":
+        lines.append("  **Content Type: Review**")
+        lines.append("  - Include pros/cons section.")
+        lines.append('  - End with clear recommendation and "who is this best for" section.')
+        lines.append("")
 
     # FAQ section with specific questions from POP
     if faq_questions:

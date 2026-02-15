@@ -18,6 +18,7 @@ from app.services.blog_content_generation import (
     BLOG_CONTENT_KEYS,
     BlogPipelinePostResult,
     BlogPipelineResult,
+    _humanize_content,
     _parse_blog_content_json,
     _run_blog_quality_checks,
 )
@@ -273,3 +274,150 @@ class TestBlogPipelineResult:
         assert result.failed == 0
         assert result.skipped == 0
         assert result.post_results == []
+
+
+# ---------------------------------------------------------------------------
+# _humanize_content Tests
+# ---------------------------------------------------------------------------
+
+
+class TestHumanizeContent:
+    """Tests for the humanization auto-fix pass."""
+
+    def test_replaces_banned_words(self) -> None:
+        """Replaces AI-sounding words with natural alternatives."""
+        content = "This is a crucial step to utilize robust tools for a seamless experience."
+        result = _humanize_content(content)
+        assert "crucial" not in result
+        assert "important" in result
+        assert "utilize" not in result
+        assert "use" in result
+        assert "robust" not in result
+        assert "strong" in result
+        assert "seamless" not in result
+        assert "smooth" in result
+
+    def test_case_insensitive(self) -> None:
+        """Replacements work case-insensitively."""
+        content = "CRUCIAL data shows Comprehensive results."
+        result = _humanize_content(content)
+        assert "crucial" not in result.lower()
+        assert "comprehensive" not in result.lower()
+        assert "important" in result.lower()
+        assert "complete" in result.lower()
+
+    def test_preserves_surrounding_text(self) -> None:
+        """Surrounding text is not affected by replacements."""
+        content = "Start here. This is crucial for success. End here."
+        result = _humanize_content(content)
+        assert result.startswith("Start here.")
+        assert result.endswith("End here.")
+        assert "important" in result
+
+    def test_deletes_empty_replacement_phrases(self) -> None:
+        """Phrases mapped to empty string are removed cleanly."""
+        content = "It's important to note that boots need care."
+        result = _humanize_content(content)
+        assert "it's important to note that" not in result.lower()
+        # Should still have the rest of the sentence
+        assert "boots need care" in result
+
+    def test_cleans_up_double_spaces(self) -> None:
+        """Double spaces left by deletions are cleaned up."""
+        content = "Start. At the end of the day boots matter."
+        result = _humanize_content(content)
+        assert "  " not in result
+
+    def test_phrase_replacement_in_order_to(self) -> None:
+        """'in order to' is replaced with 'to'."""
+        content = "You need to clean them in order to maintain quality."
+        result = _humanize_content(content)
+        assert "in order to" not in result
+        # "to maintain quality" should remain (the "to" replacement)
+        assert "to maintain quality" in result
+
+    def test_no_replacements_returns_unchanged(self) -> None:
+        """Content with no banned words is returned unchanged."""
+        content = "Our boots are made with quality leather."
+        result = _humanize_content(content)
+        assert result == content
+
+    def test_cutting_edge_replaced(self) -> None:
+        """'cutting-edge' is replaced with 'modern'."""
+        content = "Using cutting-edge manufacturing techniques."
+        result = _humanize_content(content)
+        assert "cutting-edge" not in result
+        assert "modern" in result
+
+
+# ---------------------------------------------------------------------------
+# Perplexity trend research (mocked)
+# ---------------------------------------------------------------------------
+
+
+class TestPerplexityTrendResearch:
+    """Tests for Perplexity trend research integration."""
+
+    @pytest.mark.asyncio
+    async def test_trend_research_returns_data(self) -> None:
+        """Mocked Perplexity returns trend data dict."""
+        from app.services.blog_content_generation import _fetch_trend_context
+
+        mock_completion = MagicMock()
+        mock_completion.success = True
+        mock_completion.text = "Boot care trends: conditioning is up 20% in 2026."
+        mock_completion.citations = ["https://example.com/trends"]
+        mock_completion.error = None
+        mock_completion.input_tokens = 100
+        mock_completion.output_tokens = 50
+
+        mock_client = AsyncMock()
+        mock_client.available = True
+        mock_client.research_query = AsyncMock(return_value=mock_completion)
+        mock_client.close = AsyncMock()
+
+        with patch(
+            "app.integrations.perplexity.PerplexityClient",
+            return_value=mock_client,
+        ):
+            result = await _fetch_trend_context("boot care", {})
+
+        assert result is not None
+        assert "trends" in result
+        assert "citations" in result
+        assert "fetched_at" in result
+        assert "conditioning" in result["trends"]
+
+    @pytest.mark.asyncio
+    async def test_trend_research_graceful_degradation(self) -> None:
+        """Returns None when Perplexity fails."""
+        from app.services.blog_content_generation import _fetch_trend_context
+
+        mock_client = AsyncMock()
+        mock_client.available = True
+        mock_client.research_query = AsyncMock(side_effect=RuntimeError("API down"))
+        mock_client.close = AsyncMock()
+
+        with patch(
+            "app.integrations.perplexity.PerplexityClient",
+            return_value=mock_client,
+        ):
+            result = await _fetch_trend_context("boot care", {})
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_trend_research_skips_when_not_configured(self) -> None:
+        """Returns None when Perplexity is not configured."""
+        from app.services.blog_content_generation import _fetch_trend_context
+
+        mock_client = AsyncMock()
+        mock_client.available = False
+
+        with patch(
+            "app.integrations.perplexity.PerplexityClient",
+            return_value=mock_client,
+        ):
+            result = await _fetch_trend_context("boot care", {})
+
+        assert result is None

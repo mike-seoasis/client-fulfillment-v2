@@ -18,13 +18,18 @@ from app.services.content_quality import (
     QualityResult,
     _check_ai_openers,
     _check_banned_words,
+    _check_business_jargon,
     _check_em_dashes,
+    _check_empty_signposts,
+    _check_missing_direct_answer,
     _check_negation_contrast,
     _check_rhetorical_questions,
     _check_tier1_ai_words,
     _check_tier2_ai_words,
+    _check_tier3_phrases,
     _check_triplet_lists,
     _strip_faq_section,
+    run_blog_quality_checks,
     run_quality_checks,
 )
 
@@ -221,7 +226,7 @@ class TestCheckTripletLists:
     """Tests for excessive triplet list detection."""
 
     def test_detects_excessive_triplets(self) -> None:
-        """Positive: >2 triplet patterns flagged."""
+        """Positive: >2 triplet patterns flagged (one issue per match)."""
         fields = {
             "bottom_description": (
                 "Our boots offer warmth, comfort, and durability. "
@@ -231,9 +236,9 @@ class TestCheckTripletLists:
         }
 
         issues = _check_triplet_lists(fields)
-        assert len(issues) == 1
+        assert len(issues) == 3  # One issue per match
         assert issues[0].type == "triplet_excess"
-        assert "3 instances" in issues[0].description
+        assert "3 total" in issues[0].description
 
     def test_passes_two_or_fewer_triplets(self) -> None:
         """Negative: exactly 2 triplet patterns is acceptable."""
@@ -264,7 +269,7 @@ class TestCheckRhetoricalQuestions:
     """Tests for excessive rhetorical question detection."""
 
     def test_detects_excessive_questions(self) -> None:
-        """Positive: >1 rhetorical question outside FAQ flagged."""
+        """Positive: >1 rhetorical question outside FAQ flagged (one issue per match)."""
         fields = {
             "bottom_description": (
                 "Looking for warm boots? Want something durable? "
@@ -273,9 +278,9 @@ class TestCheckRhetoricalQuestions:
         }
 
         issues = _check_rhetorical_questions(fields)
-        assert len(issues) == 1
+        assert len(issues) == 2  # One issue per match
         assert issues[0].type == "rhetorical_excess"
-        assert "2 found" in issues[0].description
+        assert "2 total" in issues[0].description
 
     def test_passes_single_question(self) -> None:
         """Negative: exactly 1 rhetorical question is acceptable."""
@@ -368,14 +373,15 @@ class TestCheckTier2AiWords:
     """Tests for Tier 2 AI word excess detection."""
 
     def test_detects_excess_tier2_words(self) -> None:
-        """Positive: 2+ Tier 2 words flagged."""
-        fields = {"bottom_description": "Our robust and seamless collection enhances your wardrobe."}
+        """Positive: 2+ Tier 2 words flagged (one issue per word found)."""
+        fields = {"bottom_description": "Our robust and seamless collection."}
 
         issues = _check_tier2_ai_words(fields)
-        assert len(issues) == 1
+        assert len(issues) == 2  # One issue per distinct Tier 2 word found
         assert issues[0].type == "tier2_ai_excess"
-        assert "robust" in issues[0].context.lower()
-        assert "seamless" in issues[0].context.lower()
+        words_in_descriptions = " ".join(i.description.lower() for i in issues)
+        assert "robust" in words_in_descriptions
+        assert "seamless" in words_in_descriptions
 
     def test_passes_single_tier2_word(self) -> None:
         """Negative: exactly 1 Tier 2 word is acceptable."""
@@ -392,14 +398,14 @@ class TestCheckTier2AiWords:
         assert len(issues) == 0
 
     def test_counts_across_fields(self) -> None:
-        """Tier 2 words counted across all content fields."""
+        """Tier 2 words counted across all content fields (one issue per word)."""
         fields = {
             "page_title": "Curated Winter Boots",
             "bottom_description": "Our comprehensive collection.",
         }
 
         issues = _check_tier2_ai_words(fields)
-        assert len(issues) == 1
+        assert len(issues) == 2  # One per distinct word found across fields
         assert issues[0].type == "tier2_ai_excess"
 
 
@@ -412,7 +418,7 @@ class TestCheckNegationContrast:
     """Tests for negation/contrast pattern detection."""
 
     def test_detects_excess_negation(self) -> None:
-        """Positive: 2+ negation patterns flagged."""
+        """Positive: 2+ negation patterns flagged (one issue per match)."""
         fields = {
             "bottom_description": (
                 "It's not just a boot, it's a statement. "
@@ -421,9 +427,9 @@ class TestCheckNegationContrast:
         }
 
         issues = _check_negation_contrast(fields)
-        assert len(issues) == 1
+        assert len(issues) == 2  # One issue per match
         assert issues[0].type == "negation_contrast"
-        assert "2 found" in issues[0].description
+        assert "2 total" in issues[0].description
 
     def test_passes_single_negation(self) -> None:
         """Negative: exactly 1 negation pattern is acceptable."""
@@ -451,7 +457,7 @@ class TestCheckNegationContrast:
         }
 
         issues = _check_negation_contrast(fields)
-        assert len(issues) == 1  # 2 matches → flagged
+        assert len(issues) == 2  # 2 matches → one issue per match
 
 
 class TestStripFaqSection:
@@ -576,3 +582,218 @@ class TestRunQualityChecks:
         # Should pass since there's nothing to check
         assert result.passed is True
         assert len(result.issues) == 0
+
+
+# ---------------------------------------------------------------------------
+# Check 10: Tier 3 Banned Phrases
+# ---------------------------------------------------------------------------
+
+
+class TestCheckTier3Phrases:
+    """Tests for Tier 3 banned phrase detection (opening, filler, closing, hype)."""
+
+    def test_detects_opening_phrase(self) -> None:
+        """Detects Tier 3 opening phrase."""
+        fields = {"content": "In today's fast-paced world, boots matter."}
+        issues = _check_tier3_phrases(fields)
+        assert len(issues) == 1
+        assert issues[0].type == "tier3_banned_phrase"
+
+    def test_detects_filler_phrase(self) -> None:
+        """Detects Tier 3 filler phrase."""
+        fields = {"content": "It's important to note that leather is durable."}
+        issues = _check_tier3_phrases(fields)
+        assert len(issues) == 1
+        assert issues[0].type == "tier3_banned_phrase"
+
+    def test_detects_closing_phrase(self) -> None:
+        """Detects Tier 3 closing phrase."""
+        fields = {"content": "In conclusion, choose quality boots."}
+        issues = _check_tier3_phrases(fields)
+        assert len(issues) == 1
+        assert issues[0].type == "tier3_banned_phrase"
+
+    def test_detects_hype_phrase(self) -> None:
+        """Detects Tier 3 hype phrase."""
+        fields = {"content": "These boots unlock the potential of your wardrobe."}
+        issues = _check_tier3_phrases(fields)
+        assert len(issues) == 1
+        assert issues[0].type == "tier3_banned_phrase"
+
+    def test_passes_clean_content(self) -> None:
+        """Clean content without Tier 3 phrases passes."""
+        fields = {"content": "Our leather boots are built for comfort and warmth."}
+        issues = _check_tier3_phrases(fields)
+        assert len(issues) == 0
+
+    def test_case_insensitive(self) -> None:
+        """Tier 3 detection is case-insensitive."""
+        fields = {"content": "LET'S DIVE IN to the world of boots."}
+        issues = _check_tier3_phrases(fields)
+        assert len(issues) == 1
+
+
+# ---------------------------------------------------------------------------
+# Check 11: Empty Signposts
+# ---------------------------------------------------------------------------
+
+
+class TestCheckEmptySignposts:
+    """Tests for empty transition signpost detection."""
+
+    def test_detects_signpost(self) -> None:
+        """Detects empty signpost phrases."""
+        fields = {"content": "Now, let's look at the sole construction."}
+        issues = _check_empty_signposts(fields)
+        assert len(issues) == 1
+        assert issues[0].type == "empty_signpost"
+
+    def test_detects_that_said(self) -> None:
+        """Detects 'That said' signpost."""
+        fields = {"content": "That said, you should consider fit first."}
+        issues = _check_empty_signposts(fields)
+        assert len(issues) == 1
+
+    def test_passes_clean_content(self) -> None:
+        """Clean content without signposts passes."""
+        fields = {"content": "The sole is made from Vibram rubber."}
+        issues = _check_empty_signposts(fields)
+        assert len(issues) == 0
+
+
+# ---------------------------------------------------------------------------
+# Check 12: Missing Direct Answer
+# ---------------------------------------------------------------------------
+
+
+class TestCheckMissingDirectAnswer:
+    """Tests for missing direct answer check on blog content."""
+
+    def test_flags_question_opener(self) -> None:
+        """Flags content that opens with a question."""
+        fields = {"content": "Have you ever wondered about boot care? Here's what you need to know."}
+        issues = _check_missing_direct_answer(fields)
+        assert len(issues) == 1
+        assert issues[0].type == "missing_direct_answer"
+        assert "question" in issues[0].description.lower()
+
+    def test_flags_ai_opener(self) -> None:
+        """Flags content that opens with AI pattern instead of direct answer."""
+        fields = {"content": "In today's market, boot care is more important than ever."}
+        issues = _check_missing_direct_answer(fields)
+        assert len(issues) == 1
+        assert issues[0].type == "missing_direct_answer"
+
+    def test_passes_direct_answer(self) -> None:
+        """Content that opens with a direct statement passes."""
+        fields = {"content": "Leather boots last 10+ years with proper care. Here is how to maintain them."}
+        issues = _check_missing_direct_answer(fields)
+        assert len(issues) == 0
+
+    def test_handles_html_content(self) -> None:
+        """Strips HTML tags before checking."""
+        fields = {"content": "<h2>Boot Care</h2><p>Leather boots need regular conditioning to stay supple.</p>"}
+        issues = _check_missing_direct_answer(fields)
+        assert len(issues) == 0
+
+    def test_skips_empty_content(self) -> None:
+        """No issues when content field is empty."""
+        fields = {"content": ""}
+        issues = _check_missing_direct_answer(fields)
+        assert len(issues) == 0
+
+    def test_skips_missing_content(self) -> None:
+        """No issues when content key is missing."""
+        fields = {"title": "Some Title"}
+        issues = _check_missing_direct_answer(fields)
+        assert len(issues) == 0
+
+
+# ---------------------------------------------------------------------------
+# Check 13: Business Jargon
+# ---------------------------------------------------------------------------
+
+
+class TestCheckBusinessJargon:
+    """Tests for business jargon detection."""
+
+    def test_detects_jargon_word(self) -> None:
+        """Detects business jargon word."""
+        fields = {"content": "Our synergy-driven approach to boot design sets us apart."}
+        issues = _check_business_jargon(fields)
+        assert len(issues) == 1
+        assert issues[0].type == "business_jargon"
+        assert "synergy" in issues[0].description.lower()
+
+    def test_detects_multi_word_jargon(self) -> None:
+        """Detects multi-word business jargon like 'paradigm shift'."""
+        fields = {"content": "This represents a paradigm shift in footwear technology."}
+        issues = _check_business_jargon(fields)
+        assert len(issues) == 1
+        assert "paradigm shift" in issues[0].description.lower()
+
+    def test_passes_clean_content(self) -> None:
+        """Clean content without jargon passes."""
+        fields = {"content": "Our boots are made with quality leather and strong stitching."}
+        issues = _check_business_jargon(fields)
+        assert len(issues) == 0
+
+
+# ---------------------------------------------------------------------------
+# run_blog_quality_checks (combined: 13 checks)
+# ---------------------------------------------------------------------------
+
+
+class TestRunBlogQualityChecks:
+    """Tests for run_blog_quality_checks with all 13 checks."""
+
+    def test_passes_clean_content(self) -> None:
+        """Clean content passes all 13 checks."""
+        fields = {
+            "title": "Winter Boots Guide",
+            "content": "Leather boots last years with proper care. Regular conditioning keeps them supple.",
+        }
+        result = run_blog_quality_checks(fields, {})
+        assert result.passed is True
+        assert len(result.issues) == 0
+
+    def test_catches_tier3_and_standard(self) -> None:
+        """Catches both standard (em dash) and blog-specific (tier3) issues."""
+        fields = {
+            "content": "In conclusion, these boots are great\u2014quality matters.",
+        }
+        result = run_blog_quality_checks(fields, {})
+        assert result.passed is False
+        types = {i.type for i in result.issues}
+        assert "tier3_banned_phrase" in types
+        assert "em_dash" in types
+
+    def test_includes_all_13_check_types(self) -> None:
+        """Verifies all 13 checks run (each produces at least its type)."""
+        # Content designed to trigger at least one issue from many checks
+        fields = {
+            "content": (
+                "In today's fast-paced world, let's dive in. "
+                "Now, let's look at synergy. "
+                "It's crucial to utilize robust scalable tools\u2014"
+                "indeed furthermore moreover. "
+                "It's not just style, it's substance. "
+                "It's not just X, it's Y. "
+                "A, B, and C. D, E, and F. G, H, and I. "
+                "Question? Another question? "
+            ),
+        }
+        brand_config: dict[str, Any] = {"vocabulary": {"banned_words": ["tools"]}}
+        result = run_blog_quality_checks(fields, brand_config)
+        assert result.passed is False
+        types = {i.type for i in result.issues}
+        # Standard checks
+        assert "banned_word" in types
+        assert "em_dash" in types
+        assert "ai_pattern" in types
+        assert "tier1_ai_word" in types
+        assert "tier2_ai_excess" in types
+        # Blog-specific checks
+        assert "tier3_banned_phrase" in types
+        assert "empty_signpost" in types
+        assert "business_jargon" in types

@@ -422,3 +422,246 @@ def _check_competitor_names(
                 )
 
     return issues
+
+
+# ---------------------------------------------------------------------------
+# Blog-specific quality checks (Skill Bible integration)
+# ---------------------------------------------------------------------------
+
+# Tier 3: Banned phrases that signal AI-generated content
+TIER3_OPENING_PHRASES = [
+    "in today's fast-paced world",
+    "in the digital age",
+    "it's no secret that",
+    "as we all know",
+    "in a world where",
+    "welcome to",
+    "let's dive in",
+    "let's unpack",
+    "let's explore",
+]
+
+TIER3_FILLER_PHRASES = [
+    "it's important to note that",
+    "it's worth mentioning that",
+    "it goes without saying",
+    "needless to say",
+    "at the end of the day",
+    "due to the fact that",
+    "in order to",
+    "the fact of the matter is",
+]
+
+TIER3_CLOSING_PHRASES = [
+    "in conclusion",
+    "to summarize",
+    "in summary",
+    "the bottom line is",
+    "all in all",
+    "moving forward",
+]
+
+TIER3_HYPE_PHRASES = [
+    "unlock the potential of",
+    "unleash the power of",
+    "pave the way for",
+    "take it to the next level",
+    "a testament to",
+    "bridge the gap between",
+    "foster a culture of",
+]
+
+ALL_TIER3_PHRASES = (
+    TIER3_OPENING_PHRASES + TIER3_FILLER_PHRASES
+    + TIER3_CLOSING_PHRASES + TIER3_HYPE_PHRASES
+)
+
+# Empty transition signposts that add no meaning
+EMPTY_SIGNPOST_PHRASES = [
+    "now, let's look at",
+    "next, we'll explore",
+    "with that in mind",
+    "that said",
+    "having established that",
+    "let's now turn to",
+    "moving on to",
+]
+
+# Tier 2 business jargon (always AI-sounding in blog content)
+BUSINESS_JARGON_WORDS = [
+    "synergy",
+    "paradigm shift",
+    "best-in-class",
+    "state-of-the-art",
+    "next-generation",
+    "future-proof",
+    "scalable",
+    "agile",
+    "holistic",
+    "end-to-end",
+    "value proposition",
+    "pain points",
+]
+
+
+def _check_tier3_phrases(fields: dict[str, str]) -> list[QualityIssue]:
+    """Check 10: Flag Tier 3 banned phrases (opening, filler, closing, hype)."""
+    issues: list[QualityIssue] = []
+
+    for field_name, text in fields.items():
+        for phrase in ALL_TIER3_PHRASES:
+            pattern = re.compile(re.escape(phrase), re.IGNORECASE)
+            for match in pattern.finditer(text):
+                issues.append(
+                    QualityIssue(
+                        type="tier3_banned_phrase",
+                        field=field_name,
+                        description=f'Tier 3 banned phrase "{phrase}" detected',
+                        context=_extract_context(text, match.start(), match.end()),
+                    )
+                )
+
+    return issues
+
+
+def _check_empty_signposts(fields: dict[str, str]) -> list[QualityIssue]:
+    """Check 11: Flag empty transition signposts that add no meaning."""
+    issues: list[QualityIssue] = []
+
+    for field_name, text in fields.items():
+        for phrase in EMPTY_SIGNPOST_PHRASES:
+            pattern = re.compile(re.escape(phrase), re.IGNORECASE)
+            for match in pattern.finditer(text):
+                issues.append(
+                    QualityIssue(
+                        type="empty_signpost",
+                        field=field_name,
+                        description=f'Empty signpost phrase "{phrase}" detected',
+                        context=_extract_context(text, match.start(), match.end()),
+                    )
+                )
+
+    return issues
+
+
+def _check_missing_direct_answer(fields: dict[str, str]) -> list[QualityIssue]:
+    """Check 12: For blog content, verify the article opens with a direct statement.
+
+    Checks the first ~150 chars of the content field. Flags if it starts with
+    a question or a known AI opener pattern instead of a direct answer.
+    """
+    issues: list[QualityIssue] = []
+
+    content = fields.get("content", "")
+    if not content:
+        return issues
+
+    # Strip HTML tags to get plain text, then take first 150 chars
+    plain = re.sub(r"<[^>]+>", " ", content).strip()
+    opening = plain[:150].strip()
+
+    if not opening:
+        return issues
+
+    # Flag if opens with a question
+    first_sentence_end = min(
+        (opening.find(c) for c in ".!?" if opening.find(c) != -1),
+        default=len(opening),
+    )
+    first_sentence = opening[: first_sentence_end + 1].strip()
+
+    if first_sentence.endswith("?"):
+        issues.append(
+            QualityIssue(
+                type="missing_direct_answer",
+                field="content",
+                description="Article opens with a question instead of a direct answer",
+                context=f"...{first_sentence[:80]}...",
+            )
+        )
+        return issues
+
+    # Flag common AI opener patterns at the start
+    ai_openers = [
+        r"^in today'?s",
+        r"^in the (?:digital|modern|fast)",
+        r"^it'?s no secret",
+        r"^as we all know",
+        r"^in a world where",
+        r"^welcome to",
+    ]
+    for pattern_str in ai_openers:
+        if re.search(pattern_str, opening, re.IGNORECASE):
+            issues.append(
+                QualityIssue(
+                    type="missing_direct_answer",
+                    field="content",
+                    description="Article opens with an AI pattern instead of a direct answer",
+                    context=f"...{opening[:80]}...",
+                )
+            )
+            break
+
+    return issues
+
+
+def _check_business_jargon(fields: dict[str, str]) -> list[QualityIssue]:
+    """Check 13: Flag business jargon that sounds AI-generated in blog content."""
+    issues: list[QualityIssue] = []
+
+    for field_name, text in fields.items():
+        for term in BUSINESS_JARGON_WORDS:
+            pattern = re.compile(r"\b" + re.escape(term) + r"\b", re.IGNORECASE)
+            for match in pattern.finditer(text):
+                issues.append(
+                    QualityIssue(
+                        type="business_jargon",
+                        field=field_name,
+                        description=f'Business jargon "{term}" detected',
+                        context=_extract_context(text, match.start(), match.end()),
+                    )
+                )
+
+    return issues
+
+
+def run_blog_quality_checks(
+    fields: dict[str, str],
+    brand_config: dict[str, Any],
+) -> QualityResult:
+    """Run all quality checks including blog-specific checks.
+
+    Runs the 9 standard checks plus 4 blog-specific checks (13 total).
+    Designed to be called from blog_content_generation.py.
+
+    Args:
+        fields: Dict of field_name -> text content to check.
+        brand_config: The BrandConfig.v2_schema dict.
+
+    Returns:
+        QualityResult with pass/fail and list of issues.
+    """
+    issues: list[QualityIssue] = []
+
+    # Standard checks (1-9)
+    issues.extend(_check_banned_words(fields, brand_config))
+    issues.extend(_check_em_dashes(fields))
+    issues.extend(_check_ai_openers(fields))
+    issues.extend(_check_triplet_lists(fields))
+    issues.extend(_check_rhetorical_questions(fields))
+    issues.extend(_check_tier1_ai_words(fields))
+    issues.extend(_check_tier2_ai_words(fields))
+    issues.extend(_check_negation_contrast(fields))
+    issues.extend(_check_competitor_names(fields, brand_config))
+
+    # Blog-specific checks (10-13)
+    issues.extend(_check_tier3_phrases(fields))
+    issues.extend(_check_empty_signposts(fields))
+    issues.extend(_check_missing_direct_answer(fields))
+    issues.extend(_check_business_jargon(fields))
+
+    return QualityResult(
+        passed=len(issues) == 0,
+        issues=issues,
+        checked_at=datetime.now(UTC).isoformat(),
+    )

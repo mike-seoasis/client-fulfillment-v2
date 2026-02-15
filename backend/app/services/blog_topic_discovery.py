@@ -525,6 +525,14 @@ Filter these candidates to the **best 8-15 blog topics**. Apply these rules:
 - Assign a relevance_score from 0.0 to 1.0 for each topic
 - Higher scores for: higher volume, clearer informational intent, stronger relevance to the cluster
 
+### Content Classification
+For each topic, assign:
+- **format_type**: exactly one of "how-to", "guide", "comparison", "listicle", "faq", "review"
+- **intent_type**: "informational" or "commercial"
+  - "commercial" = money pages (comparison, "best X for Y", review, "vs" topics)
+  - "informational" = everything else (how-to, guides, explainers, FAQ)
+  Money pages earn the most AI citations and should be prioritized.
+
 ### URL Slugs
 - Generate a blog URL slug for each topic (e.g., "how-to-clean-white-sneakers")
 - Lowercase, hyphens instead of spaces, no special characters, max 80 characters
@@ -534,12 +542,13 @@ Return ONLY a JSON array of objects. No explanations, no markdown code blocks.
 Each object must have:
 - "topic": the blog topic keyword (lowercase)
 - "format_type": one of "how-to", "guide", "comparison", "listicle", "faq", "review"
+- "intent_type": "informational" or "commercial"
 - "url_slug": the URL slug for /blog/
 - "relevance_score": a score from 0.0 to 1.0
 - "reasoning": why this topic was selected (brief)
 
 Example:
-[{{"topic": "how to clean white sneakers at home", "format_type": "how-to", "url_slug": "how-to-clean-white-sneakers-at-home", "relevance_score": 0.92, "reasoning": "High-volume informational query directly relevant to the product niche"}}]"""
+[{{"topic": "best running shoes for flat feet", "format_type": "comparison", "intent_type": "commercial", "url_slug": "best-running-shoes-for-flat-feet", "relevance_score": 0.95, "reasoning": "High-volume commercial comparison query — money page opportunity"}}]"""
 
         result = await self._claude.complete(
             user_prompt=prompt,
@@ -589,9 +598,15 @@ Example:
             if not isinstance(relevance_score, (int, float)):
                 relevance_score = 0.7
 
+            # Determine intent_type (default to informational)
+            intent_type = item.get("intent_type", "informational")
+            if intent_type not in ("informational", "commercial"):
+                intent_type = "informational"
+
             results.append({
                 "topic": topic_normalized,
                 "format_type": item.get("format_type", original.get("format_type", "guide")),
+                "intent_type": intent_type,
                 "url_slug": url_slug,
                 "relevance_score": float(relevance_score),
                 "reasoning": item.get("reasoning", ""),
@@ -761,6 +776,15 @@ Example:
             await db.flush()  # Get campaign.id
 
             for topic_data in filtered:
+                # Store format_type and intent_type in pop_brief JSONB
+                # to avoid a DB migration
+                discovery_metadata = {
+                    "format_type": topic_data.get("format_type", "guide"),
+                    "intent_type": topic_data.get("intent_type", "informational"),
+                    "relevance_score": topic_data.get("relevance_score"),
+                    "reasoning": topic_data.get("reasoning", ""),
+                }
+
                 blog_post = BlogPost(
                     campaign_id=campaign.id,
                     primary_keyword=topic_data["topic"],
@@ -768,6 +792,7 @@ Example:
                     search_volume=topic_data.get("search_volume"),
                     source_page_id=topic_data.get("source_page_id"),
                     status=PostStatus.KEYWORD_PENDING.value,
+                    pop_brief={"discovery_metadata": discovery_metadata},
                 )
                 db.add(blog_post)
 
