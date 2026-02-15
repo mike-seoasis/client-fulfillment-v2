@@ -958,6 +958,7 @@ export interface BlogPostUpdate {
   primary_keyword?: string | null;
   url_slug?: string | null;
   is_approved?: boolean | null;
+  title?: string | null;
 }
 
 /** Request to update content fields on a blog post. */

@@ -360,6 +360,11 @@ async def update_blog_post(
     for field, value in update_data.items():
         setattr(post, field, value)
 
+    # Transition campaign to 'writing' when a post is individually approved
+    if update_data.get("is_approved") is True:
+        if campaign.status == CampaignStatus.PLANNING.value:
+            campaign.status = CampaignStatus.WRITING.value
+
     await db.commit()
     await db.refresh(post)
 
@@ -624,12 +629,13 @@ async def get_blog_content_status(
             detail=f"Blog campaign {blog_id} not found",
         )
 
-    # Build per-post status items
+    # Build per-post status items — only include approved posts
+    approved_posts = [p for p in campaign.posts if p.is_approved]
     post_items: list[BlogPostGenerationStatusItem] = []
     posts_completed = 0
     posts_failed = 0
 
-    for post in campaign.posts:
+    for post in approved_posts:
         if post.content_status == ContentStatus.COMPLETE.value:
             posts_completed += 1
         elif post.content_status == ContentStatus.FAILED.value:
@@ -644,7 +650,7 @@ async def get_blog_content_status(
         )
 
     # Determine overall status
-    posts_total = len(campaign.posts)
+    posts_total = len(approved_posts)
     if posts_total == 0:
         overall_status = "idle"
     elif blog_id in _active_blog_generations:
@@ -653,7 +659,7 @@ async def get_blog_content_status(
         overall_status = "complete" if posts_failed == 0 else "failed"
     else:
         has_any_content = any(
-            p.content_status != ContentStatus.PENDING.value for p in campaign.posts
+            p.content_status != ContentStatus.PENDING.value for p in approved_posts
         )
         overall_status = "idle" if not has_any_content else "complete"
 

@@ -540,7 +540,10 @@ For each topic, assign:
 ## Output Format
 Return ONLY a JSON array of objects. No explanations, no markdown code blocks.
 Each object must have:
-- "topic": the blog topic keyword (lowercase)
+- "source_index": the candidate number from the list above (1-based integer). This MUST match exactly — it is used to carry over search volume data.
+- "topic": the blog topic keyword (lowercase). Use the EXACT keyword from the candidate list — do NOT rephrase.
+- "topic_title": a compelling, SEO-friendly page title for this blog post (50-65 chars, title case)
+- "alternative_keywords": 2-3 alternative keyword phrasings a user could target instead (lowercase). These should be semantically similar but vary in wording, long-tail phrasing, or angle.
 - "format_type": one of "how-to", "guide", "comparison", "listicle", "faq", "review"
 - "intent_type": "informational" or "commercial"
 - "url_slug": the URL slug for /blog/
@@ -548,7 +551,7 @@ Each object must have:
 - "reasoning": why this topic was selected (brief)
 
 Example:
-[{{"topic": "best running shoes for flat feet", "format_type": "comparison", "intent_type": "commercial", "url_slug": "best-running-shoes-for-flat-feet", "relevance_score": 0.95, "reasoning": "High-volume commercial comparison query — money page opportunity"}}]"""
+[{{"source_index": 3, "topic": "best running shoes for flat feet", "topic_title": "Best Running Shoes for Flat Feet in 2025", "alternative_keywords": ["running shoes for flat feet", "top flat feet running shoes", "flat feet shoe recommendations"], "format_type": "comparison", "intent_type": "commercial", "url_slug": "best-running-shoes-for-flat-feet", "relevance_score": 0.95, "reasoning": "High-volume commercial comparison query — money page opportunity"}}]"""
 
         result = await self._claude.complete(
             user_prompt=prompt,
@@ -574,10 +577,13 @@ Example:
         if not isinstance(filtered, list):
             raise ValueError("LLM filtering response is not a list")
 
-        # Build lookup from original candidates for volume data and source_page_id
-        candidate_map: dict[str, dict[str, Any]] = {}
-        for c in candidates:
-            candidate_map[c["topic"].strip().lower()] = c
+        # Build lookups from original candidates for volume data and source_page_id
+        # Index-based lookup (primary) + topic-string lookup (fallback)
+        candidate_by_index: dict[int, dict[str, Any]] = {}
+        candidate_by_topic: dict[str, dict[str, Any]] = {}
+        for i, c in enumerate(candidates, 1):
+            candidate_by_index[i] = c
+            candidate_by_topic[c["topic"].strip().lower()] = c
 
         # Process filtered results
         results: list[dict[str, Any]] = []
@@ -589,7 +595,23 @@ Example:
                 continue
 
             topic_normalized = topic.strip().lower()
-            original = candidate_map.get(topic_normalized, {})
+
+            # Look up original candidate: prefer source_index, fall back to topic match
+            source_index = item.get("source_index")
+            original: dict[str, Any] = {}
+            if isinstance(source_index, int) and source_index in candidate_by_index:
+                original = candidate_by_index[source_index]
+            elif topic_normalized in candidate_by_topic:
+                original = candidate_by_topic[topic_normalized]
+            else:
+                logger.warning(
+                    "Stage 4 topic could not be matched to original candidate — "
+                    "volume data will be lost",
+                    extra={
+                        "topic": topic_normalized,
+                        "source_index": source_index,
+                    },
+                )
 
             url_slug = self._topic_to_slug(
                 item.get("url_slug", topic_normalized)
@@ -603,8 +625,18 @@ Example:
             if intent_type not in ("informational", "commercial"):
                 intent_type = "informational"
 
+            # Validate alternative_keywords
+            raw_alts = item.get("alternative_keywords", [])
+            alternative_keywords = [
+                a.strip().lower()
+                for a in raw_alts
+                if isinstance(a, str) and a.strip()
+            ][:3]
+
             results.append({
                 "topic": topic_normalized,
+                "topic_title": item.get("topic_title"),
+                "alternative_keywords": alternative_keywords,
                 "format_type": item.get("format_type", original.get("format_type", "guide")),
                 "intent_type": intent_type,
                 "url_slug": url_slug,
@@ -749,6 +781,77 @@ Example:
             raise ValueError(f"Blog topic discovery failed at Stage 4: {e}") from e
         t4_ms = round((time.perf_counter() - t4_start) * 1000)
 
+        # --- Enrich alternative keywords with volume data ---
+        if not volume_unavailable and self._dataforseo.available:
+            try:
+                all_alt_keywords: list[str] = []
+                for topic in filtered:
+                    for kw in topic.get("alternative_keywords", []):
+                        if isinstance(kw, str) and kw not in all_alt_keywords:
+                            all_alt_keywords.append(kw)
+
+                if all_alt_keywords:
+                    alt_result = await self._dataforseo.get_keyword_volume_batch(
+                        all_alt_keywords
+                    )
+                    if alt_result.success:
+                        alt_volume_map: dict[str, int | None] = {}
+                        for kw_data in alt_result.keywords:
+                            alt_volume_map[kw_data.keyword.strip().lower()] = (
+                                kw_data.search_volume
+                            )
+
+                        # Replace plain strings with {keyword, volume} dicts
+                        for topic in filtered:
+                            enriched_alts: list[dict[str, Any]] = []
+                            for kw in topic.get("alternative_keywords", []):
+                                vol = alt_volume_map.get(kw.strip().lower())
+                                enriched_alts.append(
+                                    {"keyword": kw, "volume": vol}
+                                )
+                            topic["alternative_keywords"] = enriched_alts
+
+                        logger.info(
+                            "Alternative keyword volume enrichment complete",
+                            extra={
+                                "alt_keywords_total": len(all_alt_keywords),
+                                "alt_keywords_enriched": len(alt_volume_map),
+                            },
+                        )
+                    else:
+                        # Fallback: wrap as objects without volume
+                        for topic in filtered:
+                            topic["alternative_keywords"] = [
+                                {"keyword": kw, "volume": None}
+                                for kw in topic.get("alternative_keywords", [])
+                                if isinstance(kw, str)
+                            ]
+                else:
+                    # No alternatives to enrich — ensure consistent format
+                    for topic in filtered:
+                        topic["alternative_keywords"] = []
+
+            except Exception as e:
+                logger.warning(
+                    "Alternative keyword enrichment failed, continuing without",
+                    extra={"error": str(e)},
+                    exc_info=True,
+                )
+                for topic in filtered:
+                    topic["alternative_keywords"] = [
+                        {"keyword": kw, "volume": None}
+                        for kw in topic.get("alternative_keywords", [])
+                        if isinstance(kw, str)
+                    ]
+        else:
+            # Volume unavailable — wrap alternatives as objects without volume
+            for topic in filtered:
+                topic["alternative_keywords"] = [
+                    {"keyword": kw, "volume": None}
+                    for kw in topic.get("alternative_keywords", [])
+                    if isinstance(kw, str)
+                ]
+
         total_ms = t1_ms + t2_ms + t3_ms + t4_ms
 
         generation_metadata: dict[str, Any] = {
@@ -783,6 +886,10 @@ Example:
                     "intent_type": topic_data.get("intent_type", "informational"),
                     "relevance_score": topic_data.get("relevance_score"),
                     "reasoning": topic_data.get("reasoning", ""),
+                    "cpc": topic_data.get("cpc"),
+                    "competition_level": topic_data.get("competition_level"),
+                    "topic_title": topic_data.get("topic_title"),
+                    "alternative_keywords": topic_data.get("alternative_keywords", []),
                 }
 
                 blog_post = BlogPost(

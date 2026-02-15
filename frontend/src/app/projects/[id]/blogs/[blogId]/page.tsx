@@ -4,7 +4,6 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useProject } from '@/hooks/use-projects';
-import { useCluster } from '@/hooks/useClusters';
 import {
   useBlogCampaign,
   useUpdateBlogPost,
@@ -211,7 +210,7 @@ function InlineEditableCell({
         onChange={(e) => setEditValue(e.target.value)}
         onBlur={handleSave}
         onKeyDown={handleKeyDown}
-        className={`px-2 py-1 border border-palm-400 rounded-sm text-sm bg-white focus:outline-none focus:ring-1 focus:ring-palm-400 ${className ?? ''}`}
+        className={`w-full px-2 py-1 border border-palm-400 rounded-sm text-sm bg-white focus:outline-none focus:ring-1 focus:ring-palm-400 ${className ?? ''}`}
       />
     );
   }
@@ -255,20 +254,311 @@ function ApproveToggle({
 
 // --- Blog post row ---
 
+// --- Title case utility ---
+
+const TITLE_CASE_MINOR = new Set([
+  'a', 'an', 'the', 'and', 'but', 'or', 'nor', 'for', 'yet', 'so',
+  'in', 'on', 'at', 'to', 'by', 'of', 'up', 'as', 'is', 'if', 'it',
+  'vs', 'via', 'with', 'from', 'into',
+]);
+
+function toTitleCase(str: string): string {
+  return str
+    .split(' ')
+    .map((word, i) => {
+      const lower = word.toLowerCase();
+      // Always capitalize first and last word; skip minor words
+      if (i > 0 && TITLE_CASE_MINOR.has(lower)) return lower;
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(' ');
+}
+
+// --- Chevron icon ---
+
+function ChevronDownIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
+// --- Format type badge ---
+
+const FORMAT_BADGE_COLORS: Record<string, string> = {
+  'how-to': 'bg-lagoon-100 text-lagoon-700',
+  'comparison': 'bg-coral-100 text-coral-700',
+  'guide': 'bg-palm-100 text-palm-700',
+  'listicle': 'bg-amber-100 text-amber-700',
+  'faq': 'bg-purple-100 text-purple-700',
+  'review': 'bg-coral-100 text-coral-700',
+};
+
+function FormatBadge({ format }: { format: string }) {
+  const colorClass = FORMAT_BADGE_COLORS[format] ?? 'bg-cream-200 text-warm-gray-600';
+  return (
+    <span className={`inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded-sm ${colorClass}`}>
+      {format}
+    </span>
+  );
+}
+
+// --- Pencil icon ---
+
+function PencilIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+  );
+}
+
+// --- Keyword chip with alternatives dropdown ---
+
+interface KeywordAlternative {
+  keyword: string;
+  volume: number | null;
+}
+
+function KeywordChip({
+  value,
+  alternatives,
+  volume,
+  score,
+  onSave,
+}: {
+  value: string;
+  alternatives: KeywordAlternative[];
+  volume: number | null;
+  score: number | null | undefined;
+  onSave: (newValue: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(value);
+  const chipRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Close dropdown on click outside or Escape
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
+        chipRef.current && !chipRef.current.contains(e.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    }
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === 'Escape') setIsOpen(false);
+    }
+    const t = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleEscape);
+    }, 0);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isOpen]);
+
+  // Focus input when entering edit mode
+  useEffect(() => {
+    if (isEditing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [isEditing]);
+
+  const handleSelect = (keyword: string) => {
+    if (keyword.toLowerCase() !== value.toLowerCase()) {
+      onSave(keyword);
+    }
+    setIsOpen(false);
+  };
+
+  const handleStartEdit = () => {
+    setIsOpen(false);
+    setEditValue(value);
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = () => {
+    const trimmed = editValue.trim();
+    if (trimmed && trimmed !== value) {
+      onSave(trimmed);
+    }
+    setIsEditing(false);
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveEdit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setIsEditing(false);
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <input
+        ref={inputRef}
+        type="text"
+        value={editValue}
+        onChange={(e) => setEditValue(e.target.value)}
+        onBlur={handleSaveEdit}
+        onKeyDown={handleEditKeyDown}
+        className="px-2.5 py-1 text-sm border border-lagoon-300 rounded-sm bg-white focus:outline-none focus:ring-2 focus:ring-palm-400 focus:border-transparent min-w-[200px]"
+        placeholder="Enter keyword..."
+      />
+    );
+  }
+
+  return (
+    <div className="relative">
+      {/* Chip button */}
+      <button
+        ref={chipRef}
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="inline-flex items-center gap-1 px-2.5 py-1 text-sm bg-lagoon-100 text-lagoon-700 rounded-sm font-medium hover:bg-lagoon-200 transition-colors"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+      >
+        {value}
+        <ChevronDownIcon className="w-3 h-3" />
+      </button>
+
+      {/* Dropdown */}
+      {isOpen && (
+        <div
+          ref={dropdownRef}
+          className="absolute z-50 left-0 top-full mt-1 bg-white border border-cream-500 rounded-sm shadow-lg min-w-[280px]"
+          role="listbox"
+          aria-label="Select keyword"
+        >
+          {/* Current keyword (selected) */}
+          <div
+            className="flex items-center justify-between px-3 py-2.5 bg-palm-50 border-b border-cream-500"
+            role="option"
+            aria-selected="true"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <CheckIcon className="w-4 h-4 text-palm-600 flex-shrink-0" />
+              <span className="text-sm font-medium text-palm-700">{value}</span>
+            </div>
+            <div className="flex items-center gap-2 ml-3 flex-shrink-0">
+              <span className="text-xs text-palm-600">
+                {volume != null ? `${volume.toLocaleString()} vol` : '\u2014 vol'}
+              </span>
+              <span className="text-xs text-palm-700 bg-palm-100 px-1.5 py-0.5 rounded-sm font-medium">
+                {score != null ? score.toFixed(2) : '\u2014'}
+              </span>
+            </div>
+          </div>
+
+          {/* Alternatives */}
+          {alternatives.length > 0 ? (
+            <div className="py-1">
+              {alternatives.map((alt) => {
+                const isSame = alt.keyword.toLowerCase() === value.toLowerCase();
+                return (
+                  <button
+                    key={alt.keyword}
+                    type="button"
+                    onClick={() => handleSelect(alt.keyword)}
+                    disabled={isSame}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-left transition-colors ${
+                      isSame ? 'bg-cream-100 cursor-not-allowed' : 'hover:bg-sand-50 cursor-pointer'
+                    }`}
+                    role="option"
+                    aria-selected={isSame}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-4 h-4 flex-shrink-0" />
+                      <span className="text-sm text-warm-gray-700">{alt.keyword}</span>
+                    </div>
+                    <span className="text-xs text-warm-gray-500 ml-3 flex-shrink-0">
+                      {alt.volume != null ? `${alt.volume.toLocaleString()} vol` : '\u2014 vol'}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="px-3 py-3 text-center text-sm text-warm-gray-400">
+              No alternatives available
+            </div>
+          )}
+
+          {/* Custom edit option */}
+          <div className="border-t border-cream-500">
+            <button
+              type="button"
+              onClick={handleStartEdit}
+              className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-warm-gray-500 hover:text-warm-gray-700 hover:bg-cream-50 transition-colors"
+            >
+              <PencilIcon className="w-3.5 h-3.5 flex-shrink-0" />
+              <span>Enter custom keyword...</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Blog post row ---
+
 function BlogPostRow({
   post,
   projectId,
   blogId,
-  sourcePageKeyword,
   onShowToast,
 }: {
   post: BlogPost;
   projectId: string;
   blogId: string;
-  sourcePageKeyword: string | null;
   onShowToast: (message: string, variant: 'success' | 'error') => void;
 }) {
   const updatePost = useUpdateBlogPost();
+
+  const discoveryMetadata = (post.pop_brief as Record<string, unknown>)?.discovery_metadata as Record<string, unknown> | undefined;
+  const rawTitle = (discoveryMetadata?.topic_title as string) ?? post.title;
+  const topicTitle = rawTitle ? toTitleCase(rawTitle) : null;
+  const formatType = (discoveryMetadata?.format_type as string) ?? '';
+  const cpc = discoveryMetadata?.cpc as number | null | undefined;
+  const relevanceScore = discoveryMetadata?.relevance_score as number | null | undefined;
+  const rawAlternatives = Array.isArray(discoveryMetadata?.alternative_keywords)
+    ? (discoveryMetadata.alternative_keywords as (string | { keyword: string; volume: number | null })[])
+    : [];
+  // Normalize: support both plain strings (legacy) and {keyword, volume} objects
+  const alternativeKeywords: KeywordAlternative[] = rawAlternatives.map((alt) =>
+    typeof alt === 'string' ? { keyword: alt, volume: null } : alt
+  );
 
   const handleToggleApproval = useCallback(() => {
     updatePost.mutate(
@@ -285,6 +575,25 @@ function BlogPostRow({
       }
     );
   }, [updatePost, projectId, blogId, post.id, post.is_approved, onShowToast]);
+
+  const handleTitleSave = useCallback(
+    (newTitle: string) => {
+      updatePost.mutate(
+        {
+          projectId,
+          blogId,
+          postId: post.id,
+          data: { title: newTitle },
+        },
+        {
+          onError: (err) => {
+            onShowToast(err.message || 'Failed to update title', 'error');
+          },
+        }
+      );
+    },
+    [updatePost, projectId, blogId, post.id, onShowToast]
+  );
 
   const handleKeywordSave = useCallback(
     (newKeyword: string) => {
@@ -305,68 +614,66 @@ function BlogPostRow({
     [updatePost, projectId, blogId, post.id, onShowToast]
   );
 
-  const handleSlugSave = useCallback(
-    (newSlug: string) => {
-      updatePost.mutate(
-        {
-          projectId,
-          blogId,
-          postId: post.id,
-          data: { url_slug: newSlug },
-        },
-        {
-          onError: (err) => {
-            onShowToast(err.message || 'Failed to update URL slug', 'error');
-          },
-        }
-      );
-    },
-    [updatePost, projectId, blogId, post.id, onShowToast]
-  );
-
   const formatVolume = (vol: number | null) => {
-    if (vol == null) return '—';
+    if (vol == null) return '\u2014';
     return vol.toLocaleString();
   };
 
-  return (
-    <div className="px-4 py-3 flex items-center gap-3 hover:bg-cream-50">
-      {/* Approve checkbox */}
-      <ApproveToggle isApproved={post.is_approved} onToggle={handleToggleApproval} />
+  const formatCpc = (val: number | null | undefined) => {
+    if (val == null) return '\u2014';
+    return `$${val.toFixed(2)}`;
+  };
 
-      {/* Keyword (editable) */}
-      <div className="flex-1 min-w-0">
-        <InlineEditableCell
-          value={post.primary_keyword}
-          onSave={handleKeywordSave}
-          className="text-sm font-medium text-warm-gray-900 max-w-[300px] truncate"
-        />
-        {/* URL slug (editable) */}
-        <div className="flex items-center gap-1 mt-0.5">
-          <span className="text-xs text-warm-gray-400 flex-shrink-0">/</span>
+  const formatScore = (val: number | null | undefined) => {
+    if (val == null) return '\u2014';
+    return val.toFixed(2);
+  };
+
+  return (
+    <div className="px-4 py-3 hover:bg-cream-50">
+      <div className="flex items-start gap-3">
+        {/* Approve checkbox */}
+        <div className="pt-1">
+          <ApproveToggle isApproved={post.is_approved} onToggle={handleToggleApproval} />
+        </div>
+
+        {/* Content area */}
+        <div className="flex-1 min-w-0">
+          {/* Top row: keyword chip + format badge + metrics */}
+          <div className="flex items-center gap-2 mb-1.5">
+            <KeywordChip
+              value={post.primary_keyword}
+              alternatives={alternativeKeywords}
+              volume={post.search_volume}
+              score={relevanceScore}
+              onSave={handleKeywordSave}
+            />
+            {formatType && <FormatBadge format={formatType} />}
+
+            {/* Metrics pushed right */}
+            <div className="ml-auto flex items-center gap-4 flex-shrink-0">
+              <div className="text-right">
+                <p className="text-xs text-warm-gray-400 leading-none mb-0.5">Vol</p>
+                <p className="text-sm text-warm-gray-900 font-medium tabular-nums leading-none">{formatVolume(post.search_volume)}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-warm-gray-400 leading-none mb-0.5">CPC</p>
+                <p className="text-sm text-warm-gray-700 tabular-nums leading-none">{formatCpc(cpc)}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-warm-gray-400 leading-none mb-0.5">Score</p>
+                <p className="text-sm text-warm-gray-700 tabular-nums leading-none">{formatScore(relevanceScore)}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Title — full width, title case, no truncation */}
           <InlineEditableCell
-            value={post.url_slug}
-            onSave={handleSlugSave}
-            className="text-xs text-warm-gray-500 font-mono max-w-[300px] truncate"
+            value={topicTitle || toTitleCase(post.primary_keyword)}
+            onSave={handleTitleSave}
+            className="text-sm text-warm-gray-900"
           />
         </div>
-      </div>
-
-      {/* Source Page */}
-      <div className="w-36 flex-shrink-0">
-        {sourcePageKeyword ? (
-          <p className="text-sm text-warm-gray-600 truncate" title={sourcePageKeyword}>
-            {sourcePageKeyword}
-          </p>
-        ) : (
-          <p className="text-sm text-warm-gray-400">—</p>
-        )}
-      </div>
-
-      {/* Volume */}
-      <div className="text-right w-16 flex-shrink-0">
-        <p className="text-sm text-warm-gray-900 font-medium">{formatVolume(post.search_volume)}</p>
-        <p className="text-xs text-warm-gray-400">Vol</p>
       </div>
     </div>
   );
@@ -395,23 +702,10 @@ export default function BlogKeywordsPage() {
 
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
   const { data: campaign, isLoading: isCampaignLoading, error: campaignError } = useBlogCampaign(projectId, blogId);
-  const { data: cluster } = useCluster(projectId, campaign?.cluster_id ?? '', {
-    enabled: !!campaign?.cluster_id,
-  });
   const bulkApprove = useBulkApproveBlogPosts();
   const deleteCampaignMutation = useDeleteBlogCampaign();
 
   const isLoading = isProjectLoading || isCampaignLoading;
-
-  // Build lookup from cluster page ID to keyword for the "Source Page" column
-  const sourcePageLookup = useMemo(() => {
-    if (!cluster?.pages) return new Map<string, string>();
-    const map = new Map<string, string>();
-    for (const page of cluster.pages) {
-      map.set(page.id, page.keyword);
-    }
-    return map;
-  }, [cluster?.pages]);
 
   // Sort posts by search_volume descending (nulls last)
   const sortedPosts = useMemo(
@@ -600,9 +894,8 @@ export default function BlogKeywordsPage() {
         <div className="border border-cream-500 rounded-sm overflow-hidden">
           <div className="px-4 py-2 bg-cream-50 border-b border-cream-300 flex items-center gap-3 text-xs font-medium text-warm-gray-500 uppercase tracking-wide">
             <div className="w-6 flex-shrink-0" />
-            <div className="flex-1 min-w-0">Topic Keyword</div>
-            <div className="w-36 flex-shrink-0">Source Page</div>
-            <div className="text-right w-16 flex-shrink-0">Volume</div>
+            <div className="flex-1 min-w-0">Keyword &amp; Proposed Title</div>
+            <div className="text-right text-warm-gray-400">Metrics</div>
           </div>
 
           {/* Post rows */}
@@ -613,7 +906,6 @@ export default function BlogKeywordsPage() {
                 post={post}
                 projectId={projectId}
                 blogId={blogId}
-                sourcePageKeyword={post.source_page_id ? (sourcePageLookup.get(post.source_page_id) ?? null) : null}
                 onShowToast={handleShowToast}
               />
             ))}

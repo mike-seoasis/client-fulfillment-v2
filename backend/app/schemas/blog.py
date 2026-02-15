@@ -107,6 +107,7 @@ class BlogPostUpdate(BaseModel):
     primary_keyword: str | None = Field(None, description="Target keyword")
     url_slug: str | None = Field(None, description="URL slug")
     is_approved: bool | None = Field(None, description="Keyword approval status")
+    title: str | None = Field(None, description="Proposed blog post title")
 
 
 class BlogContentUpdateRequest(BaseModel):
