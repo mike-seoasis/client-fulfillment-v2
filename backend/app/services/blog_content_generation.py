@@ -529,14 +529,19 @@ async def _fetch_blog_brief(
 
     Returns the ContentBrief if available, None otherwise.
     """
-    # Check for cached brief on the blog post
-    if not refresh_briefs and blog_post.pop_brief:
+    # Check for cached brief on the blog post — only use if it has real POP data
+    # (not just discovery_metadata from the topic discovery pipeline)
+    cached = blog_post.pop_brief or {}
+    has_pop_data = any(
+        k in cached for k in ("lsi_terms", "word_count_target", "competitors", "related_searches")
+    )
+    if not refresh_briefs and has_pop_data:
         logger.info(
             "Using cached POP brief from blog post",
             extra={"post_id": blog_post.id, "keyword": keyword[:50]},
         )
         # Build a lightweight ContentBrief-like object from cached data
-        return _brief_from_cached(db, blog_post.pop_brief)
+        return _brief_from_cached(db, cached)
 
     try:
         # Use POP client directly for blog posts since there's no CrawledPage
@@ -572,8 +577,10 @@ async def _fetch_blog_brief(
 
             response_data, _ = await _run_real_3step_flow(pop_client, keyword, url_slug)
 
-        # Store raw POP brief on blog post
-        blog_post.pop_brief = response_data
+        # Merge POP brief with existing pop_brief (preserve discovery_metadata)
+        existing = blog_post.pop_brief or {}
+        merged = {**existing, **response_data}
+        blog_post.pop_brief = merged
         await db.flush()
 
         # Parse into ContentBrief-like structure for prompt building
@@ -680,10 +687,43 @@ async def _generate_blog_content(
     # Parse JSON response (3 keys for blog: page_title, meta_description, content)
     parsed = _parse_blog_content_json(result.text or "")
     if parsed is None:
-        return {
-            "success": False,
-            "error": "Failed to parse Claude response as valid blog content JSON",
-        }
+        # Retry once with stricter prompt
+        logger.warning(
+            "Blog content JSON parse failed, retrying with strict prompt",
+            extra={"post_id": blog_post.id, "keyword": keyword[:50]},
+        )
+        retry_prompt = (
+            "Your previous response could not be parsed as valid JSON. "
+            "Please return ONLY a JSON object with exactly these 3 keys:\n"
+            '{"page_title": "...", "meta_description": "...", "content": "..."}\n'
+            "The content value must be a valid HTML string. "
+            "Do NOT include any text outside the JSON object. No markdown code fences."
+        )
+        retry_client = ClaudeClient(
+            api_key=get_api_key(),
+            model=CONTENT_WRITING_MODEL,
+            max_tokens=CONTENT_WRITING_MAX_TOKENS,
+            timeout=CONTENT_WRITING_TIMEOUT,
+        )
+        try:
+            retry_result = await retry_client.complete(
+                user_prompt=f"{prompts.user_prompt}\n\n{retry_prompt}",
+                system_prompt=prompts.system_prompt,
+                max_tokens=CONTENT_WRITING_MAX_TOKENS,
+                temperature=0.0,
+            )
+            if retry_result.success and retry_result.text:
+                parsed = _parse_blog_content_json(retry_result.text)
+        except Exception:
+            pass  # Fall through to the error return below
+        finally:
+            await retry_client.close()
+
+        if parsed is None:
+            return {
+                "success": False,
+                "error": "Failed to parse Claude response as valid blog content JSON (after retry)",
+            }
 
     # Apply parsed content to BlogPost
     blog_post.title = parsed["page_title"]

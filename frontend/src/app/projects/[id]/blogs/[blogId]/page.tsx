@@ -707,12 +707,14 @@ export default function BlogKeywordsPage() {
 
   const isLoading = isProjectLoading || isCampaignLoading;
 
-  // Sort posts by search_volume descending (nulls last)
+  // Sort posts by search_volume descending, with keyword as stable tiebreaker
   const sortedPosts = useMemo(
     () =>
       campaign?.posts
         ? [...campaign.posts].sort((a, b) => {
-            return (b.search_volume ?? -1) - (a.search_volume ?? -1);
+            const volDiff = (b.search_volume ?? -1) - (a.search_volume ?? -1);
+            if (volDiff !== 0) return volDiff;
+            return a.primary_keyword.localeCompare(b.primary_keyword);
           })
         : [],
     [campaign?.posts]
