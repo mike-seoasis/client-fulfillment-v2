@@ -424,11 +424,11 @@ def create_app() -> FastAPI:
                 "circuit_breaker": getattr(pop_client, "_circuit_breaker", None).state.value if hasattr(pop_client, "_circuit_breaker") else "n/a",
             },
             "dataforseo": {
-                "login_set": bool(settings.dataforseo_login),
-                "password_set": bool(settings.dataforseo_password),
+                "login_set": bool(settings.dataforseo_api_login),
+                "password_set": bool(settings.dataforseo_api_password),
             },
             "claude": {
-                "api_key_set": bool(settings.claude_api_key),
+                "api_key_set": bool(settings.anthropic_api_key),
                 "model": settings.claude_model,
             },
         }
