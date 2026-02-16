@@ -470,6 +470,7 @@ def create_app() -> FastAPI:
     @app.get("/health/project-debug/{project_id}", tags=["Health"])
     async def project_debug(project_id: str) -> dict[str, Any]:
         """Debug endpoint showing content generation state for a project."""
+        from sqlalchemy import select as sa_select
         from app.models.content_brief import ContentBrief
         from app.models.crawled_page import CrawledPage
         from app.models.page_content import PageContent
@@ -477,24 +478,24 @@ def create_app() -> FastAPI:
 
         async with db_manager.session_factory() as db:
             # Get all pages for project
-            pages_stmt = select(CrawledPage).where(CrawledPage.project_id == project_id)
+            pages_stmt = sa_select(CrawledPage).where(CrawledPage.project_id == project_id)
             pages_result = await db.execute(pages_stmt)
             pages = list(pages_result.scalars().all())
 
             page_data = []
             for page in pages:
                 # Get keywords
-                kw_stmt = select(PageKeywords).where(PageKeywords.crawled_page_id == page.id)
+                kw_stmt = sa_select(PageKeywords).where(PageKeywords.crawled_page_id == page.id)
                 kw_result = await db.execute(kw_stmt)
                 kw = kw_result.scalar_one_or_none()
 
                 # Get content
-                content_stmt = select(PageContent).where(PageContent.crawled_page_id == page.id)
+                content_stmt = sa_select(PageContent).where(PageContent.crawled_page_id == page.id)
                 content_result = await db.execute(content_stmt)
                 content = content_result.scalar_one_or_none()
 
                 # Get brief
-                brief_stmt = select(ContentBrief).where(ContentBrief.page_id == page.id)
+                brief_stmt = sa_select(ContentBrief).where(ContentBrief.page_id == page.id)
                 brief_result = await db.execute(brief_stmt)
                 brief = brief_result.scalar_one_or_none()
 
