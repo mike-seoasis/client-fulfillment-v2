@@ -499,6 +499,13 @@ def create_app() -> FastAPI:
                 brief_result = await db.execute(brief_stmt)
                 brief = brief_result.scalar_one_or_none()
 
+                # Extract raw response keys + prepareId from first brief only
+                raw_keys = None
+                prepare_id_value = None
+                if brief and brief.raw_response and not page_data:
+                    raw_keys = list(brief.raw_response.keys())
+                    prepare_id_value = brief.raw_response.get("prepareId")
+
                 page_data.append({
                     "page_id": page.id,
                     "url": page.normalized_url[:60],
@@ -509,6 +516,7 @@ def create_app() -> FastAPI:
                     "brief_lsi_count": len(brief.lsi_terms) if brief and brief.lsi_terms else 0,
                     "brief_competitors": len(brief.competitors) if brief and brief.competitors else 0,
                     "brief_pop_task_id": brief.pop_task_id[:20] if brief and brief.pop_task_id else None,
+                    **({"raw_response_keys": raw_keys, "prepareId": prepare_id_value} if raw_keys is not None else {}),
                 })
 
             return {
