@@ -146,6 +146,7 @@
 
 ### Later (Not MVP)
 - Authentication — **Moved to Phase 12** (Neon Auth, free tier — switched from WorkOS 2026-02-14)
+- Reddit Marketing Integration — **Phase 14** (after auth + polish, see `REDDIT_INTEGRATION_PLAN.md`)
 - SEMrush integration (auto-import keywords, tag by cluster)
 - Schema markup generation
 - Template code updates
@@ -350,6 +351,19 @@
 |---------|------|---------|
 | `better-auth` | ~15kb | Neon Auth SDK (Better Auth) |
 | `@better-auth/nextjs` | ~5kb | Next.js integration |
+
+### Phase 14: Reddit Marketing Integration
+
+> **Decision (2026-02-16):** Integrating the standalone Reddit Scraper App into the V2 platform. Top-level Reddit section with project association. No persona system initially (BrandConfig + custom instructions for voice). CrowdReply for posting + foundation for own accounts. See `REDDIT_INTEGRATION_PLAN.md` for full detailed plan.
+
+- [ ] **14a:** Reddit Data Foundation (5 DB tables, account pool CRUD, project config CRUD)
+- [ ] **14b:** Post Discovery Pipeline (SERP API + Claude filtering)
+- [ ] **14c:** Comment Generation (AI comments with brand context, "sandwich" technique)
+- [ ] **14d:** Comment Queue + Approval (keyboard-driven power-user review interface)
+- [ ] **14e:** CrowdReply Integration (auto-submit + webhook status tracking)
+- [ ] **14f:** Reddit Dashboard + Project Integration (cross-project stats, nav integration)
+- [ ] **14g:** Seeded Conversations (stretch — orchestrated question + answer posts)
+- [ ] **Verify:** Full flow — configure project → discover posts → generate comments → approve → submit to CrowdReply → posted
 
 #### New deps for Phase 13
 | Package | Size | Purpose |
