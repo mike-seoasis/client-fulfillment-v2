@@ -185,7 +185,7 @@ class ClaudeClient:
 
         Args:
             api_key: Anthropic API key. Defaults to settings.
-            model: Model to use. Defaults to settings (claude-3-haiku).
+            model: Model to use. Defaults to settings (claude-sonnet-4-5).
             timeout: Request timeout in seconds. Defaults to settings.
             max_retries: Maximum retry attempts. Defaults to settings.
             retry_delay: Base delay between retries. Defaults to settings.

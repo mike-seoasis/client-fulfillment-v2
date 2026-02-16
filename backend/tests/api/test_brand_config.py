@@ -37,7 +37,7 @@ class MockClaudeClient:
     def __init__(self, available: bool = True) -> None:
         self._available = available
         self._response_json = '{"test": "data"}'
-        self._model = "claude-3-haiku-20240307"
+        self._model = "claude-sonnet-4-5"
 
     @property
     def available(self) -> bool:

@@ -120,8 +120,8 @@ class Settings(BaseSettings):
         description="Anthropic API key for Claude models",
     )
     claude_model: str = Field(
-        default="claude-3-haiku-20240307",
-        description="Claude model to use for categorization (default: Haiku for speed/cost)",
+        default="claude-sonnet-4-5",
+        description="Claude model to use (default: Sonnet for quality)",
     )
     claude_timeout: float = Field(
         default=60.0, description="Claude API request timeout in seconds"

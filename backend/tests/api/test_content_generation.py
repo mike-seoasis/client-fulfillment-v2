@@ -461,7 +461,7 @@ class TestGetPagePrompts:
             role="system",
             prompt_text="System prompt text",
             response_text="Response text",
-            model="claude-sonnet-4-5-20250929",
+            model="claude-sonnet-4-5",
             input_tokens=500,
             output_tokens=300,
         )
@@ -471,7 +471,7 @@ class TestGetPagePrompts:
             role="user",
             prompt_text="User prompt text",
             response_text="Response text",
-            model="claude-sonnet-4-5-20250929",
+            model="claude-sonnet-4-5",
             input_tokens=500,
             output_tokens=300,
         )
