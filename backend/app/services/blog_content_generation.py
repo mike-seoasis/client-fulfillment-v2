@@ -961,33 +961,54 @@ def _repair_json_control_chars(text: str) -> str:
 
 
 def _extract_json_keys_fallback(text: str) -> dict[str, str] | None:
-    """Last-resort extraction: find each key's value by locating key boundaries.
+    """Last-resort extraction: use key positions as boundaries to find values.
 
-    Looks for "page_title": "...", "meta_description": "...", "content": "..."
-    and extracts values by finding the string boundaries.
+    Instead of scanning for individual closing quotes (which fails when HTML
+    contains unescaped double quotes like class="..."), this finds all key
+    positions and uses the gaps between them to determine value boundaries.
     """
-    result = {}
+    # Find positions of all required keys
+    key_positions: list[tuple[str, int, int]] = []  # (key, key_match_start, value_start)
     for key in BLOG_CONTENT_KEYS:
-        # Find "key": " pattern
         pattern = rf'"{key}"\s*:\s*"'
         match = re.search(pattern, text)
         if not match:
             return None
+        key_positions.append((key, match.start(), match.end()))
 
-        # Start of value is right after the match
-        start = match.end()
+    # Sort by position in text
+    key_positions.sort(key=lambda x: x[1])
 
-        # Find the closing quote — scan for unescaped "
-        pos = start
-        while pos < len(text):
-            if text[pos] == '"' and text[pos - 1] != '\\':
-                break
-            pos += 1
+    result = {}
+    for i, (key, _key_start, value_start) in enumerate(key_positions):
+        if i + 1 < len(key_positions):
+            # Value ends before the next key. Find the separator pattern
+            # between this value and the next key: ...","next_key" or ...", "next_key"
+            next_key_start = key_positions[i + 1][1]
+            # The region between value_start and next_key_start contains the value
+            # plus the closing quote + comma + whitespace before the next key
+            region = text[value_start:next_key_start]
+            # Find the last " in this region — that's our value's closing quote
+            last_quote = region.rfind('"')
+            if last_quote <= 0:
+                return None
+            value = region[:last_quote]
         else:
-            return None
+            # Last key — value extends to the last " before the final }
+            remaining = text[value_start:]
+            # Find closing "} or " } pattern
+            last_close = remaining.rfind('"}')
+            if last_close == -1:
+                # Try with whitespace before }
+                last_brace = remaining.rfind('}')
+                if last_brace == -1:
+                    return None
+                last_close = remaining.rfind('"', 0, last_brace)
+                if last_close == -1:
+                    return None
+            value = remaining[:last_close]
 
-        value = text[start:pos]
-        # Unescape basic JSON escapes
+        # Unescape JSON escapes
         value = (
             value.replace("\\n", "\n")
             .replace("\\t", "\t")

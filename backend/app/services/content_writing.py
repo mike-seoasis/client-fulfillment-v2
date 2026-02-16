@@ -619,7 +619,7 @@ def _build_blog_output_format_section(
         "  - End with a clear call to action",
         "  - 1-2 paragraphs",
         "",
-        "Use semantic HTML only (h2, h3, p, ul, ol, li, table, thead, tbody, tr, th, td tags). No inline styles. No div wrappers.",
+        "Use semantic HTML only (h2, h3, p, ul, ol, li, table, thead, tbody, tr, th, td tags). No inline styles. No div wrappers. No class attributes.",
     ])
 
     return "\n".join(lines)
@@ -974,7 +974,7 @@ def _build_output_format_section(
 
     # --- Shared formatting rules ---
     lines.append("")
-    lines.append("Use semantic HTML only (h2, h3, p tags). No inline styles. No div wrappers.")
+    lines.append("Use semantic HTML only (h2, h3, p tags). No inline styles. No div wrappers. No class attributes.")
 
     return "\n".join(lines)
 
@@ -1319,24 +1319,43 @@ def _repair_json_control_chars(text: str) -> str:
 
 
 def _extract_json_keys_fallback(text: str, required_keys: set[str]) -> dict[str, str] | None:
-    """Last-resort extraction: find each key's value by locating key boundaries."""
-    result = {}
+    """Last-resort extraction: use key positions as boundaries to find values.
+
+    Instead of scanning for individual closing quotes (which fails when HTML
+    contains unescaped double quotes like class="..."), this finds all key
+    positions and uses the gaps between them to determine value boundaries.
+    """
+    key_positions: list[tuple[str, int, int]] = []
     for key in required_keys:
         pattern = rf'"{key}"\s*:\s*"'
         match = re.search(pattern, text)
         if not match:
             return None
+        key_positions.append((key, match.start(), match.end()))
 
-        start = match.end()
-        pos = start
-        while pos < len(text):
-            if text[pos] == '"' and text[pos - 1] != '\\':
-                break
-            pos += 1
+    key_positions.sort(key=lambda x: x[1])
+
+    result = {}
+    for i, (key, _key_start, value_start) in enumerate(key_positions):
+        if i + 1 < len(key_positions):
+            next_key_start = key_positions[i + 1][1]
+            region = text[value_start:next_key_start]
+            last_quote = region.rfind('"')
+            if last_quote <= 0:
+                return None
+            value = region[:last_quote]
         else:
-            return None
+            remaining = text[value_start:]
+            last_close = remaining.rfind('"}')
+            if last_close == -1:
+                last_brace = remaining.rfind('}')
+                if last_brace == -1:
+                    return None
+                last_close = remaining.rfind('"', 0, last_brace)
+                if last_close == -1:
+                    return None
+            value = remaining[:last_close]
 
-        value = text[start:pos]
         value = (
             value.replace("\\n", "\n")
             .replace("\\t", "\t")
