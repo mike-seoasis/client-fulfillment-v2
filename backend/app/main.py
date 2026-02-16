@@ -466,6 +466,57 @@ def create_app() -> FastAPI:
                 "error": str(e),
             }
 
+    # Project content/brief diagnostic
+    @app.get("/health/project-debug/{project_id}", tags=["Health"])
+    async def project_debug(project_id: str) -> dict[str, Any]:
+        """Debug endpoint showing content generation state for a project."""
+        from app.core.database import get_session_context
+        from app.models.content_brief import ContentBrief
+        from app.models.crawled_page import CrawledPage
+        from app.models.page_content import PageContent
+        from app.models.page_keywords import PageKeywords
+
+        async with db_manager.session_factory() as db:
+            # Get all pages for project
+            pages_stmt = select(CrawledPage).where(CrawledPage.project_id == project_id)
+            pages_result = await db.execute(pages_stmt)
+            pages = list(pages_result.scalars().all())
+
+            page_data = []
+            for page in pages:
+                # Get keywords
+                kw_stmt = select(PageKeywords).where(PageKeywords.crawled_page_id == page.id)
+                kw_result = await db.execute(kw_stmt)
+                kw = kw_result.scalar_one_or_none()
+
+                # Get content
+                content_stmt = select(PageContent).where(PageContent.crawled_page_id == page.id)
+                content_result = await db.execute(content_stmt)
+                content = content_result.scalar_one_or_none()
+
+                # Get brief
+                brief_stmt = select(ContentBrief).where(ContentBrief.page_id == page.id)
+                brief_result = await db.execute(brief_stmt)
+                brief = brief_result.scalar_one_or_none()
+
+                page_data.append({
+                    "page_id": page.id,
+                    "url": page.normalized_url[:60],
+                    "keyword": kw.primary_keyword if kw else None,
+                    "keyword_approved": kw.is_approved if kw else False,
+                    "content_status": content.status if content else None,
+                    "has_brief": brief is not None,
+                    "brief_lsi_count": len(brief.lsi_terms) if brief and brief.lsi_terms else 0,
+                    "brief_competitors": len(brief.competitors) if brief and brief.competitors else 0,
+                    "brief_pop_task_id": brief.pop_task_id[:20] if brief and brief.pop_task_id else None,
+                })
+
+            return {
+                "project_id": project_id,
+                "total_pages": len(pages),
+                "pages": page_data,
+            }
+
     # Include API routers
     app.include_router(api_v1_router)
 
