@@ -433,6 +433,39 @@ def create_app() -> FastAPI:
             },
         }
 
+    # POP connectivity test (makes a real API call)
+    @app.get("/health/pop-test", tags=["Health"])
+    async def pop_connectivity_test() -> dict[str, Any]:
+        """Make a real POP API call to verify connectivity and credentials."""
+        from app.integrations.pop import get_pop_client, POPMockClient
+
+        pop_client = await get_pop_client()
+
+        if isinstance(pop_client, POPMockClient):
+            return {"status": "skipped", "reason": "Using mock client"}
+
+        if not pop_client.available:
+            return {"status": "error", "reason": "POP client not available (missing API key)"}
+
+        try:
+            result = await pop_client.create_report_task(
+                keyword="test connectivity",
+                url="https://example.com",
+            )
+            return {
+                "status": "ok" if result.success else "error",
+                "success": result.success,
+                "task_id": result.task_id,
+                "error": result.error,
+                "data_keys": list((result.data or {}).keys()),
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "error_type": type(e).__name__,
+                "error": str(e),
+            }
+
     # Include API routers
     app.include_router(api_v1_router)
 
