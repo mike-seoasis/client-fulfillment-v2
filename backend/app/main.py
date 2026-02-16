@@ -404,6 +404,35 @@ def create_app() -> FastAPI:
         health = scheduler_manager.check_health()
         return health
 
+    # Integrations health check
+    @app.get("/health/integrations", tags=["Health"])
+    async def integrations_health() -> dict[str, Any]:
+        """Check status of external integrations (POP, DataForSEO, Claude)."""
+        from app.core.config import get_settings
+        from app.integrations.pop import get_pop_client, POPMockClient
+
+        settings = get_settings()
+        pop_client = await get_pop_client()
+        is_mock = isinstance(pop_client, POPMockClient)
+
+        return {
+            "pop": {
+                "mock_mode": settings.pop_use_mock,
+                "is_mock_client": is_mock,
+                "api_key_set": bool(settings.pop_api_key),
+                "available": getattr(pop_client, "available", False) if not is_mock else True,
+                "circuit_breaker": getattr(pop_client, "_circuit_breaker", None).state.value if hasattr(pop_client, "_circuit_breaker") else "n/a",
+            },
+            "dataforseo": {
+                "login_set": bool(settings.dataforseo_login),
+                "password_set": bool(settings.dataforseo_password),
+            },
+            "claude": {
+                "api_key_set": bool(settings.claude_api_key),
+                "model": settings.claude_model,
+            },
+        }
+
     # Include API routers
     app.include_router(api_v1_router)
 
