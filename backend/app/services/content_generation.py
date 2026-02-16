@@ -1,16 +1,16 @@
 """Content generation pipeline orchestrator.
 
-Orchestrates the brief → write → check pipeline for each approved page with
-concurrency control. Designed to be called from a FastAPI BackgroundTask.
+Orchestrates the brief → write → check → link pipeline for each approved page
+with concurrency control. Designed to be called from a FastAPI BackgroundTask.
 
-Pipeline per page:
-1. Update status to generating_brief → fetch POP brief
-2. Update status to writing → call Claude content writing
-3. Update status to checking → run quality checks
-4. Update status to complete
+Pipeline phases:
+Phase 1: Pre-fetch POP content briefs concurrently
+Phase 2: Write content + quality checks per page (concurrent with semaphore)
+Phase 3: Auto-run link planning to inject/re-inject internal links
 
 Error isolation: if one page fails, others continue. Failed pages get
-status='failed' with error details in qa_results.
+status='failed' with error details in qa_results. Link planning failures
+are non-fatal and logged but don't affect content generation results.
 """
 
 import asyncio
@@ -197,6 +197,12 @@ async def run_content_pipeline(
         },
     )
 
+    # --- Phase 3: Auto-run link planning to inject/re-inject internal links ---
+    # Only run if at least 2 pages have complete content (link planning needs ≥2)
+    completed_count = result.succeeded + result.skipped  # skipped = already complete
+    if completed_count >= 2:
+        await _auto_link_planning(project_id)
+
     return result
 
 
@@ -289,6 +295,71 @@ async def _prefetch_all_briefs(
         "Phase 1: Brief pre-fetch complete",
         extra={"page_count": len(pages_needing_briefs)},
     )
+
+
+async def _auto_link_planning(project_id: str) -> None:
+    """Phase 3: Automatically run link planning after content generation.
+
+    Checks if InternalLink records already exist for the project (onboarding
+    scope). If they do, runs replan_links (snapshot → strip → delete → re-run).
+    If none exist, runs the fresh link planning pipeline.
+
+    Failures are non-fatal — logged but don't affect content generation results.
+    """
+    from sqlalchemy import func
+
+    from app.models.internal_link import InternalLink
+    from app.services.link_planning import replan_links, run_link_planning_pipeline
+
+    logger.info(
+        "Phase 3: Starting auto link planning",
+        extra={"project_id": project_id},
+    )
+
+    try:
+        async with db_manager.session_factory() as db:
+            # Check for existing onboarding-scope links
+            count_stmt = (
+                select(func.count())
+                .select_from(InternalLink)
+                .where(
+                    InternalLink.project_id == project_id,
+                    InternalLink.scope == "onboarding",
+                )
+            )
+            count_result = await db.execute(count_stmt)
+            has_existing = (count_result.scalar_one() or 0) > 0
+
+            if has_existing:
+                logger.info(
+                    "Phase 3: Existing links found, re-planning",
+                    extra={"project_id": project_id},
+                )
+                await replan_links(project_id, "onboarding", None, db)
+            else:
+                logger.info(
+                    "Phase 3: No existing links, running fresh link planning",
+                    extra={"project_id": project_id},
+                )
+                await run_link_planning_pipeline(project_id, "onboarding", None, db)
+
+        logger.info(
+            "Phase 3: Auto link planning complete",
+            extra={"project_id": project_id},
+        )
+
+    except Exception as e:
+        # Non-fatal: content generation already succeeded, links can be
+        # planned manually via the UI if auto-planning fails.
+        logger.warning(
+            "Phase 3: Auto link planning failed (non-fatal)",
+            extra={
+                "project_id": project_id,
+                "error": str(e),
+                "error_type": type(e).__name__,
+            },
+            exc_info=True,
+        )
 
 
 async def _load_approved_pages(
