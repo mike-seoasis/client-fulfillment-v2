@@ -365,6 +365,17 @@
 - [ ] **14g:** Seeded Conversations (stretch — orchestrated question + answer posts)
 - [ ] **Verify:** Full flow — configure project → discover posts → generate comments → approve → submit to CrowdReply → posted
 
+### Phase 15: Explore GEO Add-On Opportunities
+
+> **Decision (2026-02-16):** Research complete. GEO (Generative Engine Optimization) represents a major differentiation opportunity. SEOasis controls the full pipeline from keyword research → content generation → quality review → export, positioning it to become a unified SEO + GEO platform. POP already returns entity data that's stored but unused — quick win. See `GEO_ADDON_OPPORTUNITIES.md` for full 926-line research document with 28 prioritized recommendations across 4 tiers.
+
+- [ ] **15a:** Quick Wins — wire POP entities into content prompts, add answer capsule formatting, statistics injection, quotation attribution
+- [ ] **15b:** Content Pipeline GEO — passage-level optimization (134-167 word chunks), query fan-out coverage analysis, schema markup generation (FAQ, HowTo, Article)
+- [ ] **15c:** Embedding Infrastructure — pgvector on Neon, passage embeddings, semantic similarity search, query-passage relevance scoring
+- [ ] **15d:** Advanced GEO Features — AI citation tracker (monitor Google AI Overviews, Perplexity, ChatGPT), GEO scoring dashboard, llms.txt generation
+- [ ] **15e:** Strategic — Knowledge Panel optimization, entity graph building, multi-platform AI visibility monitoring
+- [ ] **Verify:** GEO-optimized content scores higher on AI citation metrics than baseline content
+
 #### New deps for Phase 13
 | Package | Size | Purpose |
 |---------|------|---------|
