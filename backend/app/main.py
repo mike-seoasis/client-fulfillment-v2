@@ -433,11 +433,11 @@ def create_app() -> FastAPI:
             },
         }
 
-    # POP connectivity test (makes a real API call)
+    # POP full 3-step flow test
     @app.get("/health/pop-test", tags=["Health"])
-    async def pop_connectivity_test() -> dict[str, Any]:
-        """Make a real POP API call to verify connectivity and credentials."""
-        from app.integrations.pop import get_pop_client, POPMockClient
+    async def pop_full_test() -> dict[str, Any]:
+        """Run the full 3-step POP flow and report each step's result."""
+        from app.integrations.pop import get_pop_client, POPMockClient, POPTaskStatus
 
         pop_client = await get_pop_client()
 
@@ -447,24 +447,80 @@ def create_app() -> FastAPI:
         if not pop_client.available:
             return {"status": "error", "reason": "POP client not available (missing API key)"}
 
+        steps: dict[str, Any] = {}
+
+        # --- Step 1: get-terms ---
         try:
-            result = await pop_client.create_report_task(
-                keyword="test connectivity",
-                url="https://example.com",
+            task_result = await pop_client.create_report_task(
+                keyword="pet wellness supplements",
+                url="https://www.example.com/pet-wellness",
             )
-            return {
-                "status": "ok" if result.success else "error",
-                "success": result.success,
-                "task_id": result.task_id,
-                "error": result.error,
-                "data_keys": list((result.data or {}).keys()),
+            if not task_result.success or not task_result.task_id:
+                steps["step1_create"] = {"success": False, "error": task_result.error}
+                return {"steps": steps}
+
+            steps["step1_create"] = {"success": True, "task_id": task_result.task_id}
+
+            poll_result = await pop_client.poll_for_result(task_result.task_id)
+            response_data = dict(poll_result.data or {})
+            prepare_id = response_data.get("prepareId")
+            variations = response_data.get("variations", [])
+            lsa_phrases = response_data.get("lsaPhrases", [])
+
+            steps["step1_poll"] = {
+                "success": poll_result.success,
+                "status": poll_result.status.value if poll_result.status else None,
+                "response_keys": list(response_data.keys()),
+                "prepareId": prepare_id,
+                "prepareId_type": type(prepare_id).__name__,
+                "lsa_count": len(lsa_phrases),
+                "variations_count": len(variations),
             }
+
+            if not prepare_id:
+                return {"steps": steps, "diagnosis": "No prepareId - steps 2+3 skipped"}
+
         except Exception as e:
-            return {
-                "status": "error",
-                "error_type": type(e).__name__,
-                "error": str(e),
+            steps["step1_error"] = {"type": type(e).__name__, "message": str(e)}
+            return {"steps": steps}
+
+        # --- Step 2: create-report ---
+        try:
+            report_task = await pop_client.create_report(
+                prepare_id=prepare_id,
+                variations=variations,
+                lsa_phrases=lsa_phrases,
+            )
+
+            steps["step2_create"] = {
+                "success": report_task.success,
+                "task_id": report_task.task_id,
+                "error": report_task.error,
+                "data_keys": list((report_task.data or {}).keys()),
+                "reportId": (report_task.data or {}).get("reportId"),
             }
+
+            if not report_task.success or not report_task.task_id:
+                return {"steps": steps, "diagnosis": "create-report failed"}
+
+            report_id = (report_task.data or {}).get("reportId")
+
+            report_poll = await pop_client.poll_for_result(report_task.task_id)
+            report_data = report_poll.data or {}
+
+            steps["step2_poll"] = {
+                "success": report_poll.success,
+                "status": report_poll.status.value if report_poll.status else None,
+                "response_keys": list(report_data.keys()),
+                "has_report_key": "report" in report_data,
+                "report_keys": list(report_data.get("report", {}).keys()) if isinstance(report_data.get("report"), dict) else None,
+                "competitors_count": len(report_data.get("report", {}).get("competitors", [])) if isinstance(report_data.get("report"), dict) else 0,
+            }
+
+        except Exception as e:
+            steps["step2_error"] = {"type": type(e).__name__, "message": str(e)}
+
+        return {"steps": steps}
 
     # Project content/brief diagnostic
     @app.get("/health/project-debug/{project_id}", tags=["Health"])
