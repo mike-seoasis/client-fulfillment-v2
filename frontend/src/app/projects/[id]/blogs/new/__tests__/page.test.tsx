@@ -1,9 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import NewBlogCampaignPage from '../page';
-import type { ClusterListItem, BlogCampaignListItem } from '@/lib/api';
+import type { ClusterListItem } from '@/lib/api';
 
 // ============================================================================
 // Mock Next.js navigation
@@ -110,25 +111,6 @@ const createMockCluster = (
   page_count: pageCount,
   approved_count: approvedCount,
   created_at: '2026-01-15T10:00:00Z',
-});
-
-const createMockBlogCampaign = (
-  id: string,
-  name: string,
-  status: string,
-  clusterName: string,
-  postCount: number,
-  approvedCount = 0,
-  contentCompleteCount = 0,
-): BlogCampaignListItem => ({
-  id,
-  name,
-  status,
-  cluster_name: clusterName,
-  post_count: postCount,
-  approved_count: approvedCount,
-  content_complete_count: contentCompleteCount,
-  created_at: '2026-01-20T10:00:00Z',
 });
 
 // ============================================================================

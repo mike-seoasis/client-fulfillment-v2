@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   useWPConnect,
   useWPImport,
@@ -34,7 +34,7 @@ export default function WordPressLinkerPage() {
 
   // State flowing between steps
   const [projectId, setProjectId] = useState<string | null>(null);
-  const [siteName, setSiteName] = useState("");
+  const [, setSiteName] = useState("");
   const [totalPosts, setTotalPosts] = useState(0);
   const [titleFilter, setTitleFilter] = useState("");
   const [postStatus, setPostStatus] = useState("publish");
