@@ -1322,8 +1322,8 @@ async def update_primary_keyword(
     """Update the primary keyword for a page.
 
     Allows users to select a different keyword from the alternatives or
-    type a custom keyword. If the keyword is custom (not in alternatives),
-    volume data is cleared since we don't have metrics for custom keywords.
+    type a custom keyword. For custom keywords, fetches volume data from
+    DataForSEO and calculates a composite score automatically.
 
     Args:
         project_id: UUID of the project.
@@ -1337,6 +1337,10 @@ async def update_primary_keyword(
     Raises:
         HTTPException: 404 if project, page, or page keywords not found.
     """
+    import math
+
+    from app.integrations.dataforseo import get_dataforseo
+
     # Verify project exists (raises 404 if not)
     await ProjectService.get_project(db, project_id)
 
@@ -1390,19 +1394,95 @@ async def update_primary_keyword(
     # Update primary keyword
     page_keywords.primary_keyword = data.keyword.strip()
 
-    # Clear volume data if custom keyword (not in alternatives)
+    # For custom keywords, fetch volume data from DataForSEO and score
     if not is_from_alternatives:
-        page_keywords.search_volume = None
-        page_keywords.composite_score = None
-        page_keywords.relevance_score = None
-        logger.info(
-            "Custom keyword set, cleared volume data",
-            extra={
-                "project_id": project_id,
-                "page_id": page_id,
-                "keyword": data.keyword,
-            },
-        )
+        dataforseo_client = await get_dataforseo()
+
+        if dataforseo_client.available:
+            try:
+                volume_result = await dataforseo_client.get_keyword_volume([new_keyword])
+
+                if volume_result.success and volume_result.keywords:
+                    kw_data = volume_result.keywords[0]
+                    page_keywords.search_volume = kw_data.search_volume
+
+                    # Calculate composite score (same formula as PrimaryKeywordService)
+                    volume = kw_data.search_volume
+                    competition = kw_data.competition
+                    relevance = 0.8  # User-chosen keyword gets high default relevance
+
+                    if volume is None or volume <= 0:
+                        volume_score = 0.0
+                    else:
+                        volume_score = min(50.0, max(0.0, math.log10(volume) * 10))
+
+                    if competition is None:
+                        competition_score = 50.0
+                    else:
+                        norm_comp = competition / 100.0 if competition > 1.0 else competition
+                        competition_score = (1.0 - norm_comp) * 100
+
+                    relevance_score = relevance * 100
+                    composite = (
+                        (volume_score * 0.50)
+                        + (relevance_score * 0.35)
+                        + (competition_score * 0.15)
+                    )
+
+                    page_keywords.composite_score = round(composite, 2)
+                    page_keywords.relevance_score = relevance
+
+                    logger.info(
+                        "Custom keyword enriched with volume data",
+                        extra={
+                            "project_id": project_id,
+                            "page_id": page_id,
+                            "keyword": new_keyword,
+                            "search_volume": kw_data.search_volume,
+                            "composite_score": round(composite, 2),
+                        },
+                    )
+                else:
+                    # DataForSEO lookup failed, clear metrics
+                    page_keywords.search_volume = None
+                    page_keywords.composite_score = None
+                    page_keywords.relevance_score = None
+                    logger.warning(
+                        "Custom keyword volume lookup failed",
+                        extra={
+                            "project_id": project_id,
+                            "page_id": page_id,
+                            "keyword": new_keyword,
+                            "error": volume_result.error,
+                        },
+                    )
+            except Exception as e:
+                # Don't fail the update if volume lookup fails
+                page_keywords.search_volume = None
+                page_keywords.composite_score = None
+                page_keywords.relevance_score = None
+                logger.warning(
+                    "Custom keyword volume lookup error",
+                    extra={
+                        "project_id": project_id,
+                        "page_id": page_id,
+                        "keyword": new_keyword,
+                        "error": str(e),
+                    },
+                )
+        else:
+            # DataForSEO not configured, clear metrics
+            page_keywords.search_volume = None
+            page_keywords.composite_score = None
+            page_keywords.relevance_score = None
+            logger.info(
+                "Custom keyword set, DataForSEO not available for volume lookup",
+                extra={
+                    "project_id": project_id,
+                    "page_id": page_id,
+                    "keyword": new_keyword,
+                },
+            )
 
     await db.commit()
     await db.refresh(page_keywords)
