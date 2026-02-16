@@ -480,7 +480,7 @@ function ReviewTable({
               {/* QA Status */}
               <div className="flex justify-center">
                 {page.qa_passed === true && (
-                  <CheckIcon className="w-4.5 h-4.5 text-palm-500" />
+                  <CheckIcon className="w-4 h-4 text-palm-500" />
                 )}
                 {page.qa_passed === false && (
                   <span className="inline-flex items-center gap-1 text-xs text-coral-600">
