@@ -151,7 +151,34 @@ export function useUpdateBlogPost(): UseMutationResult<
       postId: string;
       data: BlogPostUpdate;
     }) => updateBlogPost(projectId, blogId, postId, data),
-    onSuccess: (_data, { projectId, blogId }) => {
+    onMutate: async ({ projectId, blogId, postId, data }) => {
+      // Cancel in-flight refetches so they don't overwrite our optimistic update
+      const key = blogKeys.detail(projectId, blogId);
+      await queryClient.cancelQueries({ queryKey: key });
+
+      // Snapshot previous value for rollback
+      const previous = queryClient.getQueryData<BlogCampaign>(key);
+
+      // Optimistically update the post in the cached campaign
+      if (previous) {
+        queryClient.setQueryData<BlogCampaign>(key, {
+          ...previous,
+          posts: previous.posts.map((p) =>
+            p.id === postId ? { ...p, ...data } : p
+          ),
+        });
+      }
+
+      return { previous, key };
+    },
+    onError: (_err, _vars, context) => {
+      // Roll back to snapshot on error
+      if (context?.previous) {
+        queryClient.setQueryData(context.key, context.previous);
+      }
+    },
+    onSettled: (_data, _err, { projectId, blogId }) => {
+      // Always refetch after mutation settles to sync with server
       queryClient.invalidateQueries({
         queryKey: blogKeys.detail(projectId, blogId),
       });
