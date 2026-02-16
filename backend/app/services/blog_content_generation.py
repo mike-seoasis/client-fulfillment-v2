@@ -828,9 +828,10 @@ async def _generate_blog_content(
     parsed = _parse_blog_content_json(result.text or "")
     if parsed is None:
         # Retry once with stricter prompt
+        raw_snippet = (result.text or "")[:500]
         logger.warning(
             "Blog content JSON parse failed, retrying with strict prompt",
-            extra={"post_id": blog_post.id, "keyword": keyword[:50]},
+            extra={"post_id": blog_post.id, "keyword": keyword[:50], "raw_snippet": raw_snippet},
         )
         retry_prompt = (
             "Your previous response could not be parsed as valid JSON. "
@@ -877,7 +878,8 @@ async def _generate_blog_content(
 def _parse_blog_content_json(text: str) -> dict[str, str] | None:
     """Parse Claude's response as JSON with the 3 required blog content keys.
 
-    Handles markdown code fences and extracts JSON. Returns None if invalid.
+    Handles markdown code fences, control characters, and common JSON issues.
+    Returns None if invalid.
     """
     cleaned = text.strip()
 
@@ -895,9 +897,27 @@ def _parse_blog_content_json(text: str) -> dict[str, str] | None:
         if match:
             cleaned = match.group(0)
 
-    try:
-        parsed = json.loads(cleaned)
-    except json.JSONDecodeError:
+    # Attempt 1: direct parse
+    parsed = _try_json_loads(cleaned)
+
+    # Attempt 2: fix control characters inside JSON string values
+    if parsed is None:
+        # Replace literal newlines/tabs inside strings with escaped versions
+        # (common when Claude outputs multi-line HTML in a JSON string value)
+        repaired = _repair_json_control_chars(cleaned)
+        parsed = _try_json_loads(repaired)
+
+    # Attempt 3: extract each key's value using regex boundaries
+    if parsed is None:
+        parsed = _extract_json_keys_fallback(cleaned)
+
+    if parsed is None:
+        # Log a snippet of the raw text for debugging
+        snippet = cleaned[:300] if len(cleaned) > 300 else cleaned
+        logger.warning(
+            "All JSON parse strategies failed",
+            extra={"snippet": snippet, "length": len(cleaned)},
+        )
         return None
 
     if not isinstance(parsed, dict):
@@ -908,6 +928,75 @@ def _parse_blog_content_json(text: str) -> dict[str, str] | None:
         return None
 
     return {k: str(v) for k, v in parsed.items() if k in BLOG_CONTENT_KEYS}
+
+
+def _try_json_loads(text: str) -> dict | None:
+    """Try json.loads, return None on failure."""
+    try:
+        result = json.loads(text)
+        return result if isinstance(result, dict) else None
+    except (json.JSONDecodeError, ValueError):
+        return None
+
+
+def _repair_json_control_chars(text: str) -> str:
+    """Repair common JSON issues: unescaped control characters in string values."""
+    # Replace literal tab/newline characters that appear inside JSON string values
+    # This is a lightweight repair — we escape control chars that break json.loads
+    import re as _re
+
+    def _escape_string_value(m: _re.Match) -> str:
+        """Escape control chars inside a matched JSON string value."""
+        val = m.group(0)
+        # Don't touch already-escaped sequences
+        # Replace literal newlines/tabs with escaped versions
+        val = val.replace("\t", "\\t")
+        # Replace literal newlines (but not \\n which is already escaped)
+        val = val.replace("\r\n", "\\n").replace("\r", "\\n").replace("\n", "\\n")
+        return val
+
+    # Match JSON string values (between unescaped double quotes)
+    # This pattern handles escaped quotes inside strings
+    return _re.sub(r'"(?:[^"\\]|\\.)*"', _escape_string_value, text)
+
+
+def _extract_json_keys_fallback(text: str) -> dict[str, str] | None:
+    """Last-resort extraction: find each key's value by locating key boundaries.
+
+    Looks for "page_title": "...", "meta_description": "...", "content": "..."
+    and extracts values by finding the string boundaries.
+    """
+    result = {}
+    for key in BLOG_CONTENT_KEYS:
+        # Find "key": " pattern
+        pattern = rf'"{key}"\s*:\s*"'
+        match = re.search(pattern, text)
+        if not match:
+            return None
+
+        # Start of value is right after the match
+        start = match.end()
+
+        # Find the closing quote — scan for unescaped "
+        pos = start
+        while pos < len(text):
+            if text[pos] == '"' and text[pos - 1] != '\\':
+                break
+            pos += 1
+        else:
+            return None
+
+        value = text[start:pos]
+        # Unescape basic JSON escapes
+        value = (
+            value.replace("\\n", "\n")
+            .replace("\\t", "\t")
+            .replace('\\"', '"')
+            .replace("\\\\", "\\")
+        )
+        result[key] = value
+
+    return result
 
 
 def _run_blog_quality_checks(
