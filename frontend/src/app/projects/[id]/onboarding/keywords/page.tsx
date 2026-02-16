@@ -483,7 +483,7 @@ export default function KeywordsPage() {
 
       {/* Page content */}
       <div className="bg-white rounded-sm border border-cream-500 p-6 shadow-sm">
-        {/* Header with title and fallback generate button */}
+        {/* Header with title and generate/regenerate button */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-warm-gray-900">
             {showGeneratingState
@@ -493,7 +493,7 @@ export default function KeywordsPage() {
               : `${pagesWithKeywords} Keywords Generated`}
           </h2>
 
-          {/* Fallback generate/regenerate button - shown when not actively generating */}
+          {/* Generate button - shown when no keywords exist and not generating */}
           {!showGeneratingState && pagesWithKeywords === 0 && totalPages > 0 && (
             <Button
               variant="secondary"
@@ -511,8 +511,8 @@ export default function KeywordsPage() {
             </Button>
           )}
 
-          {/* Regenerate button - shown when keywords exist but user might want to regenerate */}
-          {!showGeneratingState && pagesWithKeywords > 0 && keywordGen.status !== 'generating' && (
+          {/* Regenerate button - shown when keywords exist OR when stuck generating */}
+          {((!showGeneratingState && pagesWithKeywords > 0) || showGeneratingState) && (
             <Button
               variant="secondary"
               onClick={() => {
@@ -526,6 +526,8 @@ export default function KeywordsPage() {
                   <SpinnerIcon className="w-4 h-4 mr-1.5 animate-spin" />
                   Starting...
                 </>
+              ) : showGeneratingState ? (
+                'Restart'
               ) : (
                 'Regenerate All'
               )}
