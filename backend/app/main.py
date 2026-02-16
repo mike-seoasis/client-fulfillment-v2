@@ -470,7 +470,6 @@ def create_app() -> FastAPI:
     @app.get("/health/project-debug/{project_id}", tags=["Health"])
     async def project_debug(project_id: str) -> dict[str, Any]:
         """Debug endpoint showing content generation state for a project."""
-        from app.core.database import get_session_context
         from app.models.content_brief import ContentBrief
         from app.models.crawled_page import CrawledPage
         from app.models.page_content import PageContent
