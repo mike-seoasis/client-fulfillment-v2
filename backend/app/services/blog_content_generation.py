@@ -1,7 +1,7 @@
 """Blog content generation pipeline orchestrator.
 
-Orchestrates the brief → write → check pipeline for each approved blog post
-with concurrency control. Designed to be called from a FastAPI BackgroundTask.
+Orchestrates the brief → write → check → link pipeline for each approved blog
+post with concurrency control. Designed to be called from a FastAPI BackgroundTask.
 
 Pipeline per post:
 1. Set content_status='generating', fetch POP brief (page_not_built_yet=True),
@@ -10,6 +10,7 @@ Pipeline per post:
    title/meta_description/content
 3. Run quality checks (reuse content_quality.py), store qa_results
 4. Set content_status='complete'
+5. Auto-run blog link planning to inject internal links
 
 Key difference from content_generation.py: content is stored directly on
 BlogPost (title, meta_description, content) not in a separate PageContent table.
@@ -207,7 +208,77 @@ async def run_blog_content_pipeline(
         },
     )
 
+    # --- Auto link planning: inject internal links into completed blog posts ---
+    completed_post_ids = [
+        pr.post_id for pr in result.post_results if pr.success or pr.skipped
+    ]
+    if completed_post_ids:
+        await _auto_blog_link_planning(campaign_id, completed_post_ids)
+
     return result
+
+
+async def _auto_blog_link_planning(
+    campaign_id: str,
+    post_ids: list[str],
+) -> None:
+    """Auto-run blog link planning for completed posts.
+
+    For each completed blog post, strips any existing blog-scope links,
+    then runs run_blog_link_planning to inject fresh internal links.
+
+    Failures are non-fatal — logged but don't affect content generation results.
+    """
+    from sqlalchemy import delete
+
+    from app.models.internal_link import InternalLink
+    from app.services.link_planning import run_blog_link_planning
+
+    logger.info(
+        "Auto blog link planning starting",
+        extra={"campaign_id": campaign_id, "post_count": len(post_ids)},
+    )
+
+    for post_id in post_ids:
+        try:
+            async with db_manager.session_factory() as db:
+                # Delete existing blog-scope links for this post's crawled page
+                # (run_blog_link_planning creates CrawledPage bridge records;
+                #  the source_page_id is the bridge crawled_page_id)
+                from app.models.blog import BlogPost
+                from app.models.crawled_page import CrawledPage
+
+                post_stmt = select(BlogPost).where(BlogPost.id == post_id)
+                post_result = await db.execute(post_stmt)
+                post = post_result.scalar_one_or_none()
+
+                if post and post.crawled_page_id:
+                    del_stmt = delete(InternalLink).where(
+                        InternalLink.source_page_id == post.crawled_page_id,
+                        InternalLink.scope == "blog",
+                    )
+                    await db.execute(del_stmt)
+                    await db.commit()
+
+                # Run blog link planning
+                await run_blog_link_planning(post_id, campaign_id, db)
+
+            logger.info(
+                "Auto blog link planning complete for post",
+                extra={"post_id": post_id, "campaign_id": campaign_id},
+            )
+
+        except Exception as e:
+            logger.warning(
+                "Auto blog link planning failed for post (non-fatal)",
+                extra={
+                    "post_id": post_id,
+                    "campaign_id": campaign_id,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                },
+                exc_info=True,
+            )
 
 
 async def _load_approved_posts(
