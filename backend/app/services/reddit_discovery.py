@@ -807,15 +807,27 @@ async def discover_posts(
 
         for keyword in search_keywords:
             try:
+                # Always do a broad reddit-wide search first
                 results = await serpapi.search(
                     keyword=keyword,
-                    subreddits=target_subreddits if target_subreddits else None,
+                    subreddits=None,
                     time_range=time_range,
                 )
-                # Tag each result with the keyword that found it
                 for r in results:
                     r.search_keyword = keyword
                 all_posts.extend(results)
+
+                # If target subreddits are set, also do scoped searches
+                # to catch posts that the broad search might miss
+                if target_subreddits:
+                    scoped_results = await serpapi.search(
+                        keyword=keyword,
+                        subreddits=target_subreddits,
+                        time_range=time_range,
+                    )
+                    for r in scoped_results:
+                        r.search_keyword = keyword
+                    all_posts.extend(scoped_results)
             except Exception as e:
                 logger.error(
                     "SerpAPI search failed for keyword",

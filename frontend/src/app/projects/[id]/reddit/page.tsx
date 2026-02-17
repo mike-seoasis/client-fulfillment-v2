@@ -432,9 +432,13 @@ function PostsTable({
                     type="button"
                     onClick={() => onApprove(post.id)}
                     disabled={post.filter_status === 'relevant'}
-                    className="p-1.5 rounded-sm text-palm-600 hover:bg-palm-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    aria-label="Approve post"
-                    title="Mark as relevant"
+                    className={`p-1.5 rounded-sm transition-colors ${
+                      post.filter_status === 'relevant'
+                        ? 'bg-palm-100 text-palm-600 cursor-default'
+                        : 'text-warm-gray-400 hover:text-palm-600 hover:bg-palm-50'
+                    }`}
+                    aria-label={post.filter_status === 'relevant' ? 'Approved' : 'Approve post'}
+                    title={post.filter_status === 'relevant' ? 'Already approved' : 'Mark as relevant'}
                   >
                     <CheckIcon className="w-4 h-4" />
                   </button>
@@ -442,9 +446,13 @@ function PostsTable({
                     type="button"
                     onClick={() => onReject(post.id)}
                     disabled={post.filter_status === 'irrelevant'}
-                    className="p-1.5 rounded-sm text-coral-600 hover:bg-coral-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    aria-label="Reject post"
-                    title="Mark as irrelevant"
+                    className={`p-1.5 rounded-sm transition-colors ${
+                      post.filter_status === 'irrelevant'
+                        ? 'bg-coral-100 text-coral-600 cursor-default'
+                        : 'text-warm-gray-400 hover:text-coral-600 hover:bg-coral-50'
+                    }`}
+                    aria-label={post.filter_status === 'irrelevant' ? 'Rejected' : 'Reject post'}
+                    title={post.filter_status === 'irrelevant' ? 'Already rejected' : 'Mark as irrelevant'}
                   >
                     <XCircleIcon className="w-4 h-4" />
                   </button>
@@ -495,6 +503,8 @@ export default function ProjectRedditConfigPage() {
   }, [statusFilter, intentFilter]);
 
   const { data: posts } = useRedditPosts(projectId, postFilterParams);
+  // Unfiltered count to keep tabs visible when current filter yields 0
+  const { data: allPosts } = useRedditPosts(projectId);
 
   // Form state
   const [isActive, setIsActive] = useState<boolean | null>(null);
@@ -715,8 +725,8 @@ export default function ProjectRedditConfigPage() {
         </div>
       )}
 
-      {/* Filter Controls */}
-      {posts && posts.length > 0 && (
+      {/* Filter Controls — always visible when any posts exist */}
+      {allPosts && allPosts.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 mb-4">
           {/* Status Tabs */}
           <div className="flex rounded-sm border border-cream-400 overflow-hidden">
@@ -755,32 +765,40 @@ export default function ProjectRedditConfigPage() {
       {/* Posts Table or Empty State */}
       <div className="bg-white rounded-sm border border-cream-500 shadow-sm">
         {!posts || posts.length === 0 ? (
-          <EmptyState
-            icon={<SearchIcon className="w-10 h-10" />}
-            title="No posts discovered yet"
-            description={
-              existingConfig && (existingConfig.search_keywords?.length ?? 0) > 0
-                ? 'Click "Discover Posts" to search for relevant Reddit threads.'
-                : 'Add search keywords in the settings above and save, then trigger discovery.'
-            }
-            action={
-              existingConfig && (existingConfig.search_keywords?.length ?? 0) > 0 ? (
-                <Button
-                  size="sm"
-                  onClick={() => triggerDiscovery.mutate(currentTimeRange)}
-                  disabled={
-                    triggerDiscovery.isPending ||
-                    discoveryStatus?.status === 'searching' ||
-                    discoveryStatus?.status === 'scoring' ||
-                    discoveryStatus?.status === 'storing'
-                  }
-                >
-                  <SearchIcon className="w-4 h-4 mr-1.5" />
-                  Discover Posts
-                </Button>
-              ) : undefined
-            }
-          />
+          (statusFilter || intentFilter) && allPosts && allPosts.length > 0 ? (
+            <EmptyState
+              icon={<SearchIcon className="w-10 h-10" />}
+              title="No posts match this filter"
+              description="Try a different filter or click 'All' to see all discovered posts."
+            />
+          ) : (
+            <EmptyState
+              icon={<SearchIcon className="w-10 h-10" />}
+              title="No posts discovered yet"
+              description={
+                existingConfig && (existingConfig.search_keywords?.length ?? 0) > 0
+                  ? 'Click "Discover Posts" to search for relevant Reddit threads.'
+                  : 'Add search keywords in the settings below and save, then trigger discovery.'
+              }
+              action={
+                existingConfig && (existingConfig.search_keywords?.length ?? 0) > 0 ? (
+                  <Button
+                    size="sm"
+                    onClick={() => triggerDiscovery.mutate(currentTimeRange)}
+                    disabled={
+                      triggerDiscovery.isPending ||
+                      discoveryStatus?.status === 'searching' ||
+                      discoveryStatus?.status === 'scoring' ||
+                      discoveryStatus?.status === 'storing'
+                    }
+                  >
+                    <SearchIcon className="w-4 h-4 mr-1.5" />
+                    Discover Posts
+                  </Button>
+                ) : undefined
+              }
+            />
+          )
         ) : (
           <PostsTable
             posts={posts}
