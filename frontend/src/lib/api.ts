@@ -1428,6 +1428,157 @@ export interface WPReviewResponse {
   validation_pass_rate: number;
 }
 
+// =============================================================================
+// REDDIT API TYPES
+// =============================================================================
+
+/** A Reddit account used for engagement. */
+export interface RedditAccount {
+  id: string;
+  username: string;
+  status: string;
+  warmup_stage: string;
+  niche_tags: string[];
+  karma_post: number;
+  karma_comment: number;
+  account_age_days: number | null;
+  cooldown_until: string | null;
+  last_used_at: string | null;
+  notes: string | null;
+  extra_metadata: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Request to create a new Reddit account. */
+export interface RedditAccountCreate {
+  username: string;
+  niche_tags?: string[];
+  warmup_stage?: string;
+  notes?: string | null;
+}
+
+/** Request to update a Reddit account (all fields optional). */
+export interface RedditAccountUpdate {
+  username?: string;
+  status?: string;
+  warmup_stage?: string;
+  niche_tags?: string[];
+  karma_post?: number;
+  karma_comment?: number;
+  account_age_days?: number | null;
+  cooldown_until?: string | null;
+  last_used_at?: string | null;
+  notes?: string | null;
+}
+
+/** Per-project Reddit configuration. */
+export interface RedditProjectConfig {
+  id: string;
+  project_id: string;
+  search_keywords: string[];
+  target_subreddits: string[];
+  banned_subreddits: string[];
+  competitors: string[];
+  comment_instructions: string | null;
+  niche_tags: string[];
+  discovery_settings: Record<string, unknown> | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Request to create/update a project's Reddit config. */
+export interface RedditProjectConfigCreate {
+  search_keywords?: string[];
+  target_subreddits?: string[];
+  banned_subreddits?: string[];
+  competitors?: string[];
+  comment_instructions?: string | null;
+  niche_tags?: string[];
+  discovery_settings?: Record<string, unknown> | null;
+}
+
+// =============================================================================
+// REDDIT API FUNCTIONS
+// =============================================================================
+
+/**
+ * List all Reddit accounts with optional filters.
+ */
+export function fetchRedditAccounts(params?: {
+  niche?: string;
+  status?: string;
+  warmup_stage?: string;
+}): Promise<RedditAccount[]> {
+  const searchParams = new URLSearchParams();
+  if (params?.niche) searchParams.set("niche", params.niche);
+  if (params?.status) searchParams.set("status", params.status);
+  if (params?.warmup_stage) searchParams.set("warmup_stage", params.warmup_stage);
+  const qs = searchParams.toString();
+  return apiClient.get<RedditAccount[]>(
+    `/reddit/accounts${qs ? `?${qs}` : ""}`
+  );
+}
+
+/**
+ * Create a new Reddit account. Returns 409 if username already exists.
+ */
+export function createRedditAccount(
+  data: RedditAccountCreate
+): Promise<RedditAccount> {
+  return apiClient.post<RedditAccount>("/reddit/accounts", data);
+}
+
+/**
+ * Update a Reddit account. Only provided fields are updated.
+ */
+export function updateRedditAccount(
+  accountId: string,
+  data: RedditAccountUpdate
+): Promise<RedditAccount> {
+  return apiClient.patch<RedditAccount>(
+    `/reddit/accounts/${accountId}`,
+    data
+  );
+}
+
+/**
+ * Delete a Reddit account.
+ */
+export function deleteRedditAccount(accountId: string): Promise<void> {
+  return apiClient.delete<void>(`/reddit/accounts/${accountId}`);
+}
+
+/**
+ * Get Reddit config for a project. Returns 404 if none exists.
+ */
+export function fetchRedditConfig(
+  projectId: string
+): Promise<RedditProjectConfig> {
+  return apiClient.get<RedditProjectConfig>(
+    `/projects/${projectId}/reddit/config`
+  );
+}
+
+/**
+ * Create or update Reddit config for a project (upsert).
+ * Returns 201 if created, 200 if updated.
+ */
+export function upsertRedditConfig(
+  projectId: string,
+  data: RedditProjectConfigCreate
+): Promise<RedditProjectConfig> {
+  return apiClient.post<RedditProjectConfig>(
+    `/projects/${projectId}/reddit/config`,
+    data
+  );
+}
+
+// =============================================================================
+// WORDPRESS LINKER API TYPES & FUNCTIONS
+// =============================================================================
+
 /** Validate WP credentials. */
 export function wpConnect(
   siteUrl: string,

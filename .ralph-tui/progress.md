@@ -158,3 +158,15 @@ after each iteration and it's included in prompts for context.
   - `asyncio_mode = "auto"` means no `@pytest.mark.asyncio` decorators needed on test methods
   - Test pattern: class-scoped fixtures (project, account) follow the same pattern as `test_cluster_api.py` — create via `db_session`, commit, return model instance
 ---
+
+## 2026-02-16 - S14A-014
+- Added Reddit API types and functions to frontend API client
+- Files changed:
+  - `frontend/src/lib/api.ts` (added Reddit section: 5 interfaces + 6 API functions)
+- Interfaces: `RedditAccount`, `RedditAccountCreate`, `RedditAccountUpdate`, `RedditProjectConfig`, `RedditProjectConfigCreate`
+- Functions: `fetchRedditAccounts` (with optional niche/status/warmup_stage filters), `createRedditAccount`, `updateRedditAccount`, `deleteRedditAccount`, `fetchRedditConfig`, `upsertRedditConfig`
+- **Learnings:**
+  - Backend datetime fields map to `string` on the frontend (ISO 8601 format via JSON serialization)
+  - Backend `extra_metadata` (Python attr name for `metadata` DB column) stays as `extra_metadata` in TS interfaces since the Pydantic schema exposes `extra_metadata`
+  - Filter params use `URLSearchParams` pattern (same as `triggerContentGeneration`) — only set params that are provided
+---
