@@ -75,3 +75,16 @@ after each iteration and it's included in prompts for context.
   - When each prior story registers its own model in `__init__.py` and adds relationships, the "registration" story becomes a verification-only task
   - Typecheck confirmed clean (only pre-existing `dict` type-arg issue in `internal_link.py`)
 ---
+
+## 2026-02-16 - S14A-007
+- Created Alembic migration `0027_create_reddit_tables.py` for all 5 Reddit tables
+- Tables created in dependency order: reddit_accounts → reddit_project_configs → reddit_posts → reddit_comments → crowdreply_tasks
+- Files changed:
+  - `backend/alembic/versions/0027_create_reddit_tables.py` (new)
+- Verified: `alembic upgrade head` ✓, `alembic downgrade -1` ✓, re-upgrade ✓
+- **Learnings:**
+  - Wrote migration manually rather than using `--autogenerate` to avoid picking up drift from the `da1ea5f253b0` widening migration (which dropped/recreated constraints as side effects)
+  - The venv has a stale shebang (old path without ` (1)`); use `.venv/bin/python -m alembic` instead of `.venv/bin/alembic`
+  - SQLAlchemy `extra_metadata` mapped to column `"metadata"` — in the migration, use the actual DB column name `"metadata"`, not the Python attribute name
+  - For `unique=True` + `index=True` columns (like `reddit_project_configs.project_id`), create a unique index (`unique=True` on `create_index`) which satisfies both the unique constraint and the index
+---

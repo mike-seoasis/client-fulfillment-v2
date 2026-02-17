@@ -111,8 +111,9 @@
         "Run alembic downgrade -1 successfully (drops all tables)"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Latest migration is 0026_create_blog_tables.py (plus a widening migration da1ea5f253b0). The new migration should be numbered 0027. After autogeneration, review the migration file to verify all columns, constraints, and indexes are correct before running."
+      "passes": true,
+      "notes": "Latest migration is 0026_create_blog_tables.py (plus a widening migration da1ea5f253b0). The new migration should be numbered 0027. After autogeneration, review the migration file to verify all columns, constraints, and indexes are correct before running.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S14A-008",
@@ -363,6 +364,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-17T00:27:50.207Z"
+    "updatedAt": "2026-02-17T00:30:56.575Z"
   }
 }
