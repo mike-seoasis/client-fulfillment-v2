@@ -109,3 +109,20 @@ after each iteration and it's included in prompts for context.
   - No circuit breaker settings needed at config level — those will come when integration clients are built (slices 14b/14e)
   - Pre-existing pyright error on `get_settings()` (missing `database_url` param) is expected — it's resolved at runtime via env vars
 ---
+
+## 2026-02-16 - S14A-010
+- Created Reddit API router with account CRUD endpoints
+- Files changed:
+  - `backend/app/api/v1/reddit.py` (new — 2 APIRouter instances, 4 endpoints)
+  - `backend/app/api/v1/__init__.py` (registered `reddit_router` and `reddit_project_router`)
+- Endpoints:
+  - `GET /api/v1/reddit/accounts` — list with optional `niche`, `status`, `warmup_stage` filters
+  - `POST /api/v1/reddit/accounts` — create with 409 on duplicate username
+  - `PATCH /api/v1/reddit/accounts/{account_id}` — partial update, 404 if missing
+  - `DELETE /api/v1/reddit/accounts/{account_id}` — delete, 204/404
+- **Learnings:**
+  - For JSONB `@>` contains filter: `RedditAccount.niche_tags.op("@>")(cast([niche], JSONB))` — wrap the value in a Python list and cast to JSONB
+  - FastAPI `Query` param named `status` conflicts with the imported `status` module — use `alias="status"` with a different Python param name (`status_filter`)
+  - Two separate `APIRouter` instances (`reddit_router`, `reddit_project_router`) allow grouping endpoints under different URL prefixes while sharing the same tag
+  - Venv lives at `backend/.venv/` not project root `.venv/`
+---
