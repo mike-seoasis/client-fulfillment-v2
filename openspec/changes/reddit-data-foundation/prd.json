@@ -194,8 +194,9 @@
         "Verify endpoints appear in FastAPI auto-docs at /docs"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Follow same pattern as blogs_router import/include."
+      "passes": true,
+      "notes": "Follow same pattern as blogs_router import/include.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S14A-013",
@@ -368,6 +369,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-17T00:37:41.590Z"
+    "updatedAt": "2026-02-17T00:38:13.605Z"
   }
 }

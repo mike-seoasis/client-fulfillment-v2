@@ -138,3 +138,11 @@ after each iteration and it's included in prompts for context.
   - Direct `select(Project.id).where(...)` is simpler than importing `ProjectService` when you just need an existence check
   - `model_dump(exclude_unset=True)` on the upsert update path ensures only explicitly-sent fields are modified (preserves existing values for omitted fields)
 ---
+
+## 2026-02-16 - S14A-012
+- Verified router registration already complete (done in S14A-010)
+- Both `reddit_router` and `reddit_project_router` imported and included in `backend/app/api/v1/__init__.py`
+- Files changed: None (no changes needed)
+- **Learnings:**
+  - S14A-010 proactively registered both routers when creating them, making this story a verification-only task (same pattern as S14A-006)
+---
