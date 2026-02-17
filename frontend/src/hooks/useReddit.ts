@@ -28,6 +28,12 @@ import {
   fetchRedditPosts,
   updateRedditPostStatus,
   bulkUpdateRedditPosts,
+  generateComment,
+  generateBatch,
+  fetchGenerationStatus,
+  fetchComments,
+  updateComment,
+  deleteComment,
   type RedditAccount,
   type RedditAccountCreate,
   type RedditAccountUpdate,
@@ -39,6 +45,10 @@ import {
   type RedditPostsFilterParams,
   type RedditPostUpdateRequest,
   type RedditBulkPostActionRequest,
+  type RedditCommentResponse,
+  type BatchGenerateResponse,
+  type GenerationStatusResponse,
+  type RedditCommentUpdateRequest,
 } from '@/lib/api';
 
 // =============================================================================
@@ -54,6 +64,10 @@ export const redditKeys = {
     ['reddit-discovery-status', projectId] as const,
   posts: (projectId: string, params?: RedditPostsFilterParams) =>
     ['reddit-posts', projectId, params] as const,
+  comments: (projectId: string, filters?: { status?: string; post_id?: string }) =>
+    ['reddit-comments', projectId, filters] as const,
+  generationStatus: (projectId: string) =>
+    ['reddit-generation-status', projectId] as const,
 };
 
 // =============================================================================
@@ -349,6 +363,174 @@ export function useBulkUpdatePosts(projectId: string): UseMutationResult<
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['reddit-posts', projectId],
+      });
+    },
+  });
+}
+
+// =============================================================================
+// COMMENT GENERATION HOOKS
+// =============================================================================
+
+/**
+ * Fetch generated comments for a project with optional filters.
+ */
+export function useComments(
+  projectId: string,
+  filters?: { status?: string; post_id?: string },
+  options?: { enabled?: boolean }
+): UseQueryResult<RedditCommentResponse[]> {
+  return useQuery({
+    queryKey: redditKeys.comments(projectId, filters),
+    queryFn: () => fetchComments(projectId, filters),
+    enabled: options?.enabled ?? !!projectId,
+  });
+}
+
+/**
+ * Poll batch generation status for a project.
+ * Automatically polls every 2 seconds when status is "generating".
+ * Invalidates comments query when generation transitions to "complete".
+ */
+export function useGenerationStatus(
+  projectId: string,
+  options?: { enabled?: boolean }
+): UseQueryResult<GenerationStatusResponse> {
+  const queryClient = useQueryClient();
+  const prevStatusRef = useRef<string>();
+
+  const query = useQuery({
+    queryKey: redditKeys.generationStatus(projectId),
+    queryFn: () => fetchGenerationStatus(projectId),
+    enabled: options?.enabled ?? !!projectId,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      if (status === 'generating') {
+        return 2000;
+      }
+      return false;
+    },
+  });
+
+  // Auto-refresh comments when generation transitions to "complete"
+  useEffect(() => {
+    const currentStatus = query.data?.status;
+    if (
+      prevStatusRef.current &&
+      prevStatusRef.current !== 'complete' &&
+      currentStatus === 'complete'
+    ) {
+      queryClient.invalidateQueries({ queryKey: ['reddit-comments', projectId] });
+    }
+    prevStatusRef.current = currentStatus;
+  }, [query.data?.status, queryClient, projectId]);
+
+  return query;
+}
+
+/**
+ * Generate a comment for a single Reddit post.
+ * Invalidates comments query on success.
+ */
+export function useGenerateComment(projectId: string): UseMutationResult<
+  RedditCommentResponse,
+  Error,
+  { postId: string; isPromotional?: boolean }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ postId, isPromotional }: { postId: string; isPromotional?: boolean }) =>
+      generateComment(projectId, postId, isPromotional),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['reddit-comments', projectId],
+      });
+    },
+  });
+}
+
+/**
+ * Trigger batch comment generation for a project.
+ * Invalidates generation status on success.
+ */
+export function useGenerateBatch(projectId: string): UseMutationResult<
+  BatchGenerateResponse,
+  Error,
+  string[] | undefined
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (postIds?: string[]) =>
+      generateBatch(projectId, postIds),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: redditKeys.generationStatus(projectId),
+      });
+    },
+  });
+}
+
+/**
+ * Update a comment's body text.
+ * Invalidates comments query on success.
+ */
+export function useUpdateComment(projectId: string): UseMutationResult<
+  RedditCommentResponse,
+  Error,
+  { commentId: string; data: RedditCommentUpdateRequest }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ commentId, data }: { commentId: string; data: RedditCommentUpdateRequest }) =>
+      updateComment(projectId, commentId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['reddit-comments', projectId],
+      });
+    },
+  });
+}
+
+/**
+ * Delete a draft comment with optimistic removal.
+ * Removes from cache immediately, rolls back on error.
+ */
+export function useDeleteComment(projectId: string): UseMutationResult<
+  void,
+  Error,
+  string
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (commentId: string) => deleteComment(projectId, commentId),
+    onMutate: async (commentId) => {
+      await queryClient.cancelQueries({ queryKey: ['reddit-comments', projectId] });
+
+      const previousQueries = queryClient.getQueriesData<RedditCommentResponse[]>({
+        queryKey: ['reddit-comments', projectId],
+      });
+
+      queryClient.setQueriesData<RedditCommentResponse[]>(
+        { queryKey: ['reddit-comments', projectId] },
+        (old) => old?.filter((c) => c.id !== commentId),
+      );
+
+      return { previousQueries };
+    },
+    onError: (_err, _commentId, context) => {
+      if (context?.previousQueries) {
+        for (const [queryKey, data] of context.previousQueries) {
+          queryClient.setQueryData(queryKey, data);
+        }
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['reddit-comments', projectId],
       });
     },
   });

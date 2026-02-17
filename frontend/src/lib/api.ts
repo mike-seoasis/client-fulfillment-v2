@@ -1349,6 +1349,150 @@ export async function downloadBlogPostHtml(
 }
 
 // =============================================================================
+// REDDIT COMMENT GENERATION API TYPES
+// =============================================================================
+
+/** Response from single comment generation (POST). */
+export interface RedditCommentResponse {
+  id: string;
+  post_id: string;
+  project_id: string;
+  account_id: string | null;
+  body: string;
+  original_body: string;
+  is_promotional: boolean;
+  approach_type: string | null;
+  status: string;
+  reject_reason: string | null;
+  crowdreply_task_id: string | null;
+  posted_url: string | null;
+  posted_at: string | null;
+  generation_metadata: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+  post: RedditDiscoveredPost | null;
+}
+
+/** Request body for single comment generation. */
+export interface GenerateCommentRequest {
+  is_promotional?: boolean;
+}
+
+/** Request body for batch comment generation. */
+export interface BatchGenerateRequest {
+  post_ids?: string[];
+}
+
+/** Response from batch generation trigger (202). */
+export interface BatchGenerateResponse {
+  message: string;
+}
+
+/** Polling response for generation progress. */
+export interface GenerationStatusResponse {
+  status: "idle" | "generating" | "complete" | "failed";
+  total_posts: number;
+  posts_generated: number;
+  error: string | null;
+}
+
+/** Request body for updating a comment. */
+export interface RedditCommentUpdateRequest {
+  body?: string;
+}
+
+// =============================================================================
+// REDDIT COMMENT GENERATION API FUNCTIONS
+// =============================================================================
+
+/**
+ * Generate a comment for a single Reddit post.
+ * Synchronous - returns the created comment (201).
+ */
+export function generateComment(
+  projectId: string,
+  postId: string,
+  isPromotional?: boolean
+): Promise<RedditCommentResponse> {
+  const body: GenerateCommentRequest = {};
+  if (isPromotional !== undefined) body.is_promotional = isPromotional;
+  return apiClient.post<RedditCommentResponse>(
+    `/projects/${projectId}/reddit/posts/${postId}/generate`,
+    Object.keys(body).length > 0 ? body : undefined
+  );
+}
+
+/**
+ * Trigger batch comment generation for a project.
+ * Returns 202. Poll with fetchGenerationStatus for progress.
+ */
+export function generateBatch(
+  projectId: string,
+  postIds?: string[]
+): Promise<BatchGenerateResponse> {
+  const body: BatchGenerateRequest = {};
+  if (postIds && postIds.length > 0) body.post_ids = postIds;
+  return apiClient.post<BatchGenerateResponse>(
+    `/projects/${projectId}/reddit/generate-batch`,
+    Object.keys(body).length > 0 ? body : undefined
+  );
+}
+
+/**
+ * Poll batch generation status for a project.
+ * Returns "idle" if no generation is active.
+ */
+export function fetchGenerationStatus(
+  projectId: string
+): Promise<GenerationStatusResponse> {
+  return apiClient.get<GenerationStatusResponse>(
+    `/projects/${projectId}/reddit/generate/status`
+  );
+}
+
+/**
+ * List generated comments for a project with optional filters.
+ */
+export function fetchComments(
+  projectId: string,
+  filters?: { status?: string; post_id?: string }
+): Promise<RedditCommentResponse[]> {
+  const searchParams = new URLSearchParams();
+  if (filters?.status) searchParams.set("status", filters.status);
+  if (filters?.post_id) searchParams.set("post_id", filters.post_id);
+  const qs = searchParams.toString();
+  return apiClient.get<RedditCommentResponse[]>(
+    `/projects/${projectId}/reddit/comments${qs ? `?${qs}` : ""}`
+  );
+}
+
+/**
+ * Update a comment's body text (PATCH).
+ */
+export function updateComment(
+  projectId: string,
+  commentId: string,
+  data: RedditCommentUpdateRequest
+): Promise<RedditCommentResponse> {
+  return apiClient.patch<RedditCommentResponse>(
+    `/projects/${projectId}/reddit/comments/${commentId}`,
+    data
+  );
+}
+
+/**
+ * Delete a draft comment (DELETE).
+ */
+export function deleteComment(
+  projectId: string,
+  commentId: string
+): Promise<void> {
+  return apiClient.delete<void>(
+    `/projects/${projectId}/reddit/comments/${commentId}`
+  );
+}
+
+// =============================================================================
 // WORDPRESS LINKER API TYPES & FUNCTIONS
 // =============================================================================
 

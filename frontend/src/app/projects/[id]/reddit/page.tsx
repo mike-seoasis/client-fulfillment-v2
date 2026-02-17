@@ -11,9 +11,15 @@ import {
   useDiscoveryStatus,
   useRedditPosts,
   useUpdatePostStatus,
+  useComments,
+  useGenerationStatus,
+  useGenerateComment,
+  useGenerateBatch,
+  useUpdateComment,
+  useDeleteComment,
 } from '@/hooks/useReddit';
 import { Button, Toast, EmptyState } from '@/components/ui';
-import type { RedditDiscoveredPost, DiscoveryStatus } from '@/lib/api';
+import type { RedditDiscoveredPost, RedditCommentResponse, DiscoveryStatus, GenerationStatusResponse } from '@/lib/api';
 
 // =============================================================================
 // ICONS
@@ -237,6 +243,53 @@ function ExternalLinkIcon({ className }: { className?: string }) {
   );
 }
 
+function SparklesIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3l1.912 5.813a2 2 0 001.275 1.275L21 12l-5.813 1.912a2 2 0 00-1.275 1.275L12 21l-1.912-5.813a2 2 0 00-1.275-1.275L3 12l5.813-1.912a2 2 0 001.275-1.275L12 3z" />
+    </svg>
+  );
+}
+
+function MessageSquareIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+    </svg>
+  );
+}
+
+function RefreshIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 4v6h6M23 20v-6h-6" />
+      <path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15" />
+    </svg>
+  );
+}
+
+function PencilIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+    </svg>
+  );
+}
+
+function TrashIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+    </svg>
+  );
+}
+
+function SpinnerIcon({ className }: { className?: string }) {
+  return (
+    <div className={`border-2 border-current border-t-transparent rounded-full animate-spin ${className || 'w-4 h-4'}`} />
+  );
+}
+
 // =============================================================================
 // INTENT BADGE COLORS
 // =============================================================================
@@ -361,105 +414,178 @@ function PostsTable({
   posts,
   onApprove,
   onReject,
+  onGenerate,
+  generatingPostIds,
+  commentsByPostId,
+  selectedPostIds,
+  onToggleSelect,
+  onToggleSelectAll,
 }: {
   posts: RedditDiscoveredPost[];
   onApprove: (postId: string) => void;
   onReject: (postId: string) => void;
+  onGenerate?: (postId: string) => void;
+  generatingPostIds?: Set<string>;
+  commentsByPostId?: Map<string, RedditCommentResponse[]>;
+  selectedPostIds: Set<string>;
+  onToggleSelect: (postId: string) => void;
+  onToggleSelectAll: () => void;
 }) {
+  const relevantPosts = posts.filter((p) => p.filter_status === 'relevant');
+  const allRelevantSelected = relevantPosts.length > 0 && relevantPosts.every((p) => selectedPostIds.has(p.id));
+  const someSelected = relevantPosts.some((p) => selectedPostIds.has(p.id));
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-cream-300">
+            <th className="py-3 px-3 w-10">
+              <input
+                type="checkbox"
+                checked={allRelevantSelected}
+                ref={(el) => { if (el) el.indeterminate = someSelected && !allRelevantSelected; }}
+                onChange={onToggleSelectAll}
+                className="rounded-sm border-cream-400 text-palm-500 focus:ring-palm-400"
+                title="Select all relevant posts"
+              />
+            </th>
             <th className="text-left py-3 px-3 text-xs font-medium text-warm-gray-500 uppercase tracking-wider">Subreddit</th>
             <th className="text-left py-3 px-3 text-xs font-medium text-warm-gray-500 uppercase tracking-wider">Title</th>
             <th className="text-left py-3 px-3 text-xs font-medium text-warm-gray-500 uppercase tracking-wider">Intent</th>
             <th className="text-left py-3 px-3 text-xs font-medium text-warm-gray-500 uppercase tracking-wider">Score</th>
             <th className="text-left py-3 px-3 text-xs font-medium text-warm-gray-500 uppercase tracking-wider">Status</th>
-            <th className="text-left py-3 px-3 text-xs font-medium text-warm-gray-500 uppercase tracking-wider">Discovered</th>
+            <th className="text-left py-3 px-3 text-xs font-medium text-warm-gray-500 uppercase tracking-wider">Comment</th>
             <th className="text-right py-3 px-3 text-xs font-medium text-warm-gray-500 uppercase tracking-wider">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-cream-200">
-          {posts.map((post) => (
-            <tr key={post.id} className="hover:bg-cream-50 transition-colors">
-              <td className="py-3 px-3">
-                <span className="text-warm-gray-600 text-xs">r/{post.subreddit}</span>
-              </td>
-              <td className="py-3 px-3 max-w-md">
-                <a
-                  href={post.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-lagoon-600 hover:text-lagoon-800 hover:underline inline-flex items-center gap-1"
-                >
-                  <span className="line-clamp-2">{post.title}</span>
-                  <ExternalLinkIcon className="w-3 h-3 flex-shrink-0" />
-                </a>
-              </td>
-              <td className="py-3 px-3">
-                <div className="flex flex-wrap gap-1">
-                  {post.intent_categories && post.intent_categories.length > 0
-                    ? post.intent_categories.map((intent) => (
-                        <IntentBadge key={intent} intent={intent} />
-                      ))
-                    : post.intent
-                      ? <IntentBadge intent={post.intent} />
-                      : <span className="text-warm-gray-400 text-xs">--</span>
-                  }
-                </div>
-              </td>
-              <td className="py-3 px-3">
-                <ScoreBadge score={post.relevance_score} />
-              </td>
-              <td className="py-3 px-3">
-                <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-sm border ${
-                  post.filter_status === 'relevant'
-                    ? 'bg-palm-50 text-palm-700 border-palm-200'
-                    : post.filter_status === 'irrelevant'
-                      ? 'bg-coral-50 text-coral-600 border-coral-200'
-                      : 'bg-cream-100 text-warm-gray-600 border-cream-300'
-                }`}>
-                  {post.filter_status}
-                </span>
-              </td>
-              <td className="py-3 px-3 text-warm-gray-500 text-xs whitespace-nowrap">
-                {new Date(post.discovered_at).toLocaleDateString()}
-              </td>
-              <td className="py-3 px-3">
-                <div className="flex items-center justify-end gap-1">
-                  <button
-                    type="button"
-                    onClick={() => onApprove(post.id)}
-                    disabled={post.filter_status === 'relevant'}
-                    className={`p-1.5 rounded-sm transition-colors ${
-                      post.filter_status === 'relevant'
-                        ? 'bg-palm-100 text-palm-600 cursor-default'
-                        : 'text-warm-gray-400 hover:text-palm-600 hover:bg-palm-50'
-                    }`}
-                    aria-label={post.filter_status === 'relevant' ? 'Approved' : 'Approve post'}
-                    title={post.filter_status === 'relevant' ? 'Already approved' : 'Mark as relevant'}
+          {posts.map((post) => {
+            const hasComment = commentsByPostId && commentsByPostId.has(post.id);
+            const isGenerating = generatingPostIds?.has(post.id);
+            const isRelevant = post.filter_status === 'relevant';
+            const isSelected = selectedPostIds.has(post.id);
+
+            return (
+              <tr key={post.id} className={`hover:bg-cream-50 transition-colors ${isSelected ? 'bg-palm-50/30' : ''}`}>
+                <td className="py-3 px-3">
+                  {isRelevant ? (
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => onToggleSelect(post.id)}
+                      className="rounded-sm border-cream-400 text-palm-500 focus:ring-palm-400"
+                    />
+                  ) : (
+                    <span className="block w-4" />
+                  )}
+                </td>
+                <td className="py-3 px-3">
+                  <span className="text-warm-gray-600 text-xs">r/{post.subreddit}</span>
+                </td>
+                <td className="py-3 px-3 max-w-md">
+                  <a
+                    href={post.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-lagoon-600 hover:text-lagoon-800 hover:underline inline-flex items-center gap-1"
                   >
-                    <CheckIcon className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onReject(post.id)}
-                    disabled={post.filter_status === 'irrelevant'}
-                    className={`p-1.5 rounded-sm transition-colors ${
-                      post.filter_status === 'irrelevant'
-                        ? 'bg-coral-100 text-coral-600 cursor-default'
-                        : 'text-warm-gray-400 hover:text-coral-600 hover:bg-coral-50'
-                    }`}
-                    aria-label={post.filter_status === 'irrelevant' ? 'Rejected' : 'Reject post'}
-                    title={post.filter_status === 'irrelevant' ? 'Already rejected' : 'Mark as irrelevant'}
-                  >
-                    <XCircleIcon className="w-4 h-4" />
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
+                    <span className="line-clamp-2">{post.title}</span>
+                    <ExternalLinkIcon className="w-3 h-3 flex-shrink-0" />
+                  </a>
+                </td>
+                <td className="py-3 px-3">
+                  <div className="flex flex-wrap gap-1">
+                    {post.intent_categories && post.intent_categories.length > 0
+                      ? post.intent_categories.map((intent) => (
+                          <IntentBadge key={intent} intent={intent} />
+                        ))
+                      : post.intent
+                        ? <IntentBadge intent={post.intent} />
+                        : <span className="text-warm-gray-400 text-xs">--</span>
+                    }
+                  </div>
+                </td>
+                <td className="py-3 px-3">
+                  <ScoreBadge score={post.relevance_score} />
+                </td>
+                <td className="py-3 px-3">
+                  <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-sm border ${
+                    post.filter_status === 'relevant'
+                      ? 'bg-palm-50 text-palm-700 border-palm-200'
+                      : post.filter_status === 'irrelevant'
+                        ? 'bg-coral-50 text-coral-600 border-coral-200'
+                        : 'bg-cream-100 text-warm-gray-600 border-cream-300'
+                  }`}>
+                    {post.filter_status}
+                  </span>
+                </td>
+                <td className="py-3 px-3">
+                  {isGenerating ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-lagoon-600">
+                      <SpinnerIcon className="w-3 h-3" /> Generating...
+                    </span>
+                  ) : hasComment ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-palm-600">
+                      <MessageSquareIcon className="w-3 h-3" /> Draft
+                    </span>
+                  ) : isRelevant ? (
+                    <span className="text-xs text-warm-gray-400">None</span>
+                  ) : null}
+                </td>
+                <td className="py-3 px-3">
+                  <div className="flex items-center justify-end gap-1">
+                    {isRelevant && onGenerate && (
+                      <button
+                        type="button"
+                        onClick={() => onGenerate(post.id)}
+                        disabled={isGenerating}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-palm-700 bg-palm-50 border border-palm-200 rounded-sm hover:bg-palm-100 transition-colors disabled:opacity-50"
+                        title={hasComment ? 'Regenerate comment' : 'Generate comment'}
+                      >
+                        {isGenerating ? (
+                          <SpinnerIcon className="w-3 h-3" />
+                        ) : hasComment ? (
+                          <RefreshIcon className="w-3 h-3" />
+                        ) : (
+                          <SparklesIcon className="w-3 h-3" />
+                        )}
+                        {hasComment ? 'Regen' : 'Generate'}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => onApprove(post.id)}
+                      disabled={post.filter_status === 'relevant'}
+                      className={`p-1.5 rounded-sm transition-colors ${
+                        post.filter_status === 'relevant'
+                          ? 'bg-palm-100 text-palm-600 cursor-default'
+                          : 'text-warm-gray-400 hover:text-palm-600 hover:bg-palm-50'
+                      }`}
+                      aria-label={post.filter_status === 'relevant' ? 'Approved' : 'Approve post'}
+                      title={post.filter_status === 'relevant' ? 'Already approved' : 'Mark as relevant'}
+                    >
+                      <CheckIcon className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onReject(post.id)}
+                      disabled={post.filter_status === 'irrelevant'}
+                      className={`p-1.5 rounded-sm transition-colors ${
+                        post.filter_status === 'irrelevant'
+                          ? 'bg-coral-100 text-coral-600 cursor-default'
+                          : 'text-warm-gray-400 hover:text-coral-600 hover:bg-coral-50'
+                      }`}
+                      aria-label={post.filter_status === 'irrelevant' ? 'Rejected' : 'Reject post'}
+                      title={post.filter_status === 'irrelevant' ? 'Already rejected' : 'Mark as irrelevant'}
+                    >
+                      <XCircleIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -477,6 +603,266 @@ const TIME_RANGE_OPTIONS = [
 ];
 
 // =============================================================================
+// APPROACH TYPE & STATUS BADGES
+// =============================================================================
+
+const APPROACH_COLORS: Record<string, string> = {
+  sandwich: 'bg-sand-100 text-warm-gray-700 border-sand-300',
+  'story-based': 'bg-lagoon-50 text-lagoon-700 border-lagoon-200',
+  'direct-help': 'bg-palm-50 text-palm-700 border-palm-200',
+  'comparison': 'bg-coral-50 text-coral-700 border-coral-200',
+};
+
+function ApproachBadge({ approach }: { approach: string | null }) {
+  if (!approach) return null;
+  const colorClass = APPROACH_COLORS[approach] || 'bg-cream-100 text-warm-gray-600 border-cream-300';
+  const label = approach.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-sm border ${colorClass}`}>
+      {label}
+    </span>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const colorClass =
+    status === 'draft' ? 'bg-sand-100 text-warm-gray-700 border-sand-300' :
+    status === 'approved' ? 'bg-palm-50 text-palm-700 border-palm-200' :
+    status === 'rejected' ? 'bg-coral-50 text-coral-600 border-coral-200' :
+    'bg-cream-100 text-warm-gray-600 border-cream-300';
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-sm border ${colorClass}`}>
+      {status}
+    </span>
+  );
+}
+
+function PromotionalBadge({ isPromotional }: { isPromotional: boolean }) {
+  return isPromotional ? (
+    <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-sm border bg-palm-50 text-palm-700 border-palm-200">
+      Promotional
+    </span>
+  ) : (
+    <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-sm border bg-lagoon-50 text-lagoon-700 border-lagoon-200">
+      Organic
+    </span>
+  );
+}
+
+// =============================================================================
+// GENERATION PROGRESS
+// =============================================================================
+
+function GenerationProgress({ status }: { status: GenerationStatusResponse }) {
+  const isActive = status.status === 'generating';
+  const isFailed = status.status === 'failed';
+  const isComplete = status.status === 'complete';
+
+  if (!isActive && !isFailed && !isComplete) return null;
+
+  const progress = status.total_posts > 0
+    ? Math.round((status.posts_generated / status.total_posts) * 100)
+    : 0;
+
+  return (
+    <div className={`rounded-sm border p-4 ${
+      isFailed ? 'bg-coral-50 border-coral-200' :
+      isComplete ? 'bg-palm-50 border-palm-200' :
+      'bg-lagoon-50 border-lagoon-200'
+    }`}>
+      <div className="flex items-center gap-3 mb-2">
+        {isActive && (
+          <SpinnerIcon className="w-4 h-4 text-lagoon-500" />
+        )}
+        {isComplete && <CheckIcon className="w-4 h-4 text-palm-600" />}
+        {isFailed && <XCircleIcon className="w-4 h-4 text-coral-600" />}
+        <span className={`text-sm font-medium ${
+          isFailed ? 'text-coral-700' :
+          isComplete ? 'text-palm-700' :
+          'text-lagoon-700'
+        }`}>
+          {isActive ? `Generating ${status.posts_generated}/${status.total_posts}...` :
+           isComplete ? 'Generation complete' :
+           'Generation failed'}
+        </span>
+      </div>
+
+      {isActive && (
+        <div className="w-full bg-white/50 rounded-full h-1.5 mb-2">
+          <div
+            className="bg-lagoon-500 h-1.5 rounded-full transition-all duration-500"
+            style={{ width: `${Math.min(progress, 100)}%` }}
+          />
+        </div>
+      )}
+
+      {isFailed && status.error && (
+        <p className="mt-1 text-xs text-coral-600">{status.error}</p>
+      )}
+    </div>
+  );
+}
+
+// =============================================================================
+// COMMENT CARD
+// =============================================================================
+
+function CommentCard({
+  comment,
+  onSaveEdit,
+  onResetBody,
+  onDelete,
+  isSaving,
+}: {
+  comment: RedditCommentResponse;
+  onSaveEdit: (commentId: string, body: string) => void;
+  onResetBody: (commentId: string) => void;
+  onDelete: (commentId: string) => void;
+  isSaving: boolean;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editBody, setEditBody] = useState(comment.body);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const isDraft = comment.status === 'draft';
+  const isEdited = comment.body !== comment.original_body;
+
+  const handleSave = () => {
+    if (editBody.trim() && editBody !== comment.body) {
+      onSaveEdit(comment.id, editBody.trim());
+    }
+    setIsEditing(false);
+  };
+
+  const handleCancel = () => {
+    setEditBody(comment.body);
+    setIsEditing(false);
+  };
+
+  // Truncate post title for display
+  const postTitle = comment.post?.title
+    ? (comment.post.title.length > 80 ? comment.post.title.slice(0, 80) + '...' : comment.post.title)
+    : 'Unknown post';
+
+  return (
+    <div className="bg-white rounded-sm border border-cream-500 p-4 shadow-sm">
+      {/* Header row with badges */}
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <StatusBadge status={comment.status} />
+        <PromotionalBadge isPromotional={comment.is_promotional} />
+        <ApproachBadge approach={comment.approach_type} />
+        {isEdited && isDraft && (
+          <span className="text-xs text-warm-gray-400 italic">edited</span>
+        )}
+      </div>
+
+      {/* Associated post */}
+      {comment.post && (
+        <div className="mb-3">
+          <a
+            href={comment.post.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-lagoon-600 hover:text-lagoon-800 hover:underline inline-flex items-center gap-1"
+          >
+            <span className="text-warm-gray-500">r/{comment.post.subreddit}</span>
+            <span className="mx-1 text-warm-gray-300">|</span>
+            <span>{postTitle}</span>
+            <ExternalLinkIcon className="w-3 h-3 flex-shrink-0" />
+          </a>
+        </div>
+      )}
+
+      {/* Comment body - editable for drafts */}
+      {isEditing ? (
+        <div className="space-y-2">
+          <textarea
+            value={editBody}
+            onChange={(e) => setEditBody(e.target.value)}
+            rows={6}
+            className="block w-full px-3 py-2 text-sm text-warm-gray-900 bg-white border border-cream-400 rounded-sm transition-colors duration-150 placeholder:text-warm-gray-400 focus:outline-none focus:ring-2 focus:ring-palm-200 focus:ring-offset-1 focus:border-palm-400 resize-y"
+          />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={isSaving || !editBody.trim() || editBody === comment.body}
+              className="px-3 py-1 text-xs font-medium text-white bg-palm-500 rounded-sm hover:bg-palm-600 transition-colors disabled:opacity-50"
+            >
+              {isSaving ? 'Saving...' : 'Save'}
+            </button>
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="px-3 py-1 text-xs font-medium text-warm-gray-600 bg-sand-200 rounded-sm hover:bg-sand-300 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div
+          className={`text-sm text-warm-gray-800 whitespace-pre-wrap ${isDraft ? 'cursor-pointer hover:bg-cream-50 rounded-sm p-2 -m-2 transition-colors' : 'p-2 -m-2'}`}
+          onClick={isDraft ? () => { setEditBody(comment.body); setIsEditing(true); } : undefined}
+          title={isDraft ? 'Click to edit' : undefined}
+        >
+          {comment.body}
+          {isDraft && !isEditing && (
+            <PencilIcon className="w-3 h-3 inline-block ml-2 text-warm-gray-400" />
+          )}
+        </div>
+      )}
+
+      {/* Footer with timestamp, reset, and delete */}
+      <div className="flex items-center justify-between mt-3 pt-2 border-t border-cream-200">
+        <span className="text-xs text-warm-gray-400">
+          {new Date(comment.created_at).toLocaleString()}
+        </span>
+        <div className="flex items-center gap-3">
+          {isDraft && isEdited && !isEditing && (
+            <button
+              type="button"
+              onClick={() => onResetBody(comment.id)}
+              className="text-xs text-lagoon-600 hover:text-lagoon-800 hover:underline"
+            >
+              Reset to original
+            </button>
+          )}
+          {isDraft && !isEditing && !confirmDelete && (
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              className="inline-flex items-center gap-1 text-xs text-warm-gray-400 hover:text-coral-600 transition-colors"
+              title="Delete comment"
+            >
+              <TrashIcon className="w-3 h-3" />
+              Delete
+            </button>
+          )}
+          {isDraft && !isEditing && confirmDelete && (
+            <span className="inline-flex items-center gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => { onDelete(comment.id); setConfirmDelete(false); }}
+                className="text-coral-600 font-medium hover:text-coral-700 transition-colors"
+              >
+                Confirm delete?
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(false)}
+                className="text-warm-gray-400 hover:text-warm-gray-600 transition-colors"
+              >
+                Cancel
+              </button>
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
 // MAIN PAGE
 // =============================================================================
 
@@ -490,6 +876,33 @@ export default function ProjectRedditConfigPage() {
   const triggerDiscovery = useTriggerDiscovery(projectId);
   const { data: discoveryStatus } = useDiscoveryStatus(projectId);
   const updatePostStatus = useUpdatePostStatus(projectId);
+
+  // Comment generation hooks
+  const { data: comments } = useComments(projectId);
+  const { data: generationStatus } = useGenerationStatus(projectId);
+  const generateCommentMutation = useGenerateComment(projectId);
+  const generateBatchMutation = useGenerateBatch(projectId);
+  const updateCommentMutation = useUpdateComment(projectId);
+  const deleteCommentMutation = useDeleteComment(projectId);
+
+  // Track which post IDs are currently generating (single generation)
+  const [generatingPostIds, setGeneratingPostIds] = useState<Set<string>>(new Set());
+
+  // Checkbox selection for batch generation
+  const [selectedPostIds, setSelectedPostIds] = useState<Set<string>>(new Set());
+
+  // Map comments by post_id for quick lookup
+  const commentsByPostId = useMemo(() => {
+    const map = new Map<string, RedditCommentResponse[]>();
+    if (comments) {
+      for (const comment of comments) {
+        const existing = map.get(comment.post_id) || [];
+        existing.push(comment);
+        map.set(comment.post_id, existing);
+      }
+    }
+    return map;
+  }, [comments]);
 
   // Discovery filter state
   const [statusFilter, setStatusFilter] = useState('');
@@ -505,6 +918,26 @@ export default function ProjectRedditConfigPage() {
   const { data: posts } = useRedditPosts(projectId, postFilterParams);
   // Unfiltered count to keep tabs visible when current filter yields 0
   const { data: allPosts } = useRedditPosts(projectId);
+
+  // Toggle single post selection
+  const handleToggleSelect = useCallback((postId: string) => {
+    setSelectedPostIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(postId)) next.delete(postId);
+      else next.add(postId);
+      return next;
+    });
+  }, []);
+
+  // Toggle all relevant posts
+  const handleToggleSelectAll = useCallback(() => {
+    setSelectedPostIds((prev) => {
+      const relevantIds = (posts || []).filter((p) => p.filter_status === 'relevant').map((p) => p.id);
+      const allSelected = relevantIds.length > 0 && relevantIds.every((id) => prev.has(id));
+      if (allSelected) return new Set();
+      return new Set(relevantIds);
+    });
+  }, [posts]);
 
   // Form state
   const [isActive, setIsActive] = useState<boolean | null>(null);
@@ -640,6 +1073,113 @@ export default function ProjectRedditConfigPage() {
     }
   }, [hasUnsavedChanges, upsertMutation, buildSavePayload, resetFormState, triggerDiscovery, currentTimeRange]);
 
+  // Generate comment for a single post
+  const handleGenerateComment = useCallback((postId: string) => {
+    setGeneratingPostIds((prev) => new Set(prev).add(postId));
+    generateCommentMutation.mutate(
+      { postId },
+      {
+        onSuccess: () => {
+          setToastMessage('Comment generated');
+          setToastVariant('success');
+          setShowToast(true);
+          setGeneratingPostIds((prev) => {
+            const next = new Set(prev);
+            next.delete(postId);
+            return next;
+          });
+        },
+        onError: (err) => {
+          setToastMessage(err.message || 'Failed to generate comment');
+          setToastVariant('error');
+          setShowToast(true);
+          setGeneratingPostIds((prev) => {
+            const next = new Set(prev);
+            next.delete(postId);
+            return next;
+          });
+        },
+      },
+    );
+  }, [generateCommentMutation]);
+
+  // Batch generate comments for selected posts
+  const handleBatchGenerate = useCallback(() => {
+    const postIds = selectedPostIds.size > 0 ? Array.from(selectedPostIds) : undefined;
+    generateBatchMutation.mutate(postIds, {
+      onSuccess: () => {
+        setToastMessage('Batch generation started');
+        setToastVariant('success');
+        setShowToast(true);
+        setSelectedPostIds(new Set());
+      },
+      onError: (err) => {
+        setToastMessage(err.message || 'Failed to start batch generation');
+        setToastVariant('error');
+        setShowToast(true);
+      },
+    });
+  }, [generateBatchMutation, selectedPostIds]);
+
+  // Save edited comment body
+  const handleSaveCommentEdit = useCallback((commentId: string, body: string) => {
+    updateCommentMutation.mutate(
+      { commentId, data: { body } },
+      {
+        onSuccess: () => {
+          setToastMessage('Comment updated');
+          setToastVariant('success');
+          setShowToast(true);
+        },
+        onError: (err) => {
+          setToastMessage(err.message || 'Failed to update comment');
+          setToastVariant('error');
+          setShowToast(true);
+        },
+      },
+    );
+  }, [updateCommentMutation]);
+
+  // Reset comment body to original
+  const handleResetCommentBody = useCallback((commentId: string) => {
+    const comment = comments?.find((c) => c.id === commentId);
+    if (comment) {
+      updateCommentMutation.mutate(
+        { commentId, data: { body: comment.original_body } },
+        {
+          onSuccess: () => {
+            setToastMessage('Comment reset to original');
+            setToastVariant('success');
+            setShowToast(true);
+          },
+          onError: (err) => {
+            setToastMessage(err.message || 'Failed to reset comment');
+            setToastVariant('error');
+            setShowToast(true);
+          },
+        },
+      );
+    }
+  }, [updateCommentMutation, comments]);
+
+  // Delete a comment
+  const handleDeleteComment = useCallback((commentId: string) => {
+    deleteCommentMutation.mutate(commentId, {
+      onSuccess: () => {
+        setToastMessage('Comment deleted');
+        setToastVariant('success');
+        setShowToast(true);
+      },
+      onError: (err) => {
+        setToastMessage(err.message || 'Failed to delete comment');
+        setToastVariant('error');
+        setShowToast(true);
+      },
+    });
+  }, [deleteCommentMutation]);
+
+  const isGenerationActive = generationStatus?.status === 'generating';
+
   // Loading
   if (isLoading) {
     return (
@@ -756,7 +1296,7 @@ export default function ProjectRedditConfigPage() {
         </div>
       )}
 
-      {/* Filter Controls — always visible when any posts exist */}
+      {/* Filter Controls + Generate Comments button — visible when any posts exist */}
       {allPosts && allPosts.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 mb-4">
           {/* Status Tabs */}
@@ -790,6 +1330,30 @@ export default function ProjectRedditConfigPage() {
             <option value="question">Question</option>
             <option value="general">General</option>
           </select>
+
+          {/* Spacer pushes Generate button to right */}
+          <div className="flex-1" />
+
+          {/* Generate Comments button */}
+          <Button
+            onClick={handleBatchGenerate}
+            disabled={generateBatchMutation.isPending || isGenerationActive || selectedPostIds.size === 0}
+            size="sm"
+          >
+            <SparklesIcon className="w-4 h-4 mr-1.5" />
+            {generateBatchMutation.isPending ? 'Starting...' : isGenerationActive ? 'Generating...' : (
+              selectedPostIds.size > 0
+                ? `Generate Comments (${selectedPostIds.size})`
+                : 'Generate Comments'
+            )}
+          </Button>
+        </div>
+      )}
+
+      {/* Generation Progress */}
+      {generationStatus && generationStatus.status !== 'idle' && (
+        <div className="mb-4">
+          <GenerationProgress status={generationStatus} />
         </div>
       )}
 
@@ -839,9 +1403,39 @@ export default function ProjectRedditConfigPage() {
             onReject={(postId) =>
               updatePostStatus.mutate({ postId, data: { filter_status: 'irrelevant' } })
             }
+            onGenerate={handleGenerateComment}
+            generatingPostIds={generatingPostIds}
+            commentsByPostId={commentsByPostId}
+            selectedPostIds={selectedPostIds}
+            onToggleSelect={handleToggleSelect}
+            onToggleSelectAll={handleToggleSelectAll}
           />
         )}
       </div>
+
+      {/* Comment Cards — inline below posts */}
+      {comments && comments.length > 0 && (
+        <div className="mt-6">
+          <div className="flex items-center gap-2 mb-3">
+            <MessageSquareIcon className="w-4 h-4 text-warm-gray-500" />
+            <span className="text-sm font-medium text-warm-gray-700">
+              {comments.length} comment{comments.length !== 1 ? 's' : ''} generated
+            </span>
+          </div>
+          <div className="space-y-3">
+            {comments.map((comment) => (
+              <CommentCard
+                key={comment.id}
+                comment={comment}
+                onSaveEdit={handleSaveCommentEdit}
+                onResetBody={handleResetCommentBody}
+                onDelete={handleDeleteComment}
+                isSaving={updateCommentMutation.isPending}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ================================================================= */}
       {/* SETTINGS SECTION */}

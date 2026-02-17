@@ -278,6 +278,46 @@ class BulkCommentActionRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Comment generation schemas (Phase 14c)
+# ---------------------------------------------------------------------------
+
+
+class RedditCommentUpdateRequest(BaseModel):
+    """Request schema for updating a comment's body text."""
+
+    body: str = Field(..., description="Updated comment body text")
+
+
+class GenerateCommentRequest(BaseModel):
+    """Request schema for generating a comment for a single post."""
+
+    is_promotional: bool = Field(
+        True, description="Whether to generate a promotional comment (default True)"
+    )
+
+
+class BatchGenerateRequest(BaseModel):
+    """Request schema for batch comment generation."""
+
+    post_ids: list[str] | None = Field(
+        None,
+        description="Specific post IDs to generate for. If omitted, generates for all relevant posts without comments.",
+    )
+
+
+class GenerationStatusResponse(BaseModel):
+    """Response schema for polling batch generation progress."""
+
+    status: str = Field(
+        ...,
+        description="Generation status: generating | complete | failed | idle",
+    )
+    total_posts: int = Field(0, description="Total posts to generate for")
+    posts_generated: int = Field(0, description="Posts generated so far")
+    error: str | None = Field(None, description="Error message if status is 'failed'")
+
+
+# ---------------------------------------------------------------------------
 # CrowdReplyTask schemas
 # ---------------------------------------------------------------------------
 

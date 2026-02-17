@@ -1,33 +1,46 @@
 """Reddit API routers.
 
 REST endpoints for Reddit account CRUD, per-project Reddit configuration,
-post discovery, and post management.
+post discovery, post management, and comment generation.
 """
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import cast
 
 from app.core.database import get_session
 from app.core.logging import get_logger
 from app.models.project import Project
 from app.models.reddit_account import RedditAccount
+from app.models.reddit_comment import RedditComment
 from app.models.reddit_config import RedditProjectConfig
 from app.models.reddit_post import RedditPost
 from app.schemas.reddit import (
+    BatchGenerateRequest,
     BulkPostActionRequest,
     DiscoveryStatusResponse,
     DiscoveryTriggerRequest,
     DiscoveryTriggerResponse,
+    GenerateCommentRequest,
+    GenerationStatusResponse,
     PostUpdateRequest,
+    RedditCommentUpdateRequest,
     RedditAccountCreate,
     RedditAccountResponse,
     RedditAccountUpdate,
+    RedditCommentResponse,
     RedditPostResponse,
     RedditProjectConfigCreate,
     RedditProjectConfigResponse,
+)
+from app.services.reddit_comment_generation import (
+    generate_batch,
+    generate_comment,
+    get_generation_progress,
+    is_generation_active,
 )
 from app.services.reddit_discovery import (
     DiscoveryProgress,
@@ -450,3 +463,244 @@ async def bulk_post_action(
     await db.commit()
 
     return {"updated": result.rowcount}
+
+
+# ---------------------------------------------------------------------------
+# Comment generation endpoints (Phase 14c)
+# ---------------------------------------------------------------------------
+
+
+@reddit_project_router.post(
+    "/{project_id}/reddit/posts/{post_id}/generate",
+    response_model=RedditCommentResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        404: {"description": "Post not found"},
+    },
+)
+async def generate_single_comment(
+    project_id: str,
+    post_id: str,
+    data: GenerateCommentRequest | None = None,
+    db: AsyncSession = Depends(get_session),
+) -> RedditCommentResponse:
+    """Generate a single AI comment for a Reddit post.
+
+    Creates a new comment each time (re-generation never overwrites).
+    Returns 201 with the generated comment.
+    """
+    is_promotional = data.is_promotional if data else True
+
+    # Load the post
+    stmt = select(RedditPost).where(
+        RedditPost.id == post_id,
+        RedditPost.project_id == project_id,
+    )
+    result = await db.execute(stmt)
+    post = result.scalar_one_or_none()
+
+    if post is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Reddit post {post_id} not found",
+        )
+
+    comment = await generate_comment(
+        post=post,
+        project_id=project_id,
+        db=db,
+        is_promotional=is_promotional,
+    )
+    await db.commit()
+
+    # Reload with post relationship for response
+    reload_stmt = (
+        select(RedditComment)
+        .options(selectinload(RedditComment.post))
+        .where(RedditComment.id == comment.id)
+    )
+    reload_result = await db.execute(reload_stmt)
+    comment = reload_result.scalar_one()
+
+    return RedditCommentResponse.model_validate(comment)
+
+
+async def _run_batch_generation(
+    project_id: str, post_ids: list[str] | None
+) -> None:
+    """Background task wrapper for generate_batch."""
+    try:
+        await generate_batch(project_id=project_id, post_ids=post_ids)
+    except Exception as e:
+        logger.error(
+            "Background batch generation failed",
+            extra={
+                "project_id": project_id,
+                "error": str(e),
+                "error_type": type(e).__name__,
+            },
+            exc_info=True,
+        )
+
+
+@reddit_project_router.post(
+    "/{project_id}/reddit/generate-batch",
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={
+        409: {"description": "Batch generation already in progress"},
+    },
+)
+async def trigger_batch_generation(
+    project_id: str,
+    background_tasks: BackgroundTasks,
+    data: BatchGenerateRequest | None = None,
+) -> dict:
+    """Trigger batch comment generation as a background task.
+
+    If post_ids provided, generates for those posts only.
+    Otherwise generates for all relevant posts without comments.
+    Returns 202 immediately. Poll GET /generate/status for progress.
+    """
+    if is_generation_active(project_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Batch generation already in progress",
+        )
+
+    post_ids = data.post_ids if data else None
+    background_tasks.add_task(_run_batch_generation, project_id, post_ids)
+
+    return {"message": "Batch generation started"}
+
+
+@reddit_project_router.get(
+    "/{project_id}/reddit/generate/status",
+    response_model=GenerationStatusResponse,
+)
+async def get_generation_status(
+    project_id: str,
+) -> GenerationStatusResponse:
+    """Poll batch generation progress for a project.
+
+    Returns current progress if generation is active, or "idle" if not.
+    """
+    progress = get_generation_progress(project_id)
+
+    if progress is None:
+        return GenerationStatusResponse(status="idle")
+
+    return GenerationStatusResponse(
+        status=progress.status,
+        total_posts=progress.total_posts,
+        posts_generated=progress.posts_generated,
+        error=progress.error,
+    )
+
+
+@reddit_project_router.get(
+    "/{project_id}/reddit/comments",
+    response_model=list[RedditCommentResponse],
+)
+async def list_comments(
+    project_id: str,
+    comment_status: str | None = Query(
+        None, alias="status", description="Filter by comment status"
+    ),
+    post_id: str | None = Query(None, description="Filter by post ID"),
+    db: AsyncSession = Depends(get_session),
+) -> list[RedditCommentResponse]:
+    """List generated comments for a project with optional filters.
+
+    Results are ordered by creation time descending (newest first).
+    """
+    stmt = (
+        select(RedditComment)
+        .options(selectinload(RedditComment.post))
+        .where(RedditComment.project_id == project_id)
+        .order_by(RedditComment.created_at.desc())
+    )
+
+    if comment_status is not None:
+        stmt = stmt.where(RedditComment.status == comment_status)
+
+    if post_id is not None:
+        stmt = stmt.where(RedditComment.post_id == post_id)
+
+    result = await db.execute(stmt)
+    comments = result.scalars().all()
+
+    return [RedditCommentResponse.model_validate(c) for c in comments]
+
+
+@reddit_project_router.delete(
+    "/{project_id}/reddit/comments/{comment_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_comment(
+    project_id: str,
+    comment_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> None:
+    """Delete a comment. Only draft comments can be deleted."""
+    stmt = select(RedditComment).where(
+        RedditComment.id == comment_id,
+        RedditComment.project_id == project_id,
+    )
+    result = await db.execute(stmt)
+    comment = result.scalar_one_or_none()
+
+    if comment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Comment {comment_id} not found",
+        )
+
+    if comment.status != "draft":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only draft comments can be deleted",
+        )
+
+    await db.delete(comment)
+    await db.commit()
+
+
+@reddit_project_router.patch(
+    "/{project_id}/reddit/comments/{comment_id}",
+    response_model=RedditCommentResponse,
+)
+async def update_comment(
+    project_id: str,
+    comment_id: str,
+    data: RedditCommentUpdateRequest,
+    db: AsyncSession = Depends(get_session),
+) -> RedditCommentResponse:
+    """Update a comment's body text. Only draft comments can be edited."""
+    stmt = (
+        select(RedditComment)
+        .options(selectinload(RedditComment.post))
+        .where(
+            RedditComment.id == comment_id,
+            RedditComment.project_id == project_id,
+        )
+    )
+    result = await db.execute(stmt)
+    comment = result.scalar_one_or_none()
+
+    if comment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Comment {comment_id} not found",
+        )
+
+    if comment.status != "draft":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only draft comments can be edited",
+        )
+
+    comment.body = data.body
+    await db.commit()
+    await db.refresh(comment)
+
+    return RedditCommentResponse.model_validate(comment)
