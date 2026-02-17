@@ -181,3 +181,13 @@ after each iteration and it's included in prompts for context.
   - `useUpsertRedditConfig(projectId)` takes projectId as a hook argument (not mutation variable) since it's fixed for the component lifetime — keeps mutation variable as just the data payload
   - Invalidating with just the key prefix `['reddit-accounts']` (no params) invalidates all variants of that query regardless of filter params used
 ---
+
+## 2026-02-16 - S14A-016
+- Added navigation links (Projects, Reddit) to Header with active state styling
+- Files changed:
+  - `frontend/src/components/Header.tsx` (added `usePathname`, `Link`, nav links with active detection)
+- **Learnings:**
+  - Header already had `'use client'` directive — just needed imports for `Link` and `usePathname`
+  - Active state pattern: `pathname === '/'` for exact match on root, `pathname.startsWith('/reddit')` for prefix match on sections
+  - Nav links placed inside the left section (alongside logo) using `gap-8` for spacing between logo group and nav group
+---

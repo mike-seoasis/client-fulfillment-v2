@@ -1,19 +1,49 @@
 'use client';
 
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+
 export function Header() {
+  const pathname = usePathname();
+
+  const navLinks = [
+    { href: '/', label: 'Projects', isActive: pathname === '/' || pathname.startsWith('/projects') },
+    { href: '/reddit', label: 'Reddit', isActive: pathname.startsWith('/reddit') },
+  ];
+
   return (
     <header className="sticky top-0 z-50 w-full bg-cream-100 border-b border-cream-300">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
-          {/* Logo and title */}
-          <div className="flex items-center gap-3">
-            {/* Logo placeholder */}
-            <div className="flex h-9 w-9 items-center justify-center rounded-sm bg-palm-500 text-white font-bold text-lg">
-              C
+          {/* Logo, title, and nav */}
+          <div className="flex items-center gap-8">
+            {/* Logo and title */}
+            <div className="flex items-center gap-3">
+              {/* Logo placeholder */}
+              <div className="flex h-9 w-9 items-center justify-center rounded-sm bg-palm-500 text-white font-bold text-lg">
+                C
+              </div>
+              <span className="text-lg font-semibold text-warm-gray-900">
+                Client Onboarding
+              </span>
             </div>
-            <span className="text-lg font-semibold text-warm-gray-900">
-              Client Onboarding
-            </span>
+
+            {/* Navigation links */}
+            <nav className="flex items-center gap-6">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`text-sm font-medium pb-0.5 transition-colors duration-150 ${
+                    link.isActive
+                      ? 'text-warm-gray-900 border-b-2 border-palm-500'
+                      : 'text-warm-gray-700 hover:text-warm-gray-900'
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
           </div>
 
           {/* User menu placeholder */}
