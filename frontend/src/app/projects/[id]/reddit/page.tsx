@@ -674,127 +674,9 @@ export default function ProjectRedditConfigPage() {
       {/* Divider */}
       <hr className="border-cream-500 mb-6" />
 
-      {/* Form */}
-      <div className="bg-white rounded-sm border border-cream-500 p-6 shadow-sm space-y-6">
-        {/* Search Keywords */}
-        <TagInput
-          label="Search Keywords"
-          tags={currentSearchKeywords}
-          onChange={(val) => setSearchKeywords(val)}
-          placeholder="Add keywords to monitor..."
-        />
-
-        {/* Target Subreddits */}
-        <TagInput
-          label="Target Subreddits"
-          tags={currentTargetSubreddits}
-          onChange={(val) => setTargetSubreddits(val)}
-          placeholder="Add subreddits to engage in..."
-          prefix="r/"
-        />
-
-        {/* Banned Subreddits */}
-        <TagInput
-          label="Banned Subreddits"
-          tags={currentBannedSubreddits}
-          onChange={(val) => setBannedSubreddits(val)}
-          placeholder="Add subreddits to avoid..."
-          prefix="r/"
-        />
-
-        {/* Competitors */}
-        <TagInput
-          label="Competitors"
-          tags={currentCompetitors}
-          onChange={(val) => setCompetitors(val)}
-          placeholder="Add competitor names or domains..."
-        />
-
-        {/* Comment Instructions */}
-        <div className="w-full">
-          <label
-            htmlFor="comment-instructions"
-            className="block mb-1.5 text-sm font-medium text-warm-gray-700"
-          >
-            Comment Instructions
-          </label>
-          <textarea
-            id="comment-instructions"
-            rows={4}
-            value={currentCommentInstructions}
-            onChange={(e) => setCommentInstructions(e.target.value)}
-            placeholder="Describe the voice, tone, and approach for Reddit comments..."
-            className="block w-full px-4 py-2.5 text-warm-gray-900 bg-white border border-cream-400 rounded-sm transition-colors duration-150 placeholder:text-warm-gray-400 focus:outline-none focus:ring-2 focus:ring-palm-200 focus:ring-offset-1 focus:border-palm-400 hover:border-cream-500 resize-y"
-          />
-        </div>
-
-        {/* Niche Tags */}
-        <TagInput
-          label="Niche Tags"
-          tags={currentNicheTags}
-          onChange={(val) => setNicheTags(val)}
-          placeholder="Add niche or topic tags..."
-        />
-
-        {/* Discovery Settings */}
-        <div>
-          <h3 className="text-sm font-semibold text-warm-gray-900 mb-4">Discovery Settings</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Time Range */}
-            <div>
-              <label
-                htmlFor="time-range"
-                className="block mb-1.5 text-sm font-medium text-warm-gray-700"
-              >
-                Time Range
-              </label>
-              <select
-                id="time-range"
-                value={currentTimeRange}
-                onChange={(e) => setTimeRange(e.target.value)}
-                className="block w-full px-4 py-2.5 text-warm-gray-900 bg-white border border-cream-400 rounded-sm transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-palm-200 focus:ring-offset-1 focus:border-palm-400 hover:border-cream-500"
-              >
-                {TIME_RANGE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Max Posts */}
-            <div>
-              <label
-                htmlFor="max-posts"
-                className="block mb-1.5 text-sm font-medium text-warm-gray-700"
-              >
-                Max Posts
-              </label>
-              <input
-                id="max-posts"
-                type="number"
-                min={1}
-                max={500}
-                value={currentMaxPosts}
-                onChange={(e) => setMaxPosts(e.target.value)}
-                className="block w-full px-4 py-2.5 text-warm-gray-900 bg-white border border-cream-400 rounded-sm transition-colors duration-150 placeholder:text-warm-gray-400 focus:outline-none focus:ring-2 focus:ring-palm-200 focus:ring-offset-1 focus:border-palm-400 hover:border-cream-500"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Save button */}
-        <div className="pt-2">
-          <Button onClick={handleSave} disabled={upsertMutation.isPending}>
-            {upsertMutation.isPending ? 'Saving...' : 'Save Settings'}
-          </Button>
-        </div>
-      </div>
-
       {/* ================================================================= */}
-      {/* DISCOVERY SECTION */}
+      {/* DISCOVERY SECTION (above settings) */}
       {/* ================================================================= */}
-      <hr className="border-cream-500 my-8" />
 
       <div className="flex items-center justify-between mb-4">
         <div>
@@ -910,6 +792,129 @@ export default function ProjectRedditConfigPage() {
             }
           />
         )}
+      </div>
+
+      {/* ================================================================= */}
+      {/* SETTINGS SECTION */}
+      {/* ================================================================= */}
+      <hr className="border-cream-500 my-8" />
+
+      <h2 className="text-lg font-semibold text-warm-gray-900 mb-4">Settings</h2>
+
+      <div className="bg-white rounded-sm border border-cream-500 p-6 shadow-sm space-y-6">
+        {/* Search Keywords */}
+        <TagInput
+          label="Search Keywords"
+          tags={currentSearchKeywords}
+          onChange={(val) => setSearchKeywords(val)}
+          placeholder="Add keywords to monitor..."
+        />
+
+        {/* Target Subreddits */}
+        <TagInput
+          label="Target Subreddits"
+          tags={currentTargetSubreddits}
+          onChange={(val) => setTargetSubreddits(val)}
+          placeholder="Add subreddits to engage in..."
+          prefix="r/"
+        />
+
+        {/* Banned Subreddits */}
+        <TagInput
+          label="Banned Subreddits"
+          tags={currentBannedSubreddits}
+          onChange={(val) => setBannedSubreddits(val)}
+          placeholder="Add subreddits to avoid..."
+          prefix="r/"
+        />
+
+        {/* Competitors */}
+        <TagInput
+          label="Competitors"
+          tags={currentCompetitors}
+          onChange={(val) => setCompetitors(val)}
+          placeholder="Add competitor names or domains..."
+        />
+
+        {/* Comment Instructions */}
+        <div className="w-full">
+          <label
+            htmlFor="comment-instructions"
+            className="block mb-1.5 text-sm font-medium text-warm-gray-700"
+          >
+            Comment Instructions
+          </label>
+          <textarea
+            id="comment-instructions"
+            rows={4}
+            value={currentCommentInstructions}
+            onChange={(e) => setCommentInstructions(e.target.value)}
+            placeholder="Describe the voice, tone, and approach for Reddit comments..."
+            className="block w-full px-4 py-2.5 text-warm-gray-900 bg-white border border-cream-400 rounded-sm transition-colors duration-150 placeholder:text-warm-gray-400 focus:outline-none focus:ring-2 focus:ring-palm-200 focus:ring-offset-1 focus:border-palm-400 hover:border-cream-500 resize-y"
+          />
+        </div>
+
+        {/* Niche Tags */}
+        <TagInput
+          label="Niche Tags"
+          tags={currentNicheTags}
+          onChange={(val) => setNicheTags(val)}
+          placeholder="Add niche or topic tags..."
+        />
+
+        {/* Discovery Settings */}
+        <div>
+          <h3 className="text-sm font-semibold text-warm-gray-900 mb-4">Discovery Settings</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Time Range */}
+            <div>
+              <label
+                htmlFor="time-range"
+                className="block mb-1.5 text-sm font-medium text-warm-gray-700"
+              >
+                Time Range
+              </label>
+              <select
+                id="time-range"
+                value={currentTimeRange}
+                onChange={(e) => setTimeRange(e.target.value)}
+                className="block w-full px-4 py-2.5 text-warm-gray-900 bg-white border border-cream-400 rounded-sm transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-palm-200 focus:ring-offset-1 focus:border-palm-400 hover:border-cream-500"
+              >
+                {TIME_RANGE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Max Posts */}
+            <div>
+              <label
+                htmlFor="max-posts"
+                className="block mb-1.5 text-sm font-medium text-warm-gray-700"
+              >
+                Max Posts
+              </label>
+              <input
+                id="max-posts"
+                type="number"
+                min={1}
+                max={500}
+                value={currentMaxPosts}
+                onChange={(e) => setMaxPosts(e.target.value)}
+                className="block w-full px-4 py-2.5 text-warm-gray-900 bg-white border border-cream-400 rounded-sm transition-colors duration-150 placeholder:text-warm-gray-400 focus:outline-none focus:ring-2 focus:ring-palm-200 focus:ring-offset-1 focus:border-palm-400 hover:border-cream-500"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Save button */}
+        <div className="pt-2">
+          <Button onClick={handleSave} disabled={upsertMutation.isPending}>
+            {upsertMutation.isPending ? 'Saving...' : 'Save Settings'}
+          </Button>
+        </div>
       </div>
 
       {/* Toast */}

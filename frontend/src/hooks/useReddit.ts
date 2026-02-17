@@ -8,6 +8,7 @@
  * - ['reddit-posts', projectId, params] for discovered posts
  */
 
+import { useEffect, useRef } from 'react';
 import {
   useMutation,
   useQuery,
@@ -238,7 +239,10 @@ export function useDiscoveryStatus(
   projectId: string,
   options?: { enabled?: boolean }
 ): UseQueryResult<DiscoveryStatus> {
-  return useQuery({
+  const queryClient = useQueryClient();
+  const prevStatusRef = useRef<string>();
+
+  const query = useQuery({
     queryKey: redditKeys.discoveryStatus(projectId),
     queryFn: () => fetchDiscoveryStatus(projectId),
     enabled: options?.enabled ?? !!projectId,
@@ -250,6 +254,21 @@ export function useDiscoveryStatus(
       return false;
     },
   });
+
+  // Auto-refresh posts when discovery transitions to "complete"
+  useEffect(() => {
+    const currentStatus = query.data?.status;
+    if (
+      prevStatusRef.current &&
+      prevStatusRef.current !== 'complete' &&
+      currentStatus === 'complete'
+    ) {
+      queryClient.invalidateQueries({ queryKey: ['reddit-posts', projectId] });
+    }
+    prevStatusRef.current = currentStatus;
+  }, [query.data?.status, queryClient, projectId]);
+
+  return query;
 }
 
 /**
