@@ -31,6 +31,7 @@ from app.models.project import Project
 from app.models.project_file import ProjectFile
 from app.models.prompt_log import PromptLog
 from app.models.reddit_account import AccountStatus, RedditAccount, WarmupStage
+from app.models.reddit_comment import CommentStatus, RedditComment
 from app.models.reddit_config import RedditProjectConfig
 from app.models.reddit_post import PostFilterStatus, PostIntent, RedditPost
 
@@ -59,11 +60,13 @@ __all__ = [
     "PageKeywords",
     "PagePAA",
     "AccountStatus",
+    "CommentStatus",
     "PostFilterStatus",
     "PostIntent",
     "Project",
     "ProjectFile",
     "RedditAccount",
+    "RedditComment",
     "RedditPost",
     "RedditProjectConfig",
     "PromptLog",

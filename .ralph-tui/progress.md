@@ -43,3 +43,14 @@ after each iteration and it's included in prompts for context.
   - RedditComment model doesn't exist yet — used `TYPE_CHECKING` forward reference for the `comments` relationship so the model compiles without the dependency
   - UniqueConstraint goes in `__table_args__` tuple (must have trailing comma for single-element tuple)
 ---
+
+## 2026-02-16 - S14A-004
+- Created `RedditComment` model with `CommentStatus` enum
+- Files changed:
+  - `backend/app/models/reddit_comment.py` (new)
+  - `backend/app/models/__init__.py` (registered `RedditComment` + `CommentStatus`)
+- **Learnings:**
+  - `RedditPost` already had a forward-reference `comments` relationship to `RedditComment` via `TYPE_CHECKING` — now that the model exists, the relationship resolves at runtime via string-based target (`"RedditComment"`)
+  - Boolean columns with `server_default` use `text("true")` / `text("false")` (not Python bool)
+  - `SET NULL` on FK delete requires the column to be `nullable=True`
+---

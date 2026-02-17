@@ -62,8 +62,9 @@
         "Add relationships: post (many-to-one back_populates), crowdreply_tasks (one-to-many)"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "body holds the current (possibly edited) text. original_body is the AI-generated text that never changes. account_id uses SET NULL on delete so comment history is preserved even if account is removed."
+      "passes": true,
+      "notes": "body holds the current (possibly edited) text. original_body is the AI-generated text that never changes. account_id uses SET NULL on delete so comment history is preserved even if account is removed.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S14A-005",
@@ -360,6 +361,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-17T00:23:33.647Z"
+    "updatedAt": "2026-02-17T00:25:18.399Z"
   }
 }
