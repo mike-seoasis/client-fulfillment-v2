@@ -9,6 +9,7 @@ import { useCrawlStatus, getOnboardingStep } from '@/hooks/use-crawl-status';
 import { useClusters } from '@/hooks/useClusters';
 import { useBlogCampaigns } from '@/hooks/useBlogs';
 import { useLinkMap, usePlanStatus } from '@/hooks/useLinks';
+import { useRedditConfig } from '@/hooks/useReddit';
 import { Button, ButtonLink, Toast } from '@/components/ui';
 
 function LoadingSkeleton() {
@@ -131,6 +132,22 @@ function PencilIcon({ className }: { className?: string }) {
       strokeLinejoin="round"
     >
       <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+    </svg>
+  );
+}
+
+function ChatBubbleIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
     </svg>
   );
 }
@@ -494,6 +511,11 @@ export default function ProjectDetailPage() {
 
   // Fetch blog campaigns for Blogs section
   const { data: blogCampaigns } = useBlogCampaigns(projectId, {
+    enabled: !!projectId && !isLoading && !error,
+  });
+
+  // Fetch Reddit config for project
+  const { data: redditConfig } = useRedditConfig(projectId, {
     enabled: !!projectId && !isLoading && !error,
   });
 
@@ -925,6 +947,31 @@ export default function ProjectDetailPage() {
               ))}
             </div>
           )}
+        </div>
+
+        {/* Reddit Marketing section */}
+        <div className="bg-white rounded-sm border border-cream-500 p-6 shadow-sm">
+          <div className="flex items-center gap-3 mb-3">
+            <ChatBubbleIcon className="w-5 h-5 text-palm-500" />
+            <h2 className="text-lg font-semibold text-warm-gray-900">
+              Reddit Marketing
+            </h2>
+            <span className={`text-xs px-2 py-0.5 rounded-full ${
+              redditConfig
+                ? 'bg-palm-50 text-palm-700'
+                : 'bg-cream-100 text-warm-gray-600'
+            }`}>
+              {redditConfig ? 'Configured' : 'Not configured'}
+            </span>
+          </div>
+          <p className="text-warm-gray-600 text-sm mb-4">
+            {redditConfig
+              ? 'Reddit marketing is set up for this project'
+              : 'Configure Reddit marketing to promote your content across relevant subreddits'}
+          </p>
+          <ButtonLink href={`/projects/${projectId}/reddit`}>
+            {redditConfig ? 'Manage Reddit Settings' : 'Configure Reddit'}
+          </ButtonLink>
         </div>
       </div>
     </div>

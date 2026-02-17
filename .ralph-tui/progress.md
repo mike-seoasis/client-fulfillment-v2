@@ -235,3 +235,14 @@ after each iteration and it's included in prompts for context.
   - Toggle switch pattern: `role="switch"` + `aria-checked` for accessibility; `translate-x-6`/`translate-x-1` for the knob animation
   - For upsert flows, reset local state to `null` after successful save so values re-derive from the invalidated query cache
 ---
+
+## 2026-02-16 - S14A-020
+- Added Reddit Marketing card to project detail page below Blogs section
+- Card shows "Not configured" / "Configured" status badge based on `useRedditConfig` hook data
+- Links to `/projects/[id]/reddit` for both states (with contextual button text)
+- Files changed:
+  - `frontend/src/app/projects/[id]/page.tsx` (added ChatBubbleIcon, useRedditConfig import, Reddit Marketing section card)
+- **Learnings:**
+  - `useRedditConfig` returns undefined (not null) when a 404 is received and the query errors — truthiness check on `redditConfig` works to distinguish configured vs not-configured state
+  - Section card pattern: icon + title + subtitle badge + description + action ButtonLink — consistent across Onboarding, Clusters, Blogs, and now Reddit
+---
