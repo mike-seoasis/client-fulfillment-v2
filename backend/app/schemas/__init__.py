@@ -176,6 +176,19 @@ from app.schemas.project_file import (
     ProjectFileList,
     ProjectFileResponse,
 )
+from app.schemas.reddit import (
+    BulkCommentActionRequest,
+    CommentApproveRequest,
+    CommentRejectRequest,
+    CrowdReplyTaskResponse,
+    RedditAccountCreate,
+    RedditAccountResponse,
+    RedditAccountUpdate,
+    RedditCommentResponse,
+    RedditPostResponse,
+    RedditProjectConfigCreate,
+    RedditProjectConfigResponse,
+)
 
 __all__ = [
     # Content Brief schemas
@@ -322,6 +335,18 @@ __all__ = [
     "BlogLinkStatusResponse",
     "BlogLinkMapItem",
     "BlogLinkMapResponse",
+    # Reddit schemas
+    "RedditAccountCreate",
+    "RedditAccountUpdate",
+    "RedditAccountResponse",
+    "RedditProjectConfigCreate",
+    "RedditProjectConfigResponse",
+    "RedditPostResponse",
+    "RedditCommentResponse",
+    "CommentApproveRequest",
+    "CommentRejectRequest",
+    "BulkCommentActionRequest",
+    "CrowdReplyTaskResponse",
     # CrawledPage schemas
     "CrawledPageCreate",
     "CrawledPageFullResponse",

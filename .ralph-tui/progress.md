@@ -88,3 +88,14 @@ after each iteration and it's included in prompts for context.
   - SQLAlchemy `extra_metadata` mapped to column `"metadata"` — in the migration, use the actual DB column name `"metadata"`, not the Python attribute name
   - For `unique=True` + `index=True` columns (like `reddit_project_configs.project_id`), create a unique index (`unique=True` on `create_index`) which satisfies both the unique constraint and the index
 ---
+
+## 2026-02-16 - S14A-008
+- Created Pydantic v2 schemas for all Reddit entities
+- Files changed:
+  - `backend/app/schemas/reddit.py` (new — 11 schema classes)
+  - `backend/app/schemas/__init__.py` (registered all Reddit schemas)
+- **Learnings:**
+  - Follow `blog.py` pattern: `str` for UUID fields (not `UUID` type) since models use `UUID(as_uuid=False)`
+  - `extra_metadata` Python attribute maps to `metadata` DB column — Pydantic schema uses the Python attribute name `extra_metadata` since `from_attributes=True` reads Python attrs
+  - ruff import sorting (`I001`) places `reddit` alphabetically after `project_file` and before nothing else — auto-fix with `--fix` is safe
+---
