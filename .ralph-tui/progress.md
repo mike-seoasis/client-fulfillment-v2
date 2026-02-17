@@ -146,3 +146,15 @@ after each iteration and it's included in prompts for context.
 - **Learnings:**
   - S14A-010 proactively registered both routers when creating them, making this story a verification-only task (same pattern as S14A-006)
 ---
+
+## 2026-02-16 - S14A-013
+- Created backend tests for Reddit models and API endpoints (31 tests total)
+- Files changed:
+  - `backend/tests/test_reddit_models.py` (new — 16 tests: enum values, default fields, unique constraints)
+  - `backend/tests/test_reddit_api.py` (new — 15 tests: CRUD accounts, filter, duplicate 409, project config upsert, 404s)
+- **Learnings:**
+  - JSONB `@>` (contains) operator with `cast(..., JSONB)` is PostgreSQL-specific — SQLite test backend can't compile it. Niche filter test must skip the actual filter call and verify endpoint routing only; full filter testing requires PostgreSQL integration tests.
+  - Use `IntegrityError` (not bare `Exception`) for unique constraint violation assertions — ruff B017 forbids `pytest.raises(Exception)`
+  - `asyncio_mode = "auto"` means no `@pytest.mark.asyncio` decorators needed on test methods
+  - Test pattern: class-scoped fixtures (project, account) follow the same pattern as `test_cluster_api.py` — create via `db_session`, commit, return model instance
+---
