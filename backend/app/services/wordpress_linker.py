@@ -138,8 +138,13 @@ async def step2_import(
     job_id: str,
     title_filter: list[str] | None = None,
     post_status: str = "publish",
+    existing_project_id: str | None = None,
 ) -> dict[str, Any]:
-    """Import WordPress posts into Project + CrawledPage + PageContent records."""
+    """Import WordPress posts into Project + CrawledPage + PageContent records.
+
+    If existing_project_id is provided, WP posts are added to that project
+    alongside its existing onboarding pages. Otherwise a new standalone project is created.
+    """
     progress = {
         "step": "import",
         "step_label": "Fetching posts from WordPress...",
@@ -172,15 +177,27 @@ async def step2_import(
             }
             return progress["result"]
 
-        # Create project
-        project = Project(
-            name=f"WP Blog: {site_url}",
-            site_url=site_url,
-            status="active",
-            phase_status={"wordpress": {"source": "wordpress", "import_count": len(posts)}},
-        )
-        db.add(project)
-        await db.flush()
+        # Use existing project or create a new one
+        if existing_project_id:
+            project = await db.get(Project, existing_project_id)
+            if not project:
+                raise ValueError(f"Project {existing_project_id} not found")
+            # Store WP metadata on the existing project
+            if "wordpress" not in (project.phase_status or {}):
+                project.phase_status = {**(project.phase_status or {}), "wordpress": {}}
+            project.phase_status["wordpress"]["source"] = "wordpress"
+            project.phase_status["wordpress"]["import_count"] = len(posts)
+            flag_modified(project, "phase_status")
+            await db.flush()
+        else:
+            project = Project(
+                name=f"WP Blog: {site_url}",
+                site_url=site_url,
+                status="active",
+                phase_status={"wordpress": {"source": "wordpress", "import_count": len(posts)}},
+            )
+            db.add(project)
+            await db.flush()
 
         # Create CrawledPage + PageContent for each post
         for i, post in enumerate(posts):
@@ -450,9 +467,32 @@ async def _generate_blog_taxonomy(
 
         page_summaries.append(summary)
 
+    # Check for existing onboarding page labels in the same project
+    onboarding_labels_section = ""
+    onboarding_stmt = select(CrawledPage).where(
+        CrawledPage.project_id == project_id,
+        CrawledPage.source == "onboarding",
+    )
+    onboarding_result = await db.execute(onboarding_stmt)
+    onboarding_pages = list(onboarding_result.scalars().all())
+
+    if onboarding_pages:
+        existing_labels: set[str] = set()
+        for op in onboarding_pages:
+            if op.labels:
+                existing_labels.update(op.labels)
+        if existing_labels:
+            onboarding_labels_section = f"""
+
+IMPORTANT: This blog exists alongside collection/product pages that already use these labels:
+{', '.join(sorted(existing_labels))}
+
+You MUST reuse these existing labels where they are topically relevant to blog posts. This creates label overlap between blog posts and collection pages, which enables cross-linking. You may also create new labels for blog topics not covered by existing labels."""
+
     user_prompt = f"""Analyze these {len(pages)} blog posts and generate a taxonomy of topic labels for internal linking silos:
 
 {chr(10).join(page_summaries)}
+{onboarding_labels_section}
 
 Generate a taxonomy that captures the main topics. Each label should group posts that readers would naturally want to explore together."""
 
@@ -690,7 +730,12 @@ async def step5_plan_links(
     project_id: str,
     job_id: str,
 ) -> dict[str, Any]:
-    """Build internal links for each silo group using the existing pipeline."""
+    """Build internal links for each silo group using the existing pipeline.
+
+    If the project has onboarding pages (i.e., it's a mixed project), uses
+    collection-aware graph building and target selection so blog posts link
+    to collection pages as high-value targets.
+    """
     progress = {
         "step": "plan",
         "step_label": "Planning internal links",
@@ -701,6 +746,21 @@ async def step5_plan_links(
     _wp_progress[job_id] = progress
 
     try:
+        # Detect whether project has onboarding (collection) pages
+        onboarding_count_stmt = (
+            select(func.count())
+            .select_from(CrawledPage)
+            .where(
+                CrawledPage.project_id == project_id,
+                CrawledPage.source == "onboarding",
+            )
+        )
+        onboarding_count_result = await db.execute(onboarding_count_stmt)
+        has_collection_pages = onboarding_count_result.scalar_one() > 0
+
+        if has_collection_pages:
+            logger.info("Mixed project detected — using collection-aware link planning")
+
         # Load all clusters (silo groups) for this project
         stmt = select(KeywordCluster).where(
             KeywordCluster.project_id == project_id,
@@ -714,6 +774,16 @@ async def step5_plan_links(
             progress["result"] = {"total_links": 0, "groups_processed": 0}
             return progress["result"]
 
+        # Pre-load onboarding pages once if this is a mixed project
+        collection_pages: list[CrawledPage] = []
+        if has_collection_pages:
+            coll_stmt = select(CrawledPage).where(
+                CrawledPage.project_id == project_id,
+                CrawledPage.source == "onboarding",
+            )
+            coll_result = await db.execute(coll_stmt)
+            collection_pages = list(coll_result.scalars().all())
+
         total_links = 0
         injector = LinkInjector()
         validator = LinkValidator()
@@ -722,9 +792,15 @@ async def step5_plan_links(
         for i, cluster in enumerate(clusters):
             progress["step_label"] = f"Planning links: {cluster.name}"
 
-            links_in_group = await _plan_links_for_silo(
-                db, project_id, cluster, injector, validator, anchor_selector
-            )
+            if has_collection_pages and collection_pages:
+                links_in_group = await _plan_links_for_silo_with_collections(
+                    db, project_id, cluster, collection_pages,
+                    injector, validator, anchor_selector,
+                )
+            else:
+                links_in_group = await _plan_links_for_silo(
+                    db, project_id, cluster, injector, validator, anchor_selector
+                )
             total_links += links_in_group
             progress["current"] = i + 1
 
@@ -960,6 +1036,403 @@ def _build_silo_graph(cluster_pages: list[ClusterPage]) -> dict[str, Any]:
     return {"pages": pages, "edges": edges}
 
 
+def _build_silo_graph_with_collections(
+    cluster_pages: list[ClusterPage],
+    collection_pages: list[CrawledPage],
+) -> dict[str, Any]:
+    """Build a mixed graph with WP blog nodes and onboarding collection page nodes.
+
+    Edges:
+    - WP → WP: label overlap (same as _build_silo_graph)
+    - WP → collection: label overlap (one-directional — blogs link TO collections)
+    - collection → WP: NEVER (collection pages are targets only)
+    """
+    wp_nodes: list[dict[str, Any]] = []
+    for cp in cluster_pages:
+        crawled = cp.crawled_page
+        if not crawled:
+            continue
+        wp_nodes.append({
+            "page_id": crawled.id,
+            "keyword": crawled.title or cp.keyword,
+            "url": crawled.normalized_url,
+            "labels": crawled.labels or [],
+            "is_priority": False,
+            "source": "wordpress",
+        })
+
+    # Find collection pages that share labels with this silo's WP posts
+    silo_labels: set[str] = set()
+    for node in wp_nodes:
+        silo_labels.update(node.get("labels", []))
+
+    coll_nodes: list[dict[str, Any]] = []
+    for cp in collection_pages:
+        page_labels = set(cp.labels or [])
+        if page_labels & silo_labels:  # Only include if there's label overlap
+            coll_nodes.append({
+                "page_id": cp.id,
+                "keyword": cp.title or cp.normalized_url,
+                "url": cp.normalized_url,
+                "labels": cp.labels or [],
+                "is_priority": bool(cp.category and cp.category.lower() in ("collection", "product")),
+                "source": "onboarding",
+            })
+
+    all_nodes = wp_nodes + coll_nodes
+
+    # Build edges — WP→WP and WP→collection only (never collection→WP)
+    edges: list[dict[str, Any]] = []
+
+    # WP → WP edges (bidirectional within silo)
+    for a, b in combinations(wp_nodes, 2):
+        labels_a = set(a.get("labels", []))
+        labels_b = set(b.get("labels", []))
+        overlap = len(labels_a & labels_b)
+        edges.append({
+            "source": a["page_id"],
+            "target": b["page_id"],
+            "weight": max(overlap, 1),
+        })
+
+    # WP → collection edges (one-directional)
+    for wp_node in wp_nodes:
+        wp_labels = set(wp_node.get("labels", []))
+        for coll_node in coll_nodes:
+            coll_labels = set(coll_node.get("labels", []))
+            overlap = len(wp_labels & coll_labels)
+            if overlap > 0:
+                edges.append({
+                    "source": wp_node["page_id"],
+                    "target": coll_node["page_id"],
+                    "weight": overlap,
+                })
+
+    return {"pages": all_nodes, "edges": edges}
+
+
+def select_targets_wp_with_collections(
+    graph: dict[str, Any],
+    budgets: dict[str, int],
+) -> dict[str, list[dict[str, Any]]]:
+    """Select link targets for WP pages in a mixed graph with collection pages.
+
+    Collection pages get a bonus score (collection_bonus=4.0 + priority_bonus=3.0).
+    Budget is split: ~half for collection targets, ~half for sibling blogs.
+    Only WP pages are sources — collection pages never have outbound links.
+    """
+    COLLECTION_BONUS = 4.0
+    PRIORITY_BONUS = 3.0
+
+    pages_by_id: dict[str, dict[str, Any]] = {p["page_id"]: p for p in graph["pages"]}
+
+    # Build one-directional adjacency: source → {target: weight}
+    adjacency: dict[str, dict[str, int]] = {p["page_id"]: {} for p in graph["pages"]}
+    for edge in graph["edges"]:
+        source_page = pages_by_id.get(edge["source"])
+        if not source_page:
+            continue
+        # Only WP pages can be sources
+        if source_page.get("source") == "wordpress":
+            adjacency[edge["source"]][edge["target"]] = edge["weight"]
+        # For WP→WP edges, also add reverse direction
+        target_page = pages_by_id.get(edge["target"])
+        if target_page and target_page.get("source") == "wordpress" and source_page.get("source") == "wordpress":
+            adjacency[edge["target"]][edge["source"]] = edge["weight"]
+
+    inbound_counts: dict[str, int] = {p["page_id"]: 0 for p in graph["pages"]}
+    result: dict[str, list[dict[str, Any]]] = {}
+
+    for page in graph["pages"]:
+        # Only WP pages are sources
+        if page.get("source") != "wordpress":
+            continue
+
+        page_id = page["page_id"]
+        budget = budgets.get(page_id, 3)
+        neighbors = adjacency.get(page_id, {})
+
+        if not neighbors:
+            result[page_id] = []
+            continue
+
+        # Split budget: reserve slots for collection targets
+        collection_targets_available = [
+            tid for tid in neighbors
+            if pages_by_id[tid].get("source") == "onboarding"
+        ]
+        collection_budget = min(len(collection_targets_available), max(1, budget // 2))
+        blog_budget = budget - collection_budget
+
+        total_inbound = sum(inbound_counts.values())
+        page_count = len(graph["pages"])
+        avg_inbound = total_inbound / page_count if page_count > 0 else 0.0
+
+        # Score all targets
+        scored_collection: list[tuple[float, str]] = []
+        scored_blog: list[tuple[float, str]] = []
+
+        for target_id, overlap in neighbors.items():
+            target_page = pages_by_id[target_id]
+            excess_inbound = inbound_counts[target_id] - avg_inbound
+            diversity_penalty = max(0.0, excess_inbound * 0.5)
+
+            if target_page.get("source") == "onboarding":
+                # Collection page — boost score
+                priority_bonus = PRIORITY_BONUS if target_page.get("is_priority") else 0.0
+                score = overlap + COLLECTION_BONUS + priority_bonus - diversity_penalty
+                scored_collection.append((score, target_id))
+            else:
+                # Sibling blog post
+                priority_bonus = 2.0 if target_page.get("is_priority") else 0.0
+                score = overlap + priority_bonus - diversity_penalty
+                scored_blog.append((score, target_id))
+
+        scored_collection.sort(key=lambda x: (-x[0], x[1]))
+        scored_blog.sort(key=lambda x: (-x[0], x[1]))
+
+        targets: list[dict[str, Any]] = []
+
+        # Fill collection slots first
+        for score, target_id in scored_collection:
+            if len(targets) >= collection_budget:
+                break
+            target_page = pages_by_id[target_id]
+            targets.append({
+                "page_id": target_id,
+                "keyword": target_page["keyword"],
+                "url": target_page["url"],
+                "is_priority": target_page.get("is_priority", False),
+                "label_overlap": neighbors[target_id],
+                "score": score,
+                "source": "onboarding",
+            })
+            inbound_counts[target_id] += 1
+
+        # Fill remaining with blog targets
+        for score, target_id in scored_blog:
+            if len(targets) >= budget:
+                break
+            target_page = pages_by_id[target_id]
+            targets.append({
+                "page_id": target_id,
+                "keyword": target_page["keyword"],
+                "url": target_page["url"],
+                "is_priority": target_page.get("is_priority", False),
+                "label_overlap": neighbors[target_id],
+                "score": score,
+                "source": "wordpress",
+            })
+            inbound_counts[target_id] += 1
+
+        result[page_id] = targets
+
+    logger.info(
+        "Selected WP+collection targets",
+        extra={
+            "page_count": len(result),
+            "total_links": sum(len(t) for t in result.values()),
+            "collection_links": sum(
+                1 for targets in result.values()
+                for t in targets if t.get("source") == "onboarding"
+            ),
+        },
+    )
+    return result
+
+
+async def _plan_links_for_silo_with_collections(
+    db: AsyncSession,
+    project_id: str,
+    cluster: KeywordCluster,
+    collection_pages: list[CrawledPage],
+    injector: LinkInjector,
+    validator: LinkValidator,
+    anchor_selector: AnchorTextSelector,
+) -> int:
+    """Plan and inject links for a silo group including collection page targets.
+
+    Same as _plan_links_for_silo but uses collection-aware graph and target selection.
+    Only WP pages get links injected; collection pages are targets only.
+    """
+    # Load cluster pages with their CrawledPage data
+    stmt = (
+        select(ClusterPage)
+        .options(joinedload(ClusterPage.crawled_page))
+        .where(ClusterPage.cluster_id == cluster.id)
+    )
+    result = await db.execute(stmt)
+    cluster_pages = [
+        cp for cp in result.unique().scalars().all()
+        if cp.crawled_page_id is not None
+    ]
+
+    if len(cluster_pages) < 2 and not collection_pages:
+        logger.info(f"Silo '{cluster.name}' has <2 pages and no collections, skipping")
+        return 0
+
+    # 1. Build mixed graph with collection pages
+    graph = _build_silo_graph_with_collections(cluster_pages, collection_pages)
+
+    # 2. Calculate budgets (only for WP pages — they're the sources)
+    wp_page_ids = [
+        p["page_id"] for p in graph["pages"]
+        if p.get("source") == "wordpress"
+    ]
+    word_counts = await _load_word_counts(db, wp_page_ids)
+    budgets = {pid: calculate_budget(wc) for pid, wc in word_counts.items()}
+
+    # 3. Select targets with collection awareness
+    targets_map = select_targets_wp_with_collections(graph, budgets)
+
+    # 4. Resolve URLs
+    project_obj = await db.get(Project, project_id)
+    site_base = (project_obj.site_url or "").rstrip("/") if project_obj else ""
+
+    # 5. Generate anchor text
+    keyword_map: dict[str, str] = {}
+    for page in graph["pages"]:
+        pid = page["page_id"]
+        kw = page.get("keyword", "")
+        if kw:
+            keyword_map[pid] = kw
+
+    natural_phrases = await anchor_selector.generate_natural_phrases(keyword_map)
+
+    usage_tracker: dict[str, dict[str, int]] = {}
+    page_link_plans: dict[str, list[dict[str, Any]]] = {}
+
+    for page in graph["pages"]:
+        if page.get("source") != "wordpress":
+            continue  # Only WP pages are sources
+
+        source_id = page["page_id"]
+        page_targets = targets_map.get(source_id, [])
+        planned_links: list[dict[str, Any]] = []
+
+        source_content = await _load_page_content_text(db, source_id)
+
+        for target in page_targets:
+            target_id = target["page_id"]
+            candidates = await anchor_selector.gather_candidates(target_id, db)
+
+            if target_id in natural_phrases:
+                candidates.extend(natural_phrases[target_id])
+
+            anchor_result = anchor_selector.select_anchor(
+                candidates, source_content, target_id, usage_tracker
+            )
+
+            if anchor_result is None:
+                anchor_result = {
+                    "anchor_text": target.get("keyword", "link"),
+                    "anchor_type": "exact_match",
+                    "score": 0.0,
+                }
+
+            target_url = target.get("url", "")
+            if target_url and not target_url.startswith("http"):
+                target_url = f"{site_base}/{target_url.lstrip('/')}"
+
+            planned_links.append({
+                **target,
+                "anchor_text": anchor_result["anchor_text"],
+                "anchor_type": anchor_result["anchor_type"],
+                "target_page_id": target_id,
+                "url": target_url,
+            })
+
+        page_link_plans[source_id] = planned_links
+
+    # 6. Inject links into WP content only
+    injection_results: list[dict[str, Any]] = []
+    pages_html: dict[str, str] = {}
+
+    for source_id, planned_links in page_link_plans.items():
+        html = await _load_bottom_description(db, source_id)
+        if not html:
+            continue
+
+        current_html = html
+        for link_plan in planned_links:
+            anchor_text = link_plan["anchor_text"]
+            target_url = link_plan.get("url", "")
+            target_id = link_plan["target_page_id"]
+
+            modified_html, p_idx = injector.inject_rule_based(
+                current_html, anchor_text, target_url
+            )
+
+            if p_idx is not None:
+                current_html = modified_html
+                injection_results.append({
+                    "source_page_id": source_id,
+                    "target_page_id": target_id,
+                    "anchor_text": anchor_text,
+                    "anchor_type": link_plan["anchor_type"],
+                    "placement_method": "rule_based",
+                    "position_in_content": p_idx,
+                    "is_mandatory": False,
+                })
+            else:
+                target_keyword = link_plan.get("keyword", "")
+                modified_html, p_idx = await injector.inject_llm_fallback(
+                    current_html, anchor_text, target_url, target_keyword
+                )
+                if p_idx is not None:
+                    current_html = modified_html
+                    injection_results.append({
+                        "source_page_id": source_id,
+                        "target_page_id": target_id,
+                        "anchor_text": anchor_text,
+                        "anchor_type": link_plan["anchor_type"],
+                        "placement_method": "llm_fallback",
+                        "position_in_content": p_idx,
+                        "is_mandatory": False,
+                    })
+
+        pages_html[source_id] = current_html
+
+    # 7. Validate
+    temp_links = [_LinkProxy({**r, "scope": "cluster"}) for r in injection_results]
+    validation = validator.validate_links(temp_links, pages_html, "cluster")
+
+    # 8. Persist InternalLink rows + update PageContent
+    for result_dict in injection_results:
+        link_status = "verified" if validation["passed"] else "injected"
+
+        link = InternalLink(
+            source_page_id=result_dict["source_page_id"],
+            target_page_id=result_dict["target_page_id"],
+            project_id=project_id,
+            cluster_id=cluster.id,
+            scope="cluster",
+            anchor_text=result_dict["anchor_text"],
+            anchor_type=result_dict["anchor_type"],
+            position_in_content=result_dict.get("position_in_content"),
+            is_mandatory=result_dict.get("is_mandatory", False),
+            placement_method=result_dict["placement_method"],
+            status=link_status,
+        )
+        db.add(link)
+
+    # Update PageContent with injected HTML (WP pages only)
+    for page_id, html in pages_html.items():
+        pc_stmt = select(PageContent).where(PageContent.crawled_page_id == page_id)
+        pc_result = await db.execute(pc_stmt)
+        pc = pc_result.scalar_one_or_none()
+        if pc:
+            pc.bottom_description = html
+
+    await db.flush()
+
+    logger.info(
+        f"Silo '{cluster.name}' planned (with collections)",
+        extra={"links": len(injection_results), "pages": len(cluster_pages)},
+    )
+    return len(injection_results)
+
+
 # =============================================================================
 # STEP 6: REVIEW
 # =============================================================================
@@ -982,6 +1455,27 @@ async def step6_get_review(
     total_posts = 0
     verified_count = 0
     total_link_count = 0
+
+    # Pre-aggregate collection link counts in a single query
+    onboarding_ids_stmt = select(CrawledPage.id).where(
+        CrawledPage.project_id == project_id,
+        CrawledPage.source == "onboarding",
+    )
+    onboarding_ids_result = await db.execute(onboarding_ids_stmt)
+    onboarding_page_ids = set(onboarding_ids_result.scalars().all())
+
+    collection_counts_by_cluster: dict[str, int] = {}
+    if onboarding_page_ids:
+        coll_counts_stmt = (
+            select(
+                InternalLink.cluster_id,
+                func.count().label("count"),
+            )
+            .where(InternalLink.target_page_id.in_(onboarding_page_ids))
+            .group_by(InternalLink.cluster_id)
+        )
+        coll_counts_result = await db.execute(coll_counts_stmt)
+        collection_counts_by_cluster = dict(coll_counts_result.all())
 
     for cluster in clusters:
         # Count links for this cluster
@@ -1011,6 +1505,7 @@ async def step6_get_review(
             "post_count": page_count,
             "link_count": link_count,
             "avg_links_per_post": link_count / page_count if page_count > 0 else 0,
+            "collection_link_count": collection_counts_by_cluster.get(cluster.id, 0),
         })
 
         total_links += link_count

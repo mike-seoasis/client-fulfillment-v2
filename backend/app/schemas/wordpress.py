@@ -49,6 +49,10 @@ class WPImportRequest(BaseModel):
         "publish",
         description="WordPress post status to fetch: 'publish', 'private', or 'any'",
     )
+    existing_project_id: str | None = Field(
+        None,
+        description="Optional existing project ID to import WP posts into (for blog→collection linking)",
+    )
 
 
 class WPImportResponse(BaseModel):
@@ -130,6 +134,7 @@ class WPReviewGroup(BaseModel):
     post_count: int = Field(..., description="Number of posts in this group")
     link_count: int = Field(..., description="Number of internal links in this group")
     avg_links_per_post: float = Field(..., description="Average links per post")
+    collection_link_count: int = Field(0, description="Number of links targeting collection/onboarding pages")
 
 
 class WPReviewResponse(BaseModel):
@@ -158,6 +163,20 @@ class WPExportRequest(BaseModel):
         None,
         description="Optional title filter to export only specific posts",
     )
+
+
+# =============================================================================
+# PROJECT PICKER (for linking to existing projects)
+# =============================================================================
+
+
+class WPProjectOption(BaseModel):
+    """A project available for importing WP posts into."""
+
+    id: str = Field(..., description="Project UUID")
+    name: str = Field(..., description="Project name")
+    site_url: str = Field(..., description="Project site URL")
+    collection_page_count: int = Field(..., description="Number of onboarding collection pages")
 
 
 # =============================================================================

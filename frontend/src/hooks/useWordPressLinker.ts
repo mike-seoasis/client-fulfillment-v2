@@ -23,11 +23,13 @@ import {
   wpPlanLinks,
   wpGetReview,
   wpExport,
+  wpListLinkableProjects,
   type WPConnectResponse,
   type WPImportResponse,
   type WPProgressResponse,
   type WPLabelReviewResponse,
   type WPReviewResponse,
+  type WPProjectOption,
 } from '@/lib/api';
 
 // Query keys
@@ -35,6 +37,7 @@ export const wpKeys = {
   progress: (jobId: string) => ['wp', 'progress', jobId] as const,
   labels: (projectId: string) => ['wp', 'labels', projectId] as const,
   review: (projectId: string) => ['wp', 'review', projectId] as const,
+  linkableProjects: () => ['wp', 'linkable-projects'] as const,
 };
 
 // Mutation input types
@@ -47,6 +50,7 @@ interface ConnectInput {
 interface ImportInput extends ConnectInput {
   titleFilter?: string[];
   postStatus?: string;
+  existingProjectId?: string | null;
 }
 
 interface ExportInput extends ConnectInput {
@@ -77,8 +81,21 @@ export function useWPImport(): UseMutationResult<
   ImportInput
 > {
   return useMutation({
-    mutationFn: ({ siteUrl, username, appPassword, titleFilter, postStatus }: ImportInput) =>
-      wpImport(siteUrl, username, appPassword, titleFilter, postStatus),
+    mutationFn: ({ siteUrl, username, appPassword, titleFilter, postStatus, existingProjectId }: ImportInput) =>
+      wpImport(siteUrl, username, appPassword, titleFilter, postStatus, existingProjectId),
+  });
+}
+
+/**
+ * Fetch projects with onboarding pages (for the project picker dropdown).
+ */
+export function useWPLinkableProjects(
+  enabled?: boolean,
+): UseQueryResult<WPProjectOption[]> {
+  return useQuery({
+    queryKey: wpKeys.linkableProjects(),
+    queryFn: () => wpListLinkableProjects(),
+    enabled: enabled ?? true,
   });
 }
 

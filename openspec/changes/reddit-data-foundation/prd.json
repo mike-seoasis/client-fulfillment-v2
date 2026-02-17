@@ -15,8 +15,9 @@
         "Use Mapped[] types, server_default=text() for defaults, lambda factories for timestamps — match blog.py pattern exactly"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Reference backend/app/models/blog.py for exact pattern (UUID PK with str(uuid4()) default + gen_random_uuid() server_default, DateTime with UTC lambdas, JSONB columns). No FK to projects — accounts are shared across all projects."
+      "passes": true,
+      "notes": "Reference backend/app/models/blog.py for exact pattern (UUID PK with str(uuid4()) default + gen_random_uuid() server_default, DateTime with UTC lambdas, JSONB columns). No FK to projects — accounts are shared across all projects.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S14A-002",
@@ -357,6 +358,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-16T00:00:00.000Z"
+    "updatedAt": "2026-02-17T00:20:33.717Z"
   }
 }

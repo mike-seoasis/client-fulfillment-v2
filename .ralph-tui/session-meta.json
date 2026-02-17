@@ -1,14 +1,14 @@
 {
-  "id": "7a04ad6e-04d1-4f7f-981d-dc737a128af5",
+  "id": "2b9db875-7e64-4949-b706-e23991ce3443",
   "status": "running",
-  "startedAt": "2026-02-14T21:20:01.137Z",
-  "updatedAt": "2026-02-14T23:02:34.984Z",
+  "startedAt": "2026-02-17T00:18:46.293Z",
+  "updatedAt": "2026-02-17T00:18:50.131Z",
   "agentPlugin": "claude",
   "trackerPlugin": "json",
-  "prdPath": "prd.json",
-  "currentIteration": 22,
+  "prdPath": "./openspec/changes/reddit-data-foundation/prd.json",
+  "currentIteration": 0,
   "maxIterations": 100,
   "totalTasks": 0,
-  "tasksCompleted": 22,
+  "tasksCompleted": 0,
   "cwd": "/Users/mike/Projects (1)/client-onboarding-v2"
 }

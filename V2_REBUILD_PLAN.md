@@ -8,9 +8,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Phase** | 11 - Blog Planning & Writing (COMPLETE + polish) |
-| **Slice** | Phase 11 polish complete |
-| **Last Session** | 2026-02-15 |
+| **Phase** | 11 - Blog Planning & Writing (COMPLETE + QA hardening) |
+| **Slice** | Phase 11 QA hardening complete |
+| **Last Session** | 2026-02-16 |
 | **Next Action** | Phase 12: Authentication |
 | **Auth Decision** | Neon Auth (free tier, 60K MAU, Better Auth SDK) — see Phase 12 |
 | **Backup Decision** | Neon free tier (PITR) + Railway pg_dump template → Cloudflare R2 — see Phase 10 |
@@ -45,7 +45,8 @@
 | 2026-02-14 | Phase 9 wrapped up, OpenSpec changes archived (keyword-cluster-creation + phase-9-internal-linking). Phase 10 added: Database Backup & Recovery (Neon free tier + Railway pg_dump → Cloudflare R2). Research complete: evaluated 5 backup strategies (Railway template + R2, Railway template + B2, SimpleBackups SaaS, Neon/Supabase migration, custom Docker cron). Decision: Neon free tier for PITR + R2 for off-platform redundancy. | Phase 10a: Neon migration |
 | 2026-02-14 | Phase 10 complete. 10a: Migrated DB from Railway Postgres to Neon (pg_dump → pg_restore → Alembic upgrade, 24 tables, 3 projects). Fixed SSL for asyncpg (use `ssl` connect_arg, not `sslmode` URL param). Updated staging + production DATABASE_URL. 10b: Created Cloudflare R2 bucket with 30-day lifecycle, deployed Railway postgres-s3-backups template, verified first backup (15.98 KB). Created INFRASTRUCTURE.md and BACKUP_RESTORE_RUNBOOK.md. | Phase 11: Blog Planning & Writing |
 | 2026-02-14 | Phase 11 complete (S11-001 through S11-021): BlogCampaign + BlogPost models with Alembic migration, blog topic discovery service (4-stage pipeline from POP briefs), blog campaign CRUD API (6 endpoints), blog content prompt builder, blog content generation pipeline orchestrator, blog content API (7 endpoints), blog link planning (per-post graph building, target selection, injection), blog HTML export service + 3 API endpoints, frontend TypeScript types + 18 API functions, TanStack Query hooks (17 hooks), blog section on project detail, campaign creation page, keyword approval page, content generation/review page, content editor (3-field + QA sidebar), link planning trigger + link map visualization, HTML export page with Copy/Download, 81 backend tests + 63 frontend component tests. | Phase 11 polish |
-| 2026-02-15 | Phase 11 polish: Fixed ContentBrief SimpleNamespace bug (generation failures), normalized POP API response keys (LSI terms now display in frontend), rewrote blog keyword discovery prompt (real search queries instead of blog titles), integrated link planning into content pipeline (Brief → Write → Links → Check → Done with granular ContentStatus), brand-aware blog writing (company-specific system prompt + Brand Positioning section), removed FlaggedPassagesCard from editor sidebar, added Lexical table support + regenerate button. | Phase 12: Authentication |
+| 2026-02-15 | Phase 11 polish: Fixed ContentBrief SimpleNamespace bug (generation failures), normalized POP API response keys (LSI terms now display in frontend), rewrote blog keyword discovery prompt (real search queries instead of blog titles), integrated link planning into content pipeline (Brief → Write → Links → Check → Done with granular ContentStatus), brand-aware blog writing (company-specific system prompt + Brand Positioning section), removed FlaggedPassagesCard from editor sidebar, added Lexical table support + regenerate button. | Phase 11 QA hardening |
+| 2026-02-16 | Phase 11 QA hardening: Diagnosed POP step 2 batch failure (cached partial briefs with 0 competitors), added diagnostic endpoints (/health/integrations, /health/pop-test, /health/project-debug), auto link planning after onboarding content generation (Phase 3 pipeline), auto link planning after blog content generation, robust 3-tier JSON parsing for content generation (direct parse → control char repair → key-boundary fallback), fixed fallback parser truncation (HTML double quotes in attributes), optimistic updates for blog topic approval checkbox, added "No class attributes" to content prompts. | Phase 12: Authentication |
 
 ---
 
@@ -375,6 +376,123 @@
 - [ ] **15d:** Advanced GEO Features — AI citation tracker (monitor Google AI Overviews, Perplexity, ChatGPT), GEO scoring dashboard, llms.txt generation
 - [ ] **15e:** Strategic — Knowledge Panel optimization, entity graph building, multi-platform AI visibility monitoring
 - [ ] **Verify:** GEO-optimized content scores higher on AI citation metrics than baseline content
+
+### Phase 16: V1 Data Migration
+
+> **Decision (2026-02-16):** One-time migration of ~2 client projects from V1 (Railway Postgres + JSON files on disk) into V2 (Neon Postgres). V1 stored pipeline data as accumulative JSON files per project (each phase extends the previous). V2 stores everything relationally. Migration script in `execution/migrate_v1_to_v2.py` with dry-run mode, idempotent inserts, and Neon PITR snapshot for rollback. See field mappings below.
+
+**V1 source data (per project in `.tmp/old-app/`):**
+- `projects` table (Railway Postgres) — project metadata + phase statuses
+- `crawl_results.json` → `categorized_pages.json` → `labeled_pages.json` — accumulative page data
+- `keyword_enriched.json` — primary/secondary keywords with volumes
+- `keyword_with_paa.json` — People Also Ask questions per page
+- `brand_config.json` — brand voice, style guide, priority pages
+- `validated_content.json` / `collection_content.json` — final generated content with QA results
+- `.tmp/uploads/` — brand documents (DOCX files)
+
+**V2 target tables:** `projects`, `crawled_pages`, `page_keywords`, `page_paa`, `brand_configs`, `page_contents`, `project_files`
+
+**Tables that do NOT need migration (new in V2):** `keyword_clusters`, `cluster_pages`, `internal_links`, `link_plan_snapshots`, `blog_campaigns`, `blog_posts`, `content_briefs`, `content_scores`, `prompt_logs`, `crawl_schedules`, `crawl_history`
+
+#### Field Mappings
+
+**projects (v1) → projects (v2)**
+| V1 | V2 | Transform |
+|---|---|---|
+| `id` (UUID) | `id` | Preserve original UUIDs |
+| `name` | `name` | Direct |
+| `website_url` | `site_url` | Direct |
+| `phase1_status` thru `phase5c_status` | `phase_status` (JSONB) | Combine: `{"crawl": "complete", "categorize": "complete", ...}` |
+| `brand_wizard_step` + `brand_wizard_data` | `brand_wizard_state` (JSONB) | Merge: `{"step": N, "data": {...}}` |
+| `created_at`, `updated_at` | `created_at`, `updated_at` | Direct |
+| — | `status` | Set `"active"` |
+| — | `client_id` | `null` |
+
+**labeled_pages.json → crawled_pages** (use labeled_pages as it's the most complete accumulation)
+| V1 | V2 | Transform |
+|---|---|---|
+| `url` | `normalized_url` + `raw_url` | Normalize: strip trailing slash, lowercase domain |
+| `title` | `title` | Direct |
+| `meta_description` | `meta_description` | Direct |
+| `category` | `category` | Direct |
+| `labels` | `labels` (JSONB) | Direct (already array) |
+| `body_text` (from `_original_data`) | `body_content` | Direct |
+| `word_count` | `word_count` | Direct |
+| `h1`, `h2_list` | `headings` (JSONB) | Reshape: `{"h1": [h1], "h2": h2_list, "h3": []}` |
+| `crawled_at` (from `_original_data`) | `last_crawled_at` | Direct |
+| — | `source` | `"onboarding"` |
+| — | `status` | `"completed"` |
+
+**keyword_enriched.json → page_keywords** (join by URL to crawled_page)
+| V1 | V2 | Transform |
+|---|---|---|
+| `keywords.primary.keyword` | `primary_keyword` | Direct |
+| `keywords.primary.volume` | `search_volume` | Direct |
+| `keywords.primary.reasoning` | `ai_reasoning` | Direct |
+| `keywords.secondary` array | `secondary_keywords` (JSONB) | Direct |
+| `approval_status` | `is_approved` | `"approved"` → `true` |
+| — | `alternative_keywords` | `[]` |
+| — | `crawled_page_id` | FK lookup by normalized URL |
+
+**keyword_with_paa.json → page_paa** (join by URL to crawled_page)
+| V1 | V2 | Transform |
+|---|---|---|
+| `paa_data[].question` | `question` | Direct |
+| `paa_data[].answer` | `answer_snippet` | Direct |
+| `paa_data[].source` | `source_url` | Direct |
+| array index | `position` | Index in array |
+| — | `crawled_page_id` | FK lookup by normalized URL |
+
+**brand_config.json → brand_configs**
+| V1 | V2 | Transform |
+|---|---|---|
+| entire JSON | `v2_schema` (JSONB) | Nest full config as-is |
+| `source_url` | `domain` | Extract domain from URL |
+| project `name` | `brand_name` | From parent project |
+
+**validated_content.json → page_contents** (join by URL to crawled_page)
+| V1 | V2 | Transform |
+|---|---|---|
+| `content.title_tag` | `page_title` | Direct |
+| `content.meta_description` | `meta_description` | Direct |
+| `content.top_description` | `top_description` | Direct |
+| `content.bottom_description` | `bottom_description` | Direct |
+| `content.word_count` | `word_count` | Direct |
+| `passed` | `is_approved` | Direct |
+| `qa_results` | `qa_results` (JSONB) | Direct |
+| — | `status` | `"complete"` |
+| — | `crawled_page_id` | FK lookup by normalized URL |
+
+**Brand docs (.tmp/uploads/) → S3 + project_files**
+| Source | V2 | Transform |
+|---|---|---|
+| local file | S3 bucket | Upload to `projects/{project_id}/files/{file_id}/{filename}` |
+| `{uuid}_{filename}.docx` | `filename` | Strip UUID prefix |
+| file extension | `content_type` | `.docx` → `application/vnd.openxmlformats-officedocument.wordprocessingml.document` |
+| file contents | `extracted_text` | Re-extract via `app.utils.text_extraction` |
+
+#### Subtasks
+
+- [ ] **16a:** Build migration script (`execution/migrate_v1_to_v2.py`) — read v1 Railway DB + JSON files, transform, insert into Neon v2 DB. Dry-run mode (log transforms, no writes). Upload brand docs to S3. Idempotent (`ON CONFLICT DO NOTHING`).
+- [ ] **16b:** Test on staging — dry-run review, run against staging, verify row counts, spot-check 5 pages end-to-end (crawl → keywords → content in UI)
+- [ ] **16c:** Run on production — Neon PITR snapshot first, run migration, verify in production UI, document rollback (restore from PITR)
+- [ ] **16d:** Cleanup — archive v1 data files, update V2_REBUILD_PLAN.md
+- [ ] **Verify:** All v1 client projects visible in v2 UI with crawled pages, keywords, brand config, and generated content intact
+
+#### Risk Mitigations
+- **Dry-run mode** — logs all transforms without writing, review before committing
+- **Neon PITR snapshot** before production run — instant rollback
+- **Additive only** — never deletes existing v2 data, only inserts
+- **Idempotent** — `ON CONFLICT DO NOTHING` on unique constraints, safe to re-run
+- **URL normalization** — consistent normalization (lowercase domain, strip trailing slash) since URL is the join key across all JSON files
+
+#### Open Questions (resolve at execution time)
+1. V1 Railway DB credentials — still accessible, or rely solely on JSON files? (JSON files are sufficient; DB only has project metadata + phase statuses)
+2. V1 `content.h1` field — v2 `page_contents` has no H1 column. Options: store in `page_title`, add to `headings` JSONB on crawled_page, or discard (H1 typically matches primary keyword)
+3. V1 `research_briefs.json` — no direct v2 table (v2 content briefs come from POP, different format). Options: skip, or store in `content_briefs.raw_response` JSONB for reference
+
+#### New deps for Phase 16
+None — uses existing SQLAlchemy models, Alembic, asyncpg, boto3 (S3).
 
 #### New deps for Phase 13
 | Package | Size | Purpose |

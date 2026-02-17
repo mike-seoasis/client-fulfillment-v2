@@ -1408,6 +1408,15 @@ export interface WPReviewGroup {
   post_count: number;
   link_count: number;
   avg_links_per_post: number;
+  collection_link_count: number;
+}
+
+/** A project available for importing WP posts into. */
+export interface WPProjectOption {
+  id: string;
+  name: string;
+  site_url: string;
+  collection_page_count: number;
 }
 
 /** Link review response. */
@@ -1432,13 +1441,19 @@ export function wpConnect(
   });
 }
 
+/** List projects with onboarding pages (for project picker). */
+export function wpListLinkableProjects(): Promise<WPProjectOption[]> {
+  return apiClient.get<WPProjectOption[]>("/wordpress/projects");
+}
+
 /** Import WP posts (returns 202 with job_id). */
 export function wpImport(
   siteUrl: string,
   username: string,
   appPassword: string,
   titleFilter?: string[],
-  postStatus: string = "publish"
+  postStatus: string = "publish",
+  existingProjectId?: string | null,
 ): Promise<WPImportResponse> {
   return apiClient.post<WPImportResponse>("/wordpress/import", {
     site_url: siteUrl,
@@ -1446,6 +1461,7 @@ export function wpImport(
     app_password: appPassword,
     title_filter: titleFilter || null,
     post_status: postStatus,
+    existing_project_id: existingProjectId || null,
   });
 }
 

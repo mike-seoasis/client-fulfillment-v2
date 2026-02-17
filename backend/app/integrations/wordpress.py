@@ -4,6 +4,7 @@ Uses httpx with HTTP Basic Auth (application passwords). Handles paginated
 post fetching with _embed for inline terms, and single-post content updates.
 """
 
+import html
 from dataclasses import dataclass
 from typing import Any
 
@@ -157,9 +158,10 @@ class WordPressClient:
                 wp_post = self._parse_post(post)
 
                 # Apply title filter if provided
+                # Decode HTML entities (WP returns smart quotes etc.)
                 if title_filter:
-                    title_lower = wp_post.title.lower()
-                    if not any(f.lower() in title_lower for f in title_filter):
+                    title_lower = html.unescape(wp_post.title).lower()
+                    if not any(html.unescape(f).lower() in title_lower for f in title_filter):
                         continue
 
                 all_posts.append(wp_post)
@@ -221,7 +223,7 @@ class WordPressClient:
 
     def _parse_post(self, post: dict[str, Any]) -> WPPost:
         """Parse a WP REST API post response into a WPPost dataclass."""
-        title = post.get("title", {}).get("rendered", "")
+        title = html.unescape(post.get("title", {}).get("rendered", ""))
         content_html = post.get("content", {}).get("rendered", "")
         excerpt = post.get("excerpt", {}).get("rendered", "")
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   useWPConnect,
   useWPImport,
@@ -11,6 +11,7 @@ import {
   useWPPlan,
   useWPReview,
   useWPExport,
+  useWPLinkableProjects,
 } from "@/hooks/useWordPressLinker";
 
 // Step definitions
@@ -24,10 +25,42 @@ const STEPS = [
   { id: 7, label: "Export" },
 ] as const;
 
+// Session storage key
+const WP_SESSION_KEY = "wp-linker-state";
+
+interface WPSessionState {
+  step: number;
+  siteUrl: string;
+  username: string;
+  appPassword: string;
+  projectId: string | null;
+  totalPosts: number;
+  titleFilter: string;
+  postStatus: string;
+  existingProjectId: string | null;
+}
+
+function saveSession(state: WPSessionState) {
+  try {
+    sessionStorage.setItem(WP_SESSION_KEY, JSON.stringify(state));
+  } catch {
+    // sessionStorage unavailable (SSR, private browsing quota)
+  }
+}
+
+function loadSession(): WPSessionState | null {
+  try {
+    const raw = sessionStorage.getItem(WP_SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function WordPressLinkerPage() {
   const [step, setStep] = useState(1);
 
-  // Credentials (React state only, never persisted)
+  // Credentials (persisted in sessionStorage — cleared when tab closes)
   const [siteUrl, setSiteUrl] = useState("");
   const [username, setUsername] = useState("");
   const [appPassword, setAppPassword] = useState("");
@@ -38,7 +71,56 @@ export default function WordPressLinkerPage() {
   const [totalPosts, setTotalPosts] = useState(0);
   const [titleFilter, setTitleFilter] = useState("");
   const [postStatus, setPostStatus] = useState("publish");
+  const [existingProjectId, setExistingProjectId] = useState<string | null>(null);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [restored, setRestored] = useState(false);
+
+  // Restore session on mount
+  useEffect(() => {
+    const saved = loadSession();
+    if (saved) {
+      setStep(saved.step);
+      setSiteUrl(saved.siteUrl);
+      setUsername(saved.username);
+      setAppPassword(saved.appPassword);
+      setProjectId(saved.projectId);
+      setTotalPosts(saved.totalPosts);
+      setTitleFilter(saved.titleFilter);
+      setPostStatus(saved.postStatus);
+      setExistingProjectId(saved.existingProjectId ?? null);
+    }
+    setRestored(true);
+  }, []);
+
+  // Persist session on state changes
+  const persistSession = useCallback(() => {
+    if (!restored) return;
+    saveSession({
+      step,
+      siteUrl,
+      username,
+      appPassword,
+      projectId,
+      totalPosts,
+      titleFilter,
+      postStatus,
+      existingProjectId,
+    });
+  }, [restored, step, siteUrl, username, appPassword, projectId, totalPosts, titleFilter, postStatus, existingProjectId]);
+
+  useEffect(() => {
+    persistSession();
+  }, [persistSession]);
+
+  // Don't render until session is restored (prevents flash of step 1)
+  if (!restored) {
+    return (
+      <div className="flex items-center gap-2 py-12 text-sm text-warm-gray-500">
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-palm-500 border-t-transparent" />
+        Loading...
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -82,6 +164,8 @@ export default function WordPressLinkerPage() {
             setTitleFilter={setTitleFilter}
             postStatus={postStatus}
             setPostStatus={setPostStatus}
+            existingProjectId={existingProjectId}
+            setExistingProjectId={setExistingProjectId}
             activeJobId={activeJobId}
             setActiveJobId={setActiveJobId}
             onImported={(id) => {
@@ -347,6 +431,8 @@ function ImportStep({
   setTitleFilter,
   postStatus,
   setPostStatus,
+  existingProjectId,
+  setExistingProjectId,
   activeJobId,
   setActiveJobId,
   onImported,
@@ -359,12 +445,15 @@ function ImportStep({
   setTitleFilter: (v: string) => void;
   postStatus: string;
   setPostStatus: (v: string) => void;
+  existingProjectId: string | null;
+  setExistingProjectId: (v: string | null) => void;
   activeJobId: string | null;
   setActiveJobId: (v: string | null) => void;
   onImported: (projectId: string) => void;
 }) {
   const importMutation = useWPImport();
   const progress = useWPProgress(activeJobId);
+  const linkableProjects = useWPLinkableProjects();
   const [importError, setImportError] = useState<string | null>(null);
 
   // Watch for completion or failure
@@ -413,7 +502,7 @@ function ImportStep({
       : undefined;
 
     importMutation.mutate(
-      { siteUrl, username, appPassword, titleFilter: filter, postStatus },
+      { siteUrl, username, appPassword, titleFilter: filter, postStatus, existingProjectId },
       {
         onSuccess: (data) => {
           setActiveJobId(data.job_id);
@@ -436,6 +525,31 @@ function ImportStep({
       </div>
 
       <div className="max-w-md space-y-4">
+        {/* Project picker — link to existing project with collection pages */}
+        {linkableProjects.data && linkableProjects.data.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-warm-gray-700">
+              Link to Existing Project
+            </label>
+            <select
+              value={existingProjectId || ""}
+              onChange={(e) => setExistingProjectId(e.target.value || null)}
+              disabled={isRunning}
+              className="mt-1 w-full rounded-sm border border-sand-500 bg-white px-3 py-2 text-sm text-warm-gray-900 focus:outline-none focus:ring-2 focus:ring-palm-400 disabled:opacity-50"
+            >
+              <option value="">None — standalone WP project</option>
+              {linkableProjects.data.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.collection_page_count} collection pages)
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-warm-gray-400">
+              Select a project to create blog &rarr; collection page links. Leave empty for blog-only linking.
+            </p>
+          </div>
+        )}
+
         <div>
           <label className="block text-sm font-medium text-warm-gray-700">
             Post Status
@@ -836,61 +950,95 @@ function ReviewStep({
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-4 gap-4">
-        <StatCard label="Total Posts" value={data.total_posts} />
-        <StatCard label="Total Links" value={data.total_links} />
-        <StatCard
-          label="Avg Links/Post"
-          value={data.avg_links_per_post.toFixed(1)}
-        />
-        <StatCard
-          label="Validation"
-          value={`${data.validation_pass_rate}%`}
-          accent={data.validation_pass_rate >= 90}
-        />
-      </div>
+      {(() => {
+        const totalCollectionLinks = data.groups.reduce((sum, g) => sum + g.collection_link_count, 0);
+        const hasCollectionLinks = totalCollectionLinks > 0;
+        return (
+          <div className={`grid gap-4 ${hasCollectionLinks ? "grid-cols-5" : "grid-cols-4"}`}>
+            <StatCard label="Total Posts" value={data.total_posts} />
+            <StatCard label="Total Links" value={data.total_links} />
+            <StatCard
+              label="Avg Links/Post"
+              value={data.avg_links_per_post.toFixed(1)}
+            />
+            {hasCollectionLinks && (
+              <StatCard
+                label="Collection Links"
+                value={totalCollectionLinks}
+                accent
+              />
+            )}
+            <StatCard
+              label="Validation"
+              value={`${data.validation_pass_rate}%`}
+              accent={data.validation_pass_rate >= 90}
+            />
+          </div>
+        );
+      })()}
 
       {/* Per-group table */}
-      <div className="rounded-sm border border-sand-500">
-        <table className="w-full text-sm">
-          <thead className="bg-sand-100">
-            <tr>
-              <th className="px-4 py-2 text-left font-medium text-warm-gray-600">
-                Silo Group
-              </th>
-              <th className="px-4 py-2 text-right font-medium text-warm-gray-600">
-                Posts
-              </th>
-              <th className="px-4 py-2 text-right font-medium text-warm-gray-600">
-                Links
-              </th>
-              <th className="px-4 py-2 text-right font-medium text-warm-gray-600">
-                Avg/Post
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.groups.map((g) => (
-              <tr key={g.group_name} className="border-t border-sand-200">
-                <td className="px-4 py-2 font-medium text-warm-gray-900">
-                  <span className="rounded-sm bg-palm-50 px-2 py-0.5 text-xs text-palm-700">
-                    {g.group_name}
-                  </span>
-                </td>
-                <td className="px-4 py-2 text-right text-warm-gray-700">
-                  {g.post_count}
-                </td>
-                <td className="px-4 py-2 text-right text-warm-gray-700">
-                  {g.link_count}
-                </td>
-                <td className="px-4 py-2 text-right text-warm-gray-700">
-                  {g.avg_links_per_post.toFixed(1)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {(() => {
+        const hasCollectionLinks = data.groups.some((g) => g.collection_link_count > 0);
+        return (
+          <div className="rounded-sm border border-sand-500">
+            <table className="w-full text-sm">
+              <thead className="bg-sand-100">
+                <tr>
+                  <th className="px-4 py-2 text-left font-medium text-warm-gray-600">
+                    Silo Group
+                  </th>
+                  <th className="px-4 py-2 text-right font-medium text-warm-gray-600">
+                    Posts
+                  </th>
+                  <th className="px-4 py-2 text-right font-medium text-warm-gray-600">
+                    Links
+                  </th>
+                  {hasCollectionLinks && (
+                    <th className="px-4 py-2 text-right font-medium text-warm-gray-600">
+                      Collection Links
+                    </th>
+                  )}
+                  <th className="px-4 py-2 text-right font-medium text-warm-gray-600">
+                    Avg/Post
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.groups.map((g) => (
+                  <tr key={g.group_name} className="border-t border-sand-200">
+                    <td className="px-4 py-2 font-medium text-warm-gray-900">
+                      <span className="rounded-sm bg-palm-50 px-2 py-0.5 text-xs text-palm-700">
+                        {g.group_name}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-right text-warm-gray-700">
+                      {g.post_count}
+                    </td>
+                    <td className="px-4 py-2 text-right text-warm-gray-700">
+                      {g.link_count}
+                    </td>
+                    {hasCollectionLinks && (
+                      <td className="px-4 py-2 text-right text-warm-gray-700">
+                        {g.collection_link_count > 0 ? (
+                          <span className="font-medium text-palm-600">
+                            {g.collection_link_count}
+                          </span>
+                        ) : (
+                          <span className="text-warm-gray-400">0</span>
+                        )}
+                      </td>
+                    )}
+                    <td className="px-4 py-2 text-right text-warm-gray-700">
+                      {g.avg_links_per_post.toFixed(1)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })()}
 
       <button
         onClick={onContinue}

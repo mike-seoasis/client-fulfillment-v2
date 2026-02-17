@@ -22,6 +22,7 @@ from app.schemas.wordpress import (
     WPLabelReviewResponse,
     WPPlanRequest,
     WPProgressResponse,
+    WPProjectOption,
     WPReviewResponse,
     WPReviewGroup,
     WPTaxonomyLabel,
@@ -70,6 +71,51 @@ async def connect(body: WPConnectRequest) -> WPConnectResponse:
 
 
 # =============================================================================
+# PROJECT PICKER (existing projects with onboarding pages)
+# =============================================================================
+
+
+@router.get("/projects", response_model=list[WPProjectOption])
+async def list_linkable_projects(
+    db: AsyncSession = Depends(get_session),
+) -> list[WPProjectOption]:
+    """List projects that have onboarding collection pages (for the project picker)."""
+    from sqlalchemy import func, select as sa_select
+
+    from app.models.crawled_page import CrawledPage
+    from app.models.project import Project
+
+    # Find projects with at least one onboarding page
+    subq = (
+        sa_select(
+            CrawledPage.project_id,
+            func.count().label("page_count"),
+        )
+        .where(CrawledPage.source == "onboarding")
+        .group_by(CrawledPage.project_id)
+        .subquery()
+    )
+
+    stmt = (
+        sa_select(Project, subq.c.page_count)
+        .join(subq, Project.id == subq.c.project_id)
+        .order_by(Project.created_at.desc())
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    return [
+        WPProjectOption(
+            id=row[0].id,
+            name=row[0].name,
+            site_url=row[0].site_url or "",
+            collection_page_count=row[1],
+        )
+        for row in rows
+    ]
+
+
+# =============================================================================
 # STEP 2: IMPORT
 # =============================================================================
 
@@ -82,8 +128,20 @@ async def connect(body: WPConnectRequest) -> WPConnectResponse:
 async def import_posts(
     body: WPImportRequest,
     background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_session),
 ) -> WPImportResponse:
     """Import WordPress posts as a background task."""
+    # Pre-validate existing project before spawning background task
+    if body.existing_project_id:
+        from app.models.project import Project
+
+        project = await db.get(Project, body.existing_project_id)
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Project {body.existing_project_id} not found",
+            )
+
     job_id = str(uuid4())
 
     async def _run_import() -> None:
@@ -96,6 +154,7 @@ async def import_posts(
                 job_id=job_id,
                 title_filter=body.title_filter,
                 post_status=body.post_status,
+                existing_project_id=body.existing_project_id,
             )
 
     background_tasks.add_task(_run_import)

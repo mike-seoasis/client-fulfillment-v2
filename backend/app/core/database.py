@@ -81,8 +81,8 @@ class DatabaseManager:
                 connect_args={
                     "timeout": settings.db_connect_timeout,
                     "command_timeout": settings.db_command_timeout,
-                    # Require SSL for all non-local environments (Neon requires SSL)
-                    **({"ssl": "require"} if settings.environment != "development" else {}),
+                    # Require SSL when connecting to Neon (even in development)
+                    **({"ssl": "require"} if "neon.tech" in db_url or settings.environment != "development" else {}),
                 },
             )
 
