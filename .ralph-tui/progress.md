@@ -11,6 +11,7 @@ after each iteration and it's included in prompts for context.
 - **DateTime pattern**: `default=lambda: datetime.now(UTC), server_default=text("now()")` for created_at/updated_at. Add `onupdate=lambda: datetime.now(UTC)` for updated_at.
 - **JSONB default list**: Use `default=list, server_default=text("'[]'::jsonb")` for JSONB array columns.
 - **Set to Array**: Use `Array.from(set)` instead of `[...set]` spread — the project's tsconfig target doesn't enable `--downlevelIteration`.
+- **Mock new hooks in existing tests**: When adding a new hook to a shared page (e.g., `useRedditConfig` on `ProjectDetailPage`), update ALL existing test files that render that page to mock the new hook. Missing mocks cause "No QueryClient set" errors because the unmocked hook calls `useQuery` without a provider.
 
 ---
 
@@ -266,4 +267,26 @@ after each iteration and it's included in prompts for context.
   - `V2_REBUILD_PLAN.md` (Current Status table updated, Phase 14a checkbox marked complete, session log row added)
 - **Learnings:**
   - No code changes — status tracking task only
+---
+
+## 2026-02-16 - S14A-099
+- Ran full verification of Phase 14a slice completion
+- Fixed 3 test regressions caused by S14A-020 (adding `useRedditConfig` to ProjectDetailPage without updating existing test mocks)
+- Fixed pre-existing build type error in `useBlogs.ts` (optimistic update spread producing nullable type)
+- Files changed:
+  - `frontend/src/app/projects/[id]/__tests__/blogs.test.tsx` (added `useReddit` mock)
+  - `frontend/src/app/projects/[id]/__tests__/clusters.test.tsx` (added `useReddit` mock)
+  - `frontend/src/app/projects/[id]/__tests__/linkStatus.test.tsx` (added `useReddit` mock)
+  - `frontend/src/hooks/useBlogs.ts` (type assertion on optimistic update spread)
+- **Verification Results:**
+  - Backend: 950 passed, 24 failed (all pre-existing), 5 skipped — 0 Reddit-related failures
+  - Reddit-specific backend tests: 16 model tests pass, 15 API tests pass (from `backend/` dir)
+  - Frontend: 713 passed, 99 failed (all pre-existing), 8 failed files (all pre-existing) — down from 129 failed / 11 files before fix
+  - Reddit-specific frontend tests: 42 passed (24 accounts + 18 config)
+  - Build: `npm run build` succeeds with no errors
+- **Learnings:**
+  - When adding hooks to shared pages, must update ALL test files that render that page — not just create new test files for the new feature
+  - Pre-existing backend test failures are concentrated in brand_config (9), link planning/pipeline (4), crawling (1), content editing (1), clusters (2), keyword generation (3) — none related to Reddit
+  - Pre-existing frontend test failures are in brand-config, cluster detail, content generation, link map, onboarding content/keywords, GenerationProgress — none related to Reddit
+  - `useBlogs.ts` type error: spreading `BlogPostUpdate` (with nullable fields) onto `BlogPost` (non-nullable) requires explicit type assertion
 ---

@@ -164,7 +164,7 @@ export function useUpdateBlogPost(): UseMutationResult<
         queryClient.setQueryData<BlogCampaign>(key, {
           ...previous,
           posts: previous.posts.map((p) =>
-            p.id === postId ? { ...p, ...data } : p
+            p.id === postId ? ({ ...p, ...data } as BlogPost) : p
           ),
         });
       }

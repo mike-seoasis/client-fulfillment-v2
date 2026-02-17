@@ -51,6 +51,11 @@ vi.mock('@/hooks/useLinks', () => ({
   usePlanStatus: (...args: unknown[]) => mockUsePlanStatus(...args),
 }));
 
+const mockUseRedditConfig = vi.fn();
+vi.mock('@/hooks/useReddit', () => ({
+  useRedditConfig: (...args: unknown[]) => mockUseRedditConfig(...args),
+}));
+
 // ============================================================================
 // Default mock setup
 // ============================================================================
@@ -98,6 +103,7 @@ describe('ProjectDetailPage - Link Status Indicators', () => {
     // Default: onboarding links not planned
     mockUseLinkMap.mockReturnValue({ data: null });
     mockUsePlanStatus.mockReturnValue({ data: null });
+    mockUseRedditConfig.mockReturnValue({ data: undefined, isLoading: false });
   });
 
   // --------------------------------------------------------------------------

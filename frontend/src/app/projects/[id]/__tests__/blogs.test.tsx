@@ -56,6 +56,11 @@ vi.mock('@/hooks/useLinks', () => ({
   usePlanStatus: (...args: unknown[]) => mockUsePlanStatus(...args),
 }));
 
+const mockUseRedditConfig = vi.fn();
+vi.mock('@/hooks/useReddit', () => ({
+  useRedditConfig: (...args: unknown[]) => mockUseRedditConfig(...args),
+}));
+
 // ============================================================================
 // Default mock values
 // ============================================================================
@@ -142,6 +147,7 @@ describe('ProjectDetailPage - Blog Section', () => {
     mockUseBlogCampaigns.mockReturnValue({ data: undefined, isLoading: false, error: null });
     mockUseLinkMap.mockReturnValue({ data: undefined, isLoading: false });
     mockUsePlanStatus.mockReturnValue({ data: undefined, isLoading: false });
+    mockUseRedditConfig.mockReturnValue({ data: undefined, isLoading: false });
   });
 
   // ============================================================================
