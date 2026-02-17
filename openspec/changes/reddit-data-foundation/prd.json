@@ -92,8 +92,9 @@
         "Add TYPE_CHECKING import for RedditProjectConfig in project.py"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Follow the same pattern as blog_campaigns relationship on Project. uselist=False enforces the 1:1 nature on the ORM side (complementing the unique constraint on the DB side)."
+      "passes": true,
+      "notes": "Follow the same pattern as blog_campaigns relationship on Project. uselist=False enforces the 1:1 nature on the ORM side (complementing the unique constraint on the DB side).",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S14A-007",
@@ -362,6 +363,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-17T00:27:04.670Z"
+    "updatedAt": "2026-02-17T00:27:50.207Z"
   }
 }
