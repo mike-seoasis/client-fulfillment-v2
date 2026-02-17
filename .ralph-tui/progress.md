@@ -10,6 +10,7 @@ after each iteration and it's included in prompts for context.
 - **UUID PK pattern**: `default=lambda: str(uuid4()), server_default=text("gen_random_uuid()")` — both Python-side and DB-side defaults.
 - **DateTime pattern**: `default=lambda: datetime.now(UTC), server_default=text("now()")` for created_at/updated_at. Add `onupdate=lambda: datetime.now(UTC)` for updated_at.
 - **JSONB default list**: Use `default=list, server_default=text("'[]'::jsonb")` for JSONB array columns.
+- **Set to Array**: Use `Array.from(set)` instead of `[...set]` spread — the project's tsconfig target doesn't enable `--downlevelIteration`.
 
 ---
 
@@ -199,4 +200,23 @@ after each iteration and it's included in prompts for context.
 - **Learnings:**
   - Next.js nested layouts are additive — the root layout already provides Header + max-w-7xl container, so section layouts only need to render children
   - This layout exists as a future extension point for Reddit-specific sub-navigation
+---
+
+## 2026-02-16 - S14A-018
+- Created Reddit accounts management page with full CRUD
+- Files changed:
+  - `frontend/src/app/reddit/accounts/page.tsx` (new — table, filters, add modal, two-step delete)
+- Features implemented:
+  - Breadcrumb-style header ("Reddit > Accounts")
+  - Table with columns: Username, Status (badge), Warmup Stage, Niche Tags (chips), Karma (post/comment), Cooldown (relative time), Last Used (relative time)
+  - Filter bar with three dropdowns: Niche (dynamically extracted from accounts), Warmup Stage, Status
+  - "+ Add Account" button with modal (username required, comma-separated niche tags, optional notes)
+  - Two-step delete confirmation per row (same pattern as cluster/blog delete)
+  - Empty state with friendly message + CTA, plus separate empty state for no filter results
+  - Loading skeleton while data loads
+  - Toast notifications for delete success/error
+- **Learnings:**
+  - `Set` spread (`[...set]`) requires `--downlevelIteration` or `es2015+` target in tsconfig — use `Array.from(set)` instead for compatibility
+  - For dynamically-populated filter options (niches), fetch all accounts without filters separately and extract unique values
+  - Two-step delete pattern: first click sets `isDeleteConfirming=true` (auto-resets after 3s timeout), second click executes the mutation — reusable across any entity
 ---
