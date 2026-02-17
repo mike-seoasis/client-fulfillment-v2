@@ -1,20 +1,24 @@
-"""Reddit account management API router.
+"""Reddit API routers.
 
-REST endpoints for creating, listing, updating, and deleting Reddit accounts.
+REST endpoints for Reddit account CRUD and per-project Reddit configuration.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import cast
 
 from app.core.database import get_session
+from app.models.project import Project
 from app.models.reddit_account import RedditAccount
+from app.models.reddit_config import RedditProjectConfig
 from app.schemas.reddit import (
     RedditAccountCreate,
     RedditAccountResponse,
     RedditAccountUpdate,
+    RedditProjectConfigCreate,
+    RedditProjectConfigResponse,
 )
 
 reddit_router = APIRouter(prefix="/reddit", tags=["Reddit"])
@@ -137,3 +141,89 @@ async def delete_account(
 
     await db.delete(account)
     await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Project Reddit config endpoints (on reddit_project_router)
+# ---------------------------------------------------------------------------
+
+
+@reddit_project_router.get(
+    "/{project_id}/reddit/config",
+    response_model=RedditProjectConfigResponse,
+)
+async def get_project_reddit_config(
+    project_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> RedditProjectConfigResponse:
+    """Get Reddit config for a project. Returns 404 if none exists."""
+    stmt = select(RedditProjectConfig).where(
+        RedditProjectConfig.project_id == project_id
+    )
+    result = await db.execute(stmt)
+    config = result.scalar_one_or_none()
+
+    if config is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Reddit config for project {project_id} not found",
+        )
+
+    return RedditProjectConfigResponse.model_validate(config)
+
+
+@reddit_project_router.post(
+    "/{project_id}/reddit/config",
+    response_model=RedditProjectConfigResponse,
+    responses={
+        200: {"description": "Config updated"},
+        201: {"description": "Config created"},
+        404: {"description": "Project not found"},
+    },
+)
+async def upsert_project_reddit_config(
+    project_id: str,
+    data: RedditProjectConfigCreate,
+    response: Response,
+    db: AsyncSession = Depends(get_session),
+) -> RedditProjectConfigResponse:
+    """Create or update Reddit config for a project.
+
+    Returns 201 if created, 200 if updated. Returns 404 if project doesn't exist.
+    """
+    # Verify project exists
+    project_stmt = select(Project.id).where(Project.id == project_id)
+    project_result = await db.execute(project_stmt)
+    if project_result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Project {project_id} not found",
+        )
+
+    # Check for existing config
+    stmt = select(RedditProjectConfig).where(
+        RedditProjectConfig.project_id == project_id
+    )
+    result = await db.execute(stmt)
+    existing = result.scalar_one_or_none()
+
+    if existing is not None:
+        # Update existing config
+        update_data = data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(existing, field, value)
+        await db.commit()
+        await db.refresh(existing)
+        response.status_code = status.HTTP_200_OK
+        return RedditProjectConfigResponse.model_validate(existing)
+
+    # Create new config
+    config = RedditProjectConfig(
+        project_id=project_id,
+        **data.model_dump(),
+    )
+    db.add(config)
+    await db.commit()
+    await db.refresh(config)
+    response.status_code = status.HTTP_201_CREATED
+    return RedditProjectConfigResponse.model_validate(config)

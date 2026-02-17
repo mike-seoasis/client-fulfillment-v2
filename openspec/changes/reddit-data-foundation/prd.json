@@ -180,8 +180,9 @@
         "Response uses RedditProjectConfigResponse schema"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "The upsert pattern avoids requiring the frontend to know whether a config exists. POST always works — create or update. This is on the reddit_project_router with prefix='/projects'."
+      "passes": true,
+      "notes": "The upsert pattern avoids requiring the frontend to know whether a config exists. POST always works — create or update. This is on the reddit_project_router with prefix='/projects'.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S14A-012",
@@ -367,6 +368,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-17T00:35:58.315Z"
+    "updatedAt": "2026-02-17T00:37:41.590Z"
   }
 }

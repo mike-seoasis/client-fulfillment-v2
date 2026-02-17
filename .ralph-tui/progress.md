@@ -126,3 +126,15 @@ after each iteration and it's included in prompts for context.
   - Two separate `APIRouter` instances (`reddit_router`, `reddit_project_router`) allow grouping endpoints under different URL prefixes while sharing the same tag
   - Venv lives at `backend/.venv/` not project root `.venv/`
 ---
+
+## 2026-02-16 - S14A-011
+- Added GET and POST endpoints for per-project Reddit config on `reddit_project_router`
+- GET `/{project_id}/reddit/config` — returns config or 404
+- POST `/{project_id}/reddit/config` — upsert: creates (201) or updates (200), verifies project exists (404)
+- Files changed:
+  - `backend/app/api/v1/reddit.py` (added 2 endpoints, new imports for Project, RedditProjectConfig, Response, and config schemas)
+- **Learnings:**
+  - For dynamic status codes (201 vs 200 on upsert), inject FastAPI's `Response` object and set `response.status_code` — the `responses={}` decorator param just documents the possible codes in OpenAPI
+  - Direct `select(Project.id).where(...)` is simpler than importing `ProjectService` when you just need an existence check
+  - `model_dump(exclude_unset=True)` on the upsert update path ensures only explicitly-sent fields are modified (preserves existing values for omitted fields)
+---
