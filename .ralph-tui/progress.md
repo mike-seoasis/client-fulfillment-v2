@@ -170,3 +170,14 @@ after each iteration and it's included in prompts for context.
   - Backend `extra_metadata` (Python attr name for `metadata` DB column) stays as `extra_metadata` in TS interfaces since the Pydantic schema exposes `extra_metadata`
   - Filter params use `URLSearchParams` pattern (same as `triggerContentGeneration`) — only set params that are provided
 ---
+
+## 2026-02-16 - S14A-015
+- Created TanStack Query hooks for Reddit accounts and project config
+- Files changed:
+  - `frontend/src/hooks/useReddit.ts` (new — 6 hooks + query key factory)
+- Hooks: `useRedditAccounts`, `useCreateRedditAccount`, `useUpdateRedditAccount`, `useDeleteRedditAccount` (with optimistic delete), `useRedditConfig`, `useUpsertRedditConfig`
+- **Learnings:**
+  - For optimistic delete across multiple cached query variants (e.g., different filter params), use `getQueriesData`/`setQueriesData` with the base key prefix `['reddit-accounts']` — this catches all parameterized variants
+  - `useUpsertRedditConfig(projectId)` takes projectId as a hook argument (not mutation variable) since it's fixed for the component lifetime — keeps mutation variable as just the data payload
+  - Invalidating with just the key prefix `['reddit-accounts']` (no params) invalidates all variants of that query regardless of filter params used
+---

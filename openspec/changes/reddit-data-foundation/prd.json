@@ -241,8 +241,9 @@
         "useUpsertRedditConfig(projectId) — useMutation that invalidates ['reddit-config', projectId]"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Reference frontend/src/hooks/useBlogs.ts for exact pattern (useQuery/useMutation setup, queryClient.invalidateQueries, optimistic updates with onMutate/onError/onSettled)."
+      "passes": true,
+      "notes": "Reference frontend/src/hooks/useBlogs.ts for exact pattern (useQuery/useMutation setup, queryClient.invalidateQueries, optimistic updates with onMutate/onError/onSettled).",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S14A-016",
@@ -371,6 +372,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-17T00:43:10.153Z"
+    "updatedAt": "2026-02-17T00:44:24.820Z"
   }
 }
