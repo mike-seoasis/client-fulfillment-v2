@@ -8,7 +8,7 @@ export function Header() {
 
   const navLinks = [
     { href: '/', label: 'Projects', isActive: pathname === '/' || pathname.startsWith('/projects') },
-    { href: '/reddit', label: 'Reddit', isActive: pathname.startsWith('/reddit') },
+    { href: '/reddit/accounts', label: 'Reddit', isActive: pathname.startsWith('/reddit') },
   ];
 
   return (
@@ -29,15 +29,15 @@ export function Header() {
             </div>
 
             {/* Navigation links */}
-            <nav className="flex items-center gap-6">
+            <nav className="flex items-center gap-6 h-16">
               {navLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`text-sm font-medium pb-0.5 transition-colors duration-150 ${
+                  className={`flex items-center h-full text-sm font-medium transition-colors duration-150 ${
                     link.isActive
-                      ? 'text-warm-gray-900 border-b-2 border-palm-500'
-                      : 'text-warm-gray-700 hover:text-warm-gray-900'
+                      ? 'text-palm-700 border-b-2 border-palm-500'
+                      : 'text-warm-gray-500 hover:text-warm-gray-700 border-b-2 border-transparent'
                   }`}
                 >
                   {link.label}

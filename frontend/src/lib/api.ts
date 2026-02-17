@@ -1552,14 +1552,21 @@ export function deleteRedditAccount(accountId: string): Promise<void> {
 }
 
 /**
- * Get Reddit config for a project. Returns 404 if none exists.
+ * Get Reddit config for a project. Returns null if none exists (404).
  */
-export function fetchRedditConfig(
+export async function fetchRedditConfig(
   projectId: string
-): Promise<RedditProjectConfig> {
-  return apiClient.get<RedditProjectConfig>(
-    `/projects/${projectId}/reddit/config`
-  );
+): Promise<RedditProjectConfig | null> {
+  try {
+    return await apiClient.get<RedditProjectConfig>(
+      `/projects/${projectId}/reddit/config`
+    );
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      return null;
+    }
+    throw err;
+  }
 }
 
 /**

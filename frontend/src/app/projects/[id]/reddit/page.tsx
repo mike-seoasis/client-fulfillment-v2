@@ -210,7 +210,7 @@ export default function ProjectRedditConfigPage() {
   const projectId = params.id as string;
 
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
-  const { data: existingConfig, isLoading: isConfigLoading, error: configError } = useRedditConfig(projectId);
+  const { data: existingConfig, isLoading: isConfigLoading } = useRedditConfig(projectId);
   const upsertMutation = useUpsertRedditConfig(projectId);
 
   // Form state
@@ -232,8 +232,7 @@ export default function ProjectRedditConfigPage() {
   const isLoading = isProjectLoading || isConfigLoading;
 
   // Derive current values: user edits take priority, then existing config, then defaults
-  const is404 = configError && 'status' in configError && (configError as { status: number }).status === 404;
-  const config = is404 ? null : existingConfig;
+  const config = existingConfig ?? null;
 
   const currentIsActive = isActive ?? config?.is_active ?? true;
   const currentSearchKeywords = useMemo(

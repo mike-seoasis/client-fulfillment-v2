@@ -157,7 +157,7 @@ export function useDeleteRedditAccount(): UseMutationResult<
 export function useRedditConfig(
   projectId: string,
   options?: { enabled?: boolean }
-): UseQueryResult<RedditProjectConfig> {
+): UseQueryResult<RedditProjectConfig | null> {
   return useQuery({
     queryKey: redditKeys.config(projectId),
     queryFn: () => fetchRedditConfig(projectId),
