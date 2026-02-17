@@ -99,3 +99,13 @@ after each iteration and it's included in prompts for context.
   - `extra_metadata` Python attribute maps to `metadata` DB column — Pydantic schema uses the Python attribute name `extra_metadata` since `from_attributes=True` reads Python attrs
   - ruff import sorting (`I001`) places `reddit` alphabetically after `project_file` and before nothing else — auto-fix with `--fix` is safe
 ---
+
+## 2026-02-16 - S14A-009
+- Added Reddit / CrowdReply config vars to `Settings` class: `serpapi_key`, `crowdreply_api_key`, `crowdreply_project_id`, `crowdreply_webhook_secret`, `crowdreply_base_url`
+- Files changed:
+  - `backend/app/core/config.py` (added 5 settings under `# Reddit / CrowdReply` comment section)
+- **Learnings:**
+  - Config follows simple pattern: `str` type with `Field(default="", description=...)` for credential fields, non-empty default for URL fields
+  - No circuit breaker settings needed at config level — those will come when integration clients are built (slices 14b/14e)
+  - Pre-existing pyright error on `get_settings()` (missing `database_url` param) is expected — it's resolved at runtime via env vars
+---

@@ -425,6 +425,28 @@ class Settings(BaseSettings):
         description="Max concurrent page content generations (1=sequential for dev, 5 for production)",
     )
 
+    # Reddit / CrowdReply
+    serpapi_key: str = Field(
+        default="",
+        description="SerpAPI key for Reddit post discovery",
+    )
+    crowdreply_api_key: str = Field(
+        default="",
+        description="CrowdReply API key for comment posting",
+    )
+    crowdreply_project_id: str = Field(
+        default="",
+        description="CrowdReply project ID",
+    )
+    crowdreply_webhook_secret: str = Field(
+        default="",
+        description="CrowdReply webhook signing secret for verifying callbacks",
+    )
+    crowdreply_base_url: str = Field(
+        default="https://crowdreply.io/api",
+        description="CrowdReply API base URL",
+    )
+
     # S3/Object Storage
     s3_bucket: str | None = Field(
         default=None,
