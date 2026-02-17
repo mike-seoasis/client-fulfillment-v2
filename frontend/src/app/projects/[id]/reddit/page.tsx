@@ -557,48 +557,31 @@ export default function ProjectRedditConfigPage() {
     maxPosts ??
     String((config?.discovery_settings as Record<string, number> | null)?.max_posts ?? 50);
 
-  const handleSave = useCallback(() => {
-    const discoverySettings: Record<string, unknown> = {
+  // Track whether any form field has been edited but not saved
+  const hasUnsavedChanges =
+    isActive !== null ||
+    searchKeywords !== null ||
+    targetSubreddits !== null ||
+    bannedSubreddits !== null ||
+    competitors !== null ||
+    commentInstructions !== null ||
+    nicheTags !== null ||
+    timeRange !== null ||
+    maxPosts !== null;
+
+  const buildSavePayload = useCallback(() => ({
+    search_keywords: currentSearchKeywords,
+    target_subreddits: currentTargetSubreddits,
+    banned_subreddits: currentBannedSubreddits,
+    competitors: currentCompetitors,
+    comment_instructions: currentCommentInstructions || null,
+    niche_tags: currentNicheTags,
+    discovery_settings: {
       time_range: currentTimeRange,
       max_posts: parseInt(currentMaxPosts, 10) || 50,
-    };
-
-    upsertMutation.mutate(
-      {
-        search_keywords: currentSearchKeywords,
-        target_subreddits: currentTargetSubreddits,
-        banned_subreddits: currentBannedSubreddits,
-        competitors: currentCompetitors,
-        comment_instructions: currentCommentInstructions || null,
-        niche_tags: currentNicheTags,
-        discovery_settings: discoverySettings,
-        is_active: currentIsActive,
-      },
-      {
-        onSuccess: () => {
-          setToastMessage('Reddit settings saved');
-          setToastVariant('success');
-          setShowToast(true);
-          // Reset local edits so we re-derive from cache
-          setIsActive(null);
-          setSearchKeywords(null);
-          setTargetSubreddits(null);
-          setBannedSubreddits(null);
-          setCompetitors(null);
-          setCommentInstructions(null);
-          setNicheTags(null);
-          setTimeRange(null);
-          setMaxPosts(null);
-        },
-        onError: (err) => {
-          setToastMessage(err.message || 'Failed to save settings');
-          setToastVariant('error');
-          setShowToast(true);
-        },
-      },
-    );
-  }, [
-    upsertMutation,
+    },
+    is_active: currentIsActive,
+  }), [
     currentSearchKeywords,
     currentTargetSubreddits,
     currentBannedSubreddits,
@@ -609,6 +592,53 @@ export default function ProjectRedditConfigPage() {
     currentMaxPosts,
     currentIsActive,
   ]);
+
+  const resetFormState = useCallback(() => {
+    setIsActive(null);
+    setSearchKeywords(null);
+    setTargetSubreddits(null);
+    setBannedSubreddits(null);
+    setCompetitors(null);
+    setCommentInstructions(null);
+    setNicheTags(null);
+    setTimeRange(null);
+    setMaxPosts(null);
+  }, []);
+
+  const handleSave = useCallback(() => {
+    upsertMutation.mutate(buildSavePayload(), {
+      onSuccess: () => {
+        setToastMessage('Reddit settings saved');
+        setToastVariant('success');
+        setShowToast(true);
+        resetFormState();
+      },
+      onError: (err) => {
+        setToastMessage(err.message || 'Failed to save settings');
+        setToastVariant('error');
+        setShowToast(true);
+      },
+    });
+  }, [upsertMutation, buildSavePayload, resetFormState]);
+
+  // Auto-save before triggering discovery if there are unsaved changes
+  const handleDiscover = useCallback(() => {
+    if (hasUnsavedChanges) {
+      upsertMutation.mutate(buildSavePayload(), {
+        onSuccess: () => {
+          resetFormState();
+          triggerDiscovery.mutate(currentTimeRange);
+        },
+        onError: (err) => {
+          setToastMessage(err.message || 'Failed to save settings');
+          setToastVariant('error');
+          setShowToast(true);
+        },
+      });
+    } else {
+      triggerDiscovery.mutate(currentTimeRange);
+    }
+  }, [hasUnsavedChanges, upsertMutation, buildSavePayload, resetFormState, triggerDiscovery, currentTimeRange]);
 
   // Loading
   if (isLoading) {
@@ -696,11 +726,12 @@ export default function ProjectRedditConfigPage() {
           </p>
         </div>
         <Button
-          onClick={() => triggerDiscovery.mutate(currentTimeRange)}
+          onClick={handleDiscover}
           disabled={
             triggerDiscovery.isPending ||
-            !existingConfig ||
-            (existingConfig.search_keywords?.length ?? 0) === 0 ||
+            upsertMutation.isPending ||
+            (!existingConfig && !hasUnsavedChanges) ||
+            currentSearchKeywords.length === 0 ||
             discoveryStatus?.status === 'searching' ||
             discoveryStatus?.status === 'scoring' ||
             discoveryStatus?.status === 'storing'
@@ -708,7 +739,7 @@ export default function ProjectRedditConfigPage() {
           size="sm"
         >
           <SearchIcon className="w-4 h-4 mr-1.5" />
-          {triggerDiscovery.isPending ? 'Starting...' : 'Discover Posts'}
+          {upsertMutation.isPending ? 'Saving...' : triggerDiscovery.isPending ? 'Starting...' : 'Discover Posts'}
         </Button>
       </div>
 
@@ -784,7 +815,7 @@ export default function ProjectRedditConfigPage() {
                 existingConfig && (existingConfig.search_keywords?.length ?? 0) > 0 ? (
                   <Button
                     size="sm"
-                    onClick={() => triggerDiscovery.mutate(currentTimeRange)}
+                    onClick={handleDiscover}
                     disabled={
                       triggerDiscovery.isPending ||
                       discoveryStatus?.status === 'searching' ||
