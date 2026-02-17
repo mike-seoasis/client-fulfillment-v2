@@ -28,9 +28,10 @@ from app.models.page_content import PageContent
 from app.models.page_keywords import PageKeywords
 from app.models.page_paa import PagePAA
 from app.models.project import Project
-from app.models.reddit_account import AccountStatus, RedditAccount, WarmupStage
 from app.models.project_file import ProjectFile
 from app.models.prompt_log import PromptLog
+from app.models.reddit_account import AccountStatus, RedditAccount, WarmupStage
+from app.models.reddit_config import RedditProjectConfig
 
 __all__ = [
     "Base",
@@ -60,6 +61,7 @@ __all__ = [
     "Project",
     "ProjectFile",
     "RedditAccount",
+    "RedditProjectConfig",
     "PromptLog",
     "WarmupStage",
     "WebhookConfig",

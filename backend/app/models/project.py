@@ -20,6 +20,7 @@ from app.core.database import Base
 if TYPE_CHECKING:
     from app.models.blog import BlogCampaign
     from app.models.keyword_cluster import KeywordCluster
+    from app.models.reddit_config import RedditProjectConfig
 
 
 class Project(Base):
@@ -126,6 +127,13 @@ class Project(Base):
     blog_campaigns: Mapped[list["BlogCampaign"]] = relationship(
         "BlogCampaign",
         back_populates="project",
+        cascade="all, delete-orphan",
+    )
+
+    reddit_config: Mapped["RedditProjectConfig | None"] = relationship(
+        "RedditProjectConfig",
+        back_populates="project",
+        uselist=False,
         cascade="all, delete-orphan",
     )
 

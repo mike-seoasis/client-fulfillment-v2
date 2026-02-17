@@ -22,3 +22,14 @@ after each iteration and it's included in prompts for context.
   - SQLAlchemy reserves `metadata` attribute name in Declarative API — must use alternate Python name with explicit column mapping (e.g., `extra_metadata = mapped_column("metadata", JSONB, ...)`)
   - JSONB default empty array needs both `default=list` (Python-side) and `server_default=text("'[]'::jsonb")` (DB-side)
 ---
+
+## 2026-02-16 - S14A-002
+- Created `RedditProjectConfig` model for per-project Reddit settings (1:1 with Project)
+- Files changed:
+  - `backend/app/models/reddit_config.py` (new)
+  - `backend/app/models/project.py` (added `reddit_config` relationship with `uselist=False`)
+  - `backend/app/models/__init__.py` (registered `RedditProjectConfig`)
+- **Learnings:**
+  - For 1:1 relationships, use `unique=True` on the FK column plus `uselist=False` on the parent's relationship
+  - Import ordering in `__init__.py` must stay sorted — ruff enforces `I001` (isort)
+---
