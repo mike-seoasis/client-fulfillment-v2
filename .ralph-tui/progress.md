@@ -220,3 +220,18 @@ after each iteration and it's included in prompts for context.
   - For dynamically-populated filter options (niches), fetch all accounts without filters separately and extract unique values
   - Two-step delete pattern: first click sets `isDeleteConfirming=true` (auto-resets after 3s timeout), second click executes the mutation — reusable across any entity
 ---
+
+## 2026-02-16 - S14A-019
+- Created project-specific Reddit config page with tag inputs, toggle, and save
+- Added `is_active` field to `RedditProjectConfigCreate` backend schema (was missing — only in response schema) and frontend TS interface
+- Files changed:
+  - `frontend/src/app/projects/[id]/reddit/page.tsx` (new — full config form with tag inputs, toggle, discovery settings, save)
+  - `backend/app/schemas/reddit.py` (added `is_active: bool | None` to `RedditProjectConfigCreate`)
+  - `frontend/src/lib/api.ts` (added `is_active?: boolean` to `RedditProjectConfigCreate` interface)
+- **Learnings:**
+  - Tag input pattern: wrap chips + input in a shared div with `focus-within:` styles to make it behave like a single form field
+  - When using `useCallback` with derived values from `??` (nullish coalescing) that produce new array references, ESLint `react-hooks/exhaustive-deps` warns about unstable deps — fix with `useMemo` on the derived arrays
+  - `useRedditConfig` returns a 404 error when no config exists — treat 404 as "no config yet" (show empty defaults) rather than an error state
+  - Toggle switch pattern: `role="switch"` + `aria-checked` for accessibility; `translate-x-6`/`translate-x-1` for the knob animation
+  - For upsert flows, reset local state to `null` after successful save so values re-derive from the invalidated query cache
+---

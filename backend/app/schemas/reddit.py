@@ -95,6 +95,9 @@ class RedditProjectConfigCreate(BaseModel):
     discovery_settings: dict[str, Any] | None = Field(
         None, description="Advanced discovery configuration"
     )
+    is_active: bool | None = Field(
+        None, description="Whether Reddit engagement is active (defaults to True on create)"
+    )
 
 
 class RedditProjectConfigResponse(BaseModel):

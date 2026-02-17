@@ -1497,6 +1497,7 @@ export interface RedditProjectConfigCreate {
   comment_instructions?: string | null;
   niche_tags?: string[];
   discovery_settings?: Record<string, unknown> | null;
+  is_active?: boolean;
 }
 
 // =============================================================================
