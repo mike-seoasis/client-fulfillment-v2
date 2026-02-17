@@ -191,3 +191,12 @@ after each iteration and it's included in prompts for context.
   - Active state pattern: `pathname === '/'` for exact match on root, `pathname.startsWith('/reddit')` for prefix match on sections
   - Nav links placed inside the left section (alongside logo) using `gap-8` for spacing between logo group and nav group
 ---
+
+## 2026-02-16 - S14A-017
+- Created minimal pass-through layout for Reddit section
+- Files changed:
+  - `frontend/src/app/reddit/layout.tsx` (new — simple wrapper rendering `{children}`)
+- **Learnings:**
+  - Next.js nested layouts are additive — the root layout already provides Header + max-w-7xl container, so section layouts only need to render children
+  - This layout exists as a future extension point for Reddit-specific sub-navigation
+---
