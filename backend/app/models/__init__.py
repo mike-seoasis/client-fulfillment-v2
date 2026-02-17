@@ -13,6 +13,11 @@ from app.models.content_score import ContentScore
 from app.models.crawl_history import CrawlHistory
 from app.models.crawl_schedule import CrawlSchedule
 from app.models.crawled_page import CrawledPage
+from app.models.crowdreply_task import (
+    CrowdReplyTask,
+    CrowdReplyTaskStatus,
+    CrowdReplyTaskType,
+)
 from app.models.generated_content import GeneratedContent
 from app.models.internal_link import InternalLink, LinkPlanSnapshot
 from app.models.keyword_cluster import ClusterPage, KeywordCluster
@@ -43,6 +48,9 @@ __all__ = [
     "Competitor",
     "ContentBrief",
     "ContentScore",
+    "CrowdReplyTask",
+    "CrowdReplyTaskStatus",
+    "CrowdReplyTaskType",
     "CrawlHistory",
     "CrawlSchedule",
     "ClusterPage",

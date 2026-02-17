@@ -77,8 +77,9 @@
         "Fields: id (UUID PK), comment_id (UUID FK to reddit_comments.id, SET NULL, nullable, indexed), external_task_id (String 255, nullable, indexed), task_type (String 50, not null), status (String 50, default 'pending', indexed), target_url (String 2048, not null), content (Text, not null), crowdreply_project_id (String 255, nullable), request_payload (JSONB, nullable), response_payload (JSONB, nullable), upvotes_requested (Integer, nullable), price (Float, nullable), submitted_at (DateTime tz, nullable), published_at (DateTime tz, nullable), created_at, updated_at"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "comment_id uses SET NULL because we want to keep CrowdReply task records even if the comment is deleted (for billing/audit). external_task_id is CrowdReply's _id field from their API."
+      "passes": true,
+      "notes": "comment_id uses SET NULL because we want to keep CrowdReply task records even if the comment is deleted (for billing/audit). external_task_id is CrowdReply's _id field from their API.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S14A-006",
@@ -361,6 +362,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-17T00:25:18.399Z"
+    "updatedAt": "2026-02-17T00:27:04.670Z"
   }
 }

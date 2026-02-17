@@ -54,3 +54,13 @@ after each iteration and it's included in prompts for context.
   - Boolean columns with `server_default` use `text("true")` / `text("false")` (not Python bool)
   - `SET NULL` on FK delete requires the column to be `nullable=True`
 ---
+
+## 2026-02-16 - S14A-005
+- Created `CrowdReplyTask` model with `CrowdReplyTaskType` and `CrowdReplyTaskStatus` enums
+- Files changed:
+  - `backend/app/models/crowdreply_task.py` (new)
+  - `backend/app/models/__init__.py` (registered model + enums)
+- **Learnings:**
+  - Import ordering in `__init__.py` is strictly alphabetical by module path — `crawl_history` < `crawl_schedule` < `crawled_page` < `crowdreply_task` (ruff I001)
+  - `ForeignKey` can be imported from either `sqlalchemy` or `sqlalchemy.schema` — both work identically, but existing models use `sqlalchemy` directly
+---
