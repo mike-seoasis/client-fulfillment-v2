@@ -8,10 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Phase** | 14 - Reddit Marketing (14a Data Foundation complete) |
-| **Slice** | Phase 14a complete |
-| **Last Session** | 2026-02-16 |
-| **Next Action** | Phase 14b: Post Discovery Pipeline |
+| **Phase** | 14 - Reddit Marketing (14a+14b complete) |
+| **Slice** | Phase 14b complete |
+| **Last Session** | 2026-02-17 |
+| **Next Action** | Phase 14c: Crowd Reply Engine |
 | **Auth Decision** | Neon Auth (free tier, 60K MAU, Better Auth SDK) — see Phase 12 |
 | **Backup Decision** | Neon free tier (PITR) + Railway pg_dump template → Cloudflare R2 — see Phase 10 |
 | **Database** | Neon PostgreSQL (project: `spring-fog-49733273`, region: `aws-us-east-1`) |
@@ -48,6 +48,7 @@
 | 2026-02-15 | Phase 11 polish: Fixed ContentBrief SimpleNamespace bug (generation failures), normalized POP API response keys (LSI terms now display in frontend), rewrote blog keyword discovery prompt (real search queries instead of blog titles), integrated link planning into content pipeline (Brief → Write → Links → Check → Done with granular ContentStatus), brand-aware blog writing (company-specific system prompt + Brand Positioning section), removed FlaggedPassagesCard from editor sidebar, added Lexical table support + regenerate button. | Phase 11 QA hardening |
 | 2026-02-16 | Phase 11 QA hardening: Diagnosed POP step 2 batch failure (cached partial briefs with 0 competitors), added diagnostic endpoints (/health/integrations, /health/pop-test, /health/project-debug), auto link planning after onboarding content generation (Phase 3 pipeline), auto link planning after blog content generation, robust 3-tier JSON parsing for content generation (direct parse → control char repair → key-boundary fallback), fixed fallback parser truncation (HTML double quotes in attributes), optimistic updates for blog topic approval checkbox, added "No class attributes" to content prompts. | Phase 14a: Reddit Data Foundation |
 | 2026-02-16 | Phase 14a complete (S14A-001 through S14A-021): 5 Reddit models (RedditAccount, RedditProjectConfig, RedditPost, RedditComment, CrowdReplyTask) with enums + Alembic migration, Pydantic v2 schemas (11 classes), Reddit/CrowdReply config vars, Reddit API router (account CRUD with niche/status/warmup filters, project config upsert), router registration, 31 backend tests, frontend API client (5 interfaces + 6 functions), TanStack Query hooks (6 hooks with optimistic delete), Header nav links with active state, Reddit section layout, Reddit accounts page (table + filters + add modal + two-step delete), project Reddit config page (tag inputs + toggle + discovery settings), Reddit Marketing card on project detail, 51 frontend component tests. | Phase 14b: Post Discovery Pipeline |
+| 2026-02-17 | Phase 14b complete: SerpAPI integration client (query construction, time range mapping, URL filtering, subreddit extraction, rate limiting, circuit breaker), keyword-based intent classification (research/pain_point/question/competitor/general/promotional with exclusion rules), Claude Sonnet relevance scoring with batch processing, discovery pipeline orchestrator with in-memory progress tracking, Pydantic v2 schemas (6 new: DiscoveryTriggerRequest/Response, DiscoveryStatusResponse, PostUpdateRequest, BulkPostActionRequest, RedditPostResponse), 5 API endpoints (POST trigger 202, GET status polling, GET posts with filters, PATCH post status, POST bulk-action), frontend API client (6 new types + 5 functions), TanStack Query hooks (5 new: useTriggerDiscovery, useDiscoveryStatus with 2s polling, useRedditPosts, useUpdatePostStatus with optimistic update, useBulkUpdatePosts), discovery UI on project Reddit config page (trigger button, progress indicator, posts table with intent badges + score badges + approve/reject actions), 64 backend tests + 27 frontend component tests. | Phase 14c: Crowd Reply Engine |
 
 ---
 
@@ -359,7 +360,7 @@
 > **Decision (2026-02-16):** Integrating the standalone Reddit Scraper App into the V2 platform. Top-level Reddit section with project association. No persona system initially (BrandConfig + custom instructions for voice). CrowdReply for posting + foundation for own accounts. See `REDDIT_INTEGRATION_PLAN.md` for full detailed plan.
 
 - [x] **14a:** Reddit Data Foundation (5 DB tables, account pool CRUD, project config CRUD)
-- [ ] **14b:** Post Discovery Pipeline (SERP API + Claude filtering)
+- [x] **14b:** Post Discovery Pipeline (SERP API + Claude filtering)
 - [ ] **14c:** Comment Generation (AI comments with brand context, "sandwich" technique)
 - [ ] **14d:** Comment Queue + Approval (keyboard-driven power-user review interface)
 - [ ] **14e:** CrowdReply Integration (auto-submit + webhook status tracking)

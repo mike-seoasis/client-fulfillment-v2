@@ -170,6 +170,57 @@ class RedditPostResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Discovery schemas (Phase 14b)
+# ---------------------------------------------------------------------------
+
+
+class DiscoveryTriggerRequest(BaseModel):
+    """Request schema for triggering post discovery."""
+
+    time_range: str = Field(
+        "7d",
+        description="Time range filter for search: '24h', '7d', or '30d'",
+    )
+
+
+class DiscoveryTriggerResponse(BaseModel):
+    """Response schema for a discovery trigger (202 Accepted)."""
+
+    message: str = Field(..., description="Confirmation message")
+
+
+class DiscoveryStatusResponse(BaseModel):
+    """Response schema for polling discovery progress."""
+
+    status: str = Field(..., description="Pipeline status: searching | scoring | storing | complete | failed | idle")
+    total_keywords: int = Field(0, description="Total keywords to search")
+    keywords_searched: int = Field(0, description="Keywords searched so far")
+    total_posts_found: int = Field(0, description="Raw posts found from SERP")
+    posts_scored: int = Field(0, description="Posts scored by Claude so far")
+    posts_stored: int = Field(0, description="Posts stored in database")
+    error: str | None = Field(None, description="Error message if status is 'failed'")
+
+
+class PostUpdateRequest(BaseModel):
+    """Request schema for updating a post's filter status."""
+
+    filter_status: str = Field(
+        ...,
+        description="New filter status: 'relevant', 'irrelevant', 'pending', or 'skipped'",
+    )
+
+
+class BulkPostActionRequest(BaseModel):
+    """Request schema for bulk post filter status updates."""
+
+    post_ids: list[str] = Field(..., description="List of post UUIDs to update")
+    filter_status: str = Field(
+        ...,
+        description="New filter status: 'relevant', 'irrelevant', 'pending', or 'skipped'",
+    )
+
+
+# ---------------------------------------------------------------------------
 # RedditComment schemas
 # ---------------------------------------------------------------------------
 

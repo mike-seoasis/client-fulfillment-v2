@@ -39,6 +39,7 @@ from app.core.scheduler import scheduler_manager
 from app.core.websocket import connection_manager
 from app.integrations.claude import init_claude
 from app.integrations.perplexity import init_perplexity
+from app.integrations.serpapi import close_serpapi, init_serpapi
 
 # Set up logging before anything else
 setup_logging()
@@ -211,6 +212,12 @@ async def lifespan(app: FastAPI) -> Any:
     else:
         logger.warning("Perplexity not configured (missing PERPLEXITY_API_KEY)")
 
+    serpapi_client = await init_serpapi()
+    if serpapi_client.available:
+        logger.info("SerpAPI client initialized")
+    else:
+        logger.warning("SerpAPI not configured (missing SERPAPI_KEY)")
+
     # Start WebSocket heartbeat task
     await connection_manager.start_heartbeat()
     logger.info("WebSocket heartbeat task started")
@@ -253,6 +260,7 @@ async def lifespan(app: FastAPI) -> Any:
     await connection_manager.stop_heartbeat()
     logger.info("WebSocket connections closed")
 
+    await close_serpapi()
     await redis_manager.close()
     await db_manager.close()
     logger.info("Application shutdown complete")

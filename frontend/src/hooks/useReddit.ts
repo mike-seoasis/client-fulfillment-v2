@@ -1,9 +1,11 @@
 /**
- * TanStack Query hooks for Reddit accounts and project config.
+ * TanStack Query hooks for Reddit accounts, project config, and post discovery.
  *
  * Query keys:
  * - ['reddit-accounts', params] for the account list
  * - ['reddit-config', projectId] for a project's Reddit config
+ * - ['reddit-discovery-status', projectId] for discovery pipeline progress
+ * - ['reddit-posts', projectId, params] for discovered posts
  */
 
 import {
@@ -20,11 +22,22 @@ import {
   deleteRedditAccount,
   fetchRedditConfig,
   upsertRedditConfig,
+  triggerRedditDiscovery,
+  fetchDiscoveryStatus,
+  fetchRedditPosts,
+  updateRedditPostStatus,
+  bulkUpdateRedditPosts,
   type RedditAccount,
   type RedditAccountCreate,
   type RedditAccountUpdate,
   type RedditProjectConfig,
   type RedditProjectConfigCreate,
+  type DiscoveryTriggerResponse,
+  type DiscoveryStatus,
+  type RedditDiscoveredPost,
+  type RedditPostsFilterParams,
+  type RedditPostUpdateRequest,
+  type RedditBulkPostActionRequest,
 } from '@/lib/api';
 
 // =============================================================================
@@ -36,6 +49,10 @@ export const redditKeys = {
     ['reddit-accounts', params] as const,
   config: (projectId: string) =>
     ['reddit-config', projectId] as const,
+  discoveryStatus: (projectId: string) =>
+    ['reddit-discovery-status', projectId] as const,
+  posts: (projectId: string, params?: RedditPostsFilterParams) =>
+    ['reddit-posts', projectId, params] as const,
 };
 
 // =============================================================================
@@ -182,6 +199,137 @@ export function useUpsertRedditConfig(projectId: string): UseMutationResult<
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: redditKeys.config(projectId),
+      });
+    },
+  });
+}
+
+// =============================================================================
+// DISCOVERY HOOKS
+// =============================================================================
+
+/**
+ * Trigger Reddit post discovery for a project.
+ * Invalidates discovery status and posts on success.
+ */
+export function useTriggerDiscovery(projectId: string): UseMutationResult<
+  DiscoveryTriggerResponse,
+  Error,
+  string | undefined
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (timeRange?: string) =>
+      triggerRedditDiscovery(projectId, timeRange),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: redditKeys.discoveryStatus(projectId),
+      });
+    },
+  });
+}
+
+/**
+ * Poll discovery pipeline status for a project.
+ * Automatically polls every 2 seconds when status is active (searching/scoring/storing).
+ */
+export function useDiscoveryStatus(
+  projectId: string,
+  options?: { enabled?: boolean }
+): UseQueryResult<DiscoveryStatus> {
+  return useQuery({
+    queryKey: redditKeys.discoveryStatus(projectId),
+    queryFn: () => fetchDiscoveryStatus(projectId),
+    enabled: options?.enabled ?? !!projectId,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      if (status === 'searching' || status === 'scoring' || status === 'storing') {
+        return 2000;
+      }
+      return false;
+    },
+  });
+}
+
+/**
+ * Fetch discovered Reddit posts for a project with optional filters.
+ */
+export function useRedditPosts(
+  projectId: string,
+  params?: RedditPostsFilterParams,
+  options?: { enabled?: boolean }
+): UseQueryResult<RedditDiscoveredPost[]> {
+  return useQuery({
+    queryKey: redditKeys.posts(projectId, params),
+    queryFn: () => fetchRedditPosts(projectId, params),
+    enabled: options?.enabled ?? !!projectId,
+  });
+}
+
+/**
+ * Update a single post's filter status with optimistic update.
+ * Immediately updates the post in cache, rolls back on error.
+ */
+export function useUpdatePostStatus(projectId: string): UseMutationResult<
+  RedditDiscoveredPost,
+  Error,
+  { postId: string; data: RedditPostUpdateRequest }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ postId, data }: { postId: string; data: RedditPostUpdateRequest }) =>
+      updateRedditPostStatus(projectId, postId, data),
+    onMutate: async ({ postId, data }) => {
+      await queryClient.cancelQueries({ queryKey: ['reddit-posts', projectId] });
+
+      const previousQueries = queryClient.getQueriesData<RedditDiscoveredPost[]>({
+        queryKey: ['reddit-posts', projectId],
+      });
+
+      queryClient.setQueriesData<RedditDiscoveredPost[]>(
+        { queryKey: ['reddit-posts', projectId] },
+        (old) =>
+          old?.map((post) =>
+            post.id === postId ? { ...post, filter_status: data.filter_status } : post
+          ),
+      );
+
+      return { previousQueries };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previousQueries) {
+        for (const [queryKey, data] of context.previousQueries) {
+          queryClient.setQueryData(queryKey, data);
+        }
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['reddit-posts', projectId],
+      });
+    },
+  });
+}
+
+/**
+ * Bulk update filter status for multiple posts.
+ * Invalidates posts query on success.
+ */
+export function useBulkUpdatePosts(projectId: string): UseMutationResult<
+  { updated_count: number },
+  Error,
+  RedditBulkPostActionRequest
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: RedditBulkPostActionRequest) =>
+      bulkUpdateRedditPosts(projectId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['reddit-posts', projectId],
       });
     },
   });

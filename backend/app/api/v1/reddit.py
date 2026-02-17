@@ -1,25 +1,42 @@
 """Reddit API routers.
 
-REST endpoints for Reddit account CRUD and per-project Reddit configuration.
+REST endpoints for Reddit account CRUD, per-project Reddit configuration,
+post discovery, and post management.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import select
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import cast
 
 from app.core.database import get_session
+from app.core.logging import get_logger
 from app.models.project import Project
 from app.models.reddit_account import RedditAccount
 from app.models.reddit_config import RedditProjectConfig
+from app.models.reddit_post import RedditPost
 from app.schemas.reddit import (
+    BulkPostActionRequest,
+    DiscoveryStatusResponse,
+    DiscoveryTriggerRequest,
+    DiscoveryTriggerResponse,
+    PostUpdateRequest,
     RedditAccountCreate,
     RedditAccountResponse,
     RedditAccountUpdate,
+    RedditPostResponse,
     RedditProjectConfigCreate,
     RedditProjectConfigResponse,
 )
+from app.services.reddit_discovery import (
+    DiscoveryProgress,
+    discover_posts,
+    get_discovery_progress,
+    is_discovery_active,
+)
+
+logger = get_logger(__name__)
 
 reddit_router = APIRouter(prefix="/reddit", tags=["Reddit"])
 reddit_project_router = APIRouter(prefix="/projects", tags=["Reddit"])
@@ -227,3 +244,209 @@ async def upsert_project_reddit_config(
     await db.refresh(config)
     response.status_code = status.HTTP_201_CREATED
     return RedditProjectConfigResponse.model_validate(config)
+
+
+# ---------------------------------------------------------------------------
+# Discovery endpoints (Phase 14b)
+# ---------------------------------------------------------------------------
+
+
+async def _run_discovery_background(project_id: str, time_range: str) -> None:
+    """Background task wrapper for discover_posts."""
+    try:
+        await discover_posts(project_id=project_id, time_range=time_range)
+    except Exception as e:
+        logger.error(
+            "Background discovery failed",
+            extra={
+                "project_id": project_id,
+                "error": str(e),
+                "error_type": type(e).__name__,
+            },
+            exc_info=True,
+        )
+
+
+@reddit_project_router.post(
+    "/{project_id}/reddit/discover",
+    response_model=DiscoveryTriggerResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={
+        400: {"description": "No search keywords configured"},
+        404: {"description": "Reddit config not found"},
+        409: {"description": "Discovery already in progress"},
+    },
+)
+async def trigger_discovery(
+    project_id: str,
+    background_tasks: BackgroundTasks,
+    data: DiscoveryTriggerRequest | None = None,
+    db: AsyncSession = Depends(get_session),
+) -> DiscoveryTriggerResponse:
+    """Trigger Reddit post discovery for a project.
+
+    Starts the discovery pipeline as a background task and returns 202 immediately.
+    Poll GET /discover/status for progress.
+    """
+    time_range = data.time_range if data else "7d"
+
+    # Validate project has Reddit config
+    config_stmt = select(RedditProjectConfig).where(
+        RedditProjectConfig.project_id == project_id
+    )
+    config_result = await db.execute(config_stmt)
+    config = config_result.scalar_one_or_none()
+
+    if config is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Reddit config not found for this project",
+        )
+
+    if not config.search_keywords:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No search keywords configured",
+        )
+
+    # Check for duplicate runs
+    if is_discovery_active(project_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Discovery already in progress",
+        )
+
+    # Start background task
+    background_tasks.add_task(_run_discovery_background, project_id, time_range)
+
+    return DiscoveryTriggerResponse(message="Discovery started")
+
+
+@reddit_project_router.get(
+    "/{project_id}/reddit/discover/status",
+    response_model=DiscoveryStatusResponse,
+)
+async def get_discovery_status(
+    project_id: str,
+) -> DiscoveryStatusResponse:
+    """Poll discovery progress for a project.
+
+    Returns current progress if discovery is active, or "idle" if not.
+    """
+    progress = get_discovery_progress(project_id)
+
+    if progress is None:
+        return DiscoveryStatusResponse(status="idle")
+
+    return DiscoveryStatusResponse(
+        status=progress.status,
+        total_keywords=progress.total_keywords,
+        keywords_searched=progress.keywords_searched,
+        total_posts_found=progress.total_posts_found,
+        posts_scored=progress.posts_scored,
+        posts_stored=progress.posts_stored,
+        error=progress.error,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Post management endpoints (Phase 14b)
+# ---------------------------------------------------------------------------
+
+
+@reddit_project_router.get(
+    "/{project_id}/reddit/posts",
+    response_model=list[RedditPostResponse],
+)
+async def list_posts(
+    project_id: str,
+    filter_status: str | None = Query(None, description="Filter by status"),
+    intent: str | None = Query(None, description="Filter by intent category"),
+    subreddit: str | None = Query(None, description="Filter by subreddit"),
+    db: AsyncSession = Depends(get_session),
+) -> list[RedditPostResponse]:
+    """List discovered Reddit posts for a project with optional filters.
+
+    Results are ordered by relevance_score descending (most relevant first).
+    """
+    stmt = (
+        select(RedditPost)
+        .where(RedditPost.project_id == project_id)
+        .order_by(RedditPost.relevance_score.desc().nulls_last())
+    )
+
+    if filter_status is not None:
+        stmt = stmt.where(RedditPost.filter_status == filter_status)
+
+    if intent is not None:
+        # JSONB contains check: intent_categories @> '["research"]'
+        stmt = stmt.where(
+            RedditPost.intent_categories.op("@>")(cast([intent], JSONB))
+        )
+
+    if subreddit is not None:
+        stmt = stmt.where(RedditPost.subreddit == subreddit)
+
+    result = await db.execute(stmt)
+    posts = result.scalars().all()
+
+    return [RedditPostResponse.model_validate(p) for p in posts]
+
+
+@reddit_project_router.patch(
+    "/{project_id}/reddit/posts/{post_id}",
+    response_model=RedditPostResponse,
+)
+async def update_post(
+    project_id: str,
+    post_id: str,
+    data: PostUpdateRequest,
+    db: AsyncSession = Depends(get_session),
+) -> RedditPostResponse:
+    """Update a Reddit post's filter status."""
+    stmt = select(RedditPost).where(
+        RedditPost.id == post_id,
+        RedditPost.project_id == project_id,
+    )
+    result = await db.execute(stmt)
+    post = result.scalar_one_or_none()
+
+    if post is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Reddit post {post_id} not found",
+        )
+
+    post.filter_status = data.filter_status
+    await db.commit()
+    await db.refresh(post)
+
+    return RedditPostResponse.model_validate(post)
+
+
+@reddit_project_router.post(
+    "/{project_id}/reddit/posts/bulk-action",
+    response_model=dict,
+)
+async def bulk_post_action(
+    project_id: str,
+    data: BulkPostActionRequest,
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """Bulk update filter status for multiple posts."""
+    if not data.post_ids:
+        return {"updated": 0}
+
+    stmt = (
+        update(RedditPost)
+        .where(
+            RedditPost.id.in_(data.post_ids),
+            RedditPost.project_id == project_id,
+        )
+        .values(filter_status=data.filter_status)
+    )
+
+    result = await db.execute(stmt)
+    await db.commit()
+
+    return {"updated": result.rowcount}

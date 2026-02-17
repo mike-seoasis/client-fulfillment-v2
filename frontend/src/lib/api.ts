@@ -1584,6 +1584,140 @@ export function upsertRedditConfig(
 }
 
 // =============================================================================
+// REDDIT DISCOVERY API TYPES
+// =============================================================================
+
+/** Response when discovery is triggered (202 Accepted). */
+export interface DiscoveryTriggerResponse {
+  message: string;
+}
+
+/** Progress status for a running discovery pipeline. */
+export interface DiscoveryStatus {
+  status: "searching" | "scoring" | "storing" | "complete" | "failed" | "idle";
+  total_keywords: number;
+  keywords_searched: number;
+  total_posts_found: number;
+  posts_scored: number;
+  posts_stored: number;
+  error: string | null;
+}
+
+/** A discovered Reddit post. */
+export interface RedditDiscoveredPost {
+  id: string;
+  project_id: string;
+  reddit_post_id: string | null;
+  subreddit: string;
+  title: string;
+  url: string;
+  snippet: string | null;
+  keyword: string | null;
+  intent: string | null;
+  intent_categories: string[] | null;
+  relevance_score: number | null;
+  matched_keywords: string[] | null;
+  ai_evaluation: Record<string, unknown> | null;
+  filter_status: string;
+  serp_position: number | null;
+  discovered_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Params for filtering Reddit posts. */
+export interface RedditPostsFilterParams {
+  filter_status?: string;
+  intent?: string;
+  subreddit?: string;
+}
+
+/** Request to update a post's filter status. */
+export interface RedditPostUpdateRequest {
+  filter_status: string;
+}
+
+/** Request for bulk post status updates. */
+export interface RedditBulkPostActionRequest {
+  post_ids: string[];
+  filter_status: string;
+}
+
+// =============================================================================
+// REDDIT DISCOVERY API FUNCTIONS
+// =============================================================================
+
+/**
+ * Trigger Reddit post discovery for a project.
+ * Returns 202 Accepted. Poll with fetchDiscoveryStatus for progress.
+ */
+export function triggerRedditDiscovery(
+  projectId: string,
+  timeRange?: string
+): Promise<DiscoveryTriggerResponse> {
+  return apiClient.post<DiscoveryTriggerResponse>(
+    `/projects/${projectId}/reddit/discover`,
+    timeRange ? { time_range: timeRange } : undefined
+  );
+}
+
+/**
+ * Poll discovery pipeline status for a project.
+ * Returns idle if no discovery has been triggered.
+ */
+export function fetchDiscoveryStatus(
+  projectId: string
+): Promise<DiscoveryStatus> {
+  return apiClient.get<DiscoveryStatus>(
+    `/projects/${projectId}/reddit/discover/status`
+  );
+}
+
+/**
+ * List discovered Reddit posts for a project with optional filters.
+ */
+export function fetchRedditPosts(
+  projectId: string,
+  params?: RedditPostsFilterParams
+): Promise<RedditDiscoveredPost[]> {
+  const searchParams = new URLSearchParams();
+  if (params?.filter_status) searchParams.set("filter_status", params.filter_status);
+  if (params?.intent) searchParams.set("intent", params.intent);
+  if (params?.subreddit) searchParams.set("subreddit", params.subreddit);
+  const qs = searchParams.toString();
+  return apiClient.get<RedditDiscoveredPost[]>(
+    `/projects/${projectId}/reddit/posts${qs ? `?${qs}` : ""}`
+  );
+}
+
+/**
+ * Update a post's filter status (approve/reject).
+ */
+export function updateRedditPostStatus(
+  projectId: string,
+  postId: string,
+  data: RedditPostUpdateRequest
+): Promise<RedditDiscoveredPost> {
+  return apiClient.patch<RedditDiscoveredPost>(
+    `/projects/${projectId}/reddit/posts/${postId}`,
+    data
+  );
+}
+
+/**
+ * Bulk update filter status for multiple posts.
+ */
+export function bulkUpdateRedditPosts(
+  projectId: string,
+  data: RedditBulkPostActionRequest
+): Promise<{ updated_count: number }> {
+  return apiClient.post<{ updated_count: number }>(
+    `/projects/${projectId}/reddit/posts/bulk-action`,
+    data
+  );
+}
+
+// =============================================================================
 // WORDPRESS LINKER API TYPES & FUNCTIONS
 // =============================================================================
 

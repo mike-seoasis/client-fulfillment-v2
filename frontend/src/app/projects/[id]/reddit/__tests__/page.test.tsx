@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ProjectRedditConfigPage from '../page';
@@ -21,9 +21,19 @@ vi.mock('@/hooks/use-projects', () => ({
 const mockUseRedditConfig = vi.fn();
 const mockUpsertMutate = vi.fn();
 const mockUseUpsertRedditConfig = vi.fn();
+const mockTriggerMutate = vi.fn();
+const mockUseTriggerDiscovery = vi.fn();
+const mockUseDiscoveryStatus = vi.fn();
+const mockUseRedditPosts = vi.fn();
+const mockUpdatePostMutate = vi.fn();
+const mockUseUpdatePostStatus = vi.fn();
 vi.mock('@/hooks/useReddit', () => ({
   useRedditConfig: (...args: unknown[]) => mockUseRedditConfig(...args),
   useUpsertRedditConfig: (...args: unknown[]) => mockUseUpsertRedditConfig(...args),
+  useTriggerDiscovery: (...args: unknown[]) => mockUseTriggerDiscovery(...args),
+  useDiscoveryStatus: (...args: unknown[]) => mockUseDiscoveryStatus(...args),
+  useRedditPosts: (...args: unknown[]) => mockUseRedditPosts(...args),
+  useUpdatePostStatus: (...args: unknown[]) => mockUseUpdatePostStatus(...args),
 }));
 
 // ============================================================================
@@ -60,6 +70,72 @@ const mockExistingConfig = {
 };
 
 // ============================================================================
+// Mock post data for discovery tests
+// ============================================================================
+const mockPosts = [
+  {
+    id: 'post-1',
+    project_id: 'test-project-123',
+    reddit_post_id: 't3_abc',
+    subreddit: 'SkincareAddiction',
+    title: 'Best moisturizer for dry skin?',
+    url: 'https://reddit.com/r/SkincareAddiction/comments/abc/best_moisturizer/',
+    snippet: 'Looking for recommendations',
+    keyword: 'moisturizer',
+    intent: 'research',
+    intent_categories: ['research', 'question'],
+    relevance_score: 0.8,
+    matched_keywords: ['research:recommend', 'question:?'],
+    ai_evaluation: { score: 8, reasoning: 'Good fit' },
+    filter_status: 'relevant',
+    serp_position: 1,
+    discovered_at: '2026-02-16T00:00:00Z',
+    created_at: '2026-02-16T00:00:00Z',
+    updated_at: '2026-02-16T00:00:00Z',
+  },
+  {
+    id: 'post-2',
+    project_id: 'test-project-123',
+    reddit_post_id: 't3_def',
+    subreddit: 'beauty',
+    title: 'Struggling with sensitive skin',
+    url: 'https://reddit.com/r/beauty/comments/def/struggling/',
+    snippet: 'My skin is terrible and I am frustrated',
+    keyword: 'sensitive skin',
+    intent: 'pain_point',
+    intent_categories: ['pain_point'],
+    relevance_score: 0.5,
+    matched_keywords: ['pain_point:struggling'],
+    ai_evaluation: { score: 5, reasoning: 'Moderate fit' },
+    filter_status: 'pending',
+    serp_position: 3,
+    discovered_at: '2026-02-16T00:00:00Z',
+    created_at: '2026-02-16T00:00:00Z',
+    updated_at: '2026-02-16T00:00:00Z',
+  },
+  {
+    id: 'post-3',
+    project_id: 'test-project-123',
+    reddit_post_id: 't3_ghi',
+    subreddit: 'SkincareAddiction',
+    title: 'CeraVe vs Cetaphil review',
+    url: 'https://reddit.com/r/SkincareAddiction/comments/ghi/cerave_vs/',
+    snippet: 'Comparing brands for oily skin',
+    keyword: 'cerave',
+    intent: 'competitor',
+    intent_categories: ['competitor', 'research'],
+    relevance_score: 0.2,
+    matched_keywords: ['competitor:CeraVe'],
+    ai_evaluation: { score: 2, reasoning: 'Low relevance' },
+    filter_status: 'irrelevant',
+    serp_position: 5,
+    discovered_at: '2026-02-16T00:00:00Z',
+    created_at: '2026-02-16T00:00:00Z',
+    updated_at: '2026-02-16T00:00:00Z',
+  },
+];
+
+// ============================================================================
 // Default mock values
 // ============================================================================
 const defaultMockProject = () => ({
@@ -79,6 +155,28 @@ const defaultMockUpsert = () => ({
   isPending: false,
 });
 
+const defaultMockTriggerDiscovery = () => ({
+  mutate: mockTriggerMutate,
+  isPending: false,
+});
+
+const defaultMockDiscoveryStatus = () => ({
+  data: { status: 'idle', total_keywords: 0, keywords_searched: 0, total_posts_found: 0, posts_scored: 0, posts_stored: 0, error: null },
+  isLoading: false,
+  error: null,
+});
+
+const defaultMockPosts = () => ({
+  data: mockPosts,
+  isLoading: false,
+  error: null,
+});
+
+const defaultMockUpdatePost = () => ({
+  mutate: mockUpdatePostMutate,
+  isPending: false,
+});
+
 // ============================================================================
 // Tests
 // ============================================================================
@@ -88,6 +186,10 @@ describe('ProjectRedditConfigPage', () => {
     mockUseProject.mockReturnValue(defaultMockProject());
     mockUseRedditConfig.mockReturnValue(defaultMockRedditConfig());
     mockUseUpsertRedditConfig.mockReturnValue(defaultMockUpsert());
+    mockUseTriggerDiscovery.mockReturnValue(defaultMockTriggerDiscovery());
+    mockUseDiscoveryStatus.mockReturnValue(defaultMockDiscoveryStatus());
+    mockUseRedditPosts.mockReturnValue(defaultMockPosts());
+    mockUseUpdatePostStatus.mockReturnValue(defaultMockUpdatePost());
   });
 
   // ============================================================================
@@ -281,6 +383,352 @@ describe('ProjectRedditConfigPage', () => {
       render(<ProjectRedditConfigPage />);
 
       expect(screen.getByText('Project Not Found')).toBeInTheDocument();
+    });
+  });
+
+  // ============================================================================
+  // Discovery trigger button
+  // ============================================================================
+  describe('discovery trigger button', () => {
+    it('renders Discover Posts button', () => {
+      render(<ProjectRedditConfigPage />);
+
+      expect(screen.getByText('Discover Posts')).toBeInTheDocument();
+    });
+
+    it('button is enabled when config exists with keywords', () => {
+      render(<ProjectRedditConfigPage />);
+
+      const buttons = screen.getAllByText('Discover Posts');
+      // The main button (not the empty state one)
+      const mainButton = buttons[0].closest('button');
+      expect(mainButton).not.toBeDisabled();
+    });
+
+    it('button is disabled when no config exists', () => {
+      mockUseRedditConfig.mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        error: null,
+      });
+      mockUseRedditPosts.mockReturnValue({ data: [], isLoading: false, error: null });
+
+      render(<ProjectRedditConfigPage />);
+
+      const buttons = screen.getAllByText('Discover Posts');
+      const mainButton = buttons[0].closest('button');
+      expect(mainButton).toBeDisabled();
+    });
+
+    it('button is disabled when config has no keywords', () => {
+      mockUseRedditConfig.mockReturnValue({
+        data: { ...mockExistingConfig, search_keywords: [] },
+        isLoading: false,
+        error: null,
+      });
+
+      render(<ProjectRedditConfigPage />);
+
+      const buttons = screen.getAllByText('Discover Posts');
+      const mainButton = buttons[0].closest('button');
+      expect(mainButton).toBeDisabled();
+    });
+
+    it('shows Starting... text when trigger mutation is pending', () => {
+      mockUseTriggerDiscovery.mockReturnValue({
+        mutate: mockTriggerMutate,
+        isPending: true,
+      });
+
+      render(<ProjectRedditConfigPage />);
+
+      expect(screen.getByText('Starting...')).toBeInTheDocument();
+    });
+
+    it('button is disabled during active discovery', () => {
+      mockUseDiscoveryStatus.mockReturnValue({
+        data: { status: 'searching', total_keywords: 3, keywords_searched: 1, total_posts_found: 5, posts_scored: 0, posts_stored: 0, error: null },
+        isLoading: false,
+        error: null,
+      });
+
+      render(<ProjectRedditConfigPage />);
+
+      const buttons = screen.getAllByText('Discover Posts');
+      const mainButton = buttons[0].closest('button');
+      expect(mainButton).toBeDisabled();
+    });
+
+    it('calls trigger mutation when clicked', async () => {
+      const user = userEvent.setup();
+      render(<ProjectRedditConfigPage />);
+
+      const buttons = screen.getAllByText('Discover Posts');
+      await user.click(buttons[0]);
+
+      expect(mockTriggerMutate).toHaveBeenCalled();
+    });
+  });
+
+  // ============================================================================
+  // Discovery progress indicator
+  // ============================================================================
+  describe('discovery progress', () => {
+    it('shows searching progress when discovery is searching', () => {
+      mockUseDiscoveryStatus.mockReturnValue({
+        data: {
+          status: 'searching',
+          total_keywords: 5,
+          keywords_searched: 2,
+          total_posts_found: 10,
+          posts_scored: 0,
+          posts_stored: 0,
+          error: null,
+        },
+        isLoading: false,
+        error: null,
+      });
+
+      render(<ProjectRedditConfigPage />);
+
+      expect(screen.getByText('Searching keywords...')).toBeInTheDocument();
+      expect(screen.getByText(/Keywords: 2\/5/)).toBeInTheDocument();
+    });
+
+    it('shows scoring progress when discovery is scoring', () => {
+      mockUseDiscoveryStatus.mockReturnValue({
+        data: {
+          status: 'scoring',
+          total_keywords: 5,
+          keywords_searched: 5,
+          total_posts_found: 20,
+          posts_scored: 8,
+          posts_stored: 0,
+          error: null,
+        },
+        isLoading: false,
+        error: null,
+      });
+
+      render(<ProjectRedditConfigPage />);
+
+      expect(screen.getByText('Scoring posts with AI...')).toBeInTheDocument();
+      expect(screen.getByText(/Scored: 8/)).toBeInTheDocument();
+    });
+
+    it('shows completion summary when discovery is complete', () => {
+      mockUseDiscoveryStatus.mockReturnValue({
+        data: {
+          status: 'complete',
+          total_keywords: 5,
+          keywords_searched: 5,
+          total_posts_found: 20,
+          posts_scored: 15,
+          posts_stored: 15,
+          error: null,
+        },
+        isLoading: false,
+        error: null,
+      });
+
+      render(<ProjectRedditConfigPage />);
+
+      expect(screen.getByText('Discovery complete')).toBeInTheDocument();
+      expect(screen.getByText(/Stored: 15/)).toBeInTheDocument();
+    });
+
+    it('shows error when discovery fails', () => {
+      mockUseDiscoveryStatus.mockReturnValue({
+        data: {
+          status: 'failed',
+          total_keywords: 5,
+          keywords_searched: 3,
+          total_posts_found: 10,
+          posts_scored: 0,
+          posts_stored: 0,
+          error: 'SerpAPI rate limit exceeded',
+        },
+        isLoading: false,
+        error: null,
+      });
+
+      render(<ProjectRedditConfigPage />);
+
+      expect(screen.getByText('Discovery failed')).toBeInTheDocument();
+      expect(screen.getByText('SerpAPI rate limit exceeded')).toBeInTheDocument();
+    });
+
+    it('does not show progress indicator when status is idle', () => {
+      render(<ProjectRedditConfigPage />);
+
+      expect(screen.queryByText('Searching keywords...')).not.toBeInTheDocument();
+      expect(screen.queryByText('Discovery complete')).not.toBeInTheDocument();
+    });
+  });
+
+  // ============================================================================
+  // Posts table rendering
+  // ============================================================================
+  describe('posts table', () => {
+    it('renders table headers', () => {
+      render(<ProjectRedditConfigPage />);
+
+      expect(screen.getByText('Subreddit')).toBeInTheDocument();
+      expect(screen.getByText('Title')).toBeInTheDocument();
+      expect(screen.getByText('Intent')).toBeInTheDocument();
+      expect(screen.getByText('Score')).toBeInTheDocument();
+      expect(screen.getByText('Status')).toBeInTheDocument();
+      expect(screen.getByText('Discovered')).toBeInTheDocument();
+      expect(screen.getByText('Actions')).toBeInTheDocument();
+    });
+
+    it('renders post rows with subreddit names', () => {
+      render(<ProjectRedditConfigPage />);
+
+      // Two posts are from SkincareAddiction, one from beauty
+      // The text nodes may be split across child elements, so use a custom matcher
+      const skincareMentions = screen.getAllByText((_, el) => el?.textContent === 'r/SkincareAddiction');
+      expect(skincareMentions.length).toBeGreaterThanOrEqual(2);
+      const beautyMentions = screen.getAllByText((_, el) => el?.textContent === 'r/beauty');
+      expect(beautyMentions.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('renders post titles as links to Reddit', () => {
+      render(<ProjectRedditConfigPage />);
+
+      const link = screen.getByText('Best moisturizer for dry skin?').closest('a');
+      expect(link).toHaveAttribute('href', 'https://reddit.com/r/SkincareAddiction/comments/abc/best_moisturizer/');
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    });
+
+    it('renders intent badges for posts', () => {
+      render(<ProjectRedditConfigPage />);
+
+      // Intent labels appear both as badges in the table and as options
+      // in the filter dropdown, so use getAllByText
+      const researchBadges = screen.getAllByText('Research');
+      expect(researchBadges.length).toBeGreaterThanOrEqual(1);
+      const painPointBadges = screen.getAllByText('Pain Point');
+      expect(painPointBadges.length).toBeGreaterThanOrEqual(1);
+      const competitorBadges = screen.getAllByText('Competitor');
+      expect(competitorBadges.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('renders relevance scores with correct values', () => {
+      render(<ProjectRedditConfigPage />);
+
+      // Scores are displayed as X/10
+      expect(screen.getByText('8/10')).toBeInTheDocument();
+      expect(screen.getByText('5/10')).toBeInTheDocument();
+      expect(screen.getByText('2/10')).toBeInTheDocument();
+    });
+
+    it('renders filter status badges', () => {
+      render(<ProjectRedditConfigPage />);
+
+      expect(screen.getByText('relevant')).toBeInTheDocument();
+      expect(screen.getByText('pending')).toBeInTheDocument();
+      expect(screen.getByText('irrelevant')).toBeInTheDocument();
+    });
+
+    it('shows empty state when no posts', () => {
+      mockUseRedditPosts.mockReturnValue({
+        data: [],
+        isLoading: false,
+        error: null,
+      });
+
+      render(<ProjectRedditConfigPage />);
+
+      expect(screen.getByText('No posts discovered yet')).toBeInTheDocument();
+    });
+  });
+
+  // ============================================================================
+  // Filter tabs
+  // ============================================================================
+  describe('filter tabs', () => {
+    it('renders status filter tabs', () => {
+      render(<ProjectRedditConfigPage />);
+
+      expect(screen.getByText('All')).toBeInTheDocument();
+      expect(screen.getByText('Relevant')).toBeInTheDocument();
+      expect(screen.getByText('Irrelevant')).toBeInTheDocument();
+      expect(screen.getByText('Pending')).toBeInTheDocument();
+    });
+
+    it('renders intent filter dropdown', () => {
+      render(<ProjectRedditConfigPage />);
+
+      expect(screen.getByText('All Intents')).toBeInTheDocument();
+    });
+  });
+
+  // ============================================================================
+  // Approve / Reject actions
+  // ============================================================================
+  describe('approve and reject actions', () => {
+    it('renders approve buttons for each post', () => {
+      render(<ProjectRedditConfigPage />);
+
+      const approveButtons = screen.getAllByLabelText('Approve post');
+      expect(approveButtons.length).toBe(3);
+    });
+
+    it('renders reject buttons for each post', () => {
+      render(<ProjectRedditConfigPage />);
+
+      const rejectButtons = screen.getAllByLabelText('Reject post');
+      expect(rejectButtons.length).toBe(3);
+    });
+
+    it('approve button is disabled for already-relevant posts', () => {
+      render(<ProjectRedditConfigPage />);
+
+      const approveButtons = screen.getAllByLabelText('Approve post');
+      // First post (post-1) has filter_status='relevant'
+      expect(approveButtons[0]).toBeDisabled();
+      // Second post (post-2) has filter_status='pending' -- should NOT be disabled
+      expect(approveButtons[1]).not.toBeDisabled();
+    });
+
+    it('reject button is disabled for already-irrelevant posts', () => {
+      render(<ProjectRedditConfigPage />);
+
+      const rejectButtons = screen.getAllByLabelText('Reject post');
+      // Third post (post-3) has filter_status='irrelevant'
+      expect(rejectButtons[2]).toBeDisabled();
+      // First post (post-1) has filter_status='relevant' -- reject should NOT be disabled
+      expect(rejectButtons[0]).not.toBeDisabled();
+    });
+
+    it('clicking approve calls updatePostStatus mutation', async () => {
+      const user = userEvent.setup();
+      render(<ProjectRedditConfigPage />);
+
+      const approveButtons = screen.getAllByLabelText('Approve post');
+      // Click approve on second post (pending status)
+      await user.click(approveButtons[1]);
+
+      expect(mockUpdatePostMutate).toHaveBeenCalledWith({
+        postId: 'post-2',
+        data: { filter_status: 'relevant' },
+      });
+    });
+
+    it('clicking reject calls updatePostStatus mutation', async () => {
+      const user = userEvent.setup();
+      render(<ProjectRedditConfigPage />);
+
+      const rejectButtons = screen.getAllByLabelText('Reject post');
+      // Click reject on second post (pending status)
+      await user.click(rejectButtons[1]);
+
+      expect(mockUpdatePostMutate).toHaveBeenCalledWith({
+        postId: 'post-2',
+        data: { filter_status: 'irrelevant' },
+      });
     });
   });
 });

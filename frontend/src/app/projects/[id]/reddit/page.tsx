@@ -4,8 +4,16 @@ import { useState, useCallback, useMemo, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useProject } from '@/hooks/use-projects';
-import { useRedditConfig, useUpsertRedditConfig } from '@/hooks/useReddit';
-import { Button, Toast } from '@/components/ui';
+import {
+  useRedditConfig,
+  useUpsertRedditConfig,
+  useTriggerDiscovery,
+  useDiscoveryStatus,
+  useRedditPosts,
+  useUpdatePostStatus,
+} from '@/hooks/useReddit';
+import { Button, Toast, EmptyState } from '@/components/ui';
+import type { RedditDiscoveredPost, DiscoveryStatus } from '@/lib/api';
 
 // =============================================================================
 // ICONS
@@ -192,6 +200,265 @@ function LoadingSkeleton() {
 }
 
 // =============================================================================
+// DISCOVERY ICONS
+// =============================================================================
+
+function SearchIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8" />
+      <path d="M21 21l-4.35-4.35" />
+    </svg>
+  );
+}
+
+function CheckIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 6L9 17l-5-5" />
+    </svg>
+  );
+}
+
+function XCircleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M15 9l-6 6M9 9l6 6" />
+    </svg>
+  );
+}
+
+function ExternalLinkIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
+    </svg>
+  );
+}
+
+// =============================================================================
+// INTENT BADGE COLORS
+// =============================================================================
+
+const INTENT_COLORS: Record<string, string> = {
+  research: 'bg-lagoon-50 text-lagoon-700 border-lagoon-200',
+  pain_point: 'bg-coral-50 text-coral-700 border-coral-200',
+  competitor: 'bg-palm-50 text-palm-700 border-palm-200',
+  question: 'bg-sand-100 text-warm-gray-700 border-sand-300',
+  general: 'bg-cream-100 text-warm-gray-600 border-cream-300',
+};
+
+const INTENT_LABELS: Record<string, string> = {
+  research: 'Research',
+  pain_point: 'Pain Point',
+  competitor: 'Competitor',
+  question: 'Question',
+  general: 'General',
+};
+
+function IntentBadge({ intent }: { intent: string }) {
+  const colorClass = INTENT_COLORS[intent] || INTENT_COLORS.general;
+  const label = INTENT_LABELS[intent] || intent;
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-sm border ${colorClass}`}>
+      {label}
+    </span>
+  );
+}
+
+function ScoreBadge({ score }: { score: number | null }) {
+  if (score === null) return <span className="text-warm-gray-400 text-sm">--</span>;
+  const displayScore = score > 1 ? score : Math.round(score * 10);
+  let colorClass = 'text-coral-600';
+  if (displayScore >= 7) colorClass = 'text-palm-600 font-semibold';
+  else if (displayScore >= 4) colorClass = 'text-amber-600';
+  return <span className={`text-sm ${colorClass}`}>{displayScore}/10</span>;
+}
+
+// =============================================================================
+// STATUS TAB OPTIONS
+// =============================================================================
+
+const STATUS_TABS = [
+  { value: '', label: 'All' },
+  { value: 'relevant', label: 'Relevant' },
+  { value: 'irrelevant', label: 'Irrelevant' },
+  { value: 'pending', label: 'Pending' },
+] as const;
+
+// =============================================================================
+// DISCOVERY PROGRESS COMPONENT
+// =============================================================================
+
+function DiscoveryProgress({ status }: { status: DiscoveryStatus }) {
+  const isActive = status.status === 'searching' || status.status === 'scoring' || status.status === 'storing';
+  const isFailed = status.status === 'failed';
+  const isComplete = status.status === 'complete';
+
+  if (!isActive && !isFailed && !isComplete) return null;
+
+  const phaseLabel =
+    status.status === 'searching' ? 'Searching keywords...' :
+    status.status === 'scoring' ? 'Scoring posts with AI...' :
+    status.status === 'storing' ? 'Storing results...' :
+    status.status === 'complete' ? 'Discovery complete' :
+    status.status === 'failed' ? 'Discovery failed' : '';
+
+  const progress = status.total_keywords > 0
+    ? Math.round(((status.keywords_searched + status.posts_scored) / (status.total_keywords + status.total_posts_found || 1)) * 100)
+    : 0;
+
+  return (
+    <div className={`rounded-sm border p-4 ${
+      isFailed ? 'bg-coral-50 border-coral-200' :
+      isComplete ? 'bg-palm-50 border-palm-200' :
+      'bg-lagoon-50 border-lagoon-200'
+    }`}>
+      <div className="flex items-center gap-3 mb-2">
+        {isActive && (
+          <div className="w-4 h-4 border-2 border-lagoon-500 border-t-transparent rounded-full animate-spin" />
+        )}
+        {isComplete && <CheckIcon className="w-4 h-4 text-palm-600" />}
+        {isFailed && <XCircleIcon className="w-4 h-4 text-coral-600" />}
+        <span className={`text-sm font-medium ${
+          isFailed ? 'text-coral-700' :
+          isComplete ? 'text-palm-700' :
+          'text-lagoon-700'
+        }`}>
+          {phaseLabel}
+        </span>
+      </div>
+
+      {isActive && (
+        <div className="w-full bg-white/50 rounded-full h-1.5 mb-2">
+          <div
+            className="bg-lagoon-500 h-1.5 rounded-full transition-all duration-500"
+            style={{ width: `${Math.min(progress, 100)}%` }}
+          />
+        </div>
+      )}
+
+      <div className="flex gap-4 text-xs text-warm-gray-600">
+        <span>Keywords: {status.keywords_searched}/{status.total_keywords}</span>
+        <span>Posts found: {status.total_posts_found}</span>
+        <span>Scored: {status.posts_scored}</span>
+        {status.posts_stored > 0 && <span>Stored: {status.posts_stored}</span>}
+      </div>
+
+      {isFailed && status.error && (
+        <p className="mt-2 text-xs text-coral-600">{status.error}</p>
+      )}
+    </div>
+  );
+}
+
+// =============================================================================
+// POSTS TABLE COMPONENT
+// =============================================================================
+
+function PostsTable({
+  posts,
+  onApprove,
+  onReject,
+}: {
+  posts: RedditDiscoveredPost[];
+  onApprove: (postId: string) => void;
+  onReject: (postId: string) => void;
+}) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-cream-300">
+            <th className="text-left py-3 px-3 text-xs font-medium text-warm-gray-500 uppercase tracking-wider">Subreddit</th>
+            <th className="text-left py-3 px-3 text-xs font-medium text-warm-gray-500 uppercase tracking-wider">Title</th>
+            <th className="text-left py-3 px-3 text-xs font-medium text-warm-gray-500 uppercase tracking-wider">Intent</th>
+            <th className="text-left py-3 px-3 text-xs font-medium text-warm-gray-500 uppercase tracking-wider">Score</th>
+            <th className="text-left py-3 px-3 text-xs font-medium text-warm-gray-500 uppercase tracking-wider">Status</th>
+            <th className="text-left py-3 px-3 text-xs font-medium text-warm-gray-500 uppercase tracking-wider">Discovered</th>
+            <th className="text-right py-3 px-3 text-xs font-medium text-warm-gray-500 uppercase tracking-wider">Actions</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-cream-200">
+          {posts.map((post) => (
+            <tr key={post.id} className="hover:bg-cream-50 transition-colors">
+              <td className="py-3 px-3">
+                <span className="text-warm-gray-600 text-xs">r/{post.subreddit}</span>
+              </td>
+              <td className="py-3 px-3 max-w-md">
+                <a
+                  href={post.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-lagoon-600 hover:text-lagoon-800 hover:underline inline-flex items-center gap-1"
+                >
+                  <span className="line-clamp-2">{post.title}</span>
+                  <ExternalLinkIcon className="w-3 h-3 flex-shrink-0" />
+                </a>
+              </td>
+              <td className="py-3 px-3">
+                <div className="flex flex-wrap gap-1">
+                  {post.intent_categories && post.intent_categories.length > 0
+                    ? post.intent_categories.map((intent) => (
+                        <IntentBadge key={intent} intent={intent} />
+                      ))
+                    : post.intent
+                      ? <IntentBadge intent={post.intent} />
+                      : <span className="text-warm-gray-400 text-xs">--</span>
+                  }
+                </div>
+              </td>
+              <td className="py-3 px-3">
+                <ScoreBadge score={post.relevance_score} />
+              </td>
+              <td className="py-3 px-3">
+                <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-sm border ${
+                  post.filter_status === 'relevant'
+                    ? 'bg-palm-50 text-palm-700 border-palm-200'
+                    : post.filter_status === 'irrelevant'
+                      ? 'bg-coral-50 text-coral-600 border-coral-200'
+                      : 'bg-cream-100 text-warm-gray-600 border-cream-300'
+                }`}>
+                  {post.filter_status}
+                </span>
+              </td>
+              <td className="py-3 px-3 text-warm-gray-500 text-xs whitespace-nowrap">
+                {new Date(post.discovered_at).toLocaleDateString()}
+              </td>
+              <td className="py-3 px-3">
+                <div className="flex items-center justify-end gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onApprove(post.id)}
+                    disabled={post.filter_status === 'relevant'}
+                    className="p-1.5 rounded-sm text-palm-600 hover:bg-palm-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    aria-label="Approve post"
+                    title="Mark as relevant"
+                  >
+                    <CheckIcon className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onReject(post.id)}
+                    disabled={post.filter_status === 'irrelevant'}
+                    className="p-1.5 rounded-sm text-coral-600 hover:bg-coral-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    aria-label="Reject post"
+                    title="Mark as irrelevant"
+                  >
+                    <XCircleIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// =============================================================================
 // TIME RANGE OPTIONS
 // =============================================================================
 
@@ -212,6 +479,22 @@ export default function ProjectRedditConfigPage() {
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
   const { data: existingConfig, isLoading: isConfigLoading } = useRedditConfig(projectId);
   const upsertMutation = useUpsertRedditConfig(projectId);
+  const triggerDiscovery = useTriggerDiscovery(projectId);
+  const { data: discoveryStatus } = useDiscoveryStatus(projectId);
+  const updatePostStatus = useUpdatePostStatus(projectId);
+
+  // Discovery filter state
+  const [statusFilter, setStatusFilter] = useState('');
+  const [intentFilter, setIntentFilter] = useState('');
+
+  const postFilterParams = useMemo(() => {
+    const params: { filter_status?: string; intent?: string } = {};
+    if (statusFilter) params.filter_status = statusFilter;
+    if (intentFilter) params.intent = intentFilter;
+    return params;
+  }, [statusFilter, intentFilter]);
+
+  const { data: posts } = useRedditPosts(projectId, postFilterParams);
 
   // Form state
   const [isActive, setIsActive] = useState<boolean | null>(null);
@@ -506,6 +789,127 @@ export default function ProjectRedditConfigPage() {
             {upsertMutation.isPending ? 'Saving...' : 'Save Settings'}
           </Button>
         </div>
+      </div>
+
+      {/* ================================================================= */}
+      {/* DISCOVERY SECTION */}
+      {/* ================================================================= */}
+      <hr className="border-cream-500 my-8" />
+
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-lg font-semibold text-warm-gray-900">Post Discovery</h2>
+          <p className="text-sm text-warm-gray-500 mt-0.5">
+            Search for relevant Reddit posts using your configured keywords
+          </p>
+        </div>
+        <Button
+          onClick={() => triggerDiscovery.mutate(currentTimeRange)}
+          disabled={
+            triggerDiscovery.isPending ||
+            !existingConfig ||
+            (existingConfig.search_keywords?.length ?? 0) === 0 ||
+            discoveryStatus?.status === 'searching' ||
+            discoveryStatus?.status === 'scoring' ||
+            discoveryStatus?.status === 'storing'
+          }
+          size="sm"
+        >
+          <SearchIcon className="w-4 h-4 mr-1.5" />
+          {triggerDiscovery.isPending ? 'Starting...' : 'Discover Posts'}
+        </Button>
+      </div>
+
+      {!existingConfig && (
+        <p className="text-sm text-warm-gray-400 mb-4">
+          Save your Reddit settings with at least one search keyword to enable discovery.
+        </p>
+      )}
+
+      {/* Discovery Progress */}
+      {discoveryStatus && discoveryStatus.status !== 'idle' && (
+        <div className="mb-6">
+          <DiscoveryProgress status={discoveryStatus} />
+        </div>
+      )}
+
+      {/* Filter Controls */}
+      {posts && posts.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          {/* Status Tabs */}
+          <div className="flex rounded-sm border border-cream-400 overflow-hidden">
+            {STATUS_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => setStatusFilter(tab.value)}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                  statusFilter === tab.value
+                    ? 'bg-palm-500 text-white'
+                    : 'bg-white text-warm-gray-600 hover:bg-cream-100'
+                } border-r border-cream-400 last:border-r-0`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Intent Filter */}
+          <select
+            value={intentFilter}
+            onChange={(e) => setIntentFilter(e.target.value)}
+            className="px-3 py-1.5 text-xs bg-white border border-cream-400 rounded-sm text-warm-gray-700 focus:outline-none focus:ring-2 focus:ring-palm-200 focus:border-palm-400"
+          >
+            <option value="">All Intents</option>
+            <option value="research">Research</option>
+            <option value="pain_point">Pain Point</option>
+            <option value="competitor">Competitor</option>
+            <option value="question">Question</option>
+            <option value="general">General</option>
+          </select>
+        </div>
+      )}
+
+      {/* Posts Table or Empty State */}
+      <div className="bg-white rounded-sm border border-cream-500 shadow-sm">
+        {!posts || posts.length === 0 ? (
+          <EmptyState
+            icon={<SearchIcon className="w-10 h-10" />}
+            title="No posts discovered yet"
+            description={
+              existingConfig && (existingConfig.search_keywords?.length ?? 0) > 0
+                ? 'Click "Discover Posts" to search for relevant Reddit threads.'
+                : 'Add search keywords in the settings above and save, then trigger discovery.'
+            }
+            action={
+              existingConfig && (existingConfig.search_keywords?.length ?? 0) > 0 ? (
+                <Button
+                  size="sm"
+                  onClick={() => triggerDiscovery.mutate(currentTimeRange)}
+                  disabled={
+                    triggerDiscovery.isPending ||
+                    discoveryStatus?.status === 'searching' ||
+                    discoveryStatus?.status === 'scoring' ||
+                    discoveryStatus?.status === 'storing'
+                  }
+                >
+                  <SearchIcon className="w-4 h-4 mr-1.5" />
+                  Discover Posts
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : (
+          <PostsTable
+            posts={posts}
+            onApprove={(postId) =>
+              updatePostStatus.mutate({ postId, data: { filter_status: 'relevant' } })
+            }
+            onReject={(postId) =>
+              updatePostStatus.mutate({ postId, data: { filter_status: 'irrelevant' } })
+            }
+          />
+        )}
       </div>
 
       {/* Toast */}
