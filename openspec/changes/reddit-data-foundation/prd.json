@@ -343,8 +343,9 @@
         "All tests pass with npm test"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Follow existing test patterns in frontend/src/. Use vitest + testing-library. Mock the API calls and TanStack Query hooks."
+      "passes": true,
+      "notes": "Follow existing test patterns in frontend/src/. Use vitest + testing-library. Mock the API calls and TanStack Query hooks.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S14A-098",
@@ -377,6 +378,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-17T00:54:35.522Z"
+    "updatedAt": "2026-02-17T00:59:28.503Z"
   }
 }

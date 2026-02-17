@@ -246,3 +246,16 @@ after each iteration and it's included in prompts for context.
   - `useRedditConfig` returns undefined (not null) when a 404 is received and the query errors — truthiness check on `redditConfig` works to distinguish configured vs not-configured state
   - Section card pattern: icon + title + subtitle badge + description + action ButtonLink — consistent across Onboarding, Clusters, Blogs, and now Reddit
 ---
+
+## 2026-02-16 - S14A-021
+- Created frontend component tests for Reddit UI (51 tests total across 3 files)
+- Files changed:
+  - `frontend/src/app/reddit/accounts/__tests__/page.test.tsx` (new — 24 tests: table rendering, filter controls, add account modal, delete confirmation, empty state, loading state, page header)
+  - `frontend/src/app/projects/[id]/reddit/__tests__/page.test.tsx` (new — 18 tests: form rendering, loading existing config, save functionality, empty config 404, loading state, project not found)
+  - `frontend/src/components/__tests__/Header.test.tsx` (new — 9 tests: link rendering, active state toggling based on pathname)
+- **Learnings:**
+  - Filter dropdown `<option>` values share text with table column headers (e.g., "Cooldown") and badge text (e.g., "Active") — use `within(table)` scoping to disambiguate queries instead of `screen.getByText`
+  - For elements with prefix text rendered as sibling nodes (e.g., `r/` prefix + subreddit name), use `screen.getByText((_, el) => el?.textContent === 'r/running')` custom matcher to match the composed text content
+  - Mock pattern for hooks: `vi.fn()` for the mock, `vi.mock('@/hooks/useReddit', () => ({ hookName: (...args) => mockHookFn(...args) }))` — pass-through args so the mock captures filter params
+  - Pre-existing test failures (129 tests across 11 files) are unrelated to Reddit tests — caused by missing `useRedditConfig` mock in project detail tests and other prior issues
+---
