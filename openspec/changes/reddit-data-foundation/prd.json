@@ -47,8 +47,9 @@
         "Add relationship: comments (one-to-many to RedditComment, cascade all delete-orphan)"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "The unique constraint prevents duplicate posts per project. discovered_at tracks when SERP returned the result (different from created_at which is when our DB row was created)."
+      "passes": true,
+      "notes": "The unique constraint prevents duplicate posts per project. discovered_at tracks when SERP returned the result (different from created_at which is when our DB row was created).",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S14A-004",
@@ -359,6 +360,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-17T00:22:01.792Z"
+    "updatedAt": "2026-02-17T00:23:33.647Z"
   }
 }

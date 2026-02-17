@@ -32,6 +32,7 @@ from app.models.project_file import ProjectFile
 from app.models.prompt_log import PromptLog
 from app.models.reddit_account import AccountStatus, RedditAccount, WarmupStage
 from app.models.reddit_config import RedditProjectConfig
+from app.models.reddit_post import PostFilterStatus, PostIntent, RedditPost
 
 __all__ = [
     "Base",
@@ -58,9 +59,12 @@ __all__ = [
     "PageKeywords",
     "PagePAA",
     "AccountStatus",
+    "PostFilterStatus",
+    "PostIntent",
     "Project",
     "ProjectFile",
     "RedditAccount",
+    "RedditPost",
     "RedditProjectConfig",
     "PromptLog",
     "WarmupStage",

@@ -33,3 +33,13 @@ after each iteration and it's included in prompts for context.
   - For 1:1 relationships, use `unique=True` on the FK column plus `uselist=False` on the parent's relationship
   - Import ordering in `__init__.py` must stay sorted — ruff enforces `I001` (isort)
 ---
+
+## 2026-02-16 - S14A-003
+- Created `RedditPost` model with `PostFilterStatus` and `PostIntent` enums
+- Files changed:
+  - `backend/app/models/reddit_post.py` (new)
+  - `backend/app/models/__init__.py` (registered model + enums)
+- **Learnings:**
+  - RedditComment model doesn't exist yet — used `TYPE_CHECKING` forward reference for the `comments` relationship so the model compiles without the dependency
+  - UniqueConstraint goes in `__table_args__` tuple (must have trailing comma for single-element tuple)
+---
