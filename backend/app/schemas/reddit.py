@@ -290,6 +290,10 @@ class CommentQueueStatusCounts(BaseModel):
     draft: int = 0
     approved: int = 0
     rejected: int = 0
+    submitting: int = 0
+    posted: int = 0
+    failed: int = 0
+    mod_removed: int = 0
     all: int = 0
 
 
@@ -346,8 +350,64 @@ class GenerationStatusResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# CrowdReplyTask schemas
+# CrowdReply submission schemas (Phase 14e)
 # ---------------------------------------------------------------------------
+
+
+class CommentSubmitRequest(BaseModel):
+    """Request to submit approved comments to CrowdReply."""
+
+    comment_ids: list[str] | None = None  # None = all approved
+    upvotes_per_comment: int | None = Field(None, ge=0, le=50)
+
+
+class CommentSubmitResponse(BaseModel):
+    """Response from comment submission trigger."""
+
+    message: str
+    submitted_count: int = 0
+
+
+class SubmissionStatusResponse(BaseModel):
+    """Polling response for submission progress."""
+
+    status: str  # submitting | complete | failed | idle
+    total_comments: int = 0
+    comments_submitted: int = 0
+    comments_failed: int = 0
+    errors: list[str] = Field(default_factory=list)
+
+
+class CrowdReplyWebhookPayload(BaseModel):
+    """Incoming webhook payload from CrowdReply."""
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str = Field(alias="_id")
+    thread_url: str = Field("", alias="threadUrl")
+    task_type: str = Field("", alias="taskType")
+    status: str
+    content: str = ""
+    client_price: float | None = Field(None, alias="clientPrice")
+    task_submission: list[dict[str, Any]] = Field(
+        default_factory=list, alias="taskSubmission"
+    )
+    published_at: str | None = Field(None, alias="publishedAt")
+
+
+class CrowdReplyBalanceResponse(BaseModel):
+    """CrowdReply account balance."""
+
+    balance: float
+    currency: str = "USD"
+
+
+class WebhookSimulateRequest(BaseModel):
+    """Request to simulate a CrowdReply webhook (dev-only)."""
+
+    comment_id: str
+    status: str = "published"
+    submission_url: str | None = None
 
 
 # ---------------------------------------------------------------------------

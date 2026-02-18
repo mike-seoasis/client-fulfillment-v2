@@ -1928,8 +1928,33 @@ export interface CommentQueueResponse {
     draft: number;
     approved: number;
     rejected: number;
+    submitting: number;
+    posted: number;
+    failed: number;
+    mod_removed: number;
     all: number;
   };
+}
+
+/** CrowdReply account balance. */
+export interface CrowdReplyBalanceResponse {
+  balance: number;
+  currency: string;
+}
+
+/** Response from comment submission trigger. */
+export interface CommentSubmitResponse {
+  message: string;
+  submitted_count: number;
+}
+
+/** Polling response for submission progress. */
+export interface SubmissionStatusResponse {
+  status: 'submitting' | 'complete' | 'failed' | 'idle';
+  total_comments: number;
+  comments_submitted: number;
+  comments_failed: number;
+  errors: string[];
 }
 
 // =============================================================================
@@ -2007,6 +2032,46 @@ export function bulkRejectQueueComments(
   return apiClient.post<{ rejected_count: number }>(
     `/projects/${projectId}/reddit/comments/bulk-reject`,
     { comment_ids: commentIds, reason }
+  );
+}
+
+// =============================================================================
+// CROWDREPLY API FUNCTIONS
+// =============================================================================
+
+/**
+ * Get the CrowdReply account balance.
+ */
+export function fetchCrowdReplyBalance(): Promise<CrowdReplyBalanceResponse> {
+  return apiClient.get<CrowdReplyBalanceResponse>('/reddit/balance');
+}
+
+/**
+ * Submit approved comments to CrowdReply.
+ * Returns 202. Poll with fetchSubmissionStatus for progress.
+ */
+export function submitComments(
+  projectId: string,
+  commentIds?: string[],
+  upvotesPerComment?: number
+): Promise<CommentSubmitResponse> {
+  const body: Record<string, unknown> = {};
+  if (commentIds && commentIds.length > 0) body.comment_ids = commentIds;
+  if (upvotesPerComment !== undefined) body.upvotes_per_comment = upvotesPerComment;
+  return apiClient.post<CommentSubmitResponse>(
+    `/projects/${projectId}/reddit/comments/submit`,
+    Object.keys(body).length > 0 ? body : undefined
+  );
+}
+
+/**
+ * Poll submission progress for a project.
+ */
+export function fetchSubmissionStatus(
+  projectId: string
+): Promise<SubmissionStatusResponse> {
+  return apiClient.get<SubmissionStatusResponse>(
+    `/projects/${projectId}/reddit/submit/status`
   );
 }
 

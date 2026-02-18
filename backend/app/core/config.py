@@ -446,6 +446,22 @@ class Settings(BaseSettings):
         default="https://crowdreply.io/api",
         description="CrowdReply API base URL",
     )
+    crowdreply_use_mock: bool = Field(
+        default=False,
+        description="Use mock client (no API calls)",
+    )
+    crowdreply_dry_run: bool = Field(
+        default=False,
+        description="Log payloads without sending",
+    )
+    crowdreply_timeout: float = Field(
+        default=30.0,
+        description="CrowdReply API request timeout in seconds",
+    )
+    crowdreply_reconcile_delay: float = Field(
+        default=2.0,
+        description="Seconds before polling for task ID after create",
+    )
 
     # S3/Object Storage
     s3_bucket: str | None = Field(

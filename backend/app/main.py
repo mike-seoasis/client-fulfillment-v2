@@ -38,6 +38,7 @@ from app.core.redis import redis_manager
 from app.core.scheduler import scheduler_manager
 from app.core.websocket import connection_manager
 from app.integrations.claude import init_claude
+from app.integrations.crowdreply import close_crowdreply, init_crowdreply
 from app.integrations.perplexity import init_perplexity
 from app.integrations.serpapi import close_serpapi, init_serpapi
 
@@ -218,6 +219,18 @@ async def lifespan(app: FastAPI) -> Any:
     else:
         logger.warning("SerpAPI not configured (missing SERPAPI_KEY)")
 
+    crowdreply_client = await init_crowdreply()
+    is_mock = hasattr(crowdreply_client, "_task_counter")
+    if is_mock:
+        logger.info("CrowdReply mock client initialized")
+    elif crowdreply_client.available:
+        logger.info(
+            "CrowdReply client initialized",
+            extra={"dry_run": crowdreply_client.dry_run},
+        )
+    else:
+        logger.warning("CrowdReply not configured (missing CROWDREPLY_API_KEY)")
+
     # Start WebSocket heartbeat task
     await connection_manager.start_heartbeat()
     logger.info("WebSocket heartbeat task started")
@@ -260,6 +273,7 @@ async def lifespan(app: FastAPI) -> Any:
     await connection_manager.stop_heartbeat()
     logger.info("WebSocket connections closed")
 
+    await close_crowdreply()
     await close_serpapi()
     await redis_manager.close()
     await db_manager.close()

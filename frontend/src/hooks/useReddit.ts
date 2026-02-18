@@ -41,6 +41,8 @@ import {
   bulkApproveQueueComments,
   bulkRejectQueueComments,
   fetchRedditProjects,
+  fetchCrowdReplyBalance,
+  submitComments,
   type RedditAccount,
   type RedditAccountCreate,
   type RedditAccountUpdate,
@@ -59,6 +61,8 @@ import {
   type RedditCommentUpdateRequest,
   type CommentQueueParams,
   type CommentQueueResponse,
+  type CrowdReplyBalanceResponse,
+  type CommentSubmitResponse,
 } from '@/lib/api';
 
 // =============================================================================
@@ -81,6 +85,7 @@ export const redditKeys = {
     ['reddit-generation-status', projectId] as const,
   commentQueue: (params?: CommentQueueParams) =>
     ['reddit-comment-queue', params] as const,
+  balance: () => ['reddit-crowdreply-balance'] as const,
 };
 
 // =============================================================================
@@ -592,7 +597,7 @@ export function useRevertComment(projectId: string): UseMutationResult<
 
 /**
  * Fetch the cross-project comment queue with optional filters.
- * Refetches when params change.
+ * Auto-polls every 5s when there are submitting comments.
  */
 export function useCommentQueue(
   params?: CommentQueueParams,
@@ -602,6 +607,13 @@ export function useCommentQueue(
     queryKey: redditKeys.commentQueue(params),
     queryFn: () => fetchCommentQueue(params),
     enabled: options?.enabled,
+    refetchInterval: (query) => {
+      const counts = query.state.data?.counts;
+      if (counts && counts.submitting > 0) {
+        return 5000;
+      }
+      return false;
+    },
   });
 }
 
@@ -813,6 +825,65 @@ export function useBulkReject(): UseMutationResult<
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['reddit-comment-queue'] });
+    },
+  });
+}
+
+// =============================================================================
+// CROWDREPLY HOOKS
+// =============================================================================
+
+/**
+ * Fetch the CrowdReply account balance.
+ * Stale for 60s to avoid excessive polling.
+ */
+export function useCrowdReplyBalance(
+  options?: { enabled?: boolean }
+): UseQueryResult<CrowdReplyBalanceResponse> {
+  return useQuery({
+    queryKey: redditKeys.balance(),
+    queryFn: () => fetchCrowdReplyBalance(),
+    enabled: options?.enabled,
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Revert a comment back to draft from the cross-project queue.
+ */
+export function useRevertQueueComment(): UseMutationResult<
+  RedditCommentResponse,
+  Error,
+  { projectId: string; commentId: string }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ projectId, commentId }) =>
+      revertCommentToDraft(projectId, commentId),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['reddit-comment-queue'] });
+    },
+  });
+}
+
+/**
+ * Submit approved comments to CrowdReply.
+ * Invalidates comment queue and balance on success.
+ */
+export function useSubmitComments(): UseMutationResult<
+  CommentSubmitResponse,
+  Error,
+  { projectId: string; commentIds?: string[]; upvotesPerComment?: number }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ projectId, commentIds, upvotesPerComment }) =>
+      submitComments(projectId, commentIds, upvotesPerComment),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reddit-comment-queue'] });
+      queryClient.invalidateQueries({ queryKey: redditKeys.balance() });
     },
   });
 }

@@ -7,6 +7,9 @@ import {
   useRejectComment,
   useBulkApprove,
   useBulkReject,
+  useCrowdReplyBalance,
+  useSubmitComments,
+  useRevertQueueComment,
 } from '@/hooks/useReddit';
 import { useProjects } from '@/hooks/use-projects';
 import { Button, EmptyState, Toast } from '@/components/ui';
@@ -71,6 +74,35 @@ function KeyboardIcon({ className }: { className?: string }) {
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
       <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10" />
+    </svg>
+  );
+}
+
+function WalletIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12V7H5a2 2 0 010-4h14v4" />
+      <path d="M3 5v14a2 2 0 002 2h16v-5" />
+      <path d="M18 12a2 2 0 000 4h4v-4h-4z" />
+    </svg>
+  );
+}
+
+function SendIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="22" y1="2" x2="11" y2="13" />
+      <polygon points="22 2 15 22 11 13 2 9 22 2" />
+    </svg>
+  );
+}
+
+function AlertTriangleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
     </svg>
   );
 }
@@ -142,6 +174,189 @@ function ProjectBadge({ name, index }: { name: string; index: number }) {
     <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-sm border ${colorClass}`}>
       {name}
     </span>
+  );
+}
+
+// CrowdReply status badge for comments in various submission states
+function StatusBadge({ status, postedUrl }: { status: string; postedUrl?: string | null }) {
+  switch (status) {
+    case 'submitting':
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-sm border bg-amber-50 text-amber-700 border-amber-200">
+          <span className="relative flex h-1.5 w-1.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500" />
+          </span>
+          Submitting
+        </span>
+      );
+    case 'posted':
+      return postedUrl ? (
+        <a
+          href={postedUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-sm border bg-palm-50 text-palm-700 border-palm-200 hover:bg-palm-100 transition-colors"
+        >
+          Posted
+          <ExternalLinkIcon className="w-2.5 h-2.5" />
+        </a>
+      ) : (
+        <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-sm border bg-palm-50 text-palm-700 border-palm-200">
+          Posted
+        </span>
+      );
+    case 'failed':
+      return (
+        <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-sm border bg-coral-50 text-coral-600 border-coral-200">
+          Failed
+        </span>
+      );
+    case 'mod_removed':
+      return (
+        <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-sm border bg-coral-50 text-coral-600 border-coral-200">
+          Removed by moderator
+        </span>
+      );
+    case 'draft':
+      return (
+        <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-sm border bg-sand-100 text-warm-gray-700 border-sand-300">
+          draft
+        </span>
+      );
+    case 'approved':
+      return (
+        <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-sm border bg-palm-50 text-palm-700 border-palm-200">
+          approved
+        </span>
+      );
+    case 'rejected':
+      return (
+        <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-sm border bg-coral-50 text-coral-600 border-coral-200">
+          rejected
+        </span>
+      );
+    default:
+      return (
+        <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-sm border bg-cream-100 text-warm-gray-600 border-cream-300">
+          {status}
+        </span>
+      );
+  }
+}
+
+function CrowdReplyBalanceIndicator({ balance, currency }: { balance: number; currency: string }) {
+  const isLow = balance < 50;
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-sm border ${
+      isLow
+        ? 'bg-coral-50 text-coral-700 border-coral-200'
+        : 'bg-cream-100 text-warm-gray-700 border-cream-300'
+    }`}>
+      <WalletIcon className="w-3.5 h-3.5" />
+      {currency === 'USD' ? '$' : ''}{balance.toFixed(2)}
+      {isLow && <AlertTriangleIcon className="w-3 h-3 text-coral-500" />}
+    </span>
+  );
+}
+
+// =============================================================================
+// SUBMIT TO CROWDREPLY BUTTON + CONFIRMATION
+// =============================================================================
+
+function SubmitToCrowdReplyButton({
+  approvedCount,
+  submittingCount,
+  onSubmit,
+  isSubmitting,
+}: {
+  approvedCount: number;
+  submittingCount: number;
+  onSubmit: () => void;
+  isSubmitting: boolean;
+}) {
+  const [showConfirm, setShowConfirm] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Close on click outside
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setShowConfirm(false);
+      }
+    }
+    if (showConfirm) {
+      document.addEventListener('mousedown', handleClick);
+      return () => document.removeEventListener('mousedown', handleClick);
+    }
+  }, [showConfirm]);
+
+  if (submittingCount > 0) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-sm border bg-amber-50 text-amber-700 border-amber-200">
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+        </span>
+        Submitting {submittingCount}...
+      </span>
+    );
+  }
+
+  if (approvedCount === 0) return null;
+
+  const estimatedCost = approvedCount * 10;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setShowConfirm(!showConfirm)}
+        disabled={isSubmitting}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-palm-500 rounded-sm hover:bg-palm-600 transition-colors disabled:opacity-50"
+      >
+        <SendIcon className="w-3.5 h-3.5" />
+        Submit to CrowdReply ({approvedCount})
+      </button>
+
+      {showConfirm && (
+        <div className="absolute top-full mt-2 right-0 bg-white border border-cream-500 rounded-sm shadow-lg p-4 w-72 z-20">
+          <h4 className="text-sm font-medium text-warm-gray-900 mb-2">Confirm submission</h4>
+          <div className="space-y-1.5 mb-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-warm-gray-600">Comments to submit</span>
+              <span className="font-medium text-warm-gray-900">{approvedCount}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-warm-gray-600">Estimated cost</span>
+              <span className="font-medium text-warm-gray-900">~${estimatedCost}</span>
+            </div>
+            <p className="text-[10px] text-warm-gray-400 pt-1">
+              Comments will be submitted to CrowdReply at ~$10 each for posting on Reddit.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowConfirm(false)}
+              className="flex-1 px-3 py-1.5 text-xs font-medium text-warm-gray-600 bg-sand-200 rounded-sm hover:bg-sand-300 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowConfirm(false);
+                onSubmit();
+              }}
+              className="flex-1 px-3 py-1.5 text-xs font-medium text-white bg-palm-500 rounded-sm hover:bg-palm-600 transition-colors"
+            >
+              Confirm & Submit
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -301,6 +516,9 @@ function QueueCommentCard({
       <div className="flex items-center gap-1.5 flex-wrap">
         <ApproachBadge approach={comment.approach_type} />
         <PromotionalBadge isPromotional={comment.is_promotional} />
+        {['submitting', 'posted', 'failed', 'mod_removed'].includes(comment.status) && (
+          <StatusBadge status={comment.status} postedUrl={comment.posted_url} />
+        )}
       </div>
     </div>
   );
@@ -321,8 +539,10 @@ function PostContextPanel({
   onChangeEditBody,
   onApprove,
   onReject,
+  onRevert,
   isApproving,
   isRejecting,
+  isReverting,
 }: {
   comment: RedditCommentResponse;
   projectName: string;
@@ -334,8 +554,10 @@ function PostContextPanel({
   onChangeEditBody: (body: string) => void;
   onApprove: (body?: string) => void;
   onReject: () => void;
+  onRevert: () => void;
   isApproving: boolean;
   isRejecting: boolean;
+  isReverting: boolean;
 }) {
   const isDraft = comment.status === 'draft';
   const post = comment.post;
@@ -373,14 +595,7 @@ function PostContextPanel({
       <div className="flex-1 p-4 overflow-y-auto">
         <div className="flex items-center gap-2 mb-3">
           <span className="text-xs font-medium text-warm-gray-500 uppercase tracking-wider">Comment</span>
-          <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-sm border ${
-            comment.status === 'draft' ? 'bg-sand-100 text-warm-gray-700 border-sand-300' :
-            comment.status === 'approved' ? 'bg-palm-50 text-palm-700 border-palm-200' :
-            comment.status === 'rejected' ? 'bg-coral-50 text-coral-600 border-coral-200' :
-            'bg-cream-100 text-warm-gray-600 border-cream-300'
-          }`}>
-            {comment.status}
-          </span>
+          <StatusBadge status={comment.status} postedUrl={comment.posted_url} />
         </div>
 
         {isEditing ? (
@@ -469,6 +684,91 @@ function PostContextPanel({
           </div>
         </div>
       )}
+
+      {/* Approved / Rejected — move back to draft */}
+      {(comment.status === 'approved' || comment.status === 'rejected') && !isEditing && (
+        <div className="p-4 border-t border-cream-200 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onRevert}
+            disabled={isReverting}
+            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-warm-gray-700 bg-sand-200 border border-sand-300 rounded-sm hover:bg-sand-300 transition-colors disabled:opacity-50"
+          >
+            {isReverting ? 'Reverting...' : 'Move to Draft'}
+          </button>
+          {comment.status === 'rejected' && comment.reject_reason && (
+            <span className="text-[11px] text-warm-gray-500 ml-2">
+              Rejected: {comment.reject_reason}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Posted state — link to Reddit */}
+      {comment.status === 'posted' && (
+        <div className="p-4 border-t border-cream-200 flex items-center gap-2">
+          {comment.posted_url ? (
+            <a
+              href={comment.posted_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-palm-500 rounded-sm hover:bg-palm-600 transition-colors"
+            >
+              <ExternalLinkIcon className="w-3.5 h-3.5" />
+              View on Reddit
+            </a>
+          ) : (
+            <span className="text-xs text-warm-gray-500">Posted — URL not yet available</span>
+          )}
+          {comment.posted_at && (
+            <span className="ml-auto text-[10px] text-warm-gray-400">
+              Posted {formatRelativeTime(comment.posted_at)}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Failed state */}
+      {comment.status === 'failed' && (
+        <div className="p-4 border-t border-cream-200">
+          <div className="flex items-center gap-2 text-coral-600">
+            <AlertTriangleIcon className="w-4 h-4 flex-shrink-0" />
+            <span className="text-xs font-medium">Submission failed</span>
+          </div>
+          <p className="mt-1 text-[11px] text-warm-gray-500">
+            This comment could not be posted by CrowdReply. You can re-submit it from the Approved tab.
+          </p>
+        </div>
+      )}
+
+      {/* Mod removed state */}
+      {comment.status === 'mod_removed' && (
+        <div className="p-4 border-t border-cream-200">
+          <div className="flex items-center gap-2 text-coral-600">
+            <AlertTriangleIcon className="w-4 h-4 flex-shrink-0" />
+            <span className="text-xs font-medium">Removed by moderator</span>
+          </div>
+          <p className="mt-1 text-[11px] text-warm-gray-500">
+            This comment was posted but subsequently removed by subreddit moderators.
+          </p>
+        </div>
+      )}
+
+      {/* Submitting state */}
+      {comment.status === 'submitting' && (
+        <div className="p-4 border-t border-cream-200">
+          <div className="flex items-center gap-2 text-amber-600">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+            </span>
+            <span className="text-xs font-medium">Submitting via CrowdReply...</span>
+          </div>
+          <p className="mt-1 text-[11px] text-warm-gray-500">
+            This comment is being submitted. Status will update automatically.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -513,6 +813,7 @@ const STATUS_TABS = [
   { value: 'draft', label: 'Draft' },
   { value: 'approved', label: 'Approved' },
   { value: 'rejected', label: 'Rejected' },
+  { value: 'posted', label: 'Posted' },
   { value: '', label: 'All' },
 ] as const;
 
@@ -561,16 +862,22 @@ export default function CommentQueuePage() {
     return params;
   }, [statusFilter, projectFilter, debouncedSearch]);
 
+  // Track previous submitting count for transition toasts
+  const prevSubmittingRef = useRef<number>(0);
+
   // Data fetching
   const { data: queueData, isLoading } = useCommentQueue(queryParams);
   const { data: projectsData } = useProjects();
+  const { data: balanceData } = useCrowdReplyBalance();
   const approveMutation = useApproveComment();
   const rejectMutation = useRejectComment();
   const bulkApproveMutation = useBulkApprove();
   const bulkRejectMutation = useBulkReject();
+  const submitMutation = useSubmitComments();
+  const revertMutation = useRevertQueueComment();
 
   const comments = queueData?.items ?? [];
-  const counts = queueData?.counts ?? { draft: 0, approved: 0, rejected: 0, all: 0 };
+  const counts = queueData?.counts ?? { draft: 0, approved: 0, rejected: 0, all: 0, submitting: 0, posted: 0, failed: 0, mod_removed: 0 };
   const projects = projectsData?.items ?? [];
 
   // Project lookup map
@@ -671,10 +978,12 @@ export default function CommentQueuePage() {
   const handleBulkApprove = useCallback(async () => {
     const byProject = groupByProject();
     if (byProject.size === 0) return;
+    const entries = Array.from(byProject.entries());
 
     let totalApproved = 0;
     try {
-      for (const [projectId, commentIds] of byProject) {
+      for (let i = 0; i < entries.length; i++) {
+        const [projectId, commentIds] = entries[i];
         const data = await bulkApproveMutation.mutateAsync({ projectId, commentIds });
         totalApproved += data.approved_count;
       }
@@ -690,10 +999,12 @@ export default function CommentQueuePage() {
   const handleBulkReject = useCallback(async (reason: string) => {
     const byProject = groupByProject();
     if (byProject.size === 0) return;
+    const entries = Array.from(byProject.entries());
 
     let totalRejected = 0;
     try {
-      for (const [projectId, commentIds] of byProject) {
+      for (let i = 0; i < entries.length; i++) {
+        const [projectId, commentIds] = entries[i];
         const data = await bulkRejectMutation.mutateAsync({ projectId, commentIds, reason });
         totalRejected += data.rejected_count;
       }
@@ -705,6 +1016,28 @@ export default function CommentQueuePage() {
     setShowRejectPicker(false);
     setSelectedIndex(0);
   }, [groupByProject, bulkRejectMutation, toast]);
+
+  // Submit to CrowdReply — groups approved comments by project
+  const handleSubmitToCrowdReply = useCallback(async () => {
+    // Collect distinct project IDs that have approved comments
+    const projectIds = Array.from(
+      comments.reduce((acc, c) => {
+        if (c.status === 'approved') acc.add(c.project_id);
+        return acc;
+      }, new Set<string>()),
+    );
+
+    let totalSubmitted = 0;
+    try {
+      for (let i = 0; i < projectIds.length; i++) {
+        const data = await submitMutation.mutateAsync({ projectId: projectIds[i] });
+        totalSubmitted += data.submitted_count;
+      }
+      toast(`${totalSubmitted} comment${totalSubmitted !== 1 ? 's' : ''} submitted to CrowdReply`, 'success');
+    } catch (err: any) {
+      toast(err.message || 'Failed to submit comments', 'error');
+    }
+  }, [comments, submitMutation, toast]);
 
   // Toggle bulk selection
   const toggleBulkSelect = useCallback((commentId: string) => {
@@ -726,6 +1059,31 @@ export default function CommentQueuePage() {
       }
     }
   }, [selectedIndex]);
+
+  // Detect submission transitions (submitting → posted/failed) for toast notifications
+  useEffect(() => {
+    const prevSubmitting = prevSubmittingRef.current;
+    const curSubmitting = counts.submitting ?? 0;
+
+    if (prevSubmitting > 0 && curSubmitting < prevSubmitting) {
+      const resolved = prevSubmitting - curSubmitting;
+      const newPosted = counts.posted ?? 0;
+      const newFailed = counts.failed ?? 0;
+
+      if (newPosted > 0 || newFailed > 0) {
+        if (curSubmitting === 0) {
+          toast(
+            newFailed > 0
+              ? `Submission complete: ${newPosted} posted, ${newFailed} failed`
+              : `${resolved} comment${resolved !== 1 ? 's' : ''} posted successfully`,
+            newFailed > 0 ? 'error' : 'success',
+          );
+        }
+      }
+    }
+
+    prevSubmittingRef.current = curSubmitting;
+  }, [counts.submitting, counts.posted, counts.failed, toast]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -805,6 +1163,20 @@ export default function CommentQueuePage() {
           <span className="text-warm-gray-300 mx-2">&rsaquo;</span>
           <span>Comment Queue</span>
         </h1>
+        <div className="flex items-center gap-3">
+          {balanceData && (
+            <CrowdReplyBalanceIndicator
+              balance={balanceData.balance}
+              currency={balanceData.currency}
+            />
+          )}
+          <SubmitToCrowdReplyButton
+            approvedCount={counts.approved}
+            submittingCount={counts.submitting ?? 0}
+            onSubmit={handleSubmitToCrowdReply}
+            isSubmitting={submitMutation.isPending}
+          />
+        </div>
       </div>
 
       {/* Status tabs */}
@@ -814,6 +1186,7 @@ export default function CommentQueuePage() {
             const count = tab.value === 'draft' ? counts.draft
               : tab.value === 'approved' ? counts.approved
               : tab.value === 'rejected' ? counts.rejected
+              : tab.value === 'posted' ? (counts.posted ?? 0)
               : counts.all;
             return (
               <button
@@ -973,8 +1346,18 @@ export default function CommentQueuePage() {
                   setRejectTarget('single');
                   setShowRejectPicker(true);
                 }}
+                onRevert={() => {
+                  revertMutation.mutate(
+                    { projectId: selectedComment.project_id, commentId: selectedComment.id },
+                    {
+                      onSuccess: () => toast('Comment moved to draft', 'success'),
+                      onError: (err) => toast(err.message || 'Failed to revert', 'error'),
+                    },
+                  );
+                }}
                 isApproving={approveMutation.isPending}
                 isRejecting={rejectMutation.isPending}
+                isReverting={revertMutation.isPending}
               />
               {showRejectPicker && rejectTarget === 'single' && (
                 <div className="absolute bottom-16 right-4">

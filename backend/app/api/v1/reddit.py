@@ -27,6 +27,10 @@ from app.schemas.reddit import (
     CommentQueueResponse,
     CommentQueueStatusCounts,
     CommentRejectRequest,
+    CommentSubmitRequest,
+    CommentSubmitResponse,
+    CrowdReplyBalanceResponse,
+    CrowdReplyWebhookPayload,
     DiscoveryStatusResponse,
     DiscoveryTriggerRequest,
     DiscoveryTriggerResponse,
@@ -43,6 +47,8 @@ from app.schemas.reddit import (
     RedditProjectConfigCreate,
     RedditProjectConfigResponse,
     RedditProjectListResponse,
+    SubmissionStatusResponse,
+    WebhookSimulateRequest,
 )
 from app.services.reddit_comment_generation import (
     generate_batch,
@@ -55,6 +61,13 @@ from app.services.reddit_discovery import (
     discover_posts,
     get_discovery_progress,
     is_discovery_active,
+)
+from app.services.reddit_posting import (
+    get_submission_progress,
+    handle_crowdreply_webhook,
+    is_submission_active,
+    simulate_webhook,
+    submit_approved_comments,
 )
 
 logger = get_logger(__name__)
@@ -311,6 +324,10 @@ async def list_all_comments(
         draft=status_map.get("draft", 0),
         approved=status_map.get("approved", 0),
         rejected=status_map.get("rejected", 0),
+        submitting=status_map.get("submitting", 0),
+        posted=status_map.get("posted", 0),
+        failed=status_map.get("failed", 0),
+        mod_removed=status_map.get("mod_removed", 0),
         all=sum(status_map.values()),
     )
 
@@ -1064,3 +1081,185 @@ async def revert_comment_to_draft(
     await db.refresh(comment)
 
     return RedditCommentResponse.model_validate(comment)
+
+
+# ---------------------------------------------------------------------------
+# CrowdReply submission endpoints (Phase 14e)
+# ---------------------------------------------------------------------------
+
+
+async def _run_submit_background(
+    project_id: str,
+    comment_ids: list[str] | None,
+    upvotes_per_comment: int | None,
+) -> None:
+    """Background task wrapper for submit_approved_comments."""
+    try:
+        await submit_approved_comments(
+            project_id=project_id,
+            comment_ids=comment_ids,
+            upvotes_per_comment=upvotes_per_comment,
+        )
+    except Exception as e:
+        logger.error(
+            "Background submission failed",
+            extra={
+                "project_id": project_id,
+                "error": str(e),
+                "error_type": type(e).__name__,
+            },
+            exc_info=True,
+        )
+
+
+@reddit_project_router.post(
+    "/{project_id}/reddit/comments/submit",
+    response_model=CommentSubmitResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={
+        400: {"description": "No approved comments to submit"},
+        409: {"description": "Submission already in progress"},
+    },
+)
+async def submit_comments(
+    project_id: str,
+    background_tasks: BackgroundTasks,
+    data: CommentSubmitRequest | None = None,
+    db: AsyncSession = Depends(get_session),
+) -> CommentSubmitResponse:
+    """Submit approved comments to CrowdReply.
+
+    Starts submission as a background task and returns 202 immediately.
+    Poll GET /submit/status for progress.
+    """
+    # Check for active submission
+    if is_submission_active(project_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Submission already in progress",
+        )
+
+    # Count approved comments
+    count_stmt = (
+        select(func.count())
+        .select_from(RedditComment)
+        .where(
+            RedditComment.project_id == project_id,
+            RedditComment.status == "approved",
+        )
+    )
+    if data and data.comment_ids:
+        count_stmt = count_stmt.where(RedditComment.id.in_(data.comment_ids))
+    count_result = await db.execute(count_stmt)
+    approved_count = count_result.scalar() or 0
+
+    if approved_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No approved comments to submit",
+        )
+
+    comment_ids = data.comment_ids if data else None
+    upvotes = data.upvotes_per_comment if data else None
+
+    background_tasks.add_task(
+        _run_submit_background, project_id, comment_ids, upvotes
+    )
+
+    return CommentSubmitResponse(
+        message="Submission started",
+        submitted_count=approved_count,
+    )
+
+
+@reddit_project_router.get(
+    "/{project_id}/reddit/submit/status",
+    response_model=SubmissionStatusResponse,
+)
+async def get_submit_status(
+    project_id: str,
+) -> SubmissionStatusResponse:
+    """Poll submission progress for a project.
+
+    Returns current progress if submission is active, or "idle" if not.
+    """
+    progress = get_submission_progress(project_id)
+
+    if progress is None:
+        return SubmissionStatusResponse(status="idle")
+
+    return SubmissionStatusResponse(
+        status=progress.status,
+        total_comments=progress.total_comments,
+        comments_submitted=progress.comments_submitted,
+        comments_failed=progress.comments_failed,
+        errors=progress.errors,
+    )
+
+
+@reddit_router.post(
+    "/webhooks/crowdreply",
+    status_code=status.HTTP_200_OK,
+)
+async def crowdreply_webhook(
+    payload: CrowdReplyWebhookPayload,
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """Receive webhook callbacks from CrowdReply.
+
+    Processes status updates for submitted tasks.
+    """
+    success = await handle_crowdreply_webhook(
+        payload.model_dump(by_alias=True),
+        db,
+    )
+    return {"processed": success}
+
+
+@reddit_router.get(
+    "/balance",
+    response_model=CrowdReplyBalanceResponse,
+)
+async def get_crowdreply_balance() -> CrowdReplyBalanceResponse:
+    """Get the current CrowdReply account balance."""
+    from app.integrations.crowdreply import get_crowdreply
+
+    client = await get_crowdreply()
+    balance_info = await client.get_balance()
+    return CrowdReplyBalanceResponse(
+        balance=balance_info.balance,
+        currency=balance_info.currency,
+    )
+
+
+@reddit_router.post(
+    "/webhooks/crowdreply/simulate",
+    status_code=status.HTTP_200_OK,
+    responses={
+        403: {"description": "Not available in production"},
+    },
+)
+async def simulate_crowdreply_webhook(
+    data: WebhookSimulateRequest,
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """Simulate a CrowdReply webhook for development/staging.
+
+    Only available in development and staging environments.
+    """
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    if settings.environment not in ("development", "staging"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Webhook simulation only available in development/staging",
+        )
+
+    success = await simulate_webhook(
+        comment_id=data.comment_id,
+        status=data.status,
+        submission_url=data.submission_url,
+        db=db,
+    )
+    return {"simulated": success}
