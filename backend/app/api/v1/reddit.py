@@ -5,7 +5,7 @@ post discovery, post management, and comment generation.
 """
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -20,7 +20,13 @@ from app.models.reddit_config import RedditProjectConfig
 from app.models.reddit_post import RedditPost
 from app.schemas.reddit import (
     BatchGenerateRequest,
+    BulkCommentActionRequest,
+    BulkCommentRejectRequest,
     BulkPostActionRequest,
+    CommentApproveRequest,
+    CommentQueueResponse,
+    CommentQueueStatusCounts,
+    CommentRejectRequest,
     DiscoveryStatusResponse,
     DiscoveryTriggerRequest,
     DiscoveryTriggerResponse,
@@ -33,8 +39,10 @@ from app.schemas.reddit import (
     RedditAccountUpdate,
     RedditCommentResponse,
     RedditPostResponse,
+    RedditProjectCardResponse,
     RedditProjectConfigCreate,
     RedditProjectConfigResponse,
+    RedditProjectListResponse,
 )
 from app.services.reddit_comment_generation import (
     generate_batch,
@@ -171,6 +179,171 @@ async def delete_account(
 
     await db.delete(account)
     await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Reddit projects dashboard (on reddit_router, no project scope)
+# ---------------------------------------------------------------------------
+
+
+@reddit_router.get(
+    "/projects",
+    response_model=RedditProjectListResponse,
+)
+async def list_reddit_projects(
+    db: AsyncSession = Depends(get_session),
+) -> RedditProjectListResponse:
+    """List projects that have a RedditProjectConfig (for the Reddit dashboard).
+
+    Returns project summary cards with post/comment counts, ordered by
+    most recently updated config first.
+    """
+    # Get all projects with Reddit config via JOIN
+    stmt = (
+        select(
+            Project.id,
+            Project.name,
+            Project.site_url,
+            RedditProjectConfig.is_active,
+            RedditProjectConfig.updated_at,
+        )
+        .join(RedditProjectConfig, RedditProjectConfig.project_id == Project.id)
+        .order_by(RedditProjectConfig.updated_at.desc())
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    if not rows:
+        return RedditProjectListResponse(items=[], total=0)
+
+    project_ids = [r.id for r in rows]
+
+    # Count posts per project
+    post_counts_stmt = (
+        select(RedditPost.project_id, func.count())
+        .where(RedditPost.project_id.in_(project_ids))
+        .group_by(RedditPost.project_id)
+    )
+    post_result = await db.execute(post_counts_stmt)
+    post_counts = dict(post_result.all())
+
+    # Count total comments per project
+    comment_counts_stmt = (
+        select(RedditComment.project_id, func.count())
+        .where(RedditComment.project_id.in_(project_ids))
+        .group_by(RedditComment.project_id)
+    )
+    comment_result = await db.execute(comment_counts_stmt)
+    comment_counts = dict(comment_result.all())
+
+    # Count draft comments per project
+    draft_counts_stmt = (
+        select(RedditComment.project_id, func.count())
+        .where(
+            RedditComment.project_id.in_(project_ids),
+            RedditComment.status == "draft",
+        )
+        .group_by(RedditComment.project_id)
+    )
+    draft_result = await db.execute(draft_counts_stmt)
+    draft_counts = dict(draft_result.all())
+
+    items = [
+        RedditProjectCardResponse(
+            id=r.id,
+            name=r.name,
+            site_url=r.site_url,
+            is_active=r.is_active,
+            post_count=post_counts.get(r.id, 0),
+            comment_count=comment_counts.get(r.id, 0),
+            draft_count=draft_counts.get(r.id, 0),
+            updated_at=r.updated_at,
+        )
+        for r in rows
+    ]
+
+    return RedditProjectListResponse(items=items, total=len(items))
+
+
+# ---------------------------------------------------------------------------
+# Cross-project comment queue (on reddit_router, no project scope)
+# ---------------------------------------------------------------------------
+
+
+@reddit_router.get(
+    "/comments",
+    response_model=CommentQueueResponse,
+)
+async def list_all_comments(
+    comment_status: str | None = Query(
+        None, alias="status", description="Filter by comment status"
+    ),
+    project_id: str | None = Query(None, description="Filter by project ID"),
+    search: str | None = Query(None, description="Search comment body (ILIKE)"),
+    limit: int = Query(50, ge=1, le=200, description="Max results"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
+    db: AsyncSession = Depends(get_session),
+) -> CommentQueueResponse:
+    """Cross-project comment review queue.
+
+    Returns paginated comments with status counts for tab badges.
+    Eager-loads the parent post for each comment.
+    """
+    # Base filters (project + search) shared by items query and count queries
+    base_conditions = []
+    if project_id is not None:
+        base_conditions.append(RedditComment.project_id == project_id)
+    if search is not None:
+        escaped = search.replace("%", "\\%").replace("_", "\\_")
+        base_conditions.append(RedditComment.body.ilike(f"%{escaped}%"))
+
+    # Status counts (always unfiltered by status so tabs can show all counts)
+    count_stmt = (
+        select(RedditComment.status, func.count())
+        .group_by(RedditComment.status)
+    )
+    for cond in base_conditions:
+        count_stmt = count_stmt.where(cond)
+    count_result = await db.execute(count_stmt)
+    status_map = dict(count_result.all())
+
+    counts = CommentQueueStatusCounts(
+        draft=status_map.get("draft", 0),
+        approved=status_map.get("approved", 0),
+        rejected=status_map.get("rejected", 0),
+        all=sum(status_map.values()),
+    )
+
+    # Items query with pagination
+    items_stmt = (
+        select(RedditComment)
+        .options(selectinload(RedditComment.post))
+        .order_by(RedditComment.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    for cond in base_conditions:
+        items_stmt = items_stmt.where(cond)
+    if comment_status is not None:
+        items_stmt = items_stmt.where(RedditComment.status == comment_status)
+
+    # Total count for the filtered set (with status filter applied)
+    total_stmt = select(func.count()).select_from(RedditComment)
+    for cond in base_conditions:
+        total_stmt = total_stmt.where(cond)
+    if comment_status is not None:
+        total_stmt = total_stmt.where(RedditComment.status == comment_status)
+    total_result = await db.execute(total_stmt)
+    total = total_result.scalar() or 0
+
+    result = await db.execute(items_stmt)
+    comments = result.scalars().all()
+
+    return CommentQueueResponse(
+        items=[RedditCommentResponse.model_validate(c) for c in comments],
+        total=total,
+        counts=counts,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -632,6 +805,72 @@ async def list_comments(
     return [RedditCommentResponse.model_validate(c) for c in comments]
 
 
+# ---------------------------------------------------------------------------
+# Bulk comment actions (Phase 14d) — must register before {comment_id} routes
+# ---------------------------------------------------------------------------
+
+
+@reddit_project_router.post(
+    "/{project_id}/reddit/comments/bulk-approve",
+)
+async def bulk_approve_comments(
+    project_id: str,
+    data: BulkCommentActionRequest,
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """Bulk approve draft comments. Non-draft comments are skipped."""
+    if not data.comment_ids:
+        return {"approved_count": 0}
+
+    stmt = (
+        update(RedditComment)
+        .where(
+            RedditComment.id.in_(data.comment_ids),
+            RedditComment.project_id == project_id,
+            RedditComment.status == "draft",
+        )
+        .values(status="approved")
+    )
+
+    result = await db.execute(stmt)
+    await db.commit()
+
+    return {"approved_count": result.rowcount}
+
+
+@reddit_project_router.post(
+    "/{project_id}/reddit/comments/bulk-reject",
+)
+async def bulk_reject_comments(
+    project_id: str,
+    data: BulkCommentRejectRequest,
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """Bulk reject draft comments with a shared reason. Non-draft comments are skipped."""
+    if not data.comment_ids:
+        return {"rejected_count": 0}
+
+    stmt = (
+        update(RedditComment)
+        .where(
+            RedditComment.id.in_(data.comment_ids),
+            RedditComment.project_id == project_id,
+            RedditComment.status == "draft",
+        )
+        .values(status="rejected", reject_reason=data.reason)
+    )
+
+    result = await db.execute(stmt)
+    await db.commit()
+
+    return {"rejected_count": result.rowcount}
+
+
+# ---------------------------------------------------------------------------
+# Single comment actions (delete, edit, approve, reject)
+# ---------------------------------------------------------------------------
+
+
 @reddit_project_router.delete(
     "/{project_id}/reddit/comments/{comment_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -641,7 +880,7 @@ async def delete_comment(
     comment_id: str,
     db: AsyncSession = Depends(get_session),
 ) -> None:
-    """Delete a comment. Only draft comments can be deleted."""
+    """Delete a comment regardless of status."""
     stmt = select(RedditComment).where(
         RedditComment.id == comment_id,
         RedditComment.project_id == project_id,
@@ -653,12 +892,6 @@ async def delete_comment(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Comment {comment_id} not found",
-        )
-
-    if comment.status != "draft":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only draft comments can be deleted",
         )
 
     await db.delete(comment)
@@ -700,6 +933,133 @@ async def update_comment(
         )
 
     comment.body = data.body
+    await db.commit()
+    await db.refresh(comment)
+
+    return RedditCommentResponse.model_validate(comment)
+
+
+@reddit_project_router.post(
+    "/{project_id}/reddit/comments/{comment_id}/approve",
+    response_model=RedditCommentResponse,
+)
+async def approve_comment(
+    project_id: str,
+    comment_id: str,
+    data: CommentApproveRequest | None = None,
+    db: AsyncSession = Depends(get_session),
+) -> RedditCommentResponse:
+    """Approve a draft comment, optionally updating its body text."""
+    stmt = (
+        select(RedditComment)
+        .options(selectinload(RedditComment.post))
+        .where(
+            RedditComment.id == comment_id,
+            RedditComment.project_id == project_id,
+        )
+    )
+    result = await db.execute(stmt)
+    comment = result.scalar_one_or_none()
+
+    if comment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Comment {comment_id} not found",
+        )
+
+    if comment.status != "draft":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only draft comments can be approved",
+        )
+
+    if data and data.body is not None:
+        comment.body = data.body
+
+    comment.status = "approved"
+    await db.commit()
+    await db.refresh(comment)
+
+    return RedditCommentResponse.model_validate(comment)
+
+
+@reddit_project_router.post(
+    "/{project_id}/reddit/comments/{comment_id}/reject",
+    response_model=RedditCommentResponse,
+)
+async def reject_comment(
+    project_id: str,
+    comment_id: str,
+    data: CommentRejectRequest,
+    db: AsyncSession = Depends(get_session),
+) -> RedditCommentResponse:
+    """Reject a draft comment with a reason."""
+    stmt = (
+        select(RedditComment)
+        .options(selectinload(RedditComment.post))
+        .where(
+            RedditComment.id == comment_id,
+            RedditComment.project_id == project_id,
+        )
+    )
+    result = await db.execute(stmt)
+    comment = result.scalar_one_or_none()
+
+    if comment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Comment {comment_id} not found",
+        )
+
+    if comment.status != "draft":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only draft comments can be rejected",
+        )
+
+    comment.status = "rejected"
+    comment.reject_reason = data.reason
+    await db.commit()
+    await db.refresh(comment)
+
+    return RedditCommentResponse.model_validate(comment)
+
+
+@reddit_project_router.post(
+    "/{project_id}/reddit/comments/{comment_id}/revert",
+    response_model=RedditCommentResponse,
+)
+async def revert_comment_to_draft(
+    project_id: str,
+    comment_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> RedditCommentResponse:
+    """Revert an approved or rejected comment back to draft status."""
+    stmt = (
+        select(RedditComment)
+        .options(selectinload(RedditComment.post))
+        .where(
+            RedditComment.id == comment_id,
+            RedditComment.project_id == project_id,
+        )
+    )
+    result = await db.execute(stmt)
+    comment = result.scalar_one_or_none()
+
+    if comment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Comment {comment_id} not found",
+        )
+
+    if comment.status == "draft":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Comment is already a draft",
+        )
+
+    comment.status = "draft"
+    comment.reject_reason = None
     await db.commit()
     await db.refresh(comment)
 

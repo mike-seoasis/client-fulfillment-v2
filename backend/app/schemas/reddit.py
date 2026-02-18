@@ -277,6 +277,34 @@ class BulkCommentActionRequest(BaseModel):
     comment_ids: list[str] = Field(..., description="List of comment UUIDs to act on")
 
 
+class BulkCommentRejectRequest(BaseModel):
+    """Request schema for bulk comment rejection with shared reason."""
+
+    comment_ids: list[str] = Field(..., description="List of comment UUIDs to reject")
+    reason: str = Field(..., description="Shared rejection reason for all comments")
+
+
+class CommentQueueStatusCounts(BaseModel):
+    """Status counts for the comment queue."""
+
+    draft: int = 0
+    approved: int = 0
+    rejected: int = 0
+    all: int = 0
+
+
+class CommentQueueResponse(BaseModel):
+    """Paginated response for the cross-project comment queue."""
+
+    items: list[RedditCommentResponse] = Field(
+        ..., description="Comment list for the current page"
+    )
+    total: int = Field(..., description="Total count matching current filters (excl. pagination)")
+    counts: CommentQueueStatusCounts = Field(
+        ..., description="Status counts (independent of status filter)"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Comment generation schemas (Phase 14c)
 # ---------------------------------------------------------------------------
@@ -315,6 +343,36 @@ class GenerationStatusResponse(BaseModel):
     total_posts: int = Field(0, description="Total posts to generate for")
     posts_generated: int = Field(0, description="Posts generated so far")
     error: str | None = Field(None, description="Error message if status is 'failed'")
+
+
+# ---------------------------------------------------------------------------
+# CrowdReplyTask schemas
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Reddit project list schemas (dashboard)
+# ---------------------------------------------------------------------------
+
+
+class RedditProjectCardResponse(BaseModel):
+    """Summary card for a project with Reddit configured."""
+
+    id: str
+    name: str
+    site_url: str
+    is_active: bool
+    post_count: int
+    comment_count: int
+    draft_count: int
+    updated_at: datetime
+
+
+class RedditProjectListResponse(BaseModel):
+    """Paginated list of Reddit-enabled projects."""
+
+    items: list[RedditProjectCardResponse]
+    total: int
 
 
 # ---------------------------------------------------------------------------

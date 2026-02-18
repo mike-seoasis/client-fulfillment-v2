@@ -12,6 +12,7 @@ import {
   useStartBrandConfigGeneration,
   useBrandConfigStatus,
 } from '@/hooks/useBrandConfigGeneration';
+import { useUpsertRedditConfig } from '@/hooks/useReddit';
 import { Button } from '@/components/ui';
 
 type WizardStep = 1 | 2;
@@ -41,6 +42,9 @@ function CreateProjectPageContent() {
   const createProject = useCreateProject();
   const [error, setError] = useState<string | null>(null);
 
+  // Detect Reddit flow
+  const isRedditFlow = searchParams.get('flow') === 'reddit';
+
   // Get project ID from URL if resuming
   const urlProjectId = searchParams.get('project');
   const [projectId, setProjectId] = useState<string | null>(urlProjectId);
@@ -62,6 +66,9 @@ function CreateProjectPageContent() {
   // Brand config generation mutation
   const startGeneration = useStartBrandConfigGeneration();
 
+  // Reddit config upsert (for reddit flow)
+  const upsertRedditConfig = useUpsertRedditConfig(projectId ?? '');
+
   // Check generation status if resuming with a project ID
   const { data: statusData, isLoading: isCheckingStatus } = useBrandConfigStatus(
     urlProjectId ?? '',
@@ -81,7 +88,7 @@ function CreateProjectPageContent() {
     if (urlProjectId && statusData && !isCheckingStatus) {
       if (statusData.status === 'complete') {
         // Generation already complete, redirect to project
-        router.push(`/projects/${urlProjectId}`);
+        router.push(isRedditFlow ? `/reddit/${urlProjectId}` : `/projects/${urlProjectId}`);
       } else if (statusData.status === 'generating') {
         // Still generating, stay on step 2
         setCurrentStep(2);
@@ -198,7 +205,10 @@ function CreateProjectPageContent() {
 
     try {
       // Create the project
-      const project = await createProject.mutateAsync(data);
+      const project = await createProject.mutateAsync({
+        ...data,
+        ...(isRedditFlow && { reddit_only: true }),
+      });
       setProjectId(project.id);
 
       // Update URL with project ID (so refresh works)
@@ -226,16 +236,24 @@ function CreateProjectPageContent() {
   // Handle back button (Step 2 -> Step 1)
   // Note: This clears the URL param and resets state - useful if user wants to start fresh
   function handleBack() {
-    // Clear URL params
-    router.replace('/projects/new', { scroll: false });
+    // Clear URL params, preserve flow
+    router.replace(isRedditFlow ? '/projects/new?flow=reddit' : '/projects/new', { scroll: false });
     setCurrentStep(1);
     setProjectId(null);
   }
 
-  // Handle completion - go to project page
+  // Handle completion - go to project page (or Reddit detail in Reddit flow)
   function handleGoToProject() {
     if (projectId) {
-      router.push(`/projects/${projectId}`);
+      if (isRedditFlow) {
+        // Auto-create Reddit config with defaults, then navigate
+        upsertRedditConfig.mutate({}, {
+          onSuccess: () => router.push(`/reddit/${projectId}`),
+          onError: () => router.push(`/reddit/${projectId}`), // Navigate even if config fails
+        });
+      } else {
+        router.push(`/projects/${projectId}`);
+      }
     }
   }
 
@@ -251,12 +269,16 @@ function CreateProjectPageContent() {
     isUploadingFiles ||
     startGeneration.isPending;
 
+  const backHref = isRedditFlow ? '/reddit' : '/';
+  const backLabel = isRedditFlow ? 'Reddit Projects' : 'Back to Dashboard';
+  const wizardTitle = isRedditFlow ? 'Create Reddit Project' : 'Create New Project';
+
   // Show loading state while checking status on resume
   if (urlProjectId && isCheckingStatus) {
     return (
       <div>
         <Link
-          href="/"
+          href={backHref}
           className="inline-flex items-center text-warm-gray-600 hover:text-warm-gray-900 mb-6 text-sm"
         >
           <svg
@@ -270,7 +292,7 @@ function CreateProjectPageContent() {
           >
             <path d="M19 12H5M12 19l-7-7 7-7" />
           </svg>
-          Back to Dashboard
+          {backLabel}
         </Link>
 
         <div className="max-w-xl mx-auto">
@@ -291,7 +313,7 @@ function CreateProjectPageContent() {
     <div>
       {/* Back link */}
       <Link
-        href="/"
+        href={backHref}
         className="inline-flex items-center text-warm-gray-600 hover:text-warm-gray-900 mb-6 text-sm"
       >
         <svg
@@ -305,7 +327,7 @@ function CreateProjectPageContent() {
         >
           <path d="M19 12H5M12 19l-7-7 7-7" />
         </svg>
-        Back to Dashboard
+        {backLabel}
       </Link>
 
       {/* Wizard card */}
@@ -314,7 +336,7 @@ function CreateProjectPageContent() {
           {/* Header with step indicator */}
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-2xl font-semibold text-warm-gray-900">
-              Create New Project
+              {wizardTitle}
             </h1>
             <span className="text-sm text-warm-gray-500">
               Step {currentStep} of 2
@@ -345,7 +367,7 @@ function CreateProjectPageContent() {
 
               {/* Action buttons */}
               <div className="mt-8 flex justify-end gap-3 pt-4 border-t border-cream-200">
-                <Link href="/">
+                <Link href={backHref}>
                   <Button variant="ghost">Cancel</Button>
                 </Link>
                 <Button

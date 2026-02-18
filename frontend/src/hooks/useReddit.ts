@@ -34,11 +34,19 @@ import {
   fetchComments,
   updateComment,
   deleteComment,
+  revertCommentToDraft,
+  fetchCommentQueue,
+  approveQueueComment,
+  rejectQueueComment,
+  bulkApproveQueueComments,
+  bulkRejectQueueComments,
+  fetchRedditProjects,
   type RedditAccount,
   type RedditAccountCreate,
   type RedditAccountUpdate,
   type RedditProjectConfig,
   type RedditProjectConfigCreate,
+  type RedditProjectListResponse,
   type DiscoveryTriggerResponse,
   type DiscoveryStatus,
   type RedditDiscoveredPost,
@@ -49,6 +57,8 @@ import {
   type BatchGenerateResponse,
   type GenerationStatusResponse,
   type RedditCommentUpdateRequest,
+  type CommentQueueParams,
+  type CommentQueueResponse,
 } from '@/lib/api';
 
 // =============================================================================
@@ -56,6 +66,7 @@ import {
 // =============================================================================
 
 export const redditKeys = {
+  projects: () => ['reddit-projects'] as const,
   accounts: (params?: { niche?: string; status?: string; warmup_stage?: string }) =>
     ['reddit-accounts', params] as const,
   config: (projectId: string) =>
@@ -68,7 +79,26 @@ export const redditKeys = {
     ['reddit-comments', projectId, filters] as const,
   generationStatus: (projectId: string) =>
     ['reddit-generation-status', projectId] as const,
+  commentQueue: (params?: CommentQueueParams) =>
+    ['reddit-comment-queue', params] as const,
 };
+
+// =============================================================================
+// REDDIT PROJECTS HOOK (dashboard)
+// =============================================================================
+
+/**
+ * Fetch projects with Reddit configured (for the Reddit dashboard).
+ */
+export function useRedditProjects(
+  options?: { enabled?: boolean }
+): UseQueryResult<RedditProjectListResponse> {
+  return useQuery({
+    queryKey: redditKeys.projects(),
+    queryFn: () => fetchRedditProjects(),
+    enabled: options?.enabled,
+  });
+}
 
 // =============================================================================
 // ACCOUNT HOOKS
@@ -532,6 +562,257 @@ export function useDeleteComment(projectId: string): UseMutationResult<
       queryClient.invalidateQueries({
         queryKey: ['reddit-comments', projectId],
       });
+    },
+  });
+}
+
+/**
+ * Revert an approved/rejected comment back to draft.
+ */
+export function useRevertComment(projectId: string): UseMutationResult<
+  RedditCommentResponse,
+  Error,
+  string
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (commentId: string) => revertCommentToDraft(projectId, commentId),
+    onSettled: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['reddit-comments', projectId],
+      });
+    },
+  });
+}
+
+// =============================================================================
+// COMMENT QUEUE HOOKS (cross-project)
+// =============================================================================
+
+/**
+ * Fetch the cross-project comment queue with optional filters.
+ * Refetches when params change.
+ */
+export function useCommentQueue(
+  params?: CommentQueueParams,
+  options?: { enabled?: boolean }
+): UseQueryResult<CommentQueueResponse> {
+  return useQuery({
+    queryKey: redditKeys.commentQueue(params),
+    queryFn: () => fetchCommentQueue(params),
+    enabled: options?.enabled,
+  });
+}
+
+/**
+ * Approve a comment with optimistic removal from the queue cache.
+ */
+export function useApproveComment(): UseMutationResult<
+  RedditCommentResponse,
+  Error,
+  { projectId: string; commentId: string; body?: string }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ projectId, commentId, body }) =>
+      approveQueueComment(projectId, commentId, body),
+    onMutate: async ({ commentId }) => {
+      await queryClient.cancelQueries({ queryKey: ['reddit-comment-queue'] });
+
+      const previousQueries = queryClient.getQueriesData<CommentQueueResponse>({
+        queryKey: ['reddit-comment-queue'],
+      });
+
+      queryClient.setQueriesData<CommentQueueResponse>(
+        { queryKey: ['reddit-comment-queue'] },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            items: old.items.filter((c) => c.id !== commentId),
+            total: old.total - 1,
+            counts: {
+              ...old.counts,
+              draft: Math.max(0, old.counts.draft - 1),
+              approved: old.counts.approved + 1,
+            },
+          };
+        },
+      );
+
+      return { previousQueries };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previousQueries) {
+        for (const [queryKey, data] of context.previousQueries) {
+          queryClient.setQueryData(queryKey, data);
+        }
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['reddit-comment-queue'] });
+    },
+  });
+}
+
+/**
+ * Reject a comment with optimistic removal from the queue cache.
+ */
+export function useRejectComment(): UseMutationResult<
+  RedditCommentResponse,
+  Error,
+  { projectId: string; commentId: string; reason: string }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ projectId, commentId, reason }) =>
+      rejectQueueComment(projectId, commentId, reason),
+    onMutate: async ({ commentId }) => {
+      await queryClient.cancelQueries({ queryKey: ['reddit-comment-queue'] });
+
+      const previousQueries = queryClient.getQueriesData<CommentQueueResponse>({
+        queryKey: ['reddit-comment-queue'],
+      });
+
+      queryClient.setQueriesData<CommentQueueResponse>(
+        { queryKey: ['reddit-comment-queue'] },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            items: old.items.filter((c) => c.id !== commentId),
+            total: old.total - 1,
+            counts: {
+              ...old.counts,
+              draft: Math.max(0, old.counts.draft - 1),
+              rejected: old.counts.rejected + 1,
+            },
+          };
+        },
+      );
+
+      return { previousQueries };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previousQueries) {
+        for (const [queryKey, data] of context.previousQueries) {
+          queryClient.setQueryData(queryKey, data);
+        }
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['reddit-comment-queue'] });
+    },
+  });
+}
+
+/**
+ * Bulk approve comments with optimistic removal from the queue cache.
+ */
+export function useBulkApprove(): UseMutationResult<
+  { approved_count: number },
+  Error,
+  { projectId: string; commentIds: string[] }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ projectId, commentIds }) =>
+      bulkApproveQueueComments(projectId, commentIds),
+    onMutate: async ({ commentIds }) => {
+      await queryClient.cancelQueries({ queryKey: ['reddit-comment-queue'] });
+
+      const previousQueries = queryClient.getQueriesData<CommentQueueResponse>({
+        queryKey: ['reddit-comment-queue'],
+      });
+
+      const idSet = new Set(commentIds);
+      queryClient.setQueriesData<CommentQueueResponse>(
+        { queryKey: ['reddit-comment-queue'] },
+        (old) => {
+          if (!old) return old;
+          const removed = old.items.filter((c) => idSet.has(c.id)).length;
+          return {
+            ...old,
+            items: old.items.filter((c) => !idSet.has(c.id)),
+            total: old.total - removed,
+            counts: {
+              ...old.counts,
+              draft: Math.max(0, old.counts.draft - removed),
+              approved: old.counts.approved + removed,
+            },
+          };
+        },
+      );
+
+      return { previousQueries };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previousQueries) {
+        for (const [queryKey, data] of context.previousQueries) {
+          queryClient.setQueryData(queryKey, data);
+        }
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['reddit-comment-queue'] });
+    },
+  });
+}
+
+/**
+ * Bulk reject comments with optimistic removal from the queue cache.
+ */
+export function useBulkReject(): UseMutationResult<
+  { rejected_count: number },
+  Error,
+  { projectId: string; commentIds: string[]; reason: string }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ projectId, commentIds, reason }) =>
+      bulkRejectQueueComments(projectId, commentIds, reason),
+    onMutate: async ({ commentIds }) => {
+      await queryClient.cancelQueries({ queryKey: ['reddit-comment-queue'] });
+
+      const previousQueries = queryClient.getQueriesData<CommentQueueResponse>({
+        queryKey: ['reddit-comment-queue'],
+      });
+
+      const idSet = new Set(commentIds);
+      queryClient.setQueriesData<CommentQueueResponse>(
+        { queryKey: ['reddit-comment-queue'] },
+        (old) => {
+          if (!old) return old;
+          const removed = old.items.filter((c) => idSet.has(c.id)).length;
+          return {
+            ...old,
+            items: old.items.filter((c) => !idSet.has(c.id)),
+            total: old.total - removed,
+            counts: {
+              ...old.counts,
+              draft: Math.max(0, old.counts.draft - removed),
+              rejected: old.counts.rejected + removed,
+            },
+          };
+        },
+      );
+
+      return { previousQueries };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previousQueries) {
+        for (const [queryKey, data] of context.previousQueries) {
+          queryClient.setQueryData(queryKey, data);
+        }
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['reddit-comment-queue'] });
     },
   });
 }

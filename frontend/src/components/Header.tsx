@@ -7,8 +7,8 @@ export function Header() {
   const pathname = usePathname();
 
   const navLinks = [
-    { href: '/', label: 'Projects', isActive: pathname === '/' || pathname.startsWith('/projects') },
-    { href: '/reddit/accounts', label: 'Reddit', isActive: pathname.startsWith('/reddit') },
+    { href: '/', label: 'AI SEO', isActive: pathname === '/' || pathname.startsWith('/projects') },
+    { href: '/reddit', label: 'Reddit', isActive: pathname.startsWith('/reddit') },
   ];
 
   return (

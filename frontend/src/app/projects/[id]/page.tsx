@@ -9,7 +9,7 @@ import { useCrawlStatus, getOnboardingStep } from '@/hooks/use-crawl-status';
 import { useClusters } from '@/hooks/useClusters';
 import { useBlogCampaigns } from '@/hooks/useBlogs';
 import { useLinkMap, usePlanStatus } from '@/hooks/useLinks';
-import { useRedditConfig } from '@/hooks/useReddit';
+import { useRedditConfig, useUpsertRedditConfig } from '@/hooks/useReddit';
 import { Button, ButtonLink, Toast } from '@/components/ui';
 
 function LoadingSkeleton() {
@@ -518,6 +518,7 @@ export default function ProjectDetailPage() {
   const { data: redditConfig } = useRedditConfig(projectId, {
     enabled: !!projectId && !isLoading && !error,
   });
+  const upsertRedditConfig = useUpsertRedditConfig(projectId);
 
   // Fetch link status for onboarding scope
   const { data: onboardingLinkMap } = useLinkMap(projectId, 'onboarding');
@@ -969,9 +970,23 @@ export default function ProjectDetailPage() {
               ? 'Reddit marketing is set up for this project'
               : 'Configure Reddit marketing to promote your content across relevant subreddits'}
           </p>
-          <ButtonLink href={`/projects/${projectId}/reddit`}>
-            {redditConfig ? 'Manage Reddit Settings' : 'Configure Reddit'}
-          </ButtonLink>
+          {redditConfig ? (
+            <ButtonLink href={`/reddit/${projectId}`}>
+              View Reddit Project
+            </ButtonLink>
+          ) : (
+            <Button
+              onClick={() => {
+                upsertRedditConfig.mutate({}, {
+                  onSuccess: () => router.push(`/reddit/${projectId}`),
+                  onError: () => router.push(`/reddit/${projectId}`),
+                });
+              }}
+              disabled={upsertRedditConfig.isPending}
+            >
+              {upsertRedditConfig.isPending ? 'Setting up...' : 'Set up Reddit'}
+            </Button>
+          )}
         </div>
       </div>
     </div>

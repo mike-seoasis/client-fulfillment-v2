@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-from sqlalchemy import DateTime, String, Text, text
+from sqlalchemy import Boolean, DateTime, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -100,6 +100,14 @@ class Project(Base):
         Text,
         nullable=True,
         doc="Additional notes or information about the project provided during creation",
+    )
+
+    reddit_only: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+        doc="If true, project was created for Reddit only and is hidden from the AI SEO dashboard",
     )
 
     created_at: Mapped[datetime] = mapped_column(

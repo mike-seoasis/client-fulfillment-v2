@@ -1492,6 +1492,15 @@ export function deleteComment(
   );
 }
 
+export function revertCommentToDraft(
+  projectId: string,
+  commentId: string
+): Promise<RedditCommentResponse> {
+  return apiClient.post<RedditCommentResponse>(
+    `/projects/${projectId}/reddit/comments/${commentId}/revert`
+  );
+}
+
 // =============================================================================
 // WORDPRESS LINKER API TYPES & FUNCTIONS
 // =============================================================================
@@ -1570,6 +1579,39 @@ export interface WPReviewResponse {
   avg_links_per_post: number;
   groups: WPReviewGroup[];
   validation_pass_rate: number;
+}
+
+// =============================================================================
+// REDDIT PROJECT DASHBOARD TYPES
+// =============================================================================
+
+/** Summary card for a project with Reddit configured. */
+export interface RedditProjectCard {
+  id: string;
+  name: string;
+  site_url: string;
+  is_active: boolean;
+  post_count: number;
+  comment_count: number;
+  draft_count: number;
+  updated_at: string;
+}
+
+/** Paginated list of Reddit-enabled projects. */
+export interface RedditProjectListResponse {
+  items: RedditProjectCard[];
+  total: number;
+}
+
+// =============================================================================
+// REDDIT PROJECT DASHBOARD FUNCTIONS
+// =============================================================================
+
+/**
+ * Fetch projects that have Reddit configured (for Reddit dashboard).
+ */
+export function fetchRedditProjects(): Promise<RedditProjectListResponse> {
+  return apiClient.get<RedditProjectListResponse>('/reddit/projects');
 }
 
 // =============================================================================
@@ -1863,6 +1905,113 @@ export function bulkUpdateRedditPosts(
 
 // =============================================================================
 // WORDPRESS LINKER API TYPES & FUNCTIONS
+// =============================================================================
+
+// =============================================================================
+// COMMENT QUEUE API TYPES
+// =============================================================================
+
+/** Parameters for fetching the cross-project comment queue. */
+export interface CommentQueueParams {
+  status?: string;
+  project_id?: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}
+
+/** Paginated response for the comment queue. */
+export interface CommentQueueResponse {
+  items: RedditCommentResponse[];
+  total: number;
+  counts: {
+    draft: number;
+    approved: number;
+    rejected: number;
+    all: number;
+  };
+}
+
+// =============================================================================
+// COMMENT QUEUE API FUNCTIONS
+// =============================================================================
+
+/**
+ * Fetch the cross-project comment queue with optional filters.
+ * Returns paginated comments with status counts.
+ */
+export function fetchCommentQueue(
+  params?: CommentQueueParams
+): Promise<CommentQueueResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.status) searchParams.set('status', params.status);
+  if (params?.project_id) searchParams.set('project_id', params.project_id);
+  if (params?.search) searchParams.set('search', params.search);
+  if (params?.limit) searchParams.set('limit', String(params.limit));
+  if (params?.offset) searchParams.set('offset', String(params.offset));
+  const qs = searchParams.toString();
+  return apiClient.get<CommentQueueResponse>(
+    `/reddit/comments${qs ? `?${qs}` : ''}`
+  );
+}
+
+/**
+ * Approve a comment, optionally with an edited body.
+ */
+export function approveQueueComment(
+  projectId: string,
+  commentId: string,
+  body?: string
+): Promise<RedditCommentResponse> {
+  return apiClient.post<RedditCommentResponse>(
+    `/projects/${projectId}/reddit/comments/${commentId}/approve`,
+    body !== undefined ? { body } : undefined
+  );
+}
+
+/**
+ * Reject a comment with a reason.
+ */
+export function rejectQueueComment(
+  projectId: string,
+  commentId: string,
+  reason: string
+): Promise<RedditCommentResponse> {
+  return apiClient.post<RedditCommentResponse>(
+    `/projects/${projectId}/reddit/comments/${commentId}/reject`,
+    { reason }
+  );
+}
+
+/**
+ * Bulk approve multiple comments in a project.
+ */
+export function bulkApproveQueueComments(
+  projectId: string,
+  commentIds: string[]
+): Promise<{ approved_count: number }> {
+  return apiClient.post<{ approved_count: number }>(
+    `/projects/${projectId}/reddit/comments/bulk-approve`,
+    { comment_ids: commentIds }
+  );
+}
+
+/**
+ * Bulk reject multiple comments in a project with a reason.
+ */
+export function bulkRejectQueueComments(
+  projectId: string,
+  commentIds: string[],
+  reason: string
+): Promise<{ rejected_count: number }> {
+  return apiClient.post<{ rejected_count: number }>(
+    `/projects/${projectId}/reddit/comments/bulk-reject`,
+    { comment_ids: commentIds, reason }
+  );
+}
+
+// =============================================================================
+// WORDPRESS LINKER API TYPES & FUNCTIONS (continued)
 // =============================================================================
 
 /** Validate WP credentials. */

@@ -86,6 +86,10 @@ class ProjectCreate(BaseModel):
         default="active",
         description="Project status",
     )
+    reddit_only: bool = Field(
+        default=False,
+        description="If true, project is Reddit-only and hidden from AI SEO dashboard",
+    )
     phase_status: dict[str, Any] = Field(
         default_factory=dict,
         description="Initial phase status dictionary",
@@ -158,6 +162,10 @@ class ProjectUpdate(BaseModel):
     status: str | None = Field(
         None,
         description="New project status",
+    )
+    reddit_only: bool | None = Field(
+        None,
+        description="If true, project is Reddit-only and hidden from AI SEO dashboard",
     )
     phase_status: dict[str, Any] | None = Field(
         None,
@@ -258,6 +266,10 @@ class ProjectResponse(BaseModel):
     has_brand_config: bool = Field(
         default=False,
         description="Whether a brand config exists for this project",
+    )
+    reddit_only: bool = Field(
+        default=False,
+        description="If true, project is Reddit-only and hidden from AI SEO dashboard",
     )
     uploaded_files_count: int = Field(
         default=0,

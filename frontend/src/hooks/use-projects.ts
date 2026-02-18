@@ -35,6 +35,7 @@ export interface Project {
   phase_status: Record<string, PhaseStatusEntry | unknown>;
   brand_config_status: 'pending' | 'generating' | 'complete' | 'failed';
   has_brand_config: boolean;
+  reddit_only: boolean;
   uploaded_files_count: number;
   created_at: string;
   updated_at: string;
@@ -52,6 +53,7 @@ export interface ProjectCreateInput {
   site_url: string;
   client_id?: string | null;
   status?: string;
+  reddit_only?: boolean;
   phase_status?: Record<string, unknown>;
 }
 
@@ -59,6 +61,7 @@ export interface ProjectUpdateInput {
   name?: string;
   site_url?: string;
   status?: string;
+  reddit_only?: boolean;
   phase_status?: Record<string, unknown>;
 }
 

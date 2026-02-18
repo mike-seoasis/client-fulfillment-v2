@@ -21,16 +21,22 @@ class ProjectService:
     """Service class for Project CRUD operations."""
 
     @staticmethod
-    async def list_projects(db: AsyncSession) -> list[Project]:
-        """List all projects ordered by updated_at descending.
+    async def list_projects(
+        db: AsyncSession, *, include_reddit_only: bool = False
+    ) -> list[Project]:
+        """List projects ordered by updated_at descending.
 
         Args:
             db: AsyncSession for database operations.
+            include_reddit_only: If False (default), excludes reddit-only projects
+                from the list (AI SEO dashboard). If True, returns all projects.
 
         Returns:
             List of Project instances ordered by most recently updated.
         """
         stmt = select(Project).order_by(Project.updated_at.desc())
+        if not include_reddit_only:
+            stmt = stmt.where(Project.reddit_only == False)  # noqa: E712
         result = await db.execute(stmt)
         return list(result.scalars().all())
 
@@ -78,6 +84,7 @@ class ProjectService:
             client_id=data.client_id,
             additional_info=data.additional_info,
             status=data.status,
+            reddit_only=data.reddit_only,
             phase_status=data.phase_status,
         )
 
@@ -210,6 +217,7 @@ class ProjectService:
             phase_status=project.phase_status,
             brand_config_status=brand_config_status,
             has_brand_config=has_brand_config,
+            reddit_only=project.reddit_only,
             uploaded_files_count=uploaded_files_count,
             created_at=project.created_at,
             updated_at=project.updated_at,
