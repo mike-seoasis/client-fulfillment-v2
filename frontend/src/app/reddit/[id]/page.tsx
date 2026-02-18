@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useCallback, useMemo, type KeyboardEvent } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useProject, useUpdateProject } from '@/hooks/use-projects';
+import { useProject, useUpdateProject, useDeleteProject } from '@/hooks/use-projects';
 import {
   useRedditConfig,
   useUpsertRedditConfig,
@@ -665,7 +665,32 @@ export default function RedditProjectDetailPage() {
 
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
   const updateProject = useUpdateProject();
+  const deleteProject = useDeleteProject();
   const { data: existingConfig, isLoading: isConfigLoading } = useRedditConfig(projectId);
+
+  // Two-step delete confirmation
+  const [isDeleteConfirming, setIsDeleteConfirming] = useState(false);
+  const deleteConfirmTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const deleteButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (isDeleteConfirming) {
+      deleteConfirmTimeoutRef.current = setTimeout(() => setIsDeleteConfirming(false), 3000);
+    }
+    return () => { if (deleteConfirmTimeoutRef.current) clearTimeout(deleteConfirmTimeoutRef.current); };
+  }, [isDeleteConfirming]);
+
+  const handleDeleteBlur = useCallback((e: React.FocusEvent) => {
+    if (!deleteButtonRef.current?.contains(e.relatedTarget as Node)) setIsDeleteConfirming(false);
+  }, []);
+
+  const handleDeleteClick = async () => {
+    if (!isDeleteConfirming) { setIsDeleteConfirming(true); return; }
+    try {
+      await deleteProject.mutateAsync(projectId);
+      router.push('/reddit');
+    } catch { setIsDeleteConfirming(false); }
+  };
   const upsertMutation = useUpsertRedditConfig(projectId);
   const triggerDiscovery = useTriggerDiscovery(projectId);
   const { data: discoveryStatus } = useDiscoveryStatus(projectId);
@@ -872,12 +897,27 @@ export default function RedditProjectDetailPage() {
       {/* Header with toggle */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-warm-gray-900 mb-1">Reddit Settings</h1>
-          <p className="text-warm-gray-500 text-sm">{project.name}</p>
+          <h1 className="text-2xl font-semibold text-warm-gray-900 mb-1">{project.name}</h1>
+          <p className="text-warm-gray-500 text-sm">{project.site_url}</p>
         </div>
         <div className="flex items-center gap-3">
+          {project.has_brand_config && (
+            <Link href={`/projects/${projectId}/brand-config`}>
+              <Button variant="secondary" size="sm">Brand Details</Button>
+            </Link>
+          )}
           <span className="text-sm text-warm-gray-600">{currentIsActive ? 'Active' : 'Inactive'}</span>
           <ToggleSwitch checked={currentIsActive} onChange={(val) => setIsActive(val)} label="Toggle Reddit engagement" />
+          <Button
+            ref={deleteButtonRef}
+            variant="danger"
+            size="sm"
+            onClick={handleDeleteClick}
+            onBlur={handleDeleteBlur}
+            disabled={deleteProject.isPending}
+          >
+            {deleteProject.isPending ? 'Deleting...' : isDeleteConfirming ? 'Confirm Delete' : 'Delete'}
+          </Button>
         </div>
       </div>
 
