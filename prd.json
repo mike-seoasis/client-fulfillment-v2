@@ -109,8 +109,9 @@
         "No Header or navigation is shown (uses auth layout)"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Keep it simple — one centered card with logo, title, subtitle ('Sign in to continue'), and the Google button. Use the same font classes as the rest of the app. The callbackURL should be window.location.origin so after Google OAuth, user returns to the app root. Reference frontend/src/components/Header.tsx for logo styling."
+      "passes": true,
+      "notes": "Keep it simple — one centered card with logo, title, subtitle ('Sign in to continue'), and the Google button. Use the same font classes as the rest of the app. The callbackURL should be window.location.origin so after Google OAuth, user returns to the app root. Reference frontend/src/components/Header.tsx for logo styling.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S12-008",
@@ -269,6 +270,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-19T21:30:34.633Z"
+    "updatedAt": "2026-02-19T21:31:41.275Z"
   }
 }

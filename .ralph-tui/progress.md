@@ -98,3 +98,18 @@ after each iteration and it's included in prompts for context.
   - After moving files, `.next/types/` cache has stale references — delete it to get clean typecheck results
   - Layouts in Next.js nest, they don't replace — the only way to avoid a parent layout's component is to use route groups so different children get different intermediate layouts
 ---
+
+## 2026-02-19 - S12-007
+- Created Google OAuth sign-in page at `frontend/src/app/auth/sign-in/page.tsx`
+- 'use client' component with loading state management via useState
+- Centered card with 'C' logo (matching Header), "Client Onboarding" title, "Sign in to continue" subtitle
+- "Sign in with Google" button calls `authClient.signIn.social({ provider: 'google', callbackURL: window.location.origin })`
+- Loading state: button disabled, spinner replaces Google icon, text changes to "Redirecting…"
+- Styled with tropical oasis design: bg-white card, border-sand-500, palm-500 button, warm-gray text, rounded-sm
+- Uses auth layout (no Header) — centered via parent `auth/layout.tsx`
+- Files changed: `frontend/src/app/auth/sign-in/page.tsx` (new)
+- **Learnings:**
+  - `authClient.signIn.social()` is async but triggers a redirect — the loading state is mainly to give visual feedback during the brief window before the browser navigates away
+  - Auth layout already handles centering (`flex min-h-screen items-center justify-center`), so the sign-in page just needs to constrain its width
+  - No new typecheck or lint errors introduced. Pre-existing test file errors remain.
+---
