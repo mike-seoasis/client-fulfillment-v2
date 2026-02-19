@@ -126,3 +126,20 @@ after each iteration and it's included in prompts for context.
   - Auth layout already handles centering (`flex min-h-screen items-center justify-center`), so the sign-in page just needs to constrain its width
   - No new typecheck or lint errors introduced. Pre-existing test file errors remain.
 ---
+
+## 2026-02-19 - S12-009
+- Updated Header component to use real auth session data instead of hardcoded placeholder
+- `authClient.useSession()` provides `{ data: { user: { name, email } }, isPending }` for display
+- User avatar shows first letter of name (or email as fallback) instead of hardcoded 'U'
+- User name displayed next to avatar (hidden on small screens via `hidden sm:inline`)
+- Dropdown menu with user name/email and "Sign out" button
+- Sign out calls `authClient.signOut()` with `onSuccess` callback to redirect to `/auth/sign-in`
+- Loading state: skeleton pulse animation on avatar and name while session loads
+- Dropdown uses invisible backdrop overlay to close on outside click
+- Files changed: `frontend/src/components/Header.tsx` (modified)
+- **Learnings:**
+  - `authClient.useSession()` returns `{ data, isPending }` — `data` is the session object with `user` and `session` properties, or `null` if not authenticated
+  - `authClient.signOut()` accepts `{ fetchOptions: { onSuccess } }` for post-signout redirect — cleaner than chaining `.then()` since the SDK handles cookie cleanup internally
+  - Dropdown pattern: invisible fixed backdrop `div` + `z-index` layering is a clean way to handle click-outside-to-close without `useRef`/`useEffect` event listeners
+  - No new typecheck or lint errors introduced. Pre-existing test file errors remain.
+---

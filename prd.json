@@ -142,8 +142,9 @@
         "Header still shows nav links (AI SEO, Reddit) and logo as before"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Reference current Header at frontend/src/components/Header.tsx. The user menu placeholder (the 'U' circle + chevron) should become functional. authClient.useSession() returns { data: { user: { name, email, image }, session: { token } }, isPending }. Use data.user.name for display, data.user.name[0] for avatar initial. signOut() can use authClient.signOut({ fetchOptions: { onSuccess: () => router.push('/auth/sign-in') } })."
+      "passes": true,
+      "notes": "Reference current Header at frontend/src/components/Header.tsx. The user menu placeholder (the 'U' circle + chevron) should become functional. authClient.useSession() returns { data: { user: { name, email, image }, session: { token } }, isPending }. Use data.user.name for display, data.user.name[0] for avatar initial. signOut() can use authClient.signOut({ fetchOptions: { onSuccess: () => router.push('/auth/sign-in') } }).",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S12-010",
@@ -271,6 +272,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-19T21:32:53.244Z"
+    "updatedAt": "2026-02-19T21:34:18.047Z"
   }
 }
