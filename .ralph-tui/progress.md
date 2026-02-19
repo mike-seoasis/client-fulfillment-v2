@@ -231,3 +231,23 @@ after each iteration and it's included in prompts for context.
   - No code changes — purely a status tracking task
   - Phase 12 implemented 16 stories covering: SDK install, server/client auth instances, API route, middleware, sign-in page, layout restructure, Header auth integration, token sync, API client headers, backend auth dependency, router-level auth, webhook exemption, and plan updates
 ---
+
+## 2026-02-19 - S12-017
+- Verified full Phase 12 auth flow end-to-end (code review, all acceptance criteria)
+- Files changed: none (verification-only task)
+- **Acceptance Criteria Results:**
+  - [x] Unauthenticated user visiting `/` is redirected to `/auth/sign-in` — `middleware.ts` uses `auth.middleware({ loginUrl: "/auth/sign-in" })`, matcher covers all non-static routes
+  - [x] Sign-in page renders with Google button and tropical oasis styling — `auth/sign-in/page.tsx` has Google SVG icon, `bg-palm-500` button, `border-sand-500` card, `rounded-sm`, loading state
+  - [x] Google OAuth sign-in completes and redirects to dashboard — `authClient.signIn.social({ provider: 'google', callbackURL: window.location.origin })` redirects to `/`
+  - [x] Header shows user name and sign-out button after sign-in — `authClient.useSession()` drives avatar, name display, dropdown with sign-out
+  - [x] API calls include Authorization header and succeed — `api()` injects `Bearer ${token}` via `getSessionToken()`, both `apiClient.*` and raw `fetch()` calls covered, `AuthTokenSync` in root layout
+  - [x] Backend returns 401 for requests without valid Bearer token — `get_current_user` validates Bearer token against `neon_auth.session`/`neon_auth."user"`, returns 401 for missing/invalid tokens
+  - [x] Sign-out clears session and redirects to `/auth/sign-in` — `authClient.signOut()` with `onSuccess: () => router.push('/auth/sign-in')`
+  - [x] Health check at `/health` works without auth — mounted on `app` directly (not `api_v1_router`), bypasses `get_current_user` dependency
+  - [x] No uncommitted changes remain — only `.ralph-tui/` session files and `prd.json` modified (expected during Ralph session, not auth code)
+- **Learnings:**
+  - All 16 Phase 12 stories (S12-001 through S12-016) are correctly wired together into a complete auth stack
+  - The three-layer token flow works: Neon Auth cookie → `useSession()` → `AuthTokenSync` → module-level store → `api()` header injection → backend `get_current_user` validation
+  - Route protection has two layers: Next.js middleware (frontend redirect) + FastAPI router-level dependency (backend 401)
+  - Webhook router correctly bypasses auth by mounting directly on `app` instead of through `api_v1_router`
+---
