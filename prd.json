@@ -1,446 +1,268 @@
 {
-  "name": "Phase 11: Blog Planning & Writing",
-  "description": "Add blog post creation tied to keyword clusters. BlogCampaign (1:1 with cluster) + BlogPost models, topic discovery service (4-stage: POP seeds → Claude expand → DataForSEO enrich → Claude filter), blog content generation pipeline (reuse existing brief→write→check pattern with blog template), blog internal linking (blogs link UP to cluster pages + sideways to sibling blogs, siloed), HTML/clipboard export (NOT Matrixify), and full frontend UI (campaign cards on project detail, create campaign, keyword approval, content generation progress, 3-field Lexical editor, link planning, link map, HTML export page).",
+  "name": "Phase 12: Neon Auth (Google OAuth)",
+  "description": "Gate the app behind Google OAuth using Neon Auth. Frontend: sign-in page, route protection middleware, session token forwarding. Backend: session validation against neon_auth.session table, applied to all API routes. No data siloing — all users see all projects.",
   "branchName": "v2-rebuild",
   "userStories": [
     {
-      "id": "S11-001",
-      "title": "Create BlogCampaign and BlogPost SQLAlchemy models",
-      "description": "As a developer, I need BlogCampaign and BlogPost models so that blog data can be stored with a 1:1 relationship to keyword clusters.",
+      "id": "S12-001",
+      "title": "Install @neondatabase/auth SDK",
+      "description": "As a developer, I need the Neon Auth SDK installed so that I can use its auth primitives.",
       "acceptanceCriteria": [
-        "Create backend/app/models/blog.py with BlogCampaign class extending Base",
-        "BlogCampaign fields: id (UUID PK), project_id (FK projects, CASCADE), cluster_id (FK keyword_clusters, UNIQUE — 1:1), name (String 255), status (String 50, default 'planning', values: planning/writing/review/complete), generation_metadata (JSONB nullable), created_at (DateTime TZ), updated_at (DateTime TZ)",
-        "Create BlogPost class extending Base in same file",
-        "BlogPost fields: id (UUID PK), campaign_id (FK blog_campaigns, CASCADE), primary_keyword (Text), url_slug (String 255), search_volume (Integer nullable), source_page_id (FK cluster_pages nullable — which POP report seeded this topic), title (Text nullable — page_title), meta_description (Text nullable), content (Text nullable — single HTML field, NOT top/bottom split), pop_brief (JSONB nullable), is_approved (Boolean default false — keyword approved), content_status (String 50 default 'pending', values: pending/generating/complete/failed), content_approved (Boolean default false), qa_results (JSONB nullable), status (String 50 default 'keyword_pending', values: keyword_pending/generating/editing/complete), created_at (DateTime TZ), updated_at (DateTime TZ)",
-        "Add relationships: BlogCampaign.posts (one-to-many), BlogCampaign.cluster, BlogCampaign.project, BlogPost.campaign with back_populates",
-        "Register both models in backend/app/models/__init__.py",
-        "Follow UUID/timestamp/relationship patterns from backend/app/models/keyword_cluster.py"
+        "Run `npm install @neondatabase/auth@latest` in frontend/",
+        "Package appears in frontend/package.json dependencies",
+        "No version conflicts or peer dependency issues"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Key design decision: BlogPost stores content directly (title, meta_description, content) instead of bridging to CrawledPage/PageContent. Blogs have 3 content fields not 4, and don't need crawl-related fields. Follow the KeywordCluster + ClusterPage parent/child pattern from backend/app/models/keyword_cluster.py.",
+      "notes": "This is the managed Neon Auth SDK built on Better Auth. It provides createNeonAuth() for server-side and createAuthClient() for client-side.",
       "completionNotes": "Completed by agent"
     },
     {
-      "id": "S11-002",
-      "title": "Create Alembic migration for blog tables",
-      "description": "As a developer, I need database tables for blog_campaigns and blog_posts so that blog data can be persisted.",
+      "id": "S12-002",
+      "title": "Create auth server configuration",
+      "description": "As a developer, I need a server-side auth instance so that middleware and API routes can validate sessions.",
       "acceptanceCriteria": [
-        "Create migration file backend/alembic/versions/0026_create_blog_tables.py",
-        "Migration creates blog_campaigns table with UNIQUE constraint on cluster_id (enforces 1:1)",
-        "Migration creates blog_posts table with all fields from BlogPost model",
-        "Add appropriate indexes: blog_campaigns(project_id), blog_campaigns(cluster_id), blog_posts(campaign_id), blog_posts(source_page_id)",
-        "Migration runs successfully: cd backend && alembic upgrade head",
-        "Migration has proper downgrade function that drops both tables"
+        "Create frontend/src/lib/auth/server.ts",
+        "Import createNeonAuth from '@neondatabase/auth/next/server'",
+        "Export `auth` instance configured with process.env.NEON_AUTH_BASE_URL and process.env.NEON_AUTH_COOKIE_SECRET",
+        "Add NEON_AUTH_BASE_URL and NEON_AUTH_COOKIE_SECRET to frontend/.env.local (placeholder values for now)"
       ],
       "priority": 1,
-      "passes": true,
-      "notes": "Follow pattern from backend/alembic/versions/ existing migrations. The cluster_id UNIQUE constraint is critical — it prevents multiple campaigns per cluster.",
-      "completionNotes": "Completed by agent"
+      "passes": false,
+      "notes": "The auth server instance provides .handler(), .middleware(), and .getSession() methods. Cookie secret must be at least 32 characters. Env var values will be set by user after enabling Neon Auth in their console."
     },
     {
-      "id": "S11-003",
-      "title": "Create Pydantic v2 schemas for blog endpoints",
-      "description": "As a developer, I need request/response schemas for all blog API endpoints.",
+      "id": "S12-003",
+      "title": "Create auth client configuration",
+      "description": "As a developer, I need a client-side auth instance so that React components can trigger sign-in/out and read session data.",
       "acceptanceCriteria": [
-        "Create backend/app/schemas/blog.py with Pydantic v2 models",
-        "BlogCampaignCreate: cluster_id (UUID required), name (str optional)",
-        "BlogPostResponse: id, campaign_id, primary_keyword, url_slug, search_volume, source_page_id, title, meta_description, content (truncated for list views), is_approved, content_status, content_approved, qa_results, status, created_at, updated_at — with ConfigDict(from_attributes=True)",
-        "BlogCampaignResponse: id, project_id, cluster_id, name, status, generation_metadata, posts (list[BlogPostResponse]), created_at, updated_at — with ConfigDict(from_attributes=True)",
-        "BlogCampaignListItem: id, name, status, cluster_name (str), post_count (int), approved_count (int), content_complete_count (int), created_at",
-        "BlogPostUpdate: primary_keyword (str optional), url_slug (str optional), is_approved (bool optional)",
-        "BlogContentUpdateRequest: title (str optional), meta_description (str optional), content (str optional)",
-        "BlogContentGenerationStatus: overall_status, posts_total, posts_completed, posts_failed, posts (list of per-post status items)",
-        "BlogExportItem: post_id, primary_keyword, url_slug, title, meta_description, html_content, word_count"
+        "Create frontend/src/lib/auth/client.ts with 'use client' directive",
+        "Import createAuthClient from '@neondatabase/auth/next'",
+        "Export `authClient` instance from createAuthClient()",
+        "authClient exposes signIn.social(), signOut(), and useSession() methods"
       ],
       "priority": 1,
-      "passes": true,
-      "notes": "Follow pattern from backend/app/schemas/cluster.py. Use Pydantic v2 style: BaseModel, ConfigDict(from_attributes=True), Field(...) for validation. The BlogPostResponse should NOT include full content in list views — truncate or omit.",
-      "completionNotes": "Completed by agent"
+      "passes": false,
+      "notes": "The client instance is used in React components for auth operations. useSession() returns { data: { session, user }, isPending, error }."
     },
     {
-      "id": "S11-004",
-      "title": "Create blog topic discovery service",
-      "description": "As a developer, I need a service that discovers blog topics from existing POP reports using a 4-stage pipeline.",
+      "id": "S12-004",
+      "title": "Create auth API route handler",
+      "description": "As a developer, I need an API route that proxies auth requests to Neon Auth service.",
       "acceptanceCriteria": [
-        "Create backend/app/services/blog_topic_discovery.py with BlogTopicDiscoveryService class",
-        "Constructor takes ClaudeClient and DataForSEOClient (same pattern as ClusterKeywordService)",
-        "Stage 1 — extract_pop_seeds(cluster_id, db): query approved ClusterPages with POP briefs, extract related_searches and related_questions from each brief's JSONB, deduplicate, return seeds with source_page_id",
-        "Stage 2 — expand_topics(seeds, brand_context): Claude Haiku expands seeds into 15-25 blog topic candidates, focuses on informational intent (how-to, guide, comparison, listicle), tags each with source_page_id",
-        "Stage 3 — enrich_with_volume(candidates): DataForSEO batch volume lookup, filter zero-volume topics, merge volume/CPC/competition data (reuse exact pattern from ClusterKeywordService._enrich_with_volume)",
-        "Stage 4 — filter_and_rank(candidates, cluster_name): Claude Haiku filters to best 8-15 topics, removes near-duplicates, generates URL slugs, assigns relevance scores",
-        "Orchestrator discover_topics(cluster_id, project_id, brand_config, db, name): runs stages 1-4, creates BlogCampaign with status='planning', creates BlogPost records with status='keyword_pending', returns result dict with campaign_id and suggestion count",
-        "Error handling: if DataForSEO fails, continue without volume data; if Claude fails, return error to user"
+        "Create frontend/src/app/api/auth/[...path]/route.ts",
+        "Import auth from '@/lib/auth/server'",
+        "Export GET and POST from auth.handler()",
+        "Auth API requests at /api/auth/* are handled correctly"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "This catch-all route handles all Better Auth API endpoints: sign-in, sign-out, session, callbacks, etc. The [...path] pattern catches /api/auth/sign-in/social, /api/auth/get-session, /api/auth/callback/google, etc."
+    },
+    {
+      "id": "S12-005",
+      "title": "Create Next.js route protection middleware",
+      "description": "As a developer, I need middleware that blocks unauthenticated users from accessing app routes.",
+      "acceptanceCriteria": [
+        "Create frontend/src/middleware.ts",
+        "Unauthenticated users navigating to any app route (/, /projects/*, /reddit/*) are redirected to /auth/sign-in",
+        "Routes under /auth/* are accessible without authentication",
+        "Routes under /api/auth/* are accessible without authentication (auth API handler)",
+        "Static assets (/_next/*, /fonts/*, /favicon.ico) bypass middleware",
+        "Authenticated users navigating to /auth/sign-in are redirected to /",
+        "Use auth.middleware() from the server auth instance OR manual session check via auth.api.getSession() with request headers"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Project uses Next.js 14 / React 18. The Neon Auth SDK's auth.middleware() should work but if it has Next.js 15 compatibility issues, fall back to manual middleware using auth.api.getSession({ headers: request.headers }). The matcher config should exclude static assets and auth routes. Export the middleware function as default and a config object with matcher array."
+    },
+    {
+      "id": "S12-006",
+      "title": "Create auth layout (no Header)",
+      "description": "As a developer, I need a layout for auth pages that doesn't render the app Header.",
+      "acceptanceCriteria": [
+        "Create frontend/src/app/auth/layout.tsx",
+        "Layout renders children without the Header component",
+        "Layout maintains the same base styling (bg-cream-100, fonts, etc.) from root layout",
+        "Auth pages use this layout instead of the root layout's Header"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "Follow the 4-stage pattern from backend/app/services/cluster_keyword.py (ClusterKeywordService). The key difference is Stage 1: instead of taking a seed keyword from the user, we extract seeds from existing POP content briefs stored on cluster pages. POP briefs are stored as JSONB on the ContentBrief model — look for related_searches and related_questions fields. Brand context building follows the same pattern as cluster keywords.",
-      "completionNotes": "Completed by agent"
+      "passes": false,
+      "notes": "Since Next.js App Router nests layouts, the root layout already provides html/body/fonts. The auth layout just needs to NOT render Header. The simplest approach: move Header rendering out of root layout into a separate (authenticated) layout group. Use route groups: (authenticated) for app routes with Header, (auth) or auth/ for sign-in without Header."
     },
     {
-      "id": "S11-005",
-      "title": "Create blog campaign CRUD API endpoints",
-      "description": "As a developer, I need REST endpoints to create, list, view, update, and delete blog campaigns.",
+      "id": "S12-007",
+      "title": "Create Google OAuth sign-in page",
+      "description": "As a user, I need a sign-in page so that I can authenticate with my Google account.",
       "acceptanceCriteria": [
-        "Create backend/app/api/v1/blogs.py with APIRouter (prefix='/projects/{project_id}/blogs')",
-        "POST / — Create campaign: validate cluster exists and has completed content, validate no existing campaign for that cluster (409), run BlogTopicDiscoveryService.discover_topics with timeout, return BlogCampaignResponse",
-        "GET / — List campaigns: return BlogCampaignListItem[] with post counts and cluster name, ordered by created_at desc",
-        "GET /{blog_id} — Get campaign with all posts: return BlogCampaignResponse with nested BlogPostResponse[]",
-        "PATCH /{blog_id}/posts/{post_id} — Update post: edit keyword, url_slug, is_approved via BlogPostUpdate schema",
-        "POST /{blog_id}/approve — Bulk approve all unapproved posts, update campaign status to 'writing' if all approved",
-        "DELETE /{blog_id} — Delete campaign and all posts (cascade)",
-        "Register router in backend/app/api/v1/__init__.py",
-        "All endpoints validate project exists (404), use proper HTTP status codes, follow Depends(get_session) pattern"
+        "Create frontend/src/app/auth/sign-in/page.tsx with 'use client' directive",
+        "Page displays a 'Sign in with Google' button",
+        "Clicking the button calls authClient.signIn.social({ provider: 'google', callbackURL: window.location.origin })",
+        "Page is styled to match the tropical oasis design (bg-cream-100, palm-500 accents, warm-gray text, rounded-sm corners)",
+        "Page shows app logo/name (same 'C' logo + 'Client Onboarding' as Header)",
+        "Page handles loading state while OAuth redirect is in progress",
+        "No Header or navigation is shown (uses auth layout)"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "Follow CRUD pattern from backend/app/api/v1/clusters.py. The creation endpoint is the heaviest — it triggers the 4-stage discovery pipeline inline (not as a background task, since it takes ~10-30s like cluster creation). Use the same timeout and error handling pattern as the cluster creation endpoint.",
-      "completionNotes": "Completed by agent"
+      "passes": false,
+      "notes": "Keep it simple — one centered card with logo, title, subtitle ('Sign in to continue'), and the Google button. Use the same font classes as the rest of the app. The callbackURL should be window.location.origin so after Google OAuth, user returns to the app root. Reference frontend/src/components/Header.tsx for logo styling."
     },
     {
-      "id": "S11-006",
-      "title": "Create blog content prompt template",
-      "description": "As a developer, I need a blog-specific prompt template for Claude content generation that outputs 3 fields instead of 4.",
+      "id": "S12-008",
+      "title": "Restructure layouts for authenticated vs auth routes",
+      "description": "As a developer, I need to separate authenticated routes (with Header) from auth routes (without Header) using Next.js layout nesting.",
       "acceptanceCriteria": [
-        "Add build_blog_content_prompt(blog_post, keyword, brand_config, content_brief) function to backend/app/services/content_writing.py",
-        "Reuse _build_system_prompt() for the system prompt (same writing rules, AI trope avoidance, formatting standards)",
-        "User prompt specifies 3-field JSON output: { page_title, meta_description, content }",
-        "page_title: SEO-optimized, includes primary keyword, under 60 chars",
-        "meta_description: optimized for CTR, includes primary keyword, 150-160 chars",
-        "content: full article HTML with Introduction (hook + thesis), Body H2 sections, FAQ section (from POP related_questions), Conclusion with CTA",
-        "No top_description field (that's collection-page specific)",
-        "Reuse _build_seo_targets_section() for LSI terms and heading targets from POP brief",
-        "Inject brand voice from brand config ai_prompt_snippet",
-        "Filter competitor names from LSI terms (reuse existing competitor filtering logic)"
+        "Root layout (src/app/layout.tsx) provides html, body, fonts, and QueryProvider only — NO Header",
+        "Create a route group or wrapper that renders Header for all authenticated routes (/, /projects/*, /reddit/*)",
+        "Auth routes (/auth/*) do NOT render Header",
+        "All existing pages continue to work with Header visible",
+        "AuthTokenSync component is rendered inside QueryProvider in root layout"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "This modifies an existing file: backend/app/services/content_writing.py. The existing build_content_prompt() handles collection pages with 4 fields. The new build_blog_content_prompt() is a separate function that outputs 3 fields. The system prompt is shared via _build_system_prompt(). Reference the copywriting skill bible integration from Phase 5.",
-      "completionNotes": "Completed by agent"
+      "passes": false,
+      "notes": "Approach: Move Header into a (main) or (app) route group layout. Move all existing page.tsx files into that group. OR simpler: create a ClientLayout component that conditionally renders Header based on pathname (skip if pathname starts with /auth). The conditional approach is simpler and avoids moving all files. Reference current root layout at frontend/src/app/layout.tsx."
     },
     {
-      "id": "S11-007",
-      "title": "Create blog content generation pipeline orchestrator",
-      "description": "As a developer, I need a pipeline that orchestrates brief→write→check for each approved blog post with concurrency control.",
+      "id": "S12-009",
+      "title": "Update Header with user display and sign-out",
+      "description": "As a user, I need to see who I'm logged in as and be able to sign out.",
       "acceptanceCriteria": [
-        "Create backend/app/services/blog_content_generation.py with run_blog_content_pipeline(campaign_id, db, force_refresh=False, refresh_briefs=False) function",
-        "Load approved BlogPost records (is_approved=True) for the campaign",
-        "Per-post pipeline: (1) set content_status='generating', fetch POP brief with page_not_built_yet=True, store as pop_brief JSONB, (2) call Claude via build_blog_content_prompt, parse JSON response into title/meta_description/content, (3) run quality checks (reuse content_quality.py), store qa_results, (4) set content_status='complete'",
-        "Uses asyncio.Semaphore for concurrency (CONTENT_GENERATION_CONCURRENCY env var, default 1)",
-        "Error isolation: if one post fails, others continue; failed post gets content_status='failed'",
-        "Skips posts already with content_status='complete' unless force_refresh=True",
-        "Updates campaign status to 'review' when all posts complete"
+        "Header uses authClient.useSession() to get current user data",
+        "User menu area shows user's name (from Google) or email as fallback",
+        "User avatar shows first letter of name (replace hardcoded 'U')",
+        "Clicking user menu area or a sign-out button calls authClient.signOut() then redirects to /auth/sign-in",
+        "Loading state handled while session is being fetched (show skeleton or placeholder)",
+        "Header still shows nav links (AI SEO, Reddit) and logo as before"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "Follow the exact pattern from backend/app/services/content_generation.py (run_content_pipeline). Key difference: content is stored directly on BlogPost (title, meta_description, content) not in a separate PageContent table. Reuse pop_content_brief.py for POP API calls and content_quality.py for QA checks.",
-      "completionNotes": "Completed by agent"
+      "passes": false,
+      "notes": "Reference current Header at frontend/src/components/Header.tsx. The user menu placeholder (the 'U' circle + chevron) should become functional. authClient.useSession() returns { data: { user: { name, email, image }, session: { token } }, isPending }. Use data.user.name for display, data.user.name[0] for avatar initial. signOut() can use authClient.signOut({ fetchOptions: { onSuccess: () => router.push('/auth/sign-in') } })."
     },
     {
-      "id": "S11-008",
-      "title": "Create blog content generation API endpoints",
-      "description": "As a developer, I need API endpoints to trigger blog content generation, poll progress, and manage blog content.",
+      "id": "S12-010",
+      "title": "Create auth token store and sync component",
+      "description": "As a developer, I need the session token available to the API client module so that all backend requests include auth.",
       "acceptanceCriteria": [
-        "Add to backend/app/api/v1/blogs.py:",
-        "POST /{blog_id}/generate-content — Returns 202 Accepted, starts background task, validates campaign status is 'writing' and has approved posts (400 if not), prevents duplicate runs (409 if already generating)",
-        "GET /{blog_id}/content-status — Returns BlogContentGenerationStatus with per-post status breakdown",
-        "GET /{blog_id}/posts/{post_id}/content — Returns full BlogPost content fields + qa_results + pop_brief summary",
-        "PUT /{blog_id}/posts/{post_id}/content — Partial update of title/meta_description/content via BlogContentUpdateRequest, clears content_approved on change",
-        "POST /{blog_id}/posts/{post_id}/approve-content — Set content_approved=True (with ?value=false to unapprove)",
-        "POST /{blog_id}/posts/{post_id}/recheck — Re-run quality checks on current content, return updated qa_results",
-        "POST /{blog_id}/bulk-approve-content — Approve all posts with content_status='complete' and qa passed"
+        "Create frontend/src/lib/auth-token.ts with setSessionToken(token: string | null) and getSessionToken(): string | null",
+        "Module stores token in a module-level variable (simple, no React dependency)",
+        "Create frontend/src/components/AuthTokenSync.tsx ('use client') that uses authClient.useSession() and syncs session.token into the token store via useEffect",
+        "AuthTokenSync renders null (invisible component)",
+        "Token updates when session changes (sign-in, sign-out, refresh)",
+        "AuthTokenSync is mounted in the root layout inside QueryProvider"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "Follow the trigger/poll pattern from backend/app/api/v1/content_generation.py. Use background_tasks.add_task() for the pipeline. Track active generations in a module-level set to prevent duplicates.",
-      "completionNotes": "Completed by agent"
+      "passes": false,
+      "notes": "The session object from useSession() has shape { session: { token: string, ... }, user: { ... } }. The token field is what we need to pass to the backend. When data is null (signed out), set token to null. This decouples auth from the API client — api.ts just calls getSessionToken() without needing React context."
     },
     {
-      "id": "S11-009",
-      "title": "Add blog scope to internal link planning",
-      "description": "As a developer, I need the link planning infrastructure to support blog posts siloed to their parent cluster.",
+      "id": "S12-011",
+      "title": "Update API client to include Authorization header",
+      "description": "As a developer, I need all API requests to include the session token so that the backend can validate auth.",
       "acceptanceCriteria": [
-        "Add BLOG = 'blog' to LinkScope enum in backend/app/models/internal_link.py",
-        "Add build_blog_graph(campaign_id, db) method to SiloLinkPlanner in backend/app/services/link_planning.py",
-        "Blog graph: blog posts are leaf nodes, cluster pages are targets. Blogs link UP to cluster pages (2-4 links, parent page mandatory as first link) and sideways to sibling blogs (1-2 links). Total budget: 3-6 per blog post",
-        "Create CrawledPage records with source='blog' for blog posts when link planning runs (bridges blog posts to existing InternalLink infrastructure which uses CrawledPage IDs)",
-        "Blog links NEVER cross outside the cluster silo",
-        "Add blog link planning API endpoints to blogs.py: POST /{blog_id}/plan-links (trigger, 202), GET /{blog_id}/link-status (poll), GET /{blog_id}/link-map (results)",
-        "After link injection, update BlogPost.content with injected HTML"
+        "Modify frontend/src/lib/api.ts api() function to read token via getSessionToken()",
+        "When token is available, add 'Authorization': `Bearer ${token}` to request headers",
+        "When token is null, omit the Authorization header (don't send empty Bearer)",
+        "All existing API functions (apiClient.get, post, patch, put, delete) automatically include the header",
+        "The exportProject() and downloadBlogPostHtml() functions that use raw fetch() also include the header"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "Reuse existing SiloLinkPlanner, AnchorTextSelector, LinkInjector, and LinkValidator from backend/app/services/link_planning.py and link_injection.py. The blog-specific part is just the graph building (which pages can link to which). The CrawledPage bridging follows the same pattern as bulk_approve_cluster in clusters.py which creates CrawledPage records for cluster pages.",
-      "completionNotes": "Completed by agent"
+      "passes": false,
+      "notes": "Reference frontend/src/lib/api.ts. The change is small — in the api() function, import getSessionToken from './auth-token', read the token, and spread it into the headers object. Also update the two raw fetch() calls in exportProject() and downloadBlogPostHtml() to include the same header."
     },
     {
-      "id": "S11-010",
-      "title": "Create blog HTML export service",
-      "description": "As a developer, I need an export service that generates clean HTML for blog posts (NOT Matrixify CSV).",
+      "id": "S12-012",
+      "title": "Add AUTH_REQUIRED config setting to backend",
+      "description": "As a developer, I need an auth toggle so that development can work without Neon Auth enabled.",
       "acceptanceCriteria": [
-        "Create backend/app/services/blog_export.py with BlogExportService class",
-        "generate_clean_html(blog_post): strip editor artifacts (highlight spans, data attributes), preserve internal links, ensure proper heading hierarchy (H2/H3), return semantic HTML string",
-        "generate_export_package(campaign_id, db, post_ids=None): query approved posts (content_approved=True, content_status='complete'), generate clean HTML + metadata for each, return list of BlogExportItem",
-        "Add export API endpoints to blogs.py: GET /{blog_id}/export (all approved posts as JSON array of BlogExportItem), GET /{blog_id}/posts/{post_id}/export (single post), GET /{blog_id}/posts/{post_id}/download (HTML file with Content-Disposition header)",
-        "HTML cleaning reuses the strip pattern from the existing Lexical editor export (removing highlight nodes)"
+        "Add auth_required: bool = Field(default=True) to Settings class in backend/app/core/config.py",
+        "When false, auth is bypassed and a placeholder dev user is returned",
+        "When true (default), real session validation is enforced"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Add it near the top of Settings class with the other application settings. Description: 'Require authentication for API requests (disable for local development)'."
+    },
+    {
+      "id": "S12-013",
+      "title": "Create backend auth dependency (get_current_user)",
+      "description": "As a developer, I need a FastAPI dependency that validates session tokens against the neon_auth schema.",
+      "acceptanceCriteria": [
+        "Create backend/app/core/auth.py",
+        "Define a UserInfo dataclass/model with fields: id (str), email (str), name (str)",
+        "Implement get_current_user(request: Request, db: AsyncSession) -> UserInfo as an async FastAPI dependency",
+        "When AUTH_REQUIRED=false, return UserInfo(id='dev-user', email='dev@localhost', name='Dev User') without checking headers",
+        "When AUTH_REQUIRED=true: read Authorization header, extract Bearer token, query neon_auth.session table WHERE token matches AND expires_at > now(), join neon_auth.user to get user info",
+        "Return 401 {'detail': 'Not authenticated'} if no Authorization header or not Bearer format",
+        "Return 401 {'detail': 'Invalid or expired session'} if token not found or expired",
+        "Use raw SQL via db.execute(text(...)) since neon_auth tables are not in our SQLAlchemy models"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "Blog export is HTML for pasting into Shopify's blog editor. NOT Matrixify CSV (that's collection pages only). The highlight stripping logic exists in the frontend Lexical editor (HighlightPlugin.tsx lines 68-80) — replicate server-side with BeautifulSoup for the backend export.",
-      "completionNotes": "Completed by agent"
+      "passes": false,
+      "notes": "The neon_auth schema is managed by Neon Auth, not Alembic. Tables are: neon_auth.user (id, name, email, emailVerified, image, createdAt, updatedAt), neon_auth.session (id, expiresAt, token, createdAt, updatedAt, ipAddress, userAgent, userId FK). Use text() for raw SQL: SELECT u.id, u.email, u.name FROM neon_auth.session s JOIN neon_auth.\"user\" u ON s.\"userId\" = u.id WHERE s.token = :token AND s.\"expiresAt\" > now(). Note: Better Auth uses camelCase column names and 'user' is a reserved word in Postgres, so quote it."
     },
     {
-      "id": "S11-011",
-      "title": "Write backend tests for blog services and API",
-      "description": "As a developer, I need comprehensive tests for blog topic discovery, content generation, export, and API endpoints.",
+      "id": "S12-014",
+      "title": "Apply auth dependency to API v1 router",
+      "description": "As a developer, I need all API endpoints to require authentication by default.",
       "acceptanceCriteria": [
-        "Tests for blog topic discovery: mock Claude + DataForSEO, test 4-stage pipeline, test seed extraction from POP briefs, test deduplication, test error handling",
-        "Tests for blog content generation pipeline: mock POP + Claude, test per-post pipeline phases, test error isolation, test concurrency control, test skip-if-complete logic",
-        "Tests for blog export: test HTML cleaning (highlight strip, link preservation), test export package generation",
-        "Tests for blog API endpoints: test campaign CRUD (create/list/get/update/delete), test content generation trigger/poll, test content edit/approve/recheck, test export endpoints, test validation (no duplicate campaigns per cluster, must have approved posts for generation)",
-        "All tests pass: cd backend && python -m pytest tests/ -x",
-        "Minimum 40 test cases across services and API"
-      ],
-      "priority": 3,
-      "passes": true,
-      "notes": "Follow existing test patterns in backend/tests/services/ and backend/tests/api/. Use conftest.py fixtures. Mock external APIs (Claude, DataForSEO, POP) — never make real API calls in tests.",
-      "completionNotes": "Completed by agent"
-    },
-    {
-      "id": "S11-012",
-      "title": "Add blog types and API functions to frontend API client",
-      "description": "As a developer, I need TypeScript types and API functions for all blog endpoints so the frontend can interact with them.",
-      "acceptanceCriteria": [
-        "Add to frontend/src/lib/api.ts: BlogCampaign, BlogPost, BlogCampaignCreate, BlogCampaignListItem, BlogPostUpdate, BlogContentUpdate, BlogContentGenerationStatus, BlogExportItem TypeScript interfaces",
-        "Add API functions: createBlogCampaign(projectId, data), getBlogCampaigns(projectId), getBlogCampaign(projectId, blogId), updateBlogPost(projectId, blogId, postId, data), bulkApproveBlogPosts(projectId, blogId), deleteBlogCampaign(projectId, blogId)",
-        "Add content API functions: triggerBlogContentGeneration(projectId, blogId), getBlogContentStatus(projectId, blogId), getBlogPostContent(projectId, blogId, postId), updateBlogPostContent(projectId, blogId, postId, data), approveBlogPostContent(projectId, blogId, postId, value?), recheckBlogPostContent(projectId, blogId, postId), bulkApproveBlogContent(projectId, blogId)",
-        "Add link API functions: triggerBlogLinkPlanning(projectId, blogId), getBlogLinkStatus(projectId, blogId), getBlogLinkMap(projectId, blogId)",
-        "Add export API functions: getBlogExport(projectId, blogId), getBlogPostExport(projectId, blogId, postId), downloadBlogPostHtml(projectId, blogId, postId)",
-        "Follow exact patterns from existing cluster/content API functions in the same file"
+        "Add get_current_user as a dependency on the api_v1_router in backend/app/api/v1/__init__.py using router = APIRouter(prefix='/api/v1', dependencies=[Depends(get_current_user)])",
+        "All endpoints under /api/v1/* now require a valid Bearer token",
+        "Health check at /health is NOT affected (mounted on app directly, not on api_v1_router)"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "All blog endpoints are under /projects/{projectId}/blogs/{blogId}/... prefix. Follow the existing apiClient.get/post/put/patch/delete patterns. The download function should handle blob response like the existing exportProject function.",
-      "completionNotes": "Completed by agent"
+      "passes": false,
+      "notes": "Import Depends from fastapi and get_current_user from app.core.auth. The health check is defined directly on the app object in main.py, not on the v1 router, so it's unaffected."
     },
     {
-      "id": "S11-013",
-      "title": "Create useBlogs TanStack Query hooks",
-      "description": "As a developer, I need React Query hooks for blog campaigns, content generation, and export so the frontend components can fetch and mutate data.",
+      "id": "S12-015",
+      "title": "Move CrowdReply webhook outside authenticated router",
+      "description": "As a developer, I need the CrowdReply webhook to remain accessible without auth since it receives external callbacks.",
       "acceptanceCriteria": [
-        "Create frontend/src/hooks/useBlogs.ts",
-        "Query key factory: blogKeys with list, detail, contentStatus, postContent, linkStatus, linkMap, export keys",
-        "Campaign hooks: useBlogCampaigns(projectId), useBlogCampaign(projectId, blogId), useCreateBlogCampaign(), useUpdateBlogPost(), useBulkApproveBlogPosts(), useDeleteBlogCampaign()",
-        "Content hooks: useTriggerBlogContentGeneration(), useBlogContentStatus(projectId, blogId) with 3s polling while generating, useBlogPostContent(projectId, blogId, postId), useUpdateBlogPostContent(), useApproveBlogPostContent(), useRecheckBlogPostContent(), useBulkApproveBlogContent()",
-        "Link hooks: useTriggerBlogLinkPlanning(), useBlogLinkStatus(projectId, blogId) with polling, useBlogLinkMap(projectId, blogId)",
-        "All mutations invalidate relevant queries on success",
-        "Follow exact patterns from frontend/src/hooks/useClusters.ts and frontend/src/hooks/useContentGeneration.ts"
+        "Create a separate webhook_router (APIRouter) in backend/app/api/v1/reddit.py for the CrowdReply webhook endpoint",
+        "Move the POST /webhooks/crowdreply endpoint from reddit_router to webhook_router (keep the same handler logic)",
+        "Mount webhook_router directly on the app in main.py at /webhooks prefix (not under /api/v1)",
+        "The webhook simulator endpoint can stay inside /api/v1 (it's dev-only and auth is fine for it)",
+        "CrowdReply webhook continues to work without any Authorization header",
+        "Export webhook_router from backend/app/api/v1/reddit.py and import/mount in main.py"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "The polling pattern for content status: refetchInterval: (query) => query.state.data?.overall_status === 'generating' ? 3000 : false. Same pattern for link planning status. Query key hierarchy enables cache invalidation at list vs detail level.",
-      "completionNotes": "Completed by agent"
+      "passes": false,
+      "notes": "The webhook endpoint currently lives at POST /api/v1/reddit/webhooks/crowdreply. After this change it moves to POST /webhooks/crowdreply. The webhook has its own verification via crowdreply_webhook_secret. Update any CrowdReply webhook URL configuration if needed."
     },
     {
-      "id": "S11-014",
-      "title": "Add Blogs section to project detail page",
-      "description": "As a user, I need to see my blog campaigns on the project detail page alongside onboarding and clusters.",
-      "acceptanceCriteria": [
-        "Modify frontend/src/app/projects/[id]/page.tsx to add a third section below 'New Content'",
-        "Section header: pencil icon + 'Blogs' title + 'Supporting Content' chip badge (matching onboarding/cluster header pattern)",
-        "When campaigns exist: show grid of campaign cards (1-3 columns), each card shows: campaign name, cluster name (small text), post count ('X of Y posts done'), status badge (Planning/Writing/Review/Complete), link status badge",
-        "When no campaigns: empty state with 'No blog campaigns yet' + description + '+ New Campaign' button",
-        "'+ New Campaign' button in header (when campaigns exist) links to /projects/[id]/blogs/new",
-        "Each campaign card links to /projects/[id]/blogs/[blogId]",
-        "Card styling matches ClusterCard: bg-white rounded-sm border border-sand-500 p-4 shadow-sm hover:shadow-md transition-shadow",
-        "Fetch campaigns with useBlogCampaigns hook"
-      ],
-      "priority": 2,
-      "passes": true,
-      "notes": "Follow the exact layout pattern of the existing 'New Content' section (lines 765-807 of the project detail page). The BlogCampaignCard component should mirror ClusterCard (lines 367-398). Status badge colors: planning=cream, writing=lagoon, review=coral, complete=palm.",
-      "completionNotes": "Completed by agent"
-    },
-    {
-      "id": "S11-015",
-      "title": "Create blog campaign creation page",
-      "description": "As a user, I need a page to create a blog campaign by selecting a cluster and triggering topic discovery.",
-      "acceptanceCriteria": [
-        "Create frontend/src/app/projects/[id]/blogs/new/page.tsx",
-        "Form: dropdown to select parent cluster (only clusters with completed content are eligible — filter by status), optional campaign name input",
-        "Ineligible clusters (no completed content) shown grayed out with reason",
-        "Clusters that already have a campaign are excluded from dropdown",
-        "On submit: call createBlogCampaign mutation, show 4-step progress animation during discovery (Extracting seeds → Expanding topics → Checking volume → Filtering results)",
-        "On success: redirect to campaign detail page (keywords step)",
-        "On error: show error message with retry option",
-        "Cancel button returns to project detail page",
-        "Follow creation page pattern from frontend/src/app/projects/[id]/clusters/new/page.tsx",
-        "Tropical oasis styling: rounded-sm, palm/sand/cream colors, warm-gray text"
-      ],
-      "priority": 2,
-      "passes": true,
-      "notes": "The cluster dropdown needs data from useClusters hook to show available clusters. The progress animation follows the ProgressIndicator pattern from clusters/new/page.tsx (lines 32-70). The discovery takes ~10-30s, similar to cluster creation.",
-      "completionNotes": "Completed by agent"
-    },
-    {
-      "id": "S11-016",
-      "title": "Create blog keywords step page",
-      "description": "As a user, I need to view, edit, and approve discovered blog topics before content generation.",
-      "acceptanceCriteria": [
-        "Create frontend/src/app/projects/[id]/blogs/[blogId]/page.tsx",
-        "5-step indicator at top: Keywords (active) → Content → Links → Review → Export",
-        "Table showing all blog posts with columns: Approve checkbox, Topic Keyword (inline editable), Source Page (which cluster page seeded it), Volume, URL Slug (inline editable)",
-        "Inline editing: click keyword or slug cell to enter edit mode, blur to save via useUpdateBlogPost mutation",
-        "Approve checkbox per row toggles is_approved via useUpdateBlogPost",
-        "Bulk 'Approve All' button approves all unapproved posts",
-        "Bottom actions: 'Delete Campaign' (left, danger), 'Generate Content →' (right, primary — disabled until ≥1 approved)",
-        "'Generate Content' navigates to content step and triggers generation",
-        "Follow keyword approval pattern from frontend/src/app/projects/[id]/clusters/[clusterId]/page.tsx",
-        "Tropical oasis styling consistent with cluster keywords page"
-      ],
-      "priority": 2,
-      "passes": true,
-      "notes": "Follow the ClusterPageRow pattern (lines 293-471 of cluster detail page). Key difference from clusters: no parent/child roles, no CPC/competition/score columns (blogs are simpler). Add Source Page column showing which cluster page's POP report seeded the topic. The step indicator follows the StepIndicator pattern (lines 79-122).",
-      "completionNotes": "Completed by agent"
-    },
-    {
-      "id": "S11-017",
-      "title": "Create blog content generation and review page",
-      "description": "As a user, I need to trigger blog content generation, watch progress, and review generated content in a tabbed table.",
-      "acceptanceCriteria": [
-        "Create frontend/src/app/projects/[id]/blogs/[blogId]/content/page.tsx",
-        "Step indicator shows Content (active, step 2)",
-        "Generation state: 'Generate Content' button, progress bar with per-post pipeline indicator (Brief → Write → Check → Done), per-post status rows with View/Inspect actions",
-        "Polls every 3s while generating via useBlogContentStatus hook",
-        "Review state (after generation): two tabs 'Needs Review' / 'Approved' with table showing topic keyword, word count, QA status (pass/fail), content approval toggle, Edit link",
-        "Edit link navigates to /blogs/[blogId]/content/[postId] (content editor)",
-        "'Approve All Ready' button approves all QA-passed posts",
-        "After all content generated, auto-trigger link planning (same pattern as cluster content page)",
-        "Navigation: '← Back' to keywords, 'Continue →' to links/export",
-        "Follow content generation page pattern from frontend/src/app/projects/[id]/clusters/[clusterId]/content/page.tsx"
-      ],
-      "priority": 2,
-      "passes": true,
-      "notes": "This page is a near-copy of the cluster content page. The main structural difference: it queries BlogPost records instead of CrawledPage+PageContent. The pipeline indicator, polling, tabs, and approval flow are identical patterns. Reference the PipelineIndicator (lines 168-230), PageRow (lines 267-353), and ReviewTable (lines 374-537) from the cluster content page.",
-      "completionNotes": "Completed by agent"
-    },
-    {
-      "id": "S11-018",
-      "title": "Create blog content editor page (3 fields)",
-      "description": "As a user, I need a rich text editor for blog posts with 3 fields (title, meta description, content), QA sidebar, and auto-save.",
-      "acceptanceCriteria": [
-        "Create frontend/src/app/projects/[id]/blogs/[blogId]/content/[postId]/page.tsx",
-        "Two-column layout: editor (65%) + sidebar (35%)",
-        "Editor has 3 fields (NOT 4 — no top_description): Page Title (input, 70 char counter), Meta Description (textarea, 160 char counter), Content (ContentEditorWithSource Lexical editor with HTML source toggle)",
-        "Content field shows word count + heading count footer: 'X words · Y H2 · Z H3'",
-        "Highlight toggle controls for keyword, LSI, trope highlighting (reuse HighlightPlugin)",
-        "Sidebar: QualityStatusCard (pass/fail checks), ContentStatsCard (word count, headings, keyword density), LsiTermsCard (LSI term usage), HeadingOutlineCard (H2/H3 structure)",
-        "Auto-save on blur with dirty field tracking (same pattern as existing editor)",
-        "Bottom action bar: auto-save status, 'Re-run Checks' button, 'Save Draft' button, 'Approve' button",
-        "Approve button navigates back to content list",
-        "Follow editor pattern from frontend/src/app/projects/[id]/clusters/[clusterId]/content/[pageId]/page.tsx (adapt from 4 fields to 3)"
-      ],
-      "priority": 2,
-      "passes": true,
-      "notes": "This is the existing content editor with one field removed (top_description). The ContentEditorWithSource component, HighlightPlugin, ToolbarPlugin, and all sidebar components are reused from existing code in frontend/src/components/content-editor/. The auto-save logic (lines 700-761 of existing editor) needs minor adaptation for 3 fields instead of 4. QA results come from BlogPost.qa_results instead of PageContent.qa_results.",
-      "completionNotes": "Completed by agent"
-    },
-    {
-      "id": "S11-019",
-      "title": "Create blog link planning and link map pages",
-      "description": "As a user, I need to trigger link planning for blog posts and view the resulting link map.",
-      "acceptanceCriteria": [
-        "Create frontend/src/app/projects/[id]/blogs/[blogId]/links/page.tsx — link planning trigger page",
-        "Prerequisites checklist: all keywords approved, all content generated",
-        "'Plan & Inject Links' button (disabled if prerequisites not met)",
-        "Progress indicator during planning (4 steps: Building graph → Selecting targets → Injecting links → Validating)",
-        "Link rules card explaining blog-specific rules (2-4 links to cluster pages, 1-2 to sibling blogs, siloed)",
-        "Create frontend/src/app/projects/[id]/blogs/[blogId]/links/map/page.tsx — link map visualization",
-        "Two sections: Cluster Pages (link targets, showing inbound counts) and Blog Posts (showing outbound links with anchor text and target)",
-        "Stats header: total links, total posts, avg links/post",
-        "'Re-plan Links' button for re-planning",
-        "Follow link planning pattern from cluster links page at frontend/src/app/projects/[id]/clusters/[clusterId]/links/page.tsx and links/map/page.tsx"
-      ],
-      "priority": 2,
-      "passes": true,
-      "notes": "These pages are structural copies of the cluster link pages. The blog link map has a different visual structure: cluster pages shown as 'targets' at the top, blog posts shown below with their outbound links. This makes the silo relationship clear — blogs link UP to cluster pages and sideways to sibling blogs.",
-      "completionNotes": "Completed by agent"
-    },
-    {
-      "id": "S11-020",
-      "title": "Create blog HTML export page",
-      "description": "As a user, I need to export blog posts as clean HTML to paste into Shopify's blog editor.",
-      "acceptanceCriteria": [
-        "Create frontend/src/app/projects/[id]/blogs/[blogId]/export/page.tsx",
-        "Step indicator shows Export (active, step 5)",
-        "Header: 'Export Blog Posts' + subtitle 'Copy HTML to paste into Shopify, or download as files'",
-        "Show count: 'Ready to export: X of Y posts approved'",
-        "List of approved blog posts, each as a card showing: keyword, URL slug, word count, title, meta description (truncated)",
-        "Per-post actions: 'Copy HTML' button (copies clean HTML body to clipboard via navigator.clipboard.writeText), 'Download .html' button (triggers file download)",
-        "'Copy HTML' shows 'Copied!' toast on success (2s timeout), button icon changes to checkmark briefly",
-        "Bottom bar: '← Back' button, 'Copy All HTML' button (copies all posts concatenated with <!-- POST: keyword --> separators)",
-        "Unapproved posts shown grayed out at bottom",
-        "This is NOT Matrixify CSV — it's HTML for Shopify blog editor"
-      ],
-      "priority": 2,
-      "passes": true,
-      "notes": "This is the only genuinely NEW UI in Phase 11. The clipboard pattern exists in PromptInspector.tsx (CopyButton component, lines 127-155) — reuse that pattern. For file download, create a Blob with type 'text/html' and trigger download via hidden anchor element (same pattern as the existing CSV export but with HTML content type). The export cards should show title and meta as copyable text fields above the action buttons.",
-      "completionNotes": "Completed by agent"
-    },
-    {
-      "id": "S11-021",
-      "title": "Write frontend component tests",
-      "description": "As a developer, I need tests for blog UI components to ensure they render and behave correctly.",
-      "acceptanceCriteria": [
-        "Tests for useBlogs hooks: query/mutation behavior, polling, cache invalidation",
-        "Tests for project detail Blogs section: renders campaign cards, empty state, status badges",
-        "Tests for campaign creation page: form validation, cluster dropdown filtering, progress animation",
-        "Tests for keywords step: table rendering, inline editing, approve/bulk-approve",
-        "Tests for content generation page: progress display, tab switching, approve flow",
-        "Tests for content editor page: 3-field layout, auto-save, sidebar rendering",
-        "Tests for export page: clipboard copy, download trigger, card rendering",
-        "All tests pass: cd frontend && npm test",
-        "Minimum 40 frontend test cases"
-      ],
-      "priority": 3,
-      "passes": true,
-      "notes": "Follow existing test patterns in frontend/src/__tests__/. Mock API calls and TanStack Query. Use renderHook for hook tests, render for component tests. The clipboard API (navigator.clipboard.writeText) needs to be mocked in tests.",
-      "completionNotes": "Completed by agent"
-    },
-    {
-      "id": "S11-098",
+      "id": "S12-016",
       "title": "Update V2_REBUILD_PLAN.md",
       "description": "As a developer, I need to update the plan status so that progress is tracked.",
       "acceptanceCriteria": [
-        "Mark all Phase 11 checkboxes as [x] complete in V2_REBUILD_PLAN.md",
-        "Update Current Status table: Phase=11 Blog Planning & Writing (COMPLETE), Last Session=today's date, Next Action=Phase 12: Authentication",
-        "Add new row to Session Log table with date, completed items summary, next up"
+        "Mark all Phase 12 checkboxes as [x] complete in V2_REBUILD_PLAN.md",
+        "Update Current Status table: Phase=12 Auth complete, Last Session=today's date, Next Action=Phase 13 (Polish) or Phase 15 (GEO) or Phase 16 (Migration)",
+        "Add new row to Session Log table with date, completed items, next up"
       ],
       "priority": 3,
-      "passes": true,
-      "notes": "This task maintains our planning discipline.",
-      "completionNotes": "Completed by agent"
+      "passes": false,
+      "notes": "This task maintains our planning discipline."
     },
     {
-      "id": "S11-099",
-      "title": "Verify Phase 11 completion",
-      "description": "As a developer, I need to verify all Phase 11 criteria are met before moving on.",
+      "id": "S12-017",
+      "title": "Verify Phase 12 completion",
+      "description": "As a developer, I need to verify the full auth flow works end-to-end.",
       "acceptanceCriteria": [
-        "All backend tests pass: cd backend && python -m pytest tests/ -x",
-        "All frontend tests pass: cd frontend && npm test",
-        "Manual verification: full blog flow works end-to-end (create campaign from cluster → approve topics → generate content → edit in Lexical → plan links → view link map → copy HTML to clipboard)",
-        "Blog export produces clean HTML (no editor artifacts, links preserved)",
-        "Blog linking is siloed (only cluster pages + sibling blogs, never outside silo)",
-        "Project detail page shows blog campaigns section",
-        "Git commit created with message: feat(phase-11): Add blog planning & writing",
+        "Unauthenticated user visiting / is redirected to /auth/sign-in",
+        "Sign-in page renders with Google button and tropical oasis styling",
+        "Google OAuth sign-in completes and redirects to dashboard",
+        "Header shows user name and sign-out button after sign-in",
+        "API calls include Authorization header and succeed (200 responses)",
+        "Backend returns 401 for requests without valid Bearer token (when AUTH_REQUIRED=true)",
+        "Sign-out clears session and redirects to /auth/sign-in",
+        "Health check at /health works without auth",
         "No uncommitted changes remain"
       ],
       "priority": 3,
-      "passes": true,
-      "notes": "Do not proceed to Phase 12 until this passes. The critical path: campaign creation, content generation, and HTML export.",
-      "completionNotes": "Completed by agent"
+      "passes": false,
+      "notes": "For local testing, set AUTH_REQUIRED=false on backend to bypass DB session validation. Test the full flow in staging after deploying with real Neon Auth credentials. Do not proceed until this passes."
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-14T23:17:15.963Z"
+    "updatedAt": "2026-02-19T21:21:32.885Z"
   }
 }
