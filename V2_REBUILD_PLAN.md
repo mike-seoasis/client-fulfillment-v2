@@ -8,10 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Phase** | 14 - Reddit Marketing (14a+14b+14c complete, 14c UX polish done) |
-| **Slice** | Phase 14c UX polish complete |
-| **Last Session** | 2026-02-17 |
-| **Next Action** | Phase 14d: Comment Queue + Approval |
+| **Phase** | 14 - Reddit Marketing — **COMPLETE** (14a–14f done, 14g subreddit research done, hardening done) |
+| **Slice** | Phase 14 wrap-up: brand config hardening, scoring overhaul, E2E verified |
+| **Last Session** | 2026-02-19 |
+| **Next Action** | Phase 12 (Auth), 13 (Polish), 15 (GEO), or 16 (Migration) — user to decide |
 | **Auth Decision** | Neon Auth (free tier, 60K MAU, Better Auth SDK) — see Phase 12 |
 | **Backup Decision** | Neon free tier (PITR) + Railway pg_dump template → Cloudflare R2 — see Phase 10 |
 | **Database** | Neon PostgreSQL (project: `spring-fog-49733273`, region: `aws-us-east-1`) |
@@ -52,6 +52,9 @@
 | 2026-02-17 | Phase 14b polish: Auto-refresh posts after discovery completes (useRef transition detection), moved discovery section above settings, broad reddit-wide search in addition to subreddit-scoped searches, filter tabs persist when current filter yields 0 results, differentiated empty states ("no posts match filter" vs "no posts yet"), improved approve/reject button UX (active state highlighting vs gray clickable), auto-save settings before triggering discovery. | Phase 14c: Comment Generation |
 | 2026-02-17 | Phase 14c complete: Comment generation service (reddit_comment_generation.py) with 10 promotional + 11 organic approach types, prompt builder using BrandConfig v2_schema (voice/vocabulary/brand_foundation), generate_comment (Claude Sonnet temp 0.7, max_tokens 500, draft status, generation_metadata with generated_at), generate_batch (background task with in-memory progress tracking), 4 Pydantic schemas (GenerateCommentRequest, BatchGenerateRequest, GenerationStatusResponse, RedditCommentUpdateRequest), 6 API endpoints (POST single generate 201, POST batch generate 202 with 409 conflict, GET generation status, GET comments with filters, PATCH comment body for drafts), frontend API client (5 functions + 6 types), 5 TanStack Query hooks (useComments, useGenerationStatus with 2s polling, useGenerateComment, useGenerateBatch, useUpdateComment), UI: per-post Generate/Regenerate buttons, batch Generate Comments button with progress, comments section with approach type badges + promotional/organic indicators + status badges, inline draft editing with Reset to original, empty state. Code review found and fixed 3 issues (missing PATCH endpoint, missing generated_at in metadata, missing selectinload for post relationship). Built with team of 4 agents (backend-dev, frontend-dev, code-reviewer, team-lead fixes). | Phase 14c UX polish |
 | 2026-02-17 | Phase 14c UX polish: Restructured comment generation UX (checkboxes in posts table for batch selection, Generate Comments button in filter toolbar with selected count, removed separate Generated Comments section, comments shown inline below posts table), delete comment feature (backend DELETE endpoint with draft-only guard, frontend API + useDeleteComment hook with optimistic cache removal, two-step confirm/cancel UI), fixed comment generation prompt builder (v2_schema key mapping was wrong — voice_dimensions not voice_characteristics, vocabulary.power_words not preferred_terms, brand_foundation.company_overview.company_name not brand_name — all falling through to "the product"), rewrote prompt with sandwich technique, anti-promotional rules, example phrasings with actual brand name, rich brand context from v2_schema (products, USP, differentiators, voice summary, formality, vocabulary preferences). | Phase 14d: Comment Queue + Approval |
+| 2026-02-18 | Phase 14f Navigation Restructure: dual AI SEO + Reddit dashboards (Header rename, Reddit sub-nav with Projects/Accounts/Comments tabs, Reddit project cards grid, Reddit project detail page `/reddit/[id]`), `reddit_only` boolean flag on Project model (migration 0028, backend filtering in `list_projects`, frontend passes flag in Reddit wizard flow), bidirectional setup buttons ("Set up Reddit" on SEO detail, "Set up AI SEO" on Reddit detail), wizard `?flow=reddit` support (title/back/redirect changes), Reddit project detail enhancements (two-step delete, Brand Details button, project name header). Phase 14d committed (cross-project comment queue at `/reddit/comments`, 1008 lines). | Phase 14e: CrowdReply Integration |
+| 2026-02-18 | Phase 14e complete: CrowdReply integration with 3-layer mock strategy (mock client, dry-run, webhook simulator). Backend: async CrowdReply client (real + mock + dry-run modes with circuit breaker), reddit posting service with background submission and webhook handling, 5 new API endpoints (submit 202, status poll, webhook receiver, balance, webhook simulator), 6 new schemas, 4 config fields, lifespan registration. Frontend: balance indicator with low-balance warning, submit button with confirmation dialog ($10/comment estimate), 7-status StatusBadge (submitting with pulsing dot, posted with external link, failed, mod_removed), Posted tab, auto-polling during submissions (5s refetchInterval), transition toast notifications, unapprove/move-to-draft for approved+rejected comments. Tested end-to-end with mock client: submit 5 → simulate 3 posted + 1 cancelled + 1 mod-removed. | Phase 14g: Reddit Brand Config |
+| 2026-02-19 | Phase 14g complete: Subreddit research via Perplexity (auto-populate target_subreddits during brand config generation, ported from old Reddit Scraper App). Phase 14h: Brand config hardening — parallel-batched generation via asyncio.gather (7 sequential batches, 2 with concurrent sections, ~5 min total vs ~8+ sequential), per-section retry logic with MAX_SECTION_RETRIES, SECTION_CONFIG for per-section temperature/max_tokens/timeout tuning, SECTION_CONTEXT_DEPS to limit prompt bloat, _extract_json_from_response helper, trust_elements prompt rewrite (proactive inference vs permissive nulls), customer_quotes policy (real quotes only, no AI fabrication). Phase 14i: Post scoring overhaul — posts < 5/10 discarded entirely (not stored), 5-7 marked "low_relevance", 8-10 marked "relevant", removed "irrelevant" status, reject button → "skipped", cleaner dashboard. Fixed duplicate CrowdReplyTask bug in webhook handler (MultipleResultsFound → scalars().first()). Full E2E Reddit flow verified: config → discover 190 posts → approve top 5 → generate 5 comments → bulk approve → submit to CrowdReply → webhook simulation (3 posted, 1 cancelled, 1 mod_removed). Phase 14 effectively complete (14j seeded conversations is stretch). | Phase 12 (Auth), 13 (Polish), 15 (GEO), or 16 (Migration) |
 
 ---
 
@@ -365,11 +368,14 @@
 - [x] **14a:** Reddit Data Foundation (5 DB tables, account pool CRUD, project config CRUD)
 - [x] **14b:** Post Discovery Pipeline (SERP API + Claude filtering)
 - [x] **14c:** Comment Generation (AI comments with brand context, "sandwich" technique)
-- [ ] **14d:** Comment Queue + Approval (keyboard-driven power-user review interface)
-- [ ] **14e:** CrowdReply Integration (auto-submit + webhook status tracking)
-- [ ] **14f:** Reddit Dashboard + Project Integration (cross-project stats, nav integration)
-- [ ] **14g:** Seeded Conversations (stretch — orchestrated question + answer posts)
-- [ ] **Verify:** Full flow — configure project → discover posts → generate comments → approve → submit to CrowdReply → posted
+- [x] **14d:** Comment Queue + Approval (cross-project comment review at `/reddit/comments`)
+- [x] **14e:** CrowdReply Integration (auto-submit + webhook status tracking)
+- [x] **14f:** Navigation Restructure (dual AI SEO + Reddit dashboards, `reddit_only` flag, bidirectional setup buttons)
+- [x] **14g:** Subreddit Research (auto-populate target subreddits via Perplexity during brand config generation)
+- [x] **14h:** Brand Config Hardening (parallel batches, retries, per-section tuning, trust_elements prompt, customer_quotes policy)
+- [x] **14i:** Post Scoring Overhaul (discard < 5/10, low_relevance 5-7, relevant 8+, remove irrelevant status)
+- [ ] **14j:** Seeded Conversations (stretch — orchestrated question + answer posts)
+- [x] **Verify:** Full E2E flow — configure → discover 190 posts → approve → generate comments → submit to CrowdReply → webhook simulation (3 posted, 1 cancelled, 1 mod_removed)
 
 ### Phase 15: Explore GEO Add-On Opportunities
 
