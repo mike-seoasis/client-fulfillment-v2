@@ -74,6 +74,7 @@ logger = get_logger(__name__)
 
 reddit_router = APIRouter(prefix="/reddit", tags=["Reddit"])
 reddit_project_router = APIRouter(prefix="/projects", tags=["Reddit"])
+webhook_router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
 
 
 @reddit_router.get(
@@ -1197,8 +1198,8 @@ async def get_submit_status(
     )
 
 
-@reddit_router.post(
-    "/webhooks/crowdreply",
+@webhook_router.post(
+    "/crowdreply",
     status_code=status.HTTP_200_OK,
 )
 async def crowdreply_webhook(

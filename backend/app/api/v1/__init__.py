@@ -10,6 +10,7 @@ from app.api.v1.files import router as files_router
 from app.api.v1.links import router as links_router
 from app.api.v1.projects import router as projects_router
 from app.api.v1.reddit import reddit_project_router, reddit_router
+from app.api.v1.reddit import webhook_router as webhook_router
 from app.api.v1.wordpress import router as wordpress_router
 from app.core.auth import get_current_user
 

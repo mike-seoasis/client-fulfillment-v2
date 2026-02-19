@@ -204,3 +204,19 @@ after each iteration and it's included in prompts for context.
   - When a dependency function is used as a router-level dependency, all its parameters must be self-resolving (either special types like `Request` or have `Depends(...)` defaults). A bare `db: AsyncSession` without `Depends(get_session)` works when the route also declares `db`, but fails as a router-level dependency since FastAPI can't resolve it
   - isort (via ruff) groups `app.api.*` and `app.core.*` together alphabetically — `app.api` imports must come before `app.core` imports
 ---
+
+## 2026-02-19 - S12-015
+- Moved CrowdReply webhook endpoint outside the authenticated `/api/v1` router
+- Created `webhook_router` (APIRouter with `prefix="/webhooks"`) in `backend/app/api/v1/reddit.py`
+- Moved `POST /webhooks/crowdreply` handler from `reddit_router` to `webhook_router`
+- Mounted `webhook_router` directly on the app in `main.py` (no auth dependency)
+- Webhook simulator endpoint (`POST /api/v1/reddit/webhooks/crowdreply/simulate`) stays inside authenticated router
+- Old URL: `POST /api/v1/reddit/webhooks/crowdreply` → New URL: `POST /webhooks/crowdreply`
+- Files changed:
+  - `backend/app/api/v1/reddit.py` (modified — added `webhook_router`, moved webhook handler to it)
+  - `backend/app/api/v1/__init__.py` (modified — re-export `webhook_router`)
+  - `backend/app/main.py` (modified — import and mount `webhook_router` on app directly)
+- **Learnings:**
+  - When re-exporting a symbol from `__init__.py` that isn't used locally, ruff F401 requires explicit re-export syntax: `from module import thing as thing` (redundant alias signals intentional re-export)
+  - Mounting a router directly on `app` via `app.include_router()` bypasses any router-level dependencies on `api_v1_router` — clean way to exempt specific routes from auth
+---

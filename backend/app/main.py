@@ -31,6 +31,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.v1 import router as api_v1_router
+from app.api.v1.reddit import webhook_router
 from app.core.config import get_settings
 from app.core.database import db_manager
 from app.core.logging import get_logger, setup_logging
@@ -605,6 +606,9 @@ def create_app() -> FastAPI:
 
     # Include API routers
     app.include_router(api_v1_router)
+
+    # Mount webhook router directly on app (no auth required - external callbacks)
+    app.include_router(webhook_router)
 
     return app
 

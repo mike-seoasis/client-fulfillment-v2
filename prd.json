@@ -239,8 +239,9 @@
         "Export webhook_router from backend/app/api/v1/reddit.py and import/mount in main.py"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "The webhook endpoint currently lives at POST /api/v1/reddit/webhooks/crowdreply. After this change it moves to POST /webhooks/crowdreply. The webhook has its own verification via crowdreply_webhook_secret. Update any CrowdReply webhook URL configuration if needed."
+      "passes": true,
+      "notes": "The webhook endpoint currently lives at POST /api/v1/reddit/webhooks/crowdreply. After this change it moves to POST /webhooks/crowdreply. The webhook has its own verification via crowdreply_webhook_secret. Update any CrowdReply webhook URL configuration if needed.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S12-016",
@@ -276,6 +277,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-19T21:39:54.851Z"
+    "updatedAt": "2026-02-19T21:41:51.675Z"
   }
 }
