@@ -70,3 +70,14 @@ after each iteration and it's included in prompts for context.
   - Session cookie name is `__Secure-neon-auth.session_token` (prefix `__Secure-neon-auth` + `.session_token`). Checking cookie presence is sufficient for the redirect-from-login case (no need for full session validation there)
   - No new typecheck errors introduced. Pre-existing test file errors remain.
 ---
+
+## 2026-02-19 - S12-012
+- Added `auth_required: bool = Field(default=True)` to Settings class in `backend/app/core/config.py`
+- Placed in the `# Application` section alongside `app_name`, `debug`, `environment`
+- Description: "Require authentication for API requests (disable for local development)"
+- Defaults to `True` (production-safe); set `AUTH_REQUIRED=false` env var to bypass auth in local dev
+- Files changed: `backend/app/core/config.py`
+- **Learnings:**
+  - Settings class uses `case_sensitive=False` so env var `AUTH_REQUIRED` maps to `auth_required` field automatically
+  - `_env_file=None` can be passed to Settings constructor in tests to avoid loading `.env`
+---

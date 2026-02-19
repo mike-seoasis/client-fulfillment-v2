@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     app_version: str = Field(default="2.0.0")
     debug: bool = Field(default=False)
     environment: str = Field(default="development")
+    auth_required: bool = Field(
+        default=True,
+        description="Require authentication for API requests (disable for local development)",
+    )
 
     # Server - PORT is set dynamically by Railway
     port: int = Field(default=8000, description="Port to bind to (Railway sets this)")
