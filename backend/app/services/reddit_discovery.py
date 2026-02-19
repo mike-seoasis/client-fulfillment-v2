@@ -311,11 +311,11 @@ Respond ONLY with valid JSON in this exact format:
 {"score": N, "reasoning": "brief explanation", "intent": "research|pain_point|competitor|question|general"}
 
 Guidelines:
-- Score 0-3: Unrelated to the brand, purely negative/ranting, promotional/spam
-- Score 4-6: Somewhat relevant but not a clear opportunity
-- Score 7-10: Strong opportunity — asking for recommendations, has a problem the brand could solve, comparing products
-- REJECT (low score) if: unrelated to brand's niche, purely negative rant, obvious spam
-- ACCEPT (high score) if: asking for product recommendations, describing a problem the brand solves, comparing competitors"""
+- Score 0-4: Unrelated to the brand, purely negative/ranting, promotional/spam, no opportunity (will be discarded)
+- Score 5-7: Somewhat relevant but not a clear opportunity (low relevance, human review)
+- Score 8-10: Strong opportunity — asking for recommendations, has a problem the brand could solve, comparing products
+- Give LOW scores if: unrelated to brand's niche, purely negative rant, obvious spam, no engagement opportunity
+- Give HIGH scores if: asking for product recommendations, describing a problem the brand solves, comparing competitors"""
 
 
 @dataclass
@@ -325,23 +325,23 @@ class ScoringResult:
     score: float
     reasoning: str
     intent: str
-    filter_status: str  # "relevant", "irrelevant", or "pending"
+    filter_status: str | None  # "relevant", "low_relevance", or None (discard)
     raw_response: dict[str, Any] | None = None
     error: str | None = None
 
 
-def _determine_filter_status(score: float) -> str:
+def _determine_filter_status(score: float) -> str | None:
     """Map a 0-10 score to a filter status.
 
-    - score < 4: irrelevant (auto-reject)
-    - 4 <= score <= 6: pending (human review)
-    - score >= 7: relevant (auto-approve)
+    - score < 5: None (discard — not stored in DB)
+    - 5 <= score <= 7: low_relevance (human review)
+    - score >= 8: relevant (high-quality opportunity)
     """
-    if score < 4:
-        return "irrelevant"
-    if score >= 7:
+    if score < 5:
+        return None  # discard
+    if score >= 8:
         return "relevant"
-    return "pending"
+    return "low_relevance"
 
 
 def _build_scoring_prompt(
@@ -421,7 +421,7 @@ async def score_post_with_claude(
             score=0.0,
             reasoning="Claude scoring failed",
             intent="general",
-            filter_status="pending",
+            filter_status=None,
             error=result.error,
         )
 
@@ -468,7 +468,7 @@ async def score_post_with_claude(
             score=0.0,
             reasoning="Failed to parse scoring response",
             intent="general",
-            filter_status="pending",
+            filter_status=None,
             error=f"Parse error: {e}",
         )
 
@@ -520,7 +520,7 @@ async def score_posts_batch(
                     score=0.0,
                     reasoning=f"Scoring error: {e}",
                     intent="general",
-                    filter_status="pending",
+                    filter_status=None,
                     error=str(e),
                 )
             )
@@ -538,8 +538,8 @@ async def score_posts_batch(
             "total_posts": total,
             "scored": len(results),
             "relevant": sum(1 for r in results if r.filter_status == "relevant"),
-            "irrelevant": sum(1 for r in results if r.filter_status == "irrelevant"),
-            "pending": sum(1 for r in results if r.filter_status == "pending"),
+            "low_relevance": sum(1 for r in results if r.filter_status == "low_relevance"),
+            "discarded": sum(1 for r in results if r.filter_status is None),
         },
     )
 
@@ -645,8 +645,14 @@ async def store_discovered_posts(
     from sqlalchemy import case
 
     stored = 0
+    skipped = 0
 
     for post, intent, scoring in zip(posts, intent_results, scoring_results):
+        # Skip posts that scored below threshold (filter_status=None means discard)
+        if scoring.filter_status is None:
+            skipped += 1
+            continue
+
         # Determine primary intent (first from keyword classification,
         # enriched by Claude's assessment)
         primary_intent = intent.intents[0] if intent.intents else "general"
@@ -655,7 +661,7 @@ async def store_discovered_posts(
             primary_intent = scoring.intent
 
         # Normalize relevance_score from 0-10 to 0.0-1.0 for the DB field
-        relevance_score = scoring.score / 10.0 if scoring.score else None
+        relevance_score = scoring.score / 10.0 if scoring.score is not None else None
 
         values = {
             "project_id": project_id,
@@ -698,7 +704,9 @@ async def store_discovered_posts(
                 "updated_at": datetime.now(UTC),
                 "filter_status": case(
                     (
-                        RedditPost.__table__.c.filter_status == "pending",
+                        RedditPost.__table__.c.filter_status.in_(
+                            ["pending", "low_relevance"]
+                        ),
                         stmt.excluded.filter_status,
                     ),
                     else_=RedditPost.__table__.c.filter_status,
@@ -719,7 +727,12 @@ async def store_discovered_posts(
 
     logger.info(
         "Stored discovered posts",
-        extra={"project_id": project_id, "stored": stored, "total": len(posts)},
+        extra={
+            "project_id": project_id,
+            "stored": stored,
+            "discarded": skipped,
+            "total": len(posts),
+        },
     )
 
     return stored

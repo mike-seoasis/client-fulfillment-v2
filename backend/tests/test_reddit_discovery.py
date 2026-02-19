@@ -367,20 +367,20 @@ class TestDeduplication:
 class TestFilterStatusDetermination:
     """Test score-to-filter-status mapping."""
 
-    def test_low_score_irrelevant(self):
-        """Score < 4 maps to 'irrelevant'."""
-        assert _determine_filter_status(0) == "irrelevant"
-        assert _determine_filter_status(3.9) == "irrelevant"
+    def test_low_score_discard(self):
+        """Score < 5 returns None (discard)."""
+        assert _determine_filter_status(0) is None
+        assert _determine_filter_status(4.9) is None
 
-    def test_mid_score_pending(self):
-        """Score 4-6 maps to 'pending'."""
-        assert _determine_filter_status(4) == "pending"
-        assert _determine_filter_status(5) == "pending"
-        assert _determine_filter_status(6) == "pending"
+    def test_mid_score_low_relevance(self):
+        """Score 5-7 maps to 'low_relevance'."""
+        assert _determine_filter_status(5) == "low_relevance"
+        assert _determine_filter_status(6) == "low_relevance"
+        assert _determine_filter_status(7) == "low_relevance"
 
     def test_high_score_relevant(self):
-        """Score >= 7 maps to 'relevant'."""
-        assert _determine_filter_status(7) == "relevant"
+        """Score >= 8 maps to 'relevant'."""
+        assert _determine_filter_status(8) == "relevant"
         assert _determine_filter_status(10) == "relevant"
 
 
@@ -668,7 +668,7 @@ class TestListPostsAPI:
                 intent="competitor",
                 intent_categories=["competitor", "research"],
                 relevance_score=0.3,
-                filter_status="irrelevant",
+                filter_status="low_relevance",
                 discovered_at=now,
             ),
         ]
@@ -797,14 +797,14 @@ class TestUpdatePostAPI:
         async_client: AsyncClient,
         project_and_post: tuple[str, RedditPost],
     ):
-        """PATCH post with filter_status 'irrelevant' rejects it."""
+        """PATCH post with filter_status 'skipped' skips it."""
         project_id, post = project_and_post
         resp = await async_client.patch(
             f"/api/v1/projects/{project_id}/reddit/posts/{post.id}",
-            json={"filter_status": "irrelevant"},
+            json={"filter_status": "skipped"},
         )
         assert resp.status_code == 200
-        assert resp.json()["filter_status"] == "irrelevant"
+        assert resp.json()["filter_status"] == "skipped"
 
     async def test_update_nonexistent_post_returns_404(
         self, async_client: AsyncClient
@@ -879,7 +879,7 @@ class TestBulkPostActionAPI:
         async_client: AsyncClient,
         project_and_posts: tuple[str, list[RedditPost]],
     ):
-        """Bulk reject updates all specified posts."""
+        """Bulk skip updates all specified posts."""
         project_id, posts = project_and_posts
         post_ids = [p.id for p in posts]
 
@@ -887,7 +887,7 @@ class TestBulkPostActionAPI:
             f"/api/v1/projects/{project_id}/reddit/posts/bulk-action",
             json={
                 "post_ids": post_ids,
-                "filter_status": "irrelevant",
+                "filter_status": "skipped",
             },
         )
         assert resp.status_code == 200
@@ -922,7 +922,7 @@ class TestPostFilterStatusEnum:
     def test_values(self):
         assert PostFilterStatus.PENDING.value == "pending"
         assert PostFilterStatus.RELEVANT.value == "relevant"
-        assert PostFilterStatus.IRRELEVANT.value == "irrelevant"
+        assert PostFilterStatus.LOW_RELEVANCE.value == "low_relevance"
         assert PostFilterStatus.SKIPPED.value == "skipped"
 
     def test_member_count(self):

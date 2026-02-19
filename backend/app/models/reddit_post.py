@@ -5,7 +5,7 @@ RedditPost stores Reddit threads discovered via SERP searches:
 - reddit_post_id: Native Reddit post ID (t3_xxx)
 - subreddit/title/url: Post metadata
 - intent/relevance_score: AI classification results
-- filter_status: Workflow status (pending → relevant/irrelevant/skipped)
+- filter_status: Workflow status (pending → relevant/low_relevance/skipped)
 - discovered_at: When SERP returned the result (distinct from created_at)
 
 UniqueConstraint on (project_id, url) prevents duplicate posts per project.
@@ -40,7 +40,7 @@ class PostFilterStatus(str, Enum):
 
     PENDING = "pending"
     RELEVANT = "relevant"
-    IRRELEVANT = "irrelevant"
+    LOW_RELEVANCE = "low_relevance"
     SKIPPED = "skipped"
 
 

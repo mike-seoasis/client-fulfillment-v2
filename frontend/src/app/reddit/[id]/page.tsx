@@ -360,8 +360,7 @@ function PromotionalBadge({ isPromotional }: { isPromotional: boolean }) {
 const STATUS_TABS = [
   { value: '', label: 'All' },
   { value: 'relevant', label: 'Relevant' },
-  { value: 'irrelevant', label: 'Irrelevant' },
-  { value: 'pending', label: 'Pending' },
+  { value: 'low_relevance', label: 'Low Relevance' },
 ] as const;
 
 const TIME_RANGE_OPTIONS = [
@@ -543,9 +542,10 @@ function PostsTable({
                 <td className="py-3 px-3">
                   <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-sm border ${
                     post.filter_status === 'relevant' ? 'bg-palm-50 text-palm-700 border-palm-200' :
-                    post.filter_status === 'irrelevant' ? 'bg-coral-50 text-coral-600 border-coral-200' :
+                    post.filter_status === 'skipped' ? 'bg-coral-50 text-coral-600 border-coral-200' :
+                    post.filter_status === 'low_relevance' ? 'bg-sand-100 text-warm-gray-600 border-sand-300' :
                     'bg-cream-100 text-warm-gray-600 border-cream-300'
-                  }`}>{post.filter_status}</span>
+                  }`}>{post.filter_status === 'low_relevance' ? 'Low Relevance' : post.filter_status}</span>
                 </td>
                 <td className="py-3 px-3">
                   {isGenerating ? <span className="inline-flex items-center gap-1 text-xs text-lagoon-600"><SpinnerIcon className="w-3 h-3" /> Generating...</span>
@@ -563,7 +563,7 @@ function PostsTable({
                     <button type="button" onClick={() => onApprove(post.id)} disabled={post.filter_status === 'relevant'} className={`p-1.5 rounded-sm transition-colors ${post.filter_status === 'relevant' ? 'bg-palm-100 text-palm-600 cursor-default' : 'text-warm-gray-400 hover:text-palm-600 hover:bg-palm-50'}`} aria-label={post.filter_status === 'relevant' ? 'Approved' : 'Approve post'}>
                       <CheckIcon className="w-4 h-4" />
                     </button>
-                    <button type="button" onClick={() => onReject(post.id)} disabled={post.filter_status === 'irrelevant'} className={`p-1.5 rounded-sm transition-colors ${post.filter_status === 'irrelevant' ? 'bg-coral-100 text-coral-600 cursor-default' : 'text-warm-gray-400 hover:text-coral-600 hover:bg-coral-50'}`} aria-label={post.filter_status === 'irrelevant' ? 'Rejected' : 'Reject post'}>
+                    <button type="button" onClick={() => onReject(post.id)} disabled={post.filter_status === 'skipped'} className={`p-1.5 rounded-sm transition-colors ${post.filter_status === 'skipped' ? 'bg-coral-100 text-coral-600 cursor-default' : 'text-warm-gray-400 hover:text-coral-600 hover:bg-coral-50'}`} aria-label={post.filter_status === 'skipped' ? 'Skipped' : 'Skip post'}>
                       <XCircleIcon className="w-4 h-4" />
                     </button>
                   </div>
@@ -978,7 +978,7 @@ export default function RedditProjectDetailPage() {
             <EmptyState icon={<SearchIcon className="w-10 h-10" />} title="No posts discovered yet" description={existingConfig && (existingConfig.search_keywords?.length ?? 0) > 0 ? 'Click "Discover Posts" to search for relevant Reddit threads.' : 'Add search keywords in the settings below and save, then trigger discovery.'} action={existingConfig && (existingConfig.search_keywords?.length ?? 0) > 0 ? <Button size="sm" onClick={handleDiscover} disabled={triggerDiscovery.isPending || discoveryStatus?.status === 'searching' || discoveryStatus?.status === 'scoring' || discoveryStatus?.status === 'storing'}><SearchIcon className="w-4 h-4 mr-1.5" />Discover Posts</Button> : undefined} />
           )
         ) : (
-          <PostsTable posts={posts} onApprove={(postId) => updatePostStatus.mutate({ postId, data: { filter_status: 'relevant' } })} onReject={(postId) => updatePostStatus.mutate({ postId, data: { filter_status: 'irrelevant' } })} onGenerate={handleGenerateComment} generatingPostIds={generatingPostIds} commentsByPostId={commentsByPostId} selectedPostIds={selectedPostIds} onToggleSelect={handleToggleSelect} onToggleSelectAll={handleToggleSelectAll} />
+          <PostsTable posts={posts} onApprove={(postId) => updatePostStatus.mutate({ postId, data: { filter_status: 'relevant' } })} onReject={(postId) => updatePostStatus.mutate({ postId, data: { filter_status: 'skipped' } })} onGenerate={handleGenerateComment} generatingPostIds={generatingPostIds} commentsByPostId={commentsByPostId} selectedPostIds={selectedPostIds} onToggleSelect={handleToggleSelect} onToggleSelectAll={handleToggleSelectAll} />
         )}
       </div>
 

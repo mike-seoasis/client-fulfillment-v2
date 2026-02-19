@@ -17,6 +17,7 @@ import {
   useGenerateBatch,
   useUpdateComment,
   useDeleteComment,
+  useRevertComment,
 } from '@/hooks/useReddit';
 import { Button, Toast, EmptyState } from '@/components/ui';
 import type { RedditDiscoveredPost, RedditCommentResponse, DiscoveryStatus, GenerationStatusResponse } from '@/lib/api';
@@ -336,8 +337,7 @@ function ScoreBadge({ score }: { score: number | null }) {
 const STATUS_TABS = [
   { value: '', label: 'All' },
   { value: 'relevant', label: 'Relevant' },
-  { value: 'irrelevant', label: 'Irrelevant' },
-  { value: 'pending', label: 'Pending' },
+  { value: 'low_relevance', label: 'Low Relevance' },
 ] as const;
 
 // =============================================================================
@@ -513,11 +513,13 @@ function PostsTable({
                   <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-sm border ${
                     post.filter_status === 'relevant'
                       ? 'bg-palm-50 text-palm-700 border-palm-200'
-                      : post.filter_status === 'irrelevant'
+                      : post.filter_status === 'skipped'
                         ? 'bg-coral-50 text-coral-600 border-coral-200'
-                        : 'bg-cream-100 text-warm-gray-600 border-cream-300'
+                        : post.filter_status === 'low_relevance'
+                          ? 'bg-sand-100 text-warm-gray-600 border-sand-300'
+                          : 'bg-cream-100 text-warm-gray-600 border-cream-300'
                   }`}>
-                    {post.filter_status}
+                    {post.filter_status === 'low_relevance' ? 'Low Relevance' : post.filter_status}
                   </span>
                 </td>
                 <td className="py-3 px-3">
@@ -570,14 +572,14 @@ function PostsTable({
                     <button
                       type="button"
                       onClick={() => onReject(post.id)}
-                      disabled={post.filter_status === 'irrelevant'}
+                      disabled={post.filter_status === 'skipped'}
                       className={`p-1.5 rounded-sm transition-colors ${
-                        post.filter_status === 'irrelevant'
+                        post.filter_status === 'skipped'
                           ? 'bg-coral-100 text-coral-600 cursor-default'
                           : 'text-warm-gray-400 hover:text-coral-600 hover:bg-coral-50'
                       }`}
-                      aria-label={post.filter_status === 'irrelevant' ? 'Rejected' : 'Reject post'}
-                      title={post.filter_status === 'irrelevant' ? 'Already rejected' : 'Mark as irrelevant'}
+                      aria-label={post.filter_status === 'skipped' ? 'Skipped' : 'Skip post'}
+                      title={post.filter_status === 'skipped' ? 'Already skipped' : 'Skip this post'}
                     >
                       <XCircleIcon className="w-4 h-4" />
                     </button>
@@ -712,12 +714,14 @@ function CommentCard({
   onSaveEdit,
   onResetBody,
   onDelete,
+  onRevert,
   isSaving,
 }: {
   comment: RedditCommentResponse;
   onSaveEdit: (commentId: string, body: string) => void;
   onResetBody: (commentId: string) => void;
   onDelete: (commentId: string) => void;
+  onRevert: (commentId: string) => void;
   isSaving: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -827,7 +831,16 @@ function CommentCard({
               Reset to original
             </button>
           )}
-          {isDraft && !isEditing && !confirmDelete && (
+          {!isDraft && (
+            <button
+              type="button"
+              onClick={() => onRevert(comment.id)}
+              className="text-xs text-lagoon-600 hover:text-lagoon-800 hover:underline"
+            >
+              Revert to draft
+            </button>
+          )}
+          {!isEditing && !confirmDelete && (
             <button
               type="button"
               onClick={() => setConfirmDelete(true)}
@@ -838,7 +851,7 @@ function CommentCard({
               Delete
             </button>
           )}
-          {isDraft && !isEditing && confirmDelete && (
+          {!isEditing && confirmDelete && (
             <span className="inline-flex items-center gap-2 text-xs">
               <button
                 type="button"
@@ -884,6 +897,7 @@ export default function ProjectRedditConfigPage() {
   const generateBatchMutation = useGenerateBatch(projectId);
   const updateCommentMutation = useUpdateComment(projectId);
   const deleteCommentMutation = useDeleteComment(projectId);
+  const revertCommentMutation = useRevertComment(projectId);
 
   // Track which post IDs are currently generating (single generation)
   const [generatingPostIds, setGeneratingPostIds] = useState<Set<string>>(new Set());
@@ -1178,6 +1192,22 @@ export default function ProjectRedditConfigPage() {
     });
   }, [deleteCommentMutation]);
 
+  // Revert a comment back to draft
+  const handleRevertComment = useCallback((commentId: string) => {
+    revertCommentMutation.mutate(commentId, {
+      onSuccess: () => {
+        setToastMessage('Comment reverted to draft');
+        setToastVariant('success');
+        setShowToast(true);
+      },
+      onError: (err) => {
+        setToastMessage(err.message || 'Failed to revert comment');
+        setToastVariant('error');
+        setShowToast(true);
+      },
+    });
+  }, [revertCommentMutation]);
+
   const isGenerationActive = generationStatus?.status === 'generating';
 
   // Loading
@@ -1401,7 +1431,7 @@ export default function ProjectRedditConfigPage() {
               updatePostStatus.mutate({ postId, data: { filter_status: 'relevant' } })
             }
             onReject={(postId) =>
-              updatePostStatus.mutate({ postId, data: { filter_status: 'irrelevant' } })
+              updatePostStatus.mutate({ postId, data: { filter_status: 'skipped' } })
             }
             onGenerate={handleGenerateComment}
             generatingPostIds={generatingPostIds}
@@ -1430,6 +1460,7 @@ export default function ProjectRedditConfigPage() {
                 onSaveEdit={handleSaveCommentEdit}
                 onResetBody={handleResetCommentBody}
                 onDelete={handleDeleteComment}
+                onRevert={handleRevertComment}
                 isSaving={updateCommentMutation.isPending}
               />
             ))}

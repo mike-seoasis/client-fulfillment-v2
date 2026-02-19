@@ -206,7 +206,7 @@ class PostUpdateRequest(BaseModel):
 
     filter_status: str = Field(
         ...,
-        description="New filter status: 'relevant', 'irrelevant', 'pending', or 'skipped'",
+        description="New filter status: 'relevant', 'low_relevance', 'pending', or 'skipped'",
     )
 
 
@@ -216,7 +216,7 @@ class BulkPostActionRequest(BaseModel):
     post_ids: list[str] = Field(..., description="List of post UUIDs to update")
     filter_status: str = Field(
         ...,
-        description="New filter status: 'relevant', 'irrelevant', 'pending', or 'skipped'",
+        description="New filter status: 'relevant', 'low_relevance', 'pending', or 'skipped'",
     )
 
 

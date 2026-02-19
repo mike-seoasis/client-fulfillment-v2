@@ -127,7 +127,7 @@ const mockPosts = [
     relevance_score: 0.2,
     matched_keywords: ['competitor:CeraVe'],
     ai_evaluation: { score: 2, reasoning: 'Low relevance' },
-    filter_status: 'irrelevant',
+    filter_status: 'low_relevance',
     serp_position: 5,
     discovered_at: '2026-02-16T00:00:00Z',
     created_at: '2026-02-16T00:00:00Z',
@@ -629,7 +629,7 @@ describe('ProjectRedditConfigPage', () => {
 
       expect(screen.getByText('relevant')).toBeInTheDocument();
       expect(screen.getByText('pending')).toBeInTheDocument();
-      expect(screen.getByText('irrelevant')).toBeInTheDocument();
+      expect(screen.getByText('Low Relevance')).toBeInTheDocument();
     });
 
     it('shows empty state when no posts', () => {
@@ -693,13 +693,13 @@ describe('ProjectRedditConfigPage', () => {
       expect(approveButtons[1]).not.toBeDisabled();
     });
 
-    it('reject button is disabled for already-irrelevant posts', () => {
+    it('reject button is disabled for already-skipped posts', () => {
       render(<ProjectRedditConfigPage />);
 
-      const rejectButtons = screen.getAllByLabelText('Reject post');
-      // Third post (post-3) has filter_status='irrelevant'
-      expect(rejectButtons[2]).toBeDisabled();
-      // First post (post-1) has filter_status='relevant' -- reject should NOT be disabled
+      const rejectButtons = screen.getAllByLabelText('Skip post');
+      // Third post (post-3) has filter_status='low_relevance' -- skip should NOT be disabled
+      expect(rejectButtons[2]).not.toBeDisabled();
+      // First post (post-1) has filter_status='relevant' -- skip should NOT be disabled
       expect(rejectButtons[0]).not.toBeDisabled();
     });
 
@@ -721,13 +721,13 @@ describe('ProjectRedditConfigPage', () => {
       const user = userEvent.setup();
       render(<ProjectRedditConfigPage />);
 
-      const rejectButtons = screen.getAllByLabelText('Reject post');
-      // Click reject on second post (pending status)
+      const rejectButtons = screen.getAllByLabelText('Skip post');
+      // Click skip on second post (pending status)
       await user.click(rejectButtons[1]);
 
       expect(mockUpdatePostMutate).toHaveBeenCalledWith({
         postId: 'post-2',
-        data: { filter_status: 'irrelevant' },
+        data: { filter_status: 'skipped' },
       });
     });
   });
