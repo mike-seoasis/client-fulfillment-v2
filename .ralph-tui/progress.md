@@ -8,6 +8,7 @@ after each iteration and it's included in prompts for context.
 - **Neon Auth server singleton**: `import { auth } from '@/lib/auth/server'` — provides `.handler()`, `.middleware()`, `.getSession()`, and all Better Auth server methods (signIn, signUp, etc.).
 - **Neon Auth client singleton**: `import { authClient } from '@/lib/auth/client'` — provides `signIn.social()`, `signOut()`, `useSession()`, and org management hooks for React components.
 - **Neon Auth middleware**: `auth.middleware({ loginUrl: '/auth/sign-in' })` returns an `async (request: NextRequest) => NextResponse` function. SDK auto-skips `/api/auth`, `/auth/sign-in`, `/auth/sign-up`, `/auth/callback`, `/auth/magic-link`, `/auth/email-otp`, `/auth/forgot-password`. Session cookie name: `__Secure-neon-auth.session_token`.
+- **Route group layout pattern**: Root layout (`app/layout.tsx`) has html/body/fonts/providers/bg only — NO Header. Authenticated routes live in `app/(authenticated)/layout.tsx` which adds `<Header />` + `<main>` wrapper. Auth pages live in `app/auth/layout.tsx` with no Header. Route groups don't affect URLs.
 
 ---
 
@@ -80,4 +81,20 @@ after each iteration and it's included in prompts for context.
 - **Learnings:**
   - Settings class uses `case_sensitive=False` so env var `AUTH_REQUIRED` maps to `auth_required` field automatically
   - `_env_file=None` can be passed to Settings constructor in tests to avoid loading `.env`
+---
+
+## 2026-02-19 - S12-006
+- Created auth layout at `frontend/src/app/auth/layout.tsx` — renders children without Header, centered on screen
+- Restructured app to use route groups: moved Header/main from root layout to `(authenticated)/layout.tsx`
+- Root layout now only has html/body/fonts/QueryProvider/bg-cream-100 (shared by all routes)
+- Moved all existing pages (`page.tsx`, `projects/`, `reddit/`, `tools/`, `design-test/`) into `(authenticated)/` route group
+- Files changed:
+  - `frontend/src/app/layout.tsx` (modified — removed Header import and rendering)
+  - `frontend/src/app/(authenticated)/layout.tsx` (new — Header + main wrapper)
+  - `frontend/src/app/auth/layout.tsx` (new — centered children, no Header)
+  - Moved 5 items into `(authenticated)/`: `page.tsx`, `projects/`, `reddit/`, `tools/`, `design-test/`
+- **Learnings:**
+  - Next.js route groups `(name)` don't affect URL paths — `(authenticated)/projects/[id]` still serves `/projects/[id]`
+  - After moving files, `.next/types/` cache has stale references — delete it to get clean typecheck results
+  - Layouts in Next.js nest, they don't replace — the only way to avoid a parent layout's component is to use route groups so different children get different intermediate layouts
 ---
