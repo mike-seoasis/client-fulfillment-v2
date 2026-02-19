@@ -28,8 +28,9 @@
         "Add NEON_AUTH_BASE_URL and NEON_AUTH_COOKIE_SECRET to frontend/.env.local (placeholder values for now)"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "The auth server instance provides .handler(), .middleware(), and .getSession() methods. Cookie secret must be at least 32 characters. Env var values will be set by user after enabling Neon Auth in their console."
+      "passes": true,
+      "notes": "The auth server instance provides .handler(), .middleware(), and .getSession() methods. Cookie secret must be at least 32 characters. Env var values will be set by user after enabling Neon Auth in their console.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S12-003",
@@ -263,6 +264,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-19T21:21:32.885Z"
+    "updatedAt": "2026-02-19T21:22:58.003Z"
   }
 }
