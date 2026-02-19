@@ -7,6 +7,7 @@ after each iteration and it's included in prompts for context.
 
 - **Neon Auth server singleton**: `import { auth } from '@/lib/auth/server'` — provides `.handler()`, `.middleware()`, `.getSession()`, and all Better Auth server methods (signIn, signUp, etc.).
 - **Neon Auth client singleton**: `import { authClient } from '@/lib/auth/client'` — provides `signIn.social()`, `signOut()`, `useSession()`, and org management hooks for React components.
+- **Neon Auth middleware**: `auth.middleware({ loginUrl: '/auth/sign-in' })` returns an `async (request: NextRequest) => NextResponse` function. SDK auto-skips `/api/auth`, `/auth/sign-in`, `/auth/sign-up`, `/auth/callback`, `/auth/magic-link`, `/auth/email-otp`, `/auth/forgot-password`. Session cookie name: `__Secure-neon-auth.session_token`.
 
 ---
 
@@ -53,5 +54,19 @@ after each iteration and it's included in prompts for context.
   - Client import path is `@neondatabase/auth/next` (not `/next/client` — the `/next` path IS the client export, while `/next/server` is the server export)
   - `createAuthClient()` takes zero arguments — no baseUrl or cookie config needed on the client side
   - The client instance also exposes `useActiveOrganization()`, `useListOrganizations()`, and other org-related hooks beyond the core auth methods
+  - No new typecheck errors introduced. Pre-existing test file errors remain.
+---
+
+## 2026-02-19 - S12-005
+- Created Next.js route protection middleware at `frontend/src/middleware.ts`
+- Uses `auth.middleware()` from Neon Auth SDK for core route protection (unauthenticated → /auth/sign-in redirect, OAuth callback handling, session refresh)
+- Added custom logic: authenticated users on `/auth/sign-in` are redirected to `/` by checking for session cookie (`__Secure-neon-auth.session_token`)
+- Matcher regex excludes: `_next/static`, `_next/image`, `fonts`, `favicon.ico`, `api/auth`
+- Files changed: `frontend/src/middleware.ts` (new)
+- **Learnings:**
+  - `auth.middleware({ loginUrl })` returns `async (request: NextRequest) => NextResponse` — can be called directly as a sub-middleware
+  - The SDK middleware auto-skips these routes internally: `/api/auth`, `/auth/callback`, `/auth/sign-in`, `/auth/sign-up`, `/auth/magic-link`, `/auth/email-otp`, `/auth/forgot-password`
+  - SDK middleware does NOT redirect authenticated users away from login pages — that must be handled manually
+  - Session cookie name is `__Secure-neon-auth.session_token` (prefix `__Secure-neon-auth` + `.session_token`). Checking cookie presence is sufficient for the redirect-from-login case (no need for full session validation there)
   - No new typecheck errors introduced. Pre-existing test file errors remain.
 ---

@@ -76,8 +76,9 @@
         "Use auth.middleware() from the server auth instance OR manual session check via auth.api.getSession() with request headers"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Project uses Next.js 14 / React 18. The Neon Auth SDK's auth.middleware() should work but if it has Next.js 15 compatibility issues, fall back to manual middleware using auth.api.getSession({ headers: request.headers }). The matcher config should exclude static assets and auth routes. Export the middleware function as default and a config object with matcher array."
+      "passes": true,
+      "notes": "Project uses Next.js 14 / React 18. The Neon Auth SDK's auth.middleware() should work but if it has Next.js 15 compatibility issues, fall back to manual middleware using auth.api.getSession({ headers: request.headers }). The matcher config should exclude static assets and auth routes. Export the middleware function as default and a config object with matcher array.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S12-006",
@@ -266,6 +267,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-19T21:25:10.422Z"
+    "updatedAt": "2026-02-19T21:27:19.841Z"
   }
 }
