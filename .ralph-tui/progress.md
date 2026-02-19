@@ -220,3 +220,14 @@ after each iteration and it's included in prompts for context.
   - When re-exporting a symbol from `__init__.py` that isn't used locally, ruff F401 requires explicit re-export syntax: `from module import thing as thing` (redundant alias signals intentional re-export)
   - Mounting a router directly on `app` via `app.include_router()` bypasses any router-level dependencies on `api_v1_router` — clean way to exempt specific routes from auth
 ---
+
+## 2026-02-19 - S12-016
+- Updated V2_REBUILD_PLAN.md to reflect Phase 12 completion
+- Marked all Phase 12 checkboxes as `[x]` complete
+- Updated Current Status table: Phase=12 Auth complete, Last Session=2026-02-19, Next Action=Phase 13/15/16
+- Added Session Log row summarizing all Phase 12 work (S12-001 through S12-016)
+- Files changed: `V2_REBUILD_PLAN.md`
+- **Learnings:**
+  - No code changes — purely a status tracking task
+  - Phase 12 implemented 16 stories covering: SDK install, server/client auth instances, API route, middleware, sign-in page, layout restructure, Header auth integration, token sync, API client headers, backend auth dependency, router-level auth, webhook exemption, and plan updates
+---

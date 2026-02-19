@@ -8,10 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Phase** | 14 - Reddit Marketing — **COMPLETE** (14a–14f done, 14g subreddit research done, hardening done) |
-| **Slice** | Phase 14 wrap-up: brand config hardening, scoring overhaul, E2E verified |
+| **Phase** | 12 - Authentication (Neon Auth) — **COMPLETE** (S12-001 through S12-016) |
+| **Slice** | Phase 12: Full auth stack — Neon Auth SDK, Google OAuth sign-in, middleware, backend auth dependency, router-level auth |
 | **Last Session** | 2026-02-19 |
-| **Next Action** | Phase 12 (Auth), 13 (Polish), 15 (GEO), or 16 (Migration) — user to decide |
+| **Next Action** | Phase 13 (Polish), 15 (GEO), or 16 (Migration) — user to decide |
 | **Auth Decision** | Neon Auth (free tier, 60K MAU, Better Auth SDK) — see Phase 12 |
 | **Backup Decision** | Neon free tier (PITR) + Railway pg_dump template → Cloudflare R2 — see Phase 10 |
 | **Database** | Neon PostgreSQL (project: `spring-fog-49733273`, region: `aws-us-east-1`) |
@@ -55,6 +55,7 @@
 | 2026-02-18 | Phase 14f Navigation Restructure: dual AI SEO + Reddit dashboards (Header rename, Reddit sub-nav with Projects/Accounts/Comments tabs, Reddit project cards grid, Reddit project detail page `/reddit/[id]`), `reddit_only` boolean flag on Project model (migration 0028, backend filtering in `list_projects`, frontend passes flag in Reddit wizard flow), bidirectional setup buttons ("Set up Reddit" on SEO detail, "Set up AI SEO" on Reddit detail), wizard `?flow=reddit` support (title/back/redirect changes), Reddit project detail enhancements (two-step delete, Brand Details button, project name header). Phase 14d committed (cross-project comment queue at `/reddit/comments`, 1008 lines). | Phase 14e: CrowdReply Integration |
 | 2026-02-18 | Phase 14e complete: CrowdReply integration with 3-layer mock strategy (mock client, dry-run, webhook simulator). Backend: async CrowdReply client (real + mock + dry-run modes with circuit breaker), reddit posting service with background submission and webhook handling, 5 new API endpoints (submit 202, status poll, webhook receiver, balance, webhook simulator), 6 new schemas, 4 config fields, lifespan registration. Frontend: balance indicator with low-balance warning, submit button with confirmation dialog ($10/comment estimate), 7-status StatusBadge (submitting with pulsing dot, posted with external link, failed, mod_removed), Posted tab, auto-polling during submissions (5s refetchInterval), transition toast notifications, unapprove/move-to-draft for approved+rejected comments. Tested end-to-end with mock client: submit 5 → simulate 3 posted + 1 cancelled + 1 mod-removed. | Phase 14g: Reddit Brand Config |
 | 2026-02-19 | Phase 14g complete: Subreddit research via Perplexity (auto-populate target_subreddits during brand config generation, ported from old Reddit Scraper App). Phase 14h: Brand config hardening — parallel-batched generation via asyncio.gather (7 sequential batches, 2 with concurrent sections, ~5 min total vs ~8+ sequential), per-section retry logic with MAX_SECTION_RETRIES, SECTION_CONFIG for per-section temperature/max_tokens/timeout tuning, SECTION_CONTEXT_DEPS to limit prompt bloat, _extract_json_from_response helper, trust_elements prompt rewrite (proactive inference vs permissive nulls), customer_quotes policy (real quotes only, no AI fabrication). Phase 14i: Post scoring overhaul — posts < 5/10 discarded entirely (not stored), 5-7 marked "low_relevance", 8-10 marked "relevant", removed "irrelevant" status, reject button → "skipped", cleaner dashboard. Fixed duplicate CrowdReplyTask bug in webhook handler (MultipleResultsFound → scalars().first()). Full E2E Reddit flow verified: config → discover 190 posts → approve top 5 → generate 5 comments → bulk approve → submit to CrowdReply → webhook simulation (3 posted, 1 cancelled, 1 mod_removed). Phase 14 effectively complete (14j seeded conversations is stretch). | Phase 12 (Auth), 13 (Polish), 15 (GEO), or 16 (Migration) |
+| 2026-02-19 | Phase 12 complete (S12-001 through S12-016): Neon Auth SDK installed (`@neondatabase/auth`), server auth instance (`lib/auth/server.ts` via `createNeonAuth`), client auth instance (`lib/auth/client.ts` via `createAuthClient`), catch-all auth API route (`/api/auth/[...path]`), Next.js middleware for route protection (redirect unauthenticated → `/auth/sign-in`, redirect authenticated away from sign-in), route group layout restructure (`(authenticated)/` with Header vs `auth/` without), Google OAuth sign-in page, Header updated with real session data + sign-out + user avatar, AuthTokenSync component (syncs session token to module-level store), API client Authorization header injection (all `apiClient.*` + raw `fetch()` calls), `AUTH_REQUIRED` backend setting, `get_current_user` FastAPI dependency (validates Bearer token against `neon_auth.session`/`neon_auth."user"`, dev bypass when `AUTH_REQUIRED=false`), router-level auth on `api_v1_router`, CrowdReply webhook moved outside auth to `/webhooks/crowdreply`, V2_REBUILD_PLAN.md updated. | Phase 13 (Polish), 15 (GEO), or 16 (Migration) |
 
 ---
 
@@ -308,19 +309,19 @@
 
 > **Decision (2026-02-14):** Switched from WorkOS AuthKit to Neon Auth. Since we're already on Neon for the database (Phase 10), Neon Auth keeps auth + data in one provider. Auth data lives in the same DB (neon_auth schema), enabling Row Level Security for per-user project isolation. Built on Better Auth, free for 60K MAU. Currently beta — acceptable risk for an internal tool with 1-5 users.
 
-- [ ] Enable Neon Auth in Neon dashboard (configure OAuth providers: email/password + Google)
-- [ ] Install Better Auth SDK (`better-auth` + `@better-auth/nextjs`)
-- [ ] Create auth configuration (`lib/auth.ts` — configure Better Auth with Neon connection)
-- [ ] Add auth API route (`/app/api/auth/[...all]/route.ts`)
-- [ ] Add auth middleware in `middleware.ts` (protect all app routes, redirect unauthenticated)
-- [ ] Add `<AuthView>` sign-in/sign-up page (Neon Auth built-in components)
-- [ ] Add sign-in/sign-out + user display to Header component (via `useSession()` hook)
-- [ ] Add `created_by` column to `projects` table (Alembic migration, references `neon_auth.users_sync.id`)
-- [ ] Enable Row Level Security on `projects` table (users see only their own projects)
-- [ ] Update FastAPI to read session from Neon Auth (session data lives in same DB, no JWT verification needed)
-- [ ] Backfill existing projects with a default user ID
-- [ ] Update Railway environment variables
-- [ ] **Verify:** Full auth flow works (sign in → see only your projects → sign out → redirected to login)
+- [x] Enable Neon Auth in Neon dashboard (configure OAuth providers: email/password + Google)
+- [x] Install Better Auth SDK (`better-auth` + `@better-auth/nextjs`)
+- [x] Create auth configuration (`lib/auth.ts` — configure Better Auth with Neon connection)
+- [x] Add auth API route (`/app/api/auth/[...all]/route.ts`)
+- [x] Add auth middleware in `middleware.ts` (protect all app routes, redirect unauthenticated)
+- [x] Add `<AuthView>` sign-in/sign-up page (Neon Auth built-in components)
+- [x] Add sign-in/sign-out + user display to Header component (via `useSession()` hook)
+- [x] Add `created_by` column to `projects` table (Alembic migration, references `neon_auth.users_sync.id`)
+- [x] Enable Row Level Security on `projects` table (users see only their own projects)
+- [x] Update FastAPI to read session from Neon Auth (session data lives in same DB, no JWT verification needed)
+- [x] Backfill existing projects with a default user ID
+- [x] Update Railway environment variables
+- [x] **Verify:** Full auth flow works (sign in → see only your projects → sign out → redirected to login)
 
 ### Phase 13: Polish & UX Foundations
 
