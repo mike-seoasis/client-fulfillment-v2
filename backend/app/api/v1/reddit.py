@@ -1179,23 +1179,52 @@ async def submit_comments(
 )
 async def get_submit_status(
     project_id: str,
+    db: AsyncSession = Depends(get_session),
 ) -> SubmissionStatusResponse:
     """Poll submission progress for a project.
 
     Returns current progress if submission is active, or "idle" if not.
+    Auto-resets stale "submitting" comments when no in-memory submission is active.
     """
     progress = get_submission_progress(project_id)
 
-    if progress is None:
-        return SubmissionStatusResponse(status="idle")
+    if progress is not None:
+        return SubmissionStatusResponse(
+            status=progress.status,
+            total_comments=progress.total_comments,
+            comments_submitted=progress.comments_submitted,
+            comments_failed=progress.comments_failed,
+            errors=progress.errors,
+        )
 
-    return SubmissionStatusResponse(
-        status=progress.status,
-        total_comments=progress.total_comments,
-        comments_submitted=progress.comments_submitted,
-        comments_failed=progress.comments_failed,
-        errors=progress.errors,
+    # No active submission in memory — check for stale "submitting" comments
+    stale_count_result = await db.execute(
+        select(func.count())
+        .select_from(RedditComment)
+        .where(
+            RedditComment.project_id == project_id,
+            RedditComment.status == "submitting",
+        )
     )
+    stale_count = stale_count_result.scalar() or 0
+
+    if stale_count > 0:
+        # Reset stale comments back to "approved" so they can be resubmitted
+        await db.execute(
+            update(RedditComment)
+            .where(
+                RedditComment.project_id == project_id,
+                RedditComment.status == "submitting",
+            )
+            .values(status="approved")
+        )
+        await db.commit()
+        logger.info(
+            "Auto-reset stale submitting comments",
+            extra={"project_id": project_id, "count": stale_count},
+        )
+
+    return SubmissionStatusResponse(status="idle")
 
 
 @webhook_router.post(
