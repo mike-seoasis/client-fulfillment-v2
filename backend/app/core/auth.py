@@ -6,11 +6,12 @@ When AUTH_REQUIRED=false, returns a dev user without checking headers.
 
 from dataclasses import dataclass
 
-from fastapi import HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.database import get_session
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -28,7 +29,7 @@ class UserInfo:
 _DEV_USER = UserInfo(id="dev-user", email="dev@localhost", name="Dev User")
 
 
-async def get_current_user(request: Request, db: AsyncSession) -> UserInfo:
+async def get_current_user(request: Request, db: AsyncSession = Depends(get_session)) -> UserInfo:
     """FastAPI dependency that validates the session token and returns the current user.
 
     When AUTH_REQUIRED=false, returns a dev user without checking headers.

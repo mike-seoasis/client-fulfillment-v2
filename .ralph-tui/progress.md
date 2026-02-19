@@ -9,7 +9,8 @@ after each iteration and it's included in prompts for context.
 - **Neon Auth client singleton**: `import { authClient } from '@/lib/auth/client'` — provides `signIn.social()`, `signOut()`, `useSession()`, and org management hooks for React components.
 - **Neon Auth middleware**: `auth.middleware({ loginUrl: '/auth/sign-in' })` returns an `async (request: NextRequest) => NextResponse` function. SDK auto-skips `/api/auth`, `/auth/sign-in`, `/auth/sign-up`, `/auth/callback`, `/auth/magic-link`, `/auth/email-otp`, `/auth/forgot-password`. Session cookie name: `__Secure-neon-auth.session_token`.
 - **Route group layout pattern**: Root layout (`app/layout.tsx`) has html/body/fonts/providers/bg only — NO Header. Authenticated routes live in `app/(authenticated)/layout.tsx` which adds `<Header />` + `<main>` wrapper. Auth pages live in `app/auth/layout.tsx` with no Header. Route groups don't affect URLs.
-- **Backend auth dependency**: `from app.core.auth import get_current_user, UserInfo` — FastAPI dependency that validates Bearer tokens against `neon_auth.session`/`neon_auth."user"`. Returns `UserInfo(id, email, name)`. When `AUTH_REQUIRED=false`, returns dev user. Usage: `user: UserInfo = Depends(get_current_user)` (also needs `db: AsyncSession = Depends(get_session)` in the route).
+- **Backend auth dependency**: `from app.core.auth import get_current_user, UserInfo` — FastAPI dependency that validates Bearer tokens against `neon_auth.session`/`neon_auth."user"`. Returns `UserInfo(id, email, name)`. When `AUTH_REQUIRED=false`, returns dev user. Self-contained: `db` param has `Depends(get_session)` default so it works both as route-level `user: UserInfo = Depends(get_current_user)` and as router-level `dependencies=[Depends(get_current_user)]`.
+- **Router-level auth**: `api_v1_router` in `backend/app/api/v1/__init__.py` has `dependencies=[Depends(get_current_user)]` — all `/api/v1/*` endpoints require auth by default. Health checks at `/health` are on `app` directly, unaffected.
 
 ---
 
@@ -187,5 +188,19 @@ after each iteration and it's included in prompts for context.
   - Neon Auth uses camelCase column names (`userId`, `expiresAt`, `createdAt`, `updatedAt`) — must quote them in SQL
   - `"user"` is a reserved word in Postgres — must be double-quoted in SQL (`neon_auth."user"`)
   - Module-level `_DEV_USER` constant avoids creating a new object per request in dev mode
-  - The dependency signature `(request: Request, db: AsyncSession)` lets FastAPI inject both — `db` comes from `Depends(get_session)` at the route level
+  - The dependency signature `(request: Request, db: AsyncSession = Depends(get_session))` lets FastAPI resolve the full dependency chain automatically — both at route-level and router-level usage
+---
+
+## 2026-02-19 - S12-014
+- Applied `get_current_user` as a router-level dependency on `api_v1_router` using `dependencies=[Depends(get_current_user)]`
+- All `/api/v1/*` endpoints now require a valid Bearer token (or bypass when `AUTH_REQUIRED=false`)
+- Health check at `/health` is unaffected (mounted directly on `app` in `main.py`, not on the v1 router)
+- Also updated `get_current_user` signature to declare `db: AsyncSession = Depends(get_session)` so FastAPI can resolve the dependency chain when used as a router-level dependency (previously had no default, relying on route-level `Depends(get_session)`)
+- Files changed:
+  - `backend/app/api/v1/__init__.py` (modified — added Depends import, get_current_user import, router-level dependency)
+  - `backend/app/core/auth.py` (modified — added Depends/get_session imports, added `Depends(get_session)` default to db param)
+- **Learnings:**
+  - Router-level dependencies via `APIRouter(dependencies=[...])` apply to ALL routes on that router and all included sub-routers — clean way to enforce auth globally
+  - When a dependency function is used as a router-level dependency, all its parameters must be self-resolving (either special types like `Request` or have `Depends(...)` defaults). A bare `db: AsyncSession` without `Depends(get_session)` works when the route also declares `db`, but fails as a router-level dependency since FastAPI can't resolve it
+  - isort (via ruff) groups `app.api.*` and `app.core.*` together alphabetically — `app.api` imports must come before `app.core` imports
 ---
