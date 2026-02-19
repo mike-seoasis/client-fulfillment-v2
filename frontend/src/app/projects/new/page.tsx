@@ -13,6 +13,7 @@ import {
   useBrandConfigStatus,
 } from '@/hooks/useBrandConfigGeneration';
 import { useUpsertRedditConfig } from '@/hooks/useReddit';
+import { upsertRedditConfig } from '@/lib/api';
 import { Button } from '@/components/ui';
 
 type WizardStep = 1 | 2;
@@ -213,6 +214,16 @@ function CreateProjectPageContent() {
 
       // Update URL with project ID (so refresh works)
       updateUrlWithProject(project.id);
+
+      // For Reddit flow, create RedditProjectConfig before generation
+      // so subreddit research can populate target_subreddits
+      if (isRedditFlow) {
+        try {
+          await upsertRedditConfig(project.id, {});
+        } catch {
+          // Non-fatal — config can be created later
+        }
+      }
 
       // Upload any pending files
       if (pendingFiles.length > 0) {

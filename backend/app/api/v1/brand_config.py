@@ -5,14 +5,18 @@ Supports triggering generation, monitoring progress, and managing config.
 """
 
 import logging
+from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.database import get_session
 from app.integrations.claude import ClaudeClient, get_claude
 from app.integrations.crawl4ai import Crawl4AIClient, get_crawl4ai
 from app.integrations.perplexity import PerplexityClient, get_perplexity
+from app.models.reddit_config import RedditProjectConfig
 from app.schemas.brand_config import (
     BrandConfigResponse,
     RegenerateRequest,
@@ -25,6 +29,109 @@ from app.services.project import ProjectService
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/projects/{project_id}/brand-config", tags=["Brand Config"])
+
+
+async def _run_subreddit_research(
+    db: AsyncSession,
+    project_id: str,
+    generated_sections: dict[str, Any],
+    perplexity: PerplexityClient,
+    update_status: Any,
+) -> None:
+    """Post-synthesis hook: research and auto-populate target subreddits.
+
+    Only runs if the project has a RedditProjectConfig and target_subreddits
+    is currently empty (doesn't overwrite manual entries).
+
+    Args:
+        db: AsyncSession for database operations.
+        project_id: UUID of the project.
+        generated_sections: Sections generated during synthesis phase.
+        perplexity: Perplexity client for subreddit research.
+        update_status: Async callback for progress updates.
+    """
+    from app.services.brand_config import GENERATION_STEPS
+
+    step_index = GENERATION_STEPS.index("subreddit_research")
+    await update_status("subreddit_research", step_index)
+
+    # Check if project has a Reddit config
+    stmt = select(RedditProjectConfig).where(
+        RedditProjectConfig.project_id == project_id
+    )
+    result = await db.execute(stmt)
+    reddit_config = result.scalar_one_or_none()
+
+    if not reddit_config:
+        logger.info(
+            "Skipping subreddit research — no Reddit config",
+            extra={"project_id": project_id},
+        )
+        return
+
+    # Don't overwrite manually entered subreddits
+    if reddit_config.target_subreddits and len(reddit_config.target_subreddits) > 0:
+        logger.info(
+            "Skipping subreddit research — target_subreddits already populated",
+            extra={
+                "project_id": project_id,
+                "existing_count": len(reddit_config.target_subreddits),
+            },
+        )
+        return
+
+    if not perplexity.available:
+        logger.warning(
+            "Skipping subreddit research — Perplexity not available",
+            extra={"project_id": project_id},
+        )
+        return
+
+    # Build brand info from generated sections
+    bf = generated_sections.get("brand_foundation", {})
+    ta = generated_sections.get("target_audience", {})
+
+    brand_name = bf.get("company_overview", {}).get("company_name", "")
+    if not brand_name:
+        logger.warning(
+            "Skipping subreddit research — no brand name in generated sections",
+            extra={"project_id": project_id},
+        )
+        return
+
+    brand_info = f"""Industry: {bf.get("company_overview", {}).get("industry", "")}
+Products: {bf.get("what_they_sell", {}).get("primary_products_services", "")}
+Target audience: {ta.get("audience_overview", {}).get("primary_persona", "")}
+USP: {bf.get("differentiators", {}).get("primary_usp", "")}"""
+
+    try:
+        subreddits = await perplexity.research_subreddits(brand_name, brand_info)
+
+        if subreddits:
+            reddit_config.target_subreddits = subreddits
+            flag_modified(reddit_config, "target_subreddits")
+            await db.flush()
+
+            logger.info(
+                "Auto-populated target_subreddits from research",
+                extra={
+                    "project_id": project_id,
+                    "subreddit_count": len(subreddits),
+                    "subreddits": subreddits,
+                },
+            )
+        else:
+            logger.warning(
+                "Subreddit research returned no results",
+                extra={"project_id": project_id},
+            )
+
+    except Exception as e:
+        # Non-fatal — log and continue
+        logger.warning(
+            "Subreddit research failed (non-fatal)",
+            extra={"project_id": project_id, "error": str(e)},
+        )
 
 
 async def run_generation(
@@ -98,6 +205,15 @@ async def run_generation(
                 research_context=research_context,
                 claude=claude,
                 update_status_callback=update_status,
+            )
+
+            # Post-synthesis: subreddit research if Reddit is configured
+            await _run_subreddit_research(
+                db=db,
+                project_id=project_id,
+                generated_sections=generated_sections,
+                perplexity=perplexity,
+                update_status=update_status,
             )
 
             # Get source file IDs for metadata

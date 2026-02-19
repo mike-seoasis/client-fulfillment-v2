@@ -5,7 +5,8 @@ Orchestrates the brand configuration generation process, including:
 - Tracking generation status in project.brand_wizard_state
 - Reporting current progress
 - Research phase: parallel data gathering from Perplexity, Crawl4AI, and documents
-- Synthesis phase: sequential generation of 10 brand config sections via Claude
+- Synthesis phase: sequential generation of 9 brand config sections + ai_prompt_snippet via Claude
+- Post-synthesis: subreddit research via Perplexity (if Reddit config exists)
 """
 
 import asyncio
@@ -154,6 +155,7 @@ GENERATION_STEPS = [
     "trust_elements",
     "competitor_context",
     "ai_prompt_snippet",
+    "subreddit_research",
 ]
 
 
@@ -1214,15 +1216,16 @@ class BrandConfigService:
             if update_status_callback:
                 await update_status_callback(section_name, step_index)
 
-            # Get the system prompt for this section
-            system_prompt = SECTION_PROMPTS.get(section_name)
-            if not system_prompt:
-                logger.error(
-                    "Missing system prompt for section",
+            # Skip sections handled outside the synthesis loop (e.g. subreddit_research)
+            if section_name not in SECTION_PROMPTS:
+                logger.info(
+                    "Skipping section (handled post-synthesis)",
                     extra={"section": section_name},
                 )
-                errors.append(f"Missing prompt for {section_name}")
                 continue
+
+            # Get the system prompt for this section
+            system_prompt = SECTION_PROMPTS[section_name]
 
             # Build user prompt with research context and previous sections
             user_prompt_parts = [

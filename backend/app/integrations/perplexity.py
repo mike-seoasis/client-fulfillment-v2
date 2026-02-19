@@ -777,6 +777,104 @@ Please research the website thoroughly and provide factual information with cita
             return_citations=True,
         )
 
+    async def research_subreddits(
+        self,
+        brand_name: str,
+        brand_info: str,
+    ) -> list[str]:
+        """Suggest target subreddits for Reddit engagement based on brand info.
+
+        Ported from the old Reddit Scraper App's suggest_subreddits() function.
+        Uses Perplexity to find 8-12 consumer-focused subreddits where potential
+        customers ask questions and seek recommendations.
+
+        Args:
+            brand_name: Name of the brand.
+            brand_info: Combined brand info (industry, products, audience, USP).
+
+        Returns:
+            List of subreddit names (without r/ prefix), up to 12.
+        """
+        prompt = f"""Based on this brand:
+
+Brand: {brand_name}
+Info: {brand_info}
+
+Suggest 8-12 relevant subreddits where potential customers would ask questions and seek recommendations.
+
+CRITERIA:
+- Active communities with engaged users
+- Subreddits where people ask for product recommendations
+- Related to the brand's product categories and target audience
+- Mix of broad and niche communities
+
+OUTPUT FORMAT: One subreddit name per line, WITHOUT the "r/" prefix, no numbering, no bullets, no citations.
+
+IMPORTANT:
+- Do NOT include marketing/business subreddits (e.g., entrepreneur, marketing, ecommerce)
+- Focus on consumer communities, not seller communities
+- No citations like [1], [2]"""
+
+        result = await self.complete(
+            user_prompt=prompt,
+            temperature=0.3,
+            return_citations=False,
+        )
+
+        if not result.success or not result.text:
+            logger.warning(
+                "Subreddit research failed",
+                extra={"brand_name": brand_name, "error": result.error},
+            )
+            return []
+
+        # Parse response: split by newlines, clean up each line
+        import re
+
+        subreddits: list[str] = []
+        for line in result.text.strip().split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+
+            # Remove r/ prefix
+            line = re.sub(r"^r/", "", line)
+            # Remove numbering (1., 2), 3:, etc.)
+            line = re.sub(r"^\d+[\.\)\:]?\s*", "", line)
+            # Remove bullets (-, *, •)
+            line = re.sub(r"^[-\*•]\s*", "", line)
+            # Remove citations like [1], [2]
+            line = re.sub(r"\[\d+\]", "", line)
+            # Remove any trailing description after a dash or colon
+            line = re.sub(r"\s*[-–—:].*$", "", line)
+
+            line = line.strip()
+
+            # Filter garbage
+            if not line or len(line) < 3:
+                continue
+            if line.lower().startswith(("here", "example", "note", "these")):
+                continue
+            # Subreddit names don't contain spaces
+            if " " in line:
+                continue
+
+            subreddits.append(line)
+
+        # Cap at 12
+        subreddits = subreddits[:12]
+
+        logger.info(
+            "Subreddit research completed",
+            extra={
+                "brand_name": brand_name,
+                "subreddit_count": len(subreddits),
+                "subreddits": subreddits,
+            },
+        )
+
+        return subreddits
+
     async def research_brand(
         self,
         domain: str,
