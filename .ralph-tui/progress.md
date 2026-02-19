@@ -9,6 +9,7 @@ after each iteration and it's included in prompts for context.
 - **Neon Auth client singleton**: `import { authClient } from '@/lib/auth/client'` — provides `signIn.social()`, `signOut()`, `useSession()`, and org management hooks for React components.
 - **Neon Auth middleware**: `auth.middleware({ loginUrl: '/auth/sign-in' })` returns an `async (request: NextRequest) => NextResponse` function. SDK auto-skips `/api/auth`, `/auth/sign-in`, `/auth/sign-up`, `/auth/callback`, `/auth/magic-link`, `/auth/email-otp`, `/auth/forgot-password`. Session cookie name: `__Secure-neon-auth.session_token`.
 - **Route group layout pattern**: Root layout (`app/layout.tsx`) has html/body/fonts/providers/bg only — NO Header. Authenticated routes live in `app/(authenticated)/layout.tsx` which adds `<Header />` + `<main>` wrapper. Auth pages live in `app/auth/layout.tsx` with no Header. Route groups don't affect URLs.
+- **Backend auth dependency**: `from app.core.auth import get_current_user, UserInfo` — FastAPI dependency that validates Bearer tokens against `neon_auth.session`/`neon_auth."user"`. Returns `UserInfo(id, email, name)`. When `AUTH_REQUIRED=false`, returns dev user. Usage: `user: UserInfo = Depends(get_current_user)` (also needs `db: AsyncSession = Depends(get_session)` in the route).
 
 ---
 
@@ -171,4 +172,20 @@ after each iteration and it's included in prompts for context.
   - The two raw `fetch()` calls (`exportProject`, `downloadBlogPostHtml`) are separate because they handle blob responses — these need individual token injection
   - Conditional spread `...(token ? { Authorization: \`Bearer ${token}\` } : {})` is a clean pattern for optional headers without sending empty values
   - No new typecheck or lint errors introduced. Pre-existing test file errors remain.
+---
+
+## 2026-02-19 - S12-013
+- Created `backend/app/core/auth.py` with `get_current_user` FastAPI dependency and `UserInfo` dataclass
+- `UserInfo` dataclass: `id` (str), `email` (str), `name` (str)
+- When `AUTH_REQUIRED=false`: returns `UserInfo(id='dev-user', email='dev@localhost', name='Dev User')` without checking headers
+- When `AUTH_REQUIRED=true`: extracts Bearer token from Authorization header, queries `neon_auth.session` joined with `neon_auth."user"` where token matches and `expiresAt > now()`
+- Returns 401 `{'detail': 'Not authenticated'}` if no Authorization header or not Bearer format
+- Returns 401 `{'detail': 'Invalid or expired session'}` if token not found or expired
+- Uses `text()` for raw SQL since neon_auth tables are not in our SQLAlchemy models
+- Files changed: `backend/app/core/auth.py` (new)
+- **Learnings:**
+  - Neon Auth uses camelCase column names (`userId`, `expiresAt`, `createdAt`, `updatedAt`) — must quote them in SQL
+  - `"user"` is a reserved word in Postgres — must be double-quoted in SQL (`neon_auth."user"`)
+  - Module-level `_DEV_USER` constant avoids creating a new object per request in dev mode
+  - The dependency signature `(request: Request, db: AsyncSession)` lets FastAPI inject both — `db` comes from `Depends(get_session)` at the route level
 ---

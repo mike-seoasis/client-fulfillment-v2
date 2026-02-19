@@ -208,8 +208,9 @@
         "Use raw SQL via db.execute(text(...)) since neon_auth tables are not in our SQLAlchemy models"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "The neon_auth schema is managed by Neon Auth, not Alembic. Tables are: neon_auth.user (id, name, email, emailVerified, image, createdAt, updatedAt), neon_auth.session (id, expiresAt, token, createdAt, updatedAt, ipAddress, userAgent, userId FK). Use text() for raw SQL: SELECT u.id, u.email, u.name FROM neon_auth.session s JOIN neon_auth.\"user\" u ON s.\"userId\" = u.id WHERE s.token = :token AND s.\"expiresAt\" > now(). Note: Better Auth uses camelCase column names and 'user' is a reserved word in Postgres, so quote it."
+      "passes": true,
+      "notes": "The neon_auth schema is managed by Neon Auth, not Alembic. Tables are: neon_auth.user (id, name, email, emailVerified, image, createdAt, updatedAt), neon_auth.session (id, expiresAt, token, createdAt, updatedAt, ipAddress, userAgent, userId FK). Use text() for raw SQL: SELECT u.id, u.email, u.name FROM neon_auth.session s JOIN neon_auth.\"user\" u ON s.\"userId\" = u.id WHERE s.token = :token AND s.\"expiresAt\" > now(). Note: Better Auth uses camelCase column names and 'user' is a reserved word in Postgres, so quote it.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S12-014",
@@ -274,6 +275,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-19T21:36:39.820Z"
+    "updatedAt": "2026-02-19T21:38:09.208Z"
   }
 }
