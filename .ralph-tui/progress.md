@@ -32,6 +32,17 @@ after each iteration and it's included in prompts for context.
   - No new typecheck errors introduced. Pre-existing test file errors remain.
 ---
 
+## 2026-02-19 - S12-004
+- Created catch-all auth API route at `frontend/src/app/api/auth/[...path]/route.ts`
+- Imports `auth` from `@/lib/auth/server` and destructures `GET` and `POST` from `auth.handler()`
+- Handles all Better Auth endpoints: `/api/auth/sign-in/social`, `/api/auth/get-session`, `/api/auth/callback/google`, etc.
+- Files changed: `frontend/src/app/api/auth/[...path]/route.ts` (new)
+- **Learnings:**
+  - `auth.handler()` returns an object with `GET` and `POST` properties that can be directly destructured as Next.js route handler exports — very clean pattern.
+  - The `[...path]` catch-all segment is required so Better Auth can handle its own sub-routing for all auth endpoints.
+  - No new typecheck errors introduced. Pre-existing test file errors remain.
+---
+
 ## 2026-02-19 - S12-003
 - Created client-side auth instance at `frontend/src/lib/auth/client.ts`
 - Exports `authClient` singleton via `createAuthClient` from `@neondatabase/auth/next`
