@@ -143,3 +143,18 @@ after each iteration and it's included in prompts for context.
   - Dropdown pattern: invisible fixed backdrop `div` + `z-index` layering is a clean way to handle click-outside-to-close without `useRef`/`useEffect` event listeners
   - No new typecheck or lint errors introduced. Pre-existing test file errors remain.
 ---
+
+## 2026-02-19 - S12-010
+- Created auth token store at `frontend/src/lib/auth-token.ts` with `setSessionToken()` and `getSessionToken()` using a module-level variable
+- Created `frontend/src/components/AuthTokenSync.tsx` ('use client') that syncs `authClient.useSession()` data into the token store via `useEffect`
+- AuthTokenSync renders `null` (invisible component)
+- Mounted AuthTokenSync in root layout (`frontend/src/app/layout.tsx`) inside QueryProvider
+- Files changed:
+  - `frontend/src/lib/auth-token.ts` (new)
+  - `frontend/src/components/AuthTokenSync.tsx` (new)
+  - `frontend/src/app/layout.tsx` (modified — added AuthTokenSync import and rendering)
+- **Learnings:**
+  - `authClient.useSession()` returns `{ data }` where `data?.session?.token` is the bearer token string needed for backend API calls
+  - Module-level variable pattern works well for decoupling auth state from React context — any module can import `getSessionToken()` without needing hooks or providers
+  - No new typecheck or lint errors introduced. Pre-existing test file errors remain.
+---

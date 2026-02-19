@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { QueryProvider } from "@/components/providers/QueryProvider";
+import { AuthTokenSync } from "@/components/AuthTokenSync";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -30,6 +31,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <QueryProvider>
+          <AuthTokenSync />
           <div className="min-h-screen bg-cream-100">
             {children}
           </div>

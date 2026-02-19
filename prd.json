@@ -159,8 +159,9 @@
         "AuthTokenSync is mounted in the root layout inside QueryProvider"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "The session object from useSession() has shape { session: { token: string, ... }, user: { ... } }. The token field is what we need to pass to the backend. When data is null (signed out), set token to null. This decouples auth from the API client — api.ts just calls getSessionToken() without needing React context."
+      "passes": true,
+      "notes": "The session object from useSession() has shape { session: { token: string, ... }, user: { ... } }. The token field is what we need to pass to the backend. When data is null (signed out), set token to null. This decouples auth from the API client — api.ts just calls getSessionToken() without needing React context.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S12-011",
@@ -272,6 +273,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-19T21:34:18.047Z"
+    "updatedAt": "2026-02-19T21:35:26.169Z"
   }
 }
