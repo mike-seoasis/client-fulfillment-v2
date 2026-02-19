@@ -246,21 +246,27 @@ async def handle_crowdreply_webhook(
     published_at_str = payload.get("publishedAt")
     client_price = payload.get("clientPrice")
 
-    # Find CrowdReplyTask by external_task_id
-    stmt = select(CrowdReplyTask).where(
-        CrowdReplyTask.external_task_id == external_id
+    # Find CrowdReplyTask by external_task_id (use first() to handle duplicates)
+    stmt = (
+        select(CrowdReplyTask)
+        .where(CrowdReplyTask.external_task_id == external_id)
+        .order_by(CrowdReplyTask.created_at.desc())
     )
     result = await db.execute(stmt)
-    cr_task = result.scalar_one_or_none()
+    cr_task = result.scalars().first()
 
     # Fallback: match by target_url + content
     if cr_task is None and thread_url and content:
-        fallback_stmt = select(CrowdReplyTask).where(
-            CrowdReplyTask.target_url == thread_url,
-            CrowdReplyTask.content == content,
+        fallback_stmt = (
+            select(CrowdReplyTask)
+            .where(
+                CrowdReplyTask.target_url == thread_url,
+                CrowdReplyTask.content == content,
+            )
+            .order_by(CrowdReplyTask.created_at.desc())
         )
         fallback_result = await db.execute(fallback_stmt)
-        cr_task = fallback_result.scalar_one_or_none()
+        cr_task = fallback_result.scalars().first()
 
     if cr_task is None:
         logger.warning(
@@ -353,12 +359,14 @@ async def simulate_webhook(
         logger.warning("Simulate webhook: comment not found", extra={"comment_id": comment_id})
         return False
 
-    # Find the CrowdReplyTask for this comment
-    task_stmt = select(CrowdReplyTask).where(
-        CrowdReplyTask.comment_id == comment_id
+    # Find the CrowdReplyTask for this comment (most recent if duplicates)
+    task_stmt = (
+        select(CrowdReplyTask)
+        .where(CrowdReplyTask.comment_id == comment_id)
+        .order_by(CrowdReplyTask.created_at.desc())
     )
     task_result = await db.execute(task_stmt)
-    cr_task = task_result.scalar_one_or_none()
+    cr_task = task_result.scalars().first()
 
     external_id = cr_task.external_task_id if cr_task else f"sim_{comment_id[:8]}"
 
