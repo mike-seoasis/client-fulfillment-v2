@@ -99,6 +99,19 @@ after each iteration and it's included in prompts for context.
   - Layouts in Next.js nest, they don't replace — the only way to avoid a parent layout's component is to use route groups so different children get different intermediate layouts
 ---
 
+## 2026-02-19 - S12-008
+- Verified all layout restructuring is already complete (done as part of S12-006)
+- Root layout: html/body/fonts/QueryProvider only — NO Header ✅
+- `(authenticated)/layout.tsx`: Header + main wrapper for all app routes ✅
+- `auth/layout.tsx`: centered children, no Header ✅
+- All pages (/, /projects/*, /reddit/*, /tools/*, /design-test/*) inside `(authenticated)/` ✅
+- AuthTokenSync: component does not exist yet (created in S12-009), root layout is ready for it
+- Files changed: none (already implemented)
+- **Learnings:**
+  - S12-006 already handled the full layout restructuring including route groups
+  - AuthTokenSync mounting depends on S12-009 which creates the component
+---
+
 ## 2026-02-19 - S12-007
 - Created Google OAuth sign-in page at `frontend/src/app/auth/sign-in/page.tsx`
 - 'use client' component with loading state management via useState

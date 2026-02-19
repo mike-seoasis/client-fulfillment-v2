@@ -125,8 +125,9 @@
         "AuthTokenSync component is rendered inside QueryProvider in root layout"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Approach: Move Header into a (main) or (app) route group layout. Move all existing page.tsx files into that group. OR simpler: create a ClientLayout component that conditionally renders Header based on pathname (skip if pathname starts with /auth). The conditional approach is simpler and avoids moving all files. Reference current root layout at frontend/src/app/layout.tsx."
+      "passes": true,
+      "notes": "Approach: Move Header into a (main) or (app) route group layout. Move all existing page.tsx files into that group. OR simpler: create a ClientLayout component that conditionally renders Header based on pathname (skip if pathname starts with /auth). The conditional approach is simpler and avoids moving all files. Reference current root layout at frontend/src/app/layout.tsx.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S12-009",
@@ -270,6 +271,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-19T21:31:41.275Z"
+    "updatedAt": "2026-02-19T21:32:53.244Z"
   }
 }
