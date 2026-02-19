@@ -276,6 +276,7 @@ class ClaudeClient:
         max_tokens: int | None = None,
         temperature: float = 0.0,
         model: str | None = None,
+        timeout: float | None = None,
     ) -> CompletionResult:
         """Send a completion request to Claude.
 
@@ -285,6 +286,9 @@ class ClaudeClient:
             max_tokens: Maximum response tokens (overrides default)
             temperature: Sampling temperature (0.0 = deterministic)
             model: Optional model override for this request
+            timeout: Per-request HTTP timeout override (seconds). If not set,
+                uses the client-level timeout. Use for long-running requests
+                that need more time than the default (e.g. large token budgets).
 
         Returns:
             CompletionResult with response text and metadata
@@ -332,8 +336,11 @@ class ClaudeClient:
                 if system_prompt:
                     claude_logger.request_body(self._model, system_prompt, user_prompt)
 
-                # Make request
-                response = await client.post("/v1/messages", json=request_body)
+                # Make request (with optional per-request timeout override)
+                request_kwargs: dict[str, Any] = {"json": request_body}
+                if timeout is not None:
+                    request_kwargs["timeout"] = httpx.Timeout(timeout)
+                response = await client.post("/v1/messages", **request_kwargs)
                 duration_ms = (time.monotonic() - attempt_start) * 1000
 
                 # Extract request ID from response headers

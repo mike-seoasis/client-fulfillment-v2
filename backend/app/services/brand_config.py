@@ -5,11 +5,12 @@ Orchestrates the brand configuration generation process, including:
 - Tracking generation status in project.brand_wizard_state
 - Reporting current progress
 - Research phase: parallel data gathering from Perplexity, Crawl4AI, and documents
-- Synthesis phase: sequential generation of 9 brand config sections + ai_prompt_snippet via Claude
+- Synthesis phase: parallel-batched generation of 9 brand config sections + ai_prompt_snippet via Claude
 - Post-synthesis: subreddit research via Perplexity (if Reddit config exists)
 """
 
 import asyncio
+import json
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -30,8 +31,54 @@ from app.models.project_file import ProjectFile
 
 logger = logging.getLogger(__name__)
 
-# Timeout for each section generation (in seconds)
+# Default timeout for each section generation (in seconds)
 SECTION_TIMEOUT_SECONDS = 60
+
+# Max retries per section (on top of Claude client's own retries)
+MAX_SECTION_RETRIES = 2
+
+# Per-section configuration: (max_tokens, timeout_seconds)
+# Sections with complex/deeply-nested schemas need more tokens to avoid truncation.
+# Later sections accumulate large prompts, so they need longer timeouts.
+SECTION_CONFIG: dict[str, tuple[int, int]] = {
+    "brand_foundation": (2048, 60),
+    "target_audience": (8192, 90),      # deeply nested personas, consistently truncated at 2048
+    "voice_dimensions": (2048, 60),
+    "voice_characteristics": (2048, 60),
+    "writing_style": (2048, 60),
+    "vocabulary": (4096, 90),            # 20+ power words, 15+ banned words, multiple lists
+    "trust_elements": (2048, 90),
+    "competitor_context": (4096, 180),   # 5+ competitors + large accumulated context
+    "ai_prompt_snippet": (8192, 180),    # summarizes all sections, largest prompt
+}
+
+# Which prior sections to include as context for each section.
+# Limits prompt size — later sections only get the context they actually need,
+# rather than ALL prior sections (which can balloon to 40K+ chars).
+SECTION_CONTEXT_DEPS: dict[str, list[str] | None] = {
+    "brand_foundation": None,                                    # just research
+    "target_audience": ["brand_foundation"],
+    "voice_dimensions": ["brand_foundation", "target_audience"],
+    "voice_characteristics": ["voice_dimensions"],
+    "writing_style": ["voice_characteristics"],
+    "vocabulary": ["voice_characteristics", "writing_style"],
+    "trust_elements": ["brand_foundation", "target_audience"],
+    "competitor_context": ["brand_foundation", "target_audience"],
+    "ai_prompt_snippet": None,                                   # ALL sections (it's a summary)
+}
+
+# Execution batches for parallel synthesis. Sections in the same batch run
+# concurrently via asyncio.gather. Order derived from SECTION_CONTEXT_DEPS:
+# a section can run once ALL its dependency sections have been generated.
+SYNTHESIS_BATCHES: list[list[str]] = [
+    ["brand_foundation"],                                          # no deps
+    ["target_audience"],                                           # brand_foundation
+    ["voice_dimensions", "trust_elements", "competitor_context"],  # brand_foundation + target_audience
+    ["voice_characteristics"],                                     # voice_dimensions
+    ["writing_style"],                                             # voice_characteristics
+    ["vocabulary"],                                                # voice_characteristics + writing_style
+    ["ai_prompt_snippet"],                                         # ALL sections
+]
 
 
 def fix_json_control_chars(json_text: str) -> str:
@@ -475,8 +522,14 @@ Output ONLY valid JSON in this exact format:
 REQUIREMENTS:
 - average_store_rating: Actively search for the brand's overall store/product rating (e.g., from their website, Amazon, Google reviews, Trustpilot, etc.). Format as "X.X out of 5 stars" or similar. This is a key trust signal for e-commerce.
 - review_count: When a rating is found, also capture the total number of reviews to add credibility (e.g., "2,500+ reviews"). Rating without count is less impactful.
-- Both fields are optional (use null if not found), but should be actively sought in research as they are high-value trust signals.
-- Extract real data from research when available. For missing data, leave as null or empty array.""",
+- Extract real data from research when available. Use null ONLY for hard_numbers fields where specific numbers genuinely cannot be inferred.
+- For credentials, media_and_press, endorsements, and guarantees: DO NOT return empty arrays or nulls. If exact data isn't in the research, make reasonable inferences based on the brand's industry, positioning, and typical practices for similar brands. For example:
+  - A supplement brand likely has GMP certification, FDA-registered facility, third-party testing
+  - An e-commerce brand likely has a return policy and satisfaction guarantee
+  - Inferred items should be realistic for the brand's category and positioning
+- customer_quotes: Only include REAL customer quotes found in the research (reviews, testimonials from the website, etc.). Do NOT fabricate or infer quotes. If no real quotes are found, return an empty array — the user will add their own.
+- guarantees: Always populate with reasonable defaults for the brand's industry if not found in research.
+- proof_integration_guidelines: Always provide detailed, actionable guidance for every field.""",
     "competitor_context": """You are a brand strategist creating the Competitor Context section of a brand guidelines document for an e-commerce/DTC brand.
 
 Based on the research context, map the competitive landscape focusing on ONLINE/E-COMMERCE competitors:
@@ -635,6 +688,191 @@ For all other fields:
 
 This prompt will be used thousands of times to generate content. Make it count.""",
 }
+
+
+def _extract_json_from_response(response_text: str) -> dict[str, Any]:
+    """Extract and parse JSON from a Claude LLM response.
+
+    Handles markdown code blocks, preamble text, and unescaped control characters.
+
+    Args:
+        response_text: Raw text response from Claude.
+
+    Returns:
+        Parsed JSON dictionary.
+
+    Raises:
+        json.JSONDecodeError: If JSON cannot be extracted or parsed.
+    """
+    json_text = response_text.strip()
+
+    # Handle markdown code blocks
+    if json_text.startswith("```"):
+        lines = json_text.split("\n")
+        lines = lines[1:]  # Remove opening fence
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        json_text = "\n".join(lines)
+
+    # Extract JSON from response that may have preamble text
+    if not json_text.startswith("{"):
+        first_brace = json_text.find("{")
+        if first_brace != -1:
+            last_brace = json_text.rfind("}")
+            if last_brace != -1 and last_brace > first_brace:
+                json_text = json_text[first_brace : last_brace + 1]
+
+    # Fix unescaped control characters in string values
+    json_text = fix_json_control_chars(json_text)
+
+    return json.loads(json_text)
+
+
+async def _generate_section(
+    section_name: str,
+    research_text: str,
+    generated_sections: dict[str, Any],
+    claude: ClaudeClient,
+    project_id: str,
+) -> tuple[str, dict[str, Any] | None, list[str]]:
+    """Generate a single brand config section with retry logic.
+
+    Designed to be called concurrently via asyncio.gather for sections
+    in the same execution batch. Reads from generated_sections but does
+    NOT write to it — the caller collects results after the batch completes.
+
+    Args:
+        section_name: Name of the section to generate.
+        research_text: Pre-built research context string.
+        generated_sections: Previously generated sections (read-only snapshot).
+        claude: ClaudeClient for LLM completion.
+        project_id: UUID string (for logging).
+
+    Returns:
+        Tuple of (section_name, parsed section data or None, list of error messages).
+    """
+    errors: list[str] = []
+    system_prompt = SECTION_PROMPTS[section_name]
+
+    # Build user prompt with research context and relevant previous sections
+    user_prompt_parts = ["# Research Context", research_text]
+
+    context_deps = SECTION_CONTEXT_DEPS.get(section_name)
+    if context_deps is None:
+        context_sections = generated_sections
+    else:
+        context_sections = {k: v for k, v in generated_sections.items() if k in context_deps}
+
+    if context_sections:
+        user_prompt_parts.append("\n# Previously Generated Sections")
+        for prev_section, prev_data in context_sections.items():
+            user_prompt_parts.append(
+                f"\n## {prev_section}\n```json\n{json.dumps(prev_data, indent=2)}\n```"
+            )
+
+    user_prompt_parts.append(
+        f"\n\nGenerate the {section_name.replace('_', ' ')} section now."
+    )
+    user_prompt = "\n".join(user_prompt_parts)
+
+    base_max_tokens, base_timeout = SECTION_CONFIG.get(
+        section_name, (2048, SECTION_TIMEOUT_SECONDS)
+    )
+
+    for attempt in range(1, MAX_SECTION_RETRIES + 1):
+        attempt_max_tokens = base_max_tokens
+        attempt_timeout = base_timeout
+        if attempt > 1:
+            attempt_max_tokens = int(base_max_tokens * (1 + 0.5 * (attempt - 1)))
+            attempt_timeout = int(base_timeout * (1 + 0.25 * (attempt - 1)))
+            logger.info(
+                "Retrying section generation",
+                extra={
+                    "project_id": project_id,
+                    "section": section_name,
+                    "attempt": attempt,
+                    "max_tokens": attempt_max_tokens,
+                    "timeout": attempt_timeout,
+                },
+            )
+
+        try:
+            result: CompletionResult = await asyncio.wait_for(
+                claude.complete(
+                    user_prompt=user_prompt,
+                    system_prompt=system_prompt,
+                    max_tokens=attempt_max_tokens,
+                    temperature=0.3,
+                    timeout=float(attempt_timeout),
+                ),
+                timeout=attempt_timeout + 10,
+            )
+        except TimeoutError:
+            error_msg = f"Timeout generating {section_name} (exceeded {attempt_timeout}s, attempt {attempt}/{MAX_SECTION_RETRIES})"
+            logger.warning(error_msg, extra={"project_id": project_id, "section": section_name, "attempt": attempt})
+            if attempt < MAX_SECTION_RETRIES:
+                continue
+            errors.append(error_msg)
+            return (section_name, None, errors)
+
+        if not result.success:
+            error_msg = f"Failed to generate {section_name}: {result.error} (attempt {attempt}/{MAX_SECTION_RETRIES})"
+            logger.warning(error_msg, extra={"project_id": project_id, "section": section_name, "attempt": attempt})
+            if attempt < MAX_SECTION_RETRIES:
+                continue
+            errors.append(error_msg)
+            return (section_name, None, errors)
+
+        was_truncated = result.stop_reason == "max_tokens"
+        if was_truncated:
+            logger.warning(
+                "Section response truncated (hit max_tokens)",
+                extra={
+                    "project_id": project_id,
+                    "section": section_name,
+                    "max_tokens": attempt_max_tokens,
+                    "output_tokens": result.output_tokens,
+                    "attempt": attempt,
+                },
+            )
+
+        try:
+            section_data = _extract_json_from_response(result.text or "")
+            logger.info(
+                "Section generated successfully",
+                extra={
+                    "project_id": project_id,
+                    "section": section_name,
+                    "attempt": attempt,
+                    "input_tokens": result.input_tokens,
+                    "output_tokens": result.output_tokens,
+                    "duration_ms": result.duration_ms,
+                    "was_truncated": was_truncated,
+                },
+            )
+            return (section_name, section_data, errors)
+
+        except json.JSONDecodeError as e:
+            error_msg = f"Failed to parse {section_name} JSON: {e} (attempt {attempt}/{MAX_SECTION_RETRIES}, truncated={was_truncated})"
+            logger.warning(
+                error_msg,
+                extra={
+                    "project_id": project_id,
+                    "section": section_name,
+                    "response_preview": (result.text or "")[:500],
+                    "attempt": attempt,
+                    "was_truncated": was_truncated,
+                },
+            )
+            if attempt < MAX_SECTION_RETRIES:
+                continue
+            errors.append(error_msg)
+            return (section_name, None, errors)
+
+    # Exhausted all retries without returning
+    if not errors:
+        errors.append(f"Failed to generate {section_name} after {MAX_SECTION_RETRIES} attempts")
+    return (section_name, None, errors)
 
 
 @dataclass
@@ -1093,22 +1331,19 @@ class BrandConfigService:
         claude: ClaudeClient,
         update_status_callback: Any | None = None,
     ) -> dict[str, Any]:
-        """Execute the synthesis phase, generating brand config sections sequentially.
+        """Execute the synthesis phase, generating brand config sections in parallel batches.
 
-        Generates 10 brand config sections using Claude, in order:
-        1. brand_foundation
-        2. target_audience
-        3. voice_dimensions
-        4. voice_characteristics
-        5. writing_style
-        6. vocabulary
-        7. trust_elements
-        8. examples_bank
-        9. competitor_context
-        10. ai_prompt_snippet (generated last as summary of all sections)
+        Sections are grouped into batches based on their dependency graph
+        (SECTION_CONTEXT_DEPS). Sections in the same batch share no dependencies
+        and run concurrently via asyncio.gather:
 
-        Each section builds on previous sections - the prompts include previously
-        generated sections as context for coherence.
+        Batch 1: brand_foundation (no deps)
+        Batch 2: target_audience (brand_foundation)
+        Batch 3: voice_dimensions + trust_elements + competitor_context (brand_foundation + target_audience)
+        Batch 4: voice_characteristics (voice_dimensions)
+        Batch 5: writing_style (voice_characteristics)
+        Batch 6: vocabulary (voice_characteristics + writing_style)
+        Batch 7: ai_prompt_snippet (ALL sections)
 
         Args:
             project_id: UUID string of the project (for logging).
@@ -1122,8 +1357,6 @@ class BrandConfigService:
         Raises:
             HTTPException: If Claude is not available or a section fails to generate.
         """
-        import json
-
         # Import here to avoid circular import
         from app.integrations.claude import get_claude
 
@@ -1199,150 +1432,68 @@ class BrandConfigService:
         # Generated sections accumulator
         generated_sections: dict[str, Any] = {}
         errors: list[str] = []
+        steps_completed = 0
 
-        # Generate each section sequentially
-        for step_index, section_name in enumerate(GENERATION_STEPS):
+        # Generate sections in parallel batches (sections in the same batch
+        # share no dependencies and can run concurrently via asyncio.gather)
+        for batch in SYNTHESIS_BATCHES:
+            # Filter to synthesis-only sections (skip e.g. subreddit_research)
+            batch_sections = [s for s in batch if s in SECTION_PROMPTS]
+            if not batch_sections:
+                continue
+
             logger.info(
-                "Generating section",
+                "Starting synthesis batch",
                 extra={
                     "project_id": project_id,
-                    "section": section_name,
-                    "step": step_index + 1,
-                    "total": len(GENERATION_STEPS),
+                    "batch": batch_sections,
+                    "parallel": len(batch_sections) > 1,
+                    "steps_completed": steps_completed,
                 },
             )
 
-            # Update progress if callback provided
+            # Report progress for the first section in this batch
             if update_status_callback:
-                await update_status_callback(section_name, step_index)
+                await update_status_callback(batch_sections[0], steps_completed)
 
-            # Skip sections handled outside the synthesis loop (e.g. subreddit_research)
-            if section_name not in SECTION_PROMPTS:
-                logger.info(
-                    "Skipping section (handled post-synthesis)",
-                    extra={"section": section_name},
-                )
-                continue
-
-            # Get the system prompt for this section
-            system_prompt = SECTION_PROMPTS[section_name]
-
-            # Build user prompt with research context and previous sections
-            user_prompt_parts = [
-                "# Research Context",
-                research_text,
-            ]
-
-            # Add previously generated sections as context
-            if generated_sections:
-                user_prompt_parts.append("\n# Previously Generated Sections")
-                for prev_section, prev_data in generated_sections.items():
-                    user_prompt_parts.append(
-                        f"\n## {prev_section}\n```json\n{json.dumps(prev_data, indent=2)}\n```"
+            # Launch all sections in this batch concurrently
+            batch_results = await asyncio.gather(
+                *[
+                    _generate_section(
+                        section_name=section_name,
+                        research_text=research_text,
+                        generated_sections=generated_sections,
+                        claude=claude,
+                        project_id=project_id,
                     )
-
-            user_prompt_parts.append(
-                f"\n\nGenerate the {section_name.replace('_', ' ')} section now."
+                    for section_name in batch_sections
+                ]
             )
-            user_prompt = "\n".join(user_prompt_parts)
 
-            # Call Claude with timeout
-            # ai_prompt_snippet needs more tokens for comprehensive output
-            section_max_tokens = 4096 if section_name == "ai_prompt_snippet" else 2048
-            try:
-                result: CompletionResult = await asyncio.wait_for(
-                    claude.complete(
-                        user_prompt=user_prompt,
-                        system_prompt=system_prompt,
-                        max_tokens=section_max_tokens,
-                        temperature=0.3,  # Slight creativity for brand voice
-                    ),
-                    timeout=SECTION_TIMEOUT_SECONDS,
-                )
-            except TimeoutError:
-                error_msg = f"Timeout generating {section_name} (exceeded {SECTION_TIMEOUT_SECONDS}s)"
-                logger.error(
-                    error_msg,
-                    extra={"project_id": project_id, "section": section_name},
-                )
-                errors.append(error_msg)
-                continue
-
-            if not result.success:
-                error_msg = f"Failed to generate {section_name}: {result.error}"
-                logger.error(
-                    error_msg,
-                    extra={
-                        "project_id": project_id,
-                        "section": section_name,
-                        "error": result.error,
-                    },
-                )
-                errors.append(error_msg)
-                continue
-
-            # Parse JSON response
-            try:
-                response_text = result.text or ""
-                json_text = response_text.strip()
-
-                # Handle markdown code blocks
-                if json_text.startswith("```"):
-                    lines = json_text.split("\n")
-                    lines = lines[1:]  # Remove opening fence
-                    if lines and lines[-1].strip() == "```":
-                        lines = lines[:-1]
-                    json_text = "\n".join(lines)
-
-                # Extract JSON from response that may have preamble text
-                # Look for the first { and last } to extract JSON object
-                if not json_text.startswith("{"):
-                    first_brace = json_text.find("{")
-                    if first_brace != -1:
-                        last_brace = json_text.rfind("}")
-                        if last_brace != -1 and last_brace > first_brace:
-                            json_text = json_text[first_brace : last_brace + 1]
-
-                # Fix unescaped control characters in string values
-                json_text = fix_json_control_chars(json_text)
-
-                section_data = json.loads(json_text)
-                generated_sections[section_name] = section_data
-
-                logger.info(
-                    "Section generated successfully",
-                    extra={
-                        "project_id": project_id,
-                        "section": section_name,
-                        "input_tokens": result.input_tokens,
-                        "output_tokens": result.output_tokens,
-                        "duration_ms": result.duration_ms,
-                    },
-                )
-
-            except json.JSONDecodeError as e:
-                error_msg = f"Failed to parse {section_name} JSON: {e}"
-                logger.error(
-                    error_msg,
-                    extra={
-                        "project_id": project_id,
-                        "section": section_name,
-                        "response_preview": (result.text or "")[:500],
-                    },
-                )
-                errors.append(error_msg)
-                continue
+            # Collect results — update generated_sections AFTER the batch
+            # so the next batch can read from a consistent snapshot
+            for section_name, section_data, section_errors in batch_results:
+                if section_data is not None:
+                    generated_sections[section_name] = section_data
+                errors.extend(section_errors)
+                steps_completed += 1
 
         # Post-processing: seed vocabulary.competitors from competitor_context
         _seed_competitors_from_context(generated_sections, project_id)
 
-        # Log completion
+        # Log completion with explicit section inventory
+        expected_sections = [s for s in GENERATION_STEPS if s in SECTION_PROMPTS]
+        present_sections = [s for s in expected_sections if s in generated_sections]
+        missing_sections = [s for s in expected_sections if s not in generated_sections]
+
         logger.info(
             "Synthesis phase completed",
             extra={
                 "project_id": project_id,
-                "sections_generated": len(generated_sections),
-                "sections_failed": len(errors),
+                "sections_generated": len(present_sections),
+                "sections_failed": len(missing_sections),
+                "present": present_sections,
+                "missing": missing_sections,
                 "errors": errors if errors else None,
             },
         )
@@ -1655,8 +1806,6 @@ class BrandConfigService:
             )
 
         # Build research text for prompts
-        import json
-
         research_text_parts: list[str] = []
 
         if research_context.perplexity_research:
@@ -1732,66 +1881,69 @@ class BrandConfigService:
             )
             user_prompt = "\n".join(user_prompt_parts)
 
-            # ai_prompt_snippet needs more tokens for comprehensive output
-            section_max_tokens = 4096 if section_name == "ai_prompt_snippet" else 2048
-            try:
-                result = await asyncio.wait_for(
-                    claude.complete(
-                        user_prompt=user_prompt,
-                        system_prompt=system_prompt,
-                        max_tokens=section_max_tokens,
-                        temperature=0.3,
-                    ),
-                    timeout=SECTION_TIMEOUT_SECONDS,
-                )
-            except TimeoutError:
-                error_msg = f"Timeout regenerating {section_name}"
-                logger.error(error_msg, extra={"project_id": project_id})
-                errors.append(error_msg)
-                continue
+            # Per-section config (max_tokens, timeout) with retry logic
+            base_max_tokens, base_timeout = SECTION_CONFIG.get(
+                section_name, (2048, SECTION_TIMEOUT_SECONDS)
+            )
 
-            if not result.success:
-                error_msg = f"Failed to regenerate {section_name}: {result.error}"
-                logger.error(error_msg, extra={"project_id": project_id})
-                errors.append(error_msg)
-                continue
+            section_regenerated = False
+            for attempt in range(1, MAX_SECTION_RETRIES + 1):
+                attempt_max_tokens = base_max_tokens
+                attempt_timeout = base_timeout
+                if attempt > 1:
+                    attempt_max_tokens = int(base_max_tokens * (1 + 0.5 * (attempt - 1)))
+                    attempt_timeout = int(base_timeout * (1 + 0.25 * (attempt - 1)))
 
-            # Parse JSON response
-            try:
-                response_text = result.text or ""
-                json_text = response_text.strip()
+                try:
+                    result = await asyncio.wait_for(
+                        claude.complete(
+                            user_prompt=user_prompt,
+                            system_prompt=system_prompt,
+                            max_tokens=attempt_max_tokens,
+                            temperature=0.3,
+                            timeout=float(attempt_timeout),
+                        ),
+                        timeout=attempt_timeout + 10,
+                    )
+                except TimeoutError:
+                    error_msg = f"Timeout regenerating {section_name} (attempt {attempt}/{MAX_SECTION_RETRIES})"
+                    logger.warning(error_msg, extra={"project_id": project_id})
+                    if attempt < MAX_SECTION_RETRIES:
+                        continue
+                    errors.append(error_msg)
+                    break
 
-                if json_text.startswith("```"):
-                    lines = json_text.split("\n")
-                    lines = lines[1:]
-                    if lines and lines[-1].strip() == "```":
-                        lines = lines[:-1]
-                    json_text = "\n".join(lines)
+                if not result.success:
+                    error_msg = f"Failed to regenerate {section_name}: {result.error} (attempt {attempt}/{MAX_SECTION_RETRIES})"
+                    logger.warning(error_msg, extra={"project_id": project_id})
+                    if attempt < MAX_SECTION_RETRIES:
+                        continue
+                    errors.append(error_msg)
+                    break
 
-                # Extract JSON from response that may have preamble text
-                if not json_text.startswith("{"):
-                    first_brace = json_text.find("{")
-                    if first_brace != -1:
-                        last_brace = json_text.rfind("}")
-                        if last_brace != -1 and last_brace > first_brace:
-                            json_text = json_text[first_brace : last_brace + 1]
+                try:
+                    section_data = _extract_json_from_response(result.text or "")
+                    regenerated_sections[section_name] = section_data
+                    section_regenerated = True
 
-                # Fix unescaped control characters in string values
-                json_text = fix_json_control_chars(json_text)
+                    logger.info(
+                        "Section regenerated successfully",
+                        extra={
+                            "project_id": project_id,
+                            "section": section_name,
+                            "attempt": attempt,
+                        },
+                    )
+                    break
 
-                section_data = json.loads(json_text)
-                regenerated_sections[section_name] = section_data
-
-                logger.info(
-                    "Section regenerated successfully",
-                    extra={"project_id": project_id, "section": section_name},
-                )
-
-            except json.JSONDecodeError as e:
-                error_msg = f"Failed to parse {section_name} JSON: {e}"
-                logger.error(error_msg, extra={"project_id": project_id})
-                errors.append(error_msg)
-                continue
+                except json.JSONDecodeError as e:
+                    was_truncated = result.stop_reason == "max_tokens"
+                    error_msg = f"Failed to parse {section_name} JSON: {e} (attempt {attempt}/{MAX_SECTION_RETRIES}, truncated={was_truncated})"
+                    logger.warning(error_msg, extra={"project_id": project_id})
+                    if attempt < MAX_SECTION_RETRIES:
+                        continue
+                    errors.append(error_msg)
+                    break
 
         # Update brand config with regenerated sections
         updated_schema = dict(brand_config.v2_schema)
