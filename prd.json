@@ -43,8 +43,9 @@
         "authClient exposes signIn.social(), signOut(), and useSession() methods"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "The client instance is used in React components for auth operations. useSession() returns { data: { session, user }, isPending, error }."
+      "passes": true,
+      "notes": "The client instance is used in React components for auth operations. useSession() returns { data: { session, user }, isPending, error }.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S12-004",
@@ -264,6 +265,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-19T21:22:58.003Z"
+    "updatedAt": "2026-02-19T21:24:25.645Z"
   }
 }

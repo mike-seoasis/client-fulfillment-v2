@@ -6,6 +6,7 @@ after each iteration and it's included in prompts for context.
 ## Codebase Patterns (Study These First)
 
 - **Neon Auth server singleton**: `import { auth } from '@/lib/auth/server'` — provides `.handler()`, `.middleware()`, `.getSession()`, and all Better Auth server methods (signIn, signUp, etc.).
+- **Neon Auth client singleton**: `import { authClient } from '@/lib/auth/client'` — provides `signIn.social()`, `signOut()`, `useSession()`, and org management hooks for React components.
 
 ---
 
@@ -31,3 +32,15 @@ after each iteration and it's included in prompts for context.
   - No new typecheck errors introduced. Pre-existing test file errors remain.
 ---
 
+## 2026-02-19 - S12-003
+- Created client-side auth instance at `frontend/src/lib/auth/client.ts`
+- Exports `authClient` singleton via `createAuthClient` from `@neondatabase/auth/next`
+- `createAuthClient()` takes no arguments — config is inferred from the server-side setup
+- Exposes `signIn.social()`, `signOut()`, `useSession()`, plus org management hooks
+- Files changed: `frontend/src/lib/auth/client.ts` (new)
+- **Learnings:**
+  - Client import path is `@neondatabase/auth/next` (not `/next/client` — the `/next` path IS the client export, while `/next/server` is the server export)
+  - `createAuthClient()` takes zero arguments — no baseUrl or cookie config needed on the client side
+  - The client instance also exposes `useActiveOrganization()`, `useListOrganizations()`, and other org-related hooks beyond the core auth methods
+  - No new typecheck errors introduced. Pre-existing test file errors remain.
+---
