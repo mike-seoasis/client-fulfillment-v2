@@ -4,6 +4,8 @@
  * Handles base URL configuration and JSON serialization for API requests.
  */
 
+import { getSessionToken } from "./auth-token";
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
@@ -49,10 +51,12 @@ export async function api<T>(
 ): Promise<T> {
   const { body, headers, ...rest } = options;
 
+  const token = getSessionToken();
   const config: RequestInit = {
     ...rest,
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...headers,
     },
   };
@@ -861,7 +865,10 @@ export async function exportProject(
     url += `?${qs}`;
   }
 
-  const response = await fetch(url);
+  const token = getSessionToken();
+  const response = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
 
   if (!response.ok) {
     let message: string | undefined;
@@ -1312,7 +1319,10 @@ export async function downloadBlogPostHtml(
 ): Promise<void> {
   const url = `${API_BASE_URL}/projects/${projectId}/blogs/${blogId}/posts/${postId}/download`;
 
-  const response = await fetch(url);
+  const token = getSessionToken();
+  const response = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
 
   if (!response.ok) {
     let message: string | undefined;

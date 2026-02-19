@@ -175,8 +175,9 @@
         "The exportProject() and downloadBlogPostHtml() functions that use raw fetch() also include the header"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Reference frontend/src/lib/api.ts. The change is small — in the api() function, import getSessionToken from './auth-token', read the token, and spread it into the headers object. Also update the two raw fetch() calls in exportProject() and downloadBlogPostHtml() to include the same header."
+      "passes": true,
+      "notes": "Reference frontend/src/lib/api.ts. The change is small — in the api() function, import getSessionToken from './auth-token', read the token, and spread it into the headers object. Also update the two raw fetch() calls in exportProject() and downloadBlogPostHtml() to include the same header.",
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "S12-012",
@@ -273,6 +274,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-19T21:35:26.169Z"
+    "updatedAt": "2026-02-19T21:36:39.820Z"
   }
 }

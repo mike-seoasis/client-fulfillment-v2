@@ -158,3 +158,17 @@ after each iteration and it's included in prompts for context.
   - Module-level variable pattern works well for decoupling auth state from React context — any module can import `getSessionToken()` without needing hooks or providers
   - No new typecheck or lint errors introduced. Pre-existing test file errors remain.
 ---
+
+## 2026-02-19 - S12-011
+- Updated `api()` function to read token via `getSessionToken()` and add `Authorization: Bearer ${token}` header when token is available
+- When token is null, Authorization header is omitted entirely (no empty Bearer)
+- All `apiClient` methods (get, post, patch, put, delete) automatically inherit the header via `api()`
+- Updated `exportProject()` raw `fetch()` call to include Authorization header
+- Updated `downloadBlogPostHtml()` raw `fetch()` call to include Authorization header
+- Files changed: `frontend/src/lib/api.ts` (modified — added import + 3 token injection points)
+- **Learnings:**
+  - The `api()` function is the single choke point for all `apiClient.*` methods, so adding the header there covers all JSON API calls automatically
+  - The two raw `fetch()` calls (`exportProject`, `downloadBlogPostHtml`) are separate because they handle blob responses — these need individual token injection
+  - Conditional spread `...(token ? { Authorization: \`Bearer ${token}\` } : {})` is a clean pattern for optional headers without sending empty values
+  - No new typecheck or lint errors introduced. Pre-existing test file errors remain.
+---
