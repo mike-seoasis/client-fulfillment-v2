@@ -31,10 +31,11 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <QueryProvider>
-          <AuthTokenSync />
-          <div className="min-h-screen bg-cream-100">
-            {children}
-          </div>
+          <AuthTokenSync>
+            <div className="min-h-screen bg-cream-100">
+              {children}
+            </div>
+          </AuthTokenSync>
         </QueryProvider>
       </body>
     </html>

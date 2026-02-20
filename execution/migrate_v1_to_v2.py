@@ -46,14 +46,8 @@ psycopg2.extensions.register_adapter(list, psycopg2.extras.Json)
 
 MIGRATION_NS = uuid.UUID("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
 
-V1_DB_URL = os.getenv(
-    "V1_DATABASE_URL",
-    "postgresql://postgres:PASSWORD@turntable.proxy.rlwy.net:38984/railway",
-)
-V2_DB_URL = os.getenv(
-    "V2_DATABASE_URL",
-    "postgresql://neondb_owner:npg_XPNBxbI4ht9Q@ep-flat-recipe-aipaoul2.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require",
-)
+V1_DB_URL = os.environ["V1_DATABASE_URL"]
+V2_DB_URL = os.environ["V2_DATABASE_URL"]
 
 EXPORT_DIR = Path(__file__).resolve().parent.parent / ".tmp" / "v1-export"
 
