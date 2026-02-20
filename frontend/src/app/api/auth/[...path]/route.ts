@@ -1,17 +1,22 @@
 import { getAuth } from "@/lib/auth/server";
+import { type NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+type RouteContext = { params: Promise<{ path: string[] }> };
+
 // Handlers must be lazy — auth.handler() calls createNeonAuth() which
 // requires env vars not available during the Docker build phase.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function GET(...args: any[]) {
-  const { GET: handler } = getAuth().handler();
-  return handler(...args);
+let _handlers: ReturnType<ReturnType<typeof getAuth>["handler"]> | null = null;
+function handlers() {
+  if (!_handlers) _handlers = getAuth().handler();
+  return _handlers;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function POST(...args: any[]) {
-  const { POST: handler } = getAuth().handler();
-  return handler(...args);
+export function GET(req: NextRequest, ctx: RouteContext) {
+  return handlers().GET(req, ctx);
+}
+
+export function POST(req: NextRequest, ctx: RouteContext) {
+  return handlers().POST(req, ctx);
 }
