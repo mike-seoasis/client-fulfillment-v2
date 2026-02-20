@@ -37,19 +37,25 @@ SECTION_TIMEOUT_SECONDS = 60
 # Max retries per section (on top of Claude client's own retries)
 MAX_SECTION_RETRIES = 2
 
+# Truncation limits for research context fed into section prompts.
+# API limits: 200K context window, 450K input/min, 90K output/min.
+# Worst-case total ≈ 102K tokens (51% of 200K) — comfortable headroom.
+CRAWL_CONTENT_MAX_CHARS = 100_000
+DOC_TEXT_MAX_CHARS = 100_000
+
 # Per-section configuration: (max_tokens, timeout_seconds)
 # Sections with complex/deeply-nested schemas need more tokens to avoid truncation.
 # Later sections accumulate large prompts, so they need longer timeouts.
 SECTION_CONFIG: dict[str, tuple[int, int]] = {
-    "brand_foundation": (2048, 60),
-    "target_audience": (8192, 90),      # deeply nested personas, consistently truncated at 2048
-    "voice_dimensions": (2048, 60),
-    "voice_characteristics": (2048, 60),
-    "writing_style": (2048, 60),
-    "vocabulary": (4096, 90),            # 20+ power words, 15+ banned words, multiple lists
-    "trust_elements": (2048, 90),
-    "competitor_context": (4096, 180),   # 5+ competitors + large accumulated context
-    "ai_prompt_snippet": (8192, 180),    # summarizes all sections, largest prompt
+    "brand_foundation": (16384, 300),
+    "target_audience": (16384, 300),
+    "voice_dimensions": (16384, 300),
+    "voice_characteristics": (16384, 300),
+    "writing_style": (16384, 300),
+    "vocabulary": (16384, 300),
+    "trust_elements": (16384, 300),
+    "competitor_context": (16384, 300),
+    "ai_prompt_snippet": (8192, 180),    # embeds in downstream prompts, keep smaller
 }
 
 # Which prior sections to include as context for each section.
@@ -734,6 +740,7 @@ async def _generate_section(
     generated_sections: dict[str, Any],
     claude: ClaudeClient,
     project_id: str,
+    brand_directives: str | None = None,
 ) -> tuple[str, dict[str, Any] | None, list[str]]:
     """Generate a single brand config section with retry logic.
 
@@ -747,12 +754,24 @@ async def _generate_section(
         generated_sections: Previously generated sections (read-only snapshot).
         claude: ClaudeClient for LLM completion.
         project_id: UUID string (for logging).
+        brand_directives: Mandatory instructions that override defaults (from project.additional_info).
 
     Returns:
         Tuple of (section_name, parsed section data or None, list of error messages).
     """
     errors: list[str] = []
     system_prompt = SECTION_PROMPTS[section_name]
+
+    # Inject brand directives as mandatory instructions into the system prompt
+    if brand_directives:
+        system_prompt += (
+            "\n\n---\n"
+            "MANDATORY BRAND DIRECTIVES (from project owner — override defaults):\n"
+            "The following are top-level requirements set by the project owner. "
+            "You MUST follow these directives exactly. They take priority over "
+            "any conflicting guidance above.\n\n"
+            f"{brand_directives}"
+        )
 
     # Build user prompt with research context and relevant previous sections
     user_prompt_parts = ["# Research Context", research_text]
@@ -885,6 +904,7 @@ class ResearchContext:
         crawl_content: Markdown content from website crawl (or None if failed)
         crawl_metadata: Metadata from crawl result
         document_texts: List of extracted text from uploaded project files
+        brand_directives: Top-level mandatory instructions from project.additional_info
         errors: List of error messages from failed research sources
     """
 
@@ -893,6 +913,7 @@ class ResearchContext:
     crawl_content: str | None = None
     crawl_metadata: dict[str, Any] | None = None
     document_texts: list[str] | None = None
+    brand_directives: str | None = None
     errors: list[str] | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -903,6 +924,7 @@ class ResearchContext:
             "crawl_content": self.crawl_content,
             "crawl_metadata": self.crawl_metadata,
             "document_texts": self.document_texts,
+            "brand_directives": self.brand_directives,
             "errors": self.errors,
         }
 
@@ -1198,10 +1220,21 @@ class BrandConfigService:
         Raises:
             HTTPException: 404 if project not found.
         """
-        # Get project to access site_url
+        # Get project to access site_url and brand directives
         project = await BrandConfigService._get_project(db, project_id)
         site_url = project.site_url
         brand_name = project.name
+        brand_directives = (project.additional_info or "").strip() or None
+
+        if brand_directives:
+            logger.info(
+                "Brand directives found",
+                extra={
+                    "project_id": project_id,
+                    "directives_length": len(brand_directives),
+                    "preview": brand_directives[:200],
+                },
+            )
 
         errors: list[str] = []
 
@@ -1239,15 +1272,59 @@ class BrandConfigService:
         async def get_document_texts() -> list[str]:
             """Retrieve extracted text from all project files."""
             try:
-                stmt = select(ProjectFile.extracted_text).where(
-                    ProjectFile.project_id == project_id,
-                    ProjectFile.extracted_text.isnot(None),
-                )
+                # Query ALL project files to log full inventory
+                stmt = select(
+                    ProjectFile.id,
+                    ProjectFile.filename,
+                    ProjectFile.content_type,
+                    ProjectFile.extracted_text,
+                ).where(ProjectFile.project_id == project_id)
                 result = await db.execute(stmt)
-                texts = [row[0] for row in result.fetchall() if row[0]]
+                all_files = result.fetchall()
+
+                # Log per-file inventory
+                for file_row in all_files:
+                    file_id, filename, content_type, extracted_text = file_row
+                    has_text = bool(extracted_text)
+                    text_length = len(extracted_text) if extracted_text else 0
+                    logger.info(
+                        "Project files inventory",
+                        extra={
+                            "project_id": project_id,
+                            "file_id": file_id,
+                            "filename": filename,
+                            "content_type": content_type,
+                            "has_extracted_text": has_text,
+                            "text_length": text_length,
+                        },
+                    )
+
+                # Collect texts from files that have extracted content
+                texts: list[str] = []
+                for file_row in all_files:
+                    file_id, filename, content_type, extracted_text = file_row
+                    if extracted_text:
+                        texts.append(extracted_text)
+                        logger.info(
+                            "Including document text in research",
+                            extra={
+                                "project_id": project_id,
+                                "filename": filename,
+                                "text_length": len(extracted_text),
+                                "preview": extracted_text[:300],
+                            },
+                        )
+
+                # Log summary
+                total_chars = sum(len(t) for t in texts)
                 logger.info(
-                    "Retrieved document texts",
-                    extra={"project_id": project_id, "count": len(texts)},
+                    "Document texts summary",
+                    extra={
+                        "project_id": project_id,
+                        "total_files": len(all_files),
+                        "files_with_text": len(texts),
+                        "total_text_chars": total_chars,
+                    },
                 )
                 return texts
             except Exception as e:
@@ -1308,6 +1385,7 @@ class BrandConfigService:
             crawl_content=crawl_content,
             crawl_metadata=crawl_metadata,
             document_texts=doc_texts if doc_texts else None,
+            brand_directives=brand_directives,
             errors=errors if errors else None,
         )
 
@@ -1318,6 +1396,7 @@ class BrandConfigService:
                 "has_perplexity": bool(perplexity_research),
                 "has_crawl": bool(crawl_content),
                 "doc_count": len(doc_texts),
+                "has_brand_directives": bool(brand_directives),
                 "error_count": len(errors),
             },
         )
@@ -1408,17 +1487,15 @@ class BrandConfigService:
             )
 
         if research_context.crawl_content:
-            # Truncate crawl content to avoid token limits
-            crawl_preview = research_context.crawl_content[:8000]
-            if len(research_context.crawl_content) > 8000:
+            crawl_preview = research_context.crawl_content[:CRAWL_CONTENT_MAX_CHARS]
+            if len(research_context.crawl_content) > CRAWL_CONTENT_MAX_CHARS:
                 crawl_preview += "\n... (content truncated)"
             research_text_parts.append(f"## Website Content\n{crawl_preview}")
 
         if research_context.document_texts:
-            # Combine document texts with truncation
             docs_combined = "\n---\n".join(research_context.document_texts)
-            if len(docs_combined) > 4000:
-                docs_combined = docs_combined[:4000] + "\n... (documents truncated)"
+            if len(docs_combined) > DOC_TEXT_MAX_CHARS:
+                docs_combined = docs_combined[:DOC_TEXT_MAX_CHARS] + "\n... (documents truncated)"
             research_text_parts.append(f"## Uploaded Documents\n{docs_combined}")
 
         research_text = "\n\n".join(research_text_parts)
@@ -1465,6 +1542,7 @@ class BrandConfigService:
                         generated_sections=generated_sections,
                         claude=claude,
                         project_id=project_id,
+                        brand_directives=research_context.brand_directives,
                     )
                     for section_name in batch_sections
                 ]
@@ -1814,15 +1892,15 @@ class BrandConfigService:
             )
 
         if research_context.crawl_content:
-            crawl_preview = research_context.crawl_content[:8000]
-            if len(research_context.crawl_content) > 8000:
+            crawl_preview = research_context.crawl_content[:CRAWL_CONTENT_MAX_CHARS]
+            if len(research_context.crawl_content) > CRAWL_CONTENT_MAX_CHARS:
                 crawl_preview += "\n... (content truncated)"
             research_text_parts.append(f"## Website Content\n{crawl_preview}")
 
         if research_context.document_texts:
             docs_combined = "\n---\n".join(research_context.document_texts)
-            if len(docs_combined) > 4000:
-                docs_combined = docs_combined[:4000] + "\n... (documents truncated)"
+            if len(docs_combined) > DOC_TEXT_MAX_CHARS:
+                docs_combined = docs_combined[:DOC_TEXT_MAX_CHARS] + "\n... (documents truncated)"
             research_text_parts.append(f"## Uploaded Documents\n{docs_combined}")
 
         research_text = "\n\n".join(research_text_parts)
@@ -1857,6 +1935,17 @@ class BrandConfigService:
             )
 
             system_prompt = SECTION_PROMPTS[section_name]
+
+            # Inject brand directives as mandatory instructions into the system prompt
+            if research_context.brand_directives:
+                system_prompt += (
+                    "\n\n---\n"
+                    "MANDATORY BRAND DIRECTIVES (from project owner — override defaults):\n"
+                    "The following are top-level requirements set by the project owner. "
+                    "You MUST follow these directives exactly. They take priority over "
+                    "any conflicting guidance above.\n\n"
+                    f"{research_context.brand_directives}"
+                )
 
             # Build user prompt with research context and other existing sections
             user_prompt_parts = [

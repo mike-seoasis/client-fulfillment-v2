@@ -156,5 +156,24 @@ def extract_text(file_bytes: bytes, content_type: str) -> str:
             f"Supported types: {', '.join(extractors.keys())}"
         )
 
+    logger.info(
+        "Extracting text from file",
+        extra={
+            "content_type": base_content_type,
+            "file_size_bytes": len(file_bytes),
+        },
+    )
+
     text = extractor(file_bytes)
+    will_truncate = len(text) > MAX_TEXT_LENGTH
+
+    logger.info(
+        "Text extraction complete",
+        extra={
+            "content_type": base_content_type,
+            "extracted_chars": len(text),
+            "will_truncate": will_truncate,
+        },
+    )
+
     return _truncate_text(text)

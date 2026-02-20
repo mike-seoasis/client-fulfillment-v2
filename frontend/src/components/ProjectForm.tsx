@@ -89,12 +89,18 @@ export function ProjectForm({
         </div>
       )}
 
-      <Textarea
-        label="Additional Notes"
-        placeholder="Any additional context about the brand, tone preferences, key competitors, etc."
-        rows={4}
-        {...register('additional_info')}
-      />
+      <div>
+        <Textarea
+          label="Brand Directives"
+          placeholder="e.g. &quot;All content must comply with FDA supplement advertising guidelines&quot; or &quot;Write all brand copy in Russian&quot;"
+          rows={4}
+          {...register('additional_info')}
+        />
+        <p className="mt-1.5 text-xs font-medium text-warm-gray-700">
+          Top-level rules that ALL generated content must follow. Use this for regulatory requirements,
+          language preferences, or hard constraints. These are treated as mandatory instructions, not suggestions.
+        </p>
+      </div>
 
       {!hideSubmitButton && (
         <div className="flex justify-end pt-2">

@@ -6,8 +6,11 @@ Provides business logic for ProjectFile entities, coordinating:
 - Database record management
 """
 
+import logging
 from typing import BinaryIO
 from uuid import uuid4
+
+logger = logging.getLogger(__name__)
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -109,12 +112,35 @@ class FileService:
         extracted_text: str | None = None
         try:
             extracted_text = extract_text(file_bytes, content_type)
+            if extracted_text:
+                logger.info(
+                    "Text extracted from uploaded file",
+                    extra={
+                        "filename": filename,
+                        "content_type": content_type,
+                        "extracted_length": len(extracted_text),
+                        "preview": extracted_text[:200],
+                    },
+                )
+            else:
+                logger.warning(
+                    "Text extraction returned empty result",
+                    extra={"filename": filename, "content_type": content_type},
+                )
         except UnsupportedFileTypeError:
-            # File type doesn't support text extraction - that's OK
-            pass
-        except TextExtractionError:
-            # Extraction failed - log but don't fail the upload
-            pass
+            logger.info(
+                "File type does not support text extraction",
+                extra={"filename": filename, "content_type": content_type},
+            )
+        except TextExtractionError as e:
+            logger.warning(
+                "Text extraction failed for uploaded file",
+                extra={
+                    "filename": filename,
+                    "content_type": content_type,
+                    "error": str(e),
+                },
+            )
 
         # Create database record
         project_file = ProjectFile(

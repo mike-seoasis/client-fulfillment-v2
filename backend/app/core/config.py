@@ -52,10 +52,13 @@ class Settings(BaseSettings):
         default=100, description="Threshold for slow query warnings (ms)"
     )
     db_connect_timeout: int = Field(
-        default=60, description="Connection timeout in seconds (Railway cold-start)"
+        default=10, description="Connection timeout in seconds"
     )
     db_command_timeout: int = Field(
-        default=60, description="Command timeout in seconds"
+        default=30, description="Command timeout in seconds"
+    )
+    db_pool_recycle: int = Field(
+        default=300, description="Recycle connections after N seconds to match Neon idle timeout"
     )
 
     # Redis
@@ -124,7 +127,7 @@ class Settings(BaseSettings):
         description="Anthropic API key for Claude models",
     )
     claude_model: str = Field(
-        default="claude-sonnet-4-5",
+        default="claude-sonnet-4-6",
         description="Claude model to use (default: Sonnet for quality)",
     )
     claude_timeout: float = Field(
