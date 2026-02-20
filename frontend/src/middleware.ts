@@ -1,7 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth/server";
-
-const protectRoutes = auth.middleware({ loginUrl: "/auth/sign-in" });
+import { getAuth } from "@/lib/auth/server";
 
 export default async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -18,6 +16,7 @@ export default async function middleware(request: NextRequest) {
   }
 
   // All other routes: SDK middleware handles auth check + redirect
+  const protectRoutes = getAuth().middleware({ loginUrl: "/auth/sign-in" });
   return protectRoutes(request);
 }
 
