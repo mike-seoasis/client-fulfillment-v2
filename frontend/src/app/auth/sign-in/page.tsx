@@ -5,13 +5,24 @@ import { authClient } from '@/lib/auth/client';
 
 export default function SignInPage() {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
-    await authClient.signIn.social({
-      provider: 'google',
-      callbackURL: window.location.origin,
-    });
+    setError(null);
+    try {
+      const result = await authClient.signIn.social({
+        provider: 'google',
+        callbackURL: window.location.origin,
+      });
+      if (result?.error) {
+        setError(result.error.message || 'Sign in failed. Please try again.');
+        setLoading(false);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Sign in failed. Please try again.');
+      setLoading(false);
+    }
   };
 
   return (
@@ -31,6 +42,13 @@ export default function SignInPage() {
             </p>
           </div>
         </div>
+
+        {/* Error message */}
+        {error && (
+          <div className="mb-4 rounded-sm border border-coral-300 bg-coral-50 px-4 py-3 text-sm text-coral-700">
+            {error}
+          </div>
+        )}
 
         {/* Google sign-in button */}
         <button
