@@ -68,7 +68,7 @@ function CreateProjectPageContent() {
   const startGeneration = useStartBrandConfigGeneration();
 
   // Reddit config upsert (for reddit flow)
-  const upsertRedditConfig = useUpsertRedditConfig(projectId ?? '');
+  const upsertRedditConfigMutation = useUpsertRedditConfig(projectId ?? '');
 
   // Check generation status if resuming with a project ID
   const { data: statusData, isLoading: isCheckingStatus } = useBrandConfigStatus(
@@ -258,7 +258,7 @@ function CreateProjectPageContent() {
     if (projectId) {
       if (isRedditFlow) {
         // Auto-create Reddit config with defaults, then navigate
-        upsertRedditConfig.mutate({}, {
+        upsertRedditConfigMutation.mutate({}, {
           onSuccess: () => router.push(`/reddit/${projectId}`),
           onError: () => router.push(`/reddit/${projectId}`), // Navigate even if config fails
         });
