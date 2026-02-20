@@ -15,7 +15,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
-import { brandConfigKeys } from './useBrandConfigGeneration';
+import { brandConfigKeys, type GenerationStatus } from './useBrandConfigGeneration';
 
 // Types matching backend schemas
 
@@ -87,8 +87,8 @@ export function useUpdateBrandConfig(
 
 /**
  * Regenerate all or specific sections of a brand config.
- * This re-runs the research and synthesis phases.
- * Invalidates both the config and status caches on success.
+ * This re-runs the research and synthesis phases as a background task.
+ * Returns 202 with generation status; the frontend should poll for completion.
  *
  * Pass undefined or {} to regenerate all sections.
  * Pass { section: 'name' } to regenerate a single section.
@@ -96,16 +96,16 @@ export function useUpdateBrandConfig(
  */
 export function useRegenerateBrandConfig(
   projectId: string
-): UseMutationResult<BrandConfig, Error, RegenerateInput | undefined> {
+): UseMutationResult<GenerationStatus, Error, RegenerateInput | undefined> {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (data: RegenerateInput | undefined) =>
-      apiClient.post<BrandConfig>(`/projects/${projectId}/brand-config/regenerate`, data ?? {}),
-    onSuccess: (updatedConfig) => {
-      // Update the config cache with the returned config
-      queryClient.setQueryData(brandConfigDataKeys.config(projectId), updatedConfig);
-      // Invalidate status in case it's affected
+      apiClient.post<GenerationStatus>(`/projects/${projectId}/brand-config/regenerate`, data ?? {}),
+    onSuccess: (statusData) => {
+      // Update the status cache to trigger polling in the UI
+      queryClient.setQueryData(brandConfigKeys.status(projectId), statusData);
+      // Invalidate status to start fresh polling
       queryClient.invalidateQueries({ queryKey: brandConfigKeys.status(projectId) });
     },
   });

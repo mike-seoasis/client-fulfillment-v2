@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useProject } from '@/hooks/use-projects';
-import { useBrandConfig, useRegenerateBrandConfig, useUpdateBrandConfig } from '@/hooks/useBrandConfig';
+import { useBrandConfig, useRegenerateBrandConfig, useUpdateBrandConfig, brandConfigDataKeys } from '@/hooks/useBrandConfig';
+import { useBrandConfigStatus, GENERATION_STEP_LABELS } from '@/hooks/useBrandConfigGeneration';
 import { useProjectFiles } from '@/hooks/useProjectFiles';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button, Toast } from '@/components/ui';
 import { SectionNav, BRAND_SECTIONS, type SectionKey } from '@/components/SectionNav';
 import {
@@ -177,12 +179,14 @@ function SectionContent({ sectionKey, v2Schema, isEditing, isSaving, onSave, onC
 export default function BrandConfigPage() {
   const params = useParams();
   const projectId = params.id as string;
+  const queryClient = useQueryClient();
 
   const [activeSection, setActiveSection] = useState<SectionKey>(BRAND_SECTIONS[0].key);
   const [isEditing, setIsEditing] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('Section saved successfully');
   const [regeneratingSection, setRegeneratingSection] = useState<SectionKey | null>(null);
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
   const { data: brandConfig, isLoading: isBrandConfigLoading, error: brandConfigError } = useBrandConfig(projectId);
@@ -190,9 +194,50 @@ export default function BrandConfigPage() {
   const regenerateMutation = useRegenerateBrandConfig(projectId);
   const updateMutation = useUpdateBrandConfig(projectId);
 
+  // Poll generation status while regenerating
+  const { data: generationStatus } = useBrandConfigStatus(projectId, {
+    enabled: isRegenerating,
+    refetchInterval: isRegenerating ? 2000 : false,
+  });
+
+  // Track regeneration completion via status polling
+  useEffect(() => {
+    if (!isRegenerating || !generationStatus) return;
+
+    if (generationStatus.status === 'complete') {
+      setIsRegenerating(false);
+      setRegeneratingSection(null);
+      // Refresh brand config data to show updated content
+      queryClient.invalidateQueries({ queryKey: brandConfigDataKeys.config(projectId) });
+      setToastMessage(
+        regeneratingSection
+          ? `${BRAND_SECTIONS.find((s) => s.key === regeneratingSection)?.label ?? 'Section'} regenerated successfully`
+          : 'All sections regenerated successfully'
+      );
+      setShowToast(true);
+    } else if (generationStatus.status === 'failed') {
+      setIsRegenerating(false);
+      setRegeneratingSection(null);
+      setToastMessage(`Regeneration failed: ${generationStatus.error || 'Unknown error'}`);
+      setShowToast(true);
+    }
+  }, [isRegenerating, generationStatus, regeneratingSection, projectId, queryClient]);
+
   const isLoading = isProjectLoading || isBrandConfigLoading;
-  const isRegeneratingAll = regenerateMutation.isPending && regeneratingSection === null;
-  const isRegeneratingSection = regenerateMutation.isPending && regeneratingSection !== null;
+  const isRegeneratingAll = isRegenerating && regeneratingSection === null;
+  const isRegeneratingSection_ = isRegenerating && regeneratingSection !== null;
+
+  // Progress info for regeneration
+  const regenerationProgress = isRegenerating && generationStatus
+    ? {
+        step: generationStatus.current_step
+          ? GENERATION_STEP_LABELS[generationStatus.current_step] || generationStatus.current_step
+          : 'Starting...',
+        progress: generationStatus.steps_total > 0
+          ? Math.round((generationStatus.steps_completed / generationStatus.steps_total) * 100)
+          : 0,
+      }
+    : null;
 
   // Transform project files to source documents format
   const sourceDocuments = filesData?.items.map((file) => ({
@@ -204,7 +249,10 @@ export default function BrandConfigPage() {
     setRegeneratingSection(null);
     regenerateMutation.mutate(undefined, {
       onSuccess: () => {
-        setToastMessage('All sections regenerated successfully');
+        setIsRegenerating(true);
+      },
+      onError: () => {
+        setToastMessage('Failed to start regeneration');
         setShowToast(true);
       },
     });
@@ -214,12 +262,12 @@ export default function BrandConfigPage() {
     setRegeneratingSection(section);
     regenerateMutation.mutate({ section }, {
       onSuccess: () => {
-        setRegeneratingSection(null);
-        setToastMessage(`${BRAND_SECTIONS.find((s) => s.key === section)?.label ?? 'Section'} regenerated successfully`);
-        setShowToast(true);
+        setIsRegenerating(true);
       },
       onError: () => {
         setRegeneratingSection(null);
+        setToastMessage('Failed to start regeneration');
+        setShowToast(true);
       },
     });
   }, [regenerateMutation]);
@@ -327,7 +375,7 @@ export default function BrandConfigPage() {
         </div>
         <Button
           onClick={handleRegenerateAll}
-          disabled={regenerateMutation.isPending}
+          disabled={isRegenerating || regenerateMutation.isPending}
           variant="secondary"
         >
           <RefreshIcon className={`w-4 h-4 mr-2 ${isRegeneratingAll ? 'animate-spin' : ''}`} />
@@ -335,8 +383,29 @@ export default function BrandConfigPage() {
         </Button>
       </div>
 
+      {/* Regeneration progress bar */}
+      {isRegenerating && regenerationProgress && (
+        <div className="mb-6 bg-cream-100 border border-cream-500 rounded-sm p-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-warm-gray-700">
+              {regeneratingSection
+                ? `Regenerating ${BRAND_SECTIONS.find((s) => s.key === regeneratingSection)?.label ?? 'section'}...`
+                : 'Regenerating all sections...'}
+            </span>
+            <span className="text-sm text-warm-gray-500">{regenerationProgress.progress}%</span>
+          </div>
+          <div className="w-full bg-cream-300 rounded-full h-2">
+            <div
+              className="bg-coral-500 h-2 rounded-full transition-all duration-500"
+              style={{ width: `${regenerationProgress.progress}%` }}
+            />
+          </div>
+          <p className="text-xs text-warm-gray-500 mt-1.5">{regenerationProgress.step}</p>
+        </div>
+      )}
+
       {/* Divider */}
-      <hr className="border-cream-500 mb-6" />
+      {!isRegenerating && <hr className="border-cream-500 mb-6" />}
 
       {/* Two-column layout: Section Nav + Content */}
       <div className="flex gap-6">
@@ -360,10 +429,10 @@ export default function BrandConfigPage() {
                   variant="ghost"
                   size="sm"
                   onClick={() => handleRegenerateSection(activeSection)}
-                  disabled={regenerateMutation.isPending}
+                  disabled={isRegenerating || regenerateMutation.isPending}
                 >
-                  <RefreshIcon className={`w-4 h-4 mr-1.5 ${isRegeneratingSection && regeneratingSection === activeSection ? 'animate-spin' : ''}`} />
-                  {isRegeneratingSection && regeneratingSection === activeSection ? 'Regenerating...' : 'Regenerate'}
+                  <RefreshIcon className={`w-4 h-4 mr-1.5 ${isRegeneratingSection_ && regeneratingSection === activeSection ? 'animate-spin' : ''}`} />
+                  {isRegeneratingSection_ && regeneratingSection === activeSection ? 'Regenerating...' : 'Regenerate'}
                 </Button>
                 <Button variant="ghost" size="sm" onClick={handleEditClick}>
                   Edit

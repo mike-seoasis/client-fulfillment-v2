@@ -1834,10 +1834,22 @@ class BrandConfigService:
         regenerated_sections: dict[str, Any] = {}
         errors: list[str] = []
 
-        for section_name in sections_to_regenerate:
+        for section_index, section_name in enumerate(sections_to_regenerate):
             if section_name not in SECTION_PROMPTS:
                 errors.append(f"Unknown section: {section_name}")
                 continue
+
+            # Update progress so frontend can show current step
+            try:
+                await BrandConfigService.update_progress(
+                    db=db,
+                    project_id=project_id,
+                    current_step=section_name,
+                    steps_completed=section_index,
+                )
+                await db.commit()
+            except Exception:
+                pass  # Non-fatal: progress update failure shouldn't block regeneration
 
             logger.info(
                 "Regenerating section",

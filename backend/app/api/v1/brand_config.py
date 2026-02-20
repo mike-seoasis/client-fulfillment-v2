@@ -450,58 +450,152 @@ async def update_brand_config(
     )
 
 
+async def run_regeneration(
+    project_id: str,
+    sections: list[str] | None,
+    perplexity: PerplexityClient,
+    crawl4ai: Crawl4AIClient,
+    claude: ClaudeClient,
+) -> None:
+    """Background task to run brand config regeneration.
+
+    Executes the regeneration pipeline for specified sections (or all).
+    Creates its own database session to avoid issues with the
+    request-scoped session being closed after the response is sent.
+
+    Args:
+        project_id: UUID of the project.
+        sections: List of section names to regenerate, or None for all.
+        perplexity: Perplexity client for web research.
+        crawl4ai: Crawl4AI client for website crawling.
+        claude: Claude client for LLM generation.
+    """
+    from app.core.database import db_manager
+
+    async with db_manager.session_factory() as db:
+        try:
+            logger.info(
+                "Starting brand config regeneration - background task",
+                extra={
+                    "project_id": project_id,
+                    "sections": sections,
+                    "claude_available": claude.available,
+                },
+            )
+
+            await BrandConfigService.regenerate_sections(
+                db=db,
+                project_id=project_id,
+                sections=sections,
+                perplexity=perplexity,
+                crawl4ai=crawl4ai,
+                claude=claude,
+            )
+            await db.commit()
+
+            # Mark generation as complete
+            await BrandConfigService.complete_generation(db, project_id)
+            await db.commit()
+
+            logger.info(
+                "Brand config regeneration completed - background task",
+                extra={"project_id": project_id},
+            )
+
+        except Exception as e:
+            logger.exception(
+                "Brand config regeneration failed",
+                extra={"project_id": project_id, "error": str(e)},
+            )
+            try:
+                await BrandConfigService.fail_generation(
+                    db=db,
+                    project_id=project_id,
+                    error=str(e),
+                )
+                await db.commit()
+            except Exception:
+                logger.exception(
+                    "Failed to update generation status after regeneration error",
+                    extra={"project_id": project_id},
+                )
+
+
 @router.post(
     "/regenerate",
-    response_model=BrandConfigResponse,
+    response_model=GenerationStatusResponse,
+    status_code=status.HTTP_202_ACCEPTED,
     responses={
         404: {"description": "Project not found or brand config not generated yet"},
+        409: {"description": "Generation already in progress"},
         422: {"description": "Invalid section names"},
-        503: {"description": "Claude LLM not available"},
     },
 )
 async def regenerate_brand_config(
     project_id: str,
     request: RegenerateRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_session),
     perplexity: PerplexityClient = Depends(get_perplexity),
     crawl4ai: Crawl4AIClient = Depends(get_crawl4ai),
     claude: ClaudeClient = Depends(get_claude),
-) -> BrandConfigResponse:
+) -> GenerationStatusResponse:
     """Regenerate all or specific sections of a brand config.
 
-    Runs the research and synthesis phases again for the specified sections.
-    If no sections are specified, regenerates all sections.
+    Initiates a background task to re-run the research and synthesis phases
+    for the specified sections. If no sections are specified, regenerates all.
 
     Args:
         project_id: UUID of the project.
         request: RegenerateRequest with optional sections to regenerate.
 
     Returns:
-        BrandConfigResponse with the regenerated brand config.
+        GenerationStatusResponse with initial generation state.
 
     Raises:
         HTTPException: 404 if project not found or brand config not generated yet.
+        HTTPException: 409 if generation is already in progress.
         HTTPException: 422 if invalid section names provided.
-        HTTPException: 503 if Claude LLM is not configured.
     """
     sections = request.get_sections_to_regenerate()
 
-    brand_config = await BrandConfigService.regenerate_sections(
+    # Verify brand config exists (404 if not)
+    await BrandConfigService.get_brand_config(db, project_id)
+
+    # Set generation status (checks for conflict)
+    generation_status = await BrandConfigService.start_generation(db, project_id)
+
+    # Override steps_total for regeneration (may be fewer than full generation)
+    from app.services.brand_config import GENERATION_STEPS, SECTION_PROMPTS
+    sections_to_regenerate = sections if sections else GENERATION_STEPS
+    actual_steps = len([s for s in sections_to_regenerate if s in SECTION_PROMPTS])
+    generation_status.steps_total = actual_steps
+
+    # Persist the corrected steps_total
+    await BrandConfigService.update_progress(
         db=db,
+        project_id=project_id,
+        current_step=generation_status.current_step or "research",
+        steps_completed=0,
+    )
+    await db.commit()
+
+    # Queue background task
+    background_tasks.add_task(
+        run_regeneration,
         project_id=project_id,
         sections=sections,
         perplexity=perplexity,
         crawl4ai=crawl4ai,
         claude=claude,
     )
-    await db.commit()
 
-    return BrandConfigResponse(
-        id=brand_config.id,
-        project_id=brand_config.project_id,
-        brand_name=brand_config.brand_name,
-        domain=brand_config.domain,
-        v2_schema=brand_config.v2_schema,
-        created_at=brand_config.created_at,
-        updated_at=brand_config.updated_at,
+    return GenerationStatusResponse(
+        status=generation_status.status.value,
+        current_step=generation_status.current_step,
+        steps_completed=generation_status.steps_completed,
+        steps_total=actual_steps,
+        error=generation_status.error,
+        started_at=generation_status.started_at,
+        completed_at=generation_status.completed_at,
     )

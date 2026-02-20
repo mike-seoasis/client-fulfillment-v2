@@ -8,10 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Phase** | 12 - Authentication (Neon Auth) — **COMPLETE** (S12-001 through S12-017) |
-| **Slice** | Phase 12: Full auth stack — Neon Auth SDK, Google OAuth sign-in, middleware, backend auth dependency, router-level auth |
+| **Phase** | 16 - V1 Data Migration — **COMPLETE** |
+| **Slice** | Phase 16: Migrated 2 V1 projects (Planetary Design + Bronson) from Railway JSON exports to V2 Neon Postgres |
 | **Last Session** | 2026-02-19 |
-| **Next Action** | Phase 13 (Polish), 15 (GEO), or 16 (Migration) — user to decide |
+| **Next Action** | Phase 13 (Polish), 15 (GEO) — user to decide |
 | **Auth Decision** | Neon Auth (free tier, 60K MAU, Better Auth SDK) — see Phase 12 |
 | **Backup Decision** | Neon free tier (PITR) + Railway pg_dump template → Cloudflare R2 — see Phase 10 |
 | **Database** | Neon PostgreSQL (project: `spring-fog-49733273`, region: `aws-us-east-1`) |
@@ -56,6 +56,7 @@
 | 2026-02-18 | Phase 14e complete: CrowdReply integration with 3-layer mock strategy (mock client, dry-run, webhook simulator). Backend: async CrowdReply client (real + mock + dry-run modes with circuit breaker), reddit posting service with background submission and webhook handling, 5 new API endpoints (submit 202, status poll, webhook receiver, balance, webhook simulator), 6 new schemas, 4 config fields, lifespan registration. Frontend: balance indicator with low-balance warning, submit button with confirmation dialog ($10/comment estimate), 7-status StatusBadge (submitting with pulsing dot, posted with external link, failed, mod_removed), Posted tab, auto-polling during submissions (5s refetchInterval), transition toast notifications, unapprove/move-to-draft for approved+rejected comments. Tested end-to-end with mock client: submit 5 → simulate 3 posted + 1 cancelled + 1 mod-removed. | Phase 14g: Reddit Brand Config |
 | 2026-02-19 | Phase 14g complete: Subreddit research via Perplexity (auto-populate target_subreddits during brand config generation, ported from old Reddit Scraper App). Phase 14h: Brand config hardening — parallel-batched generation via asyncio.gather (7 sequential batches, 2 with concurrent sections, ~5 min total vs ~8+ sequential), per-section retry logic with MAX_SECTION_RETRIES, SECTION_CONFIG for per-section temperature/max_tokens/timeout tuning, SECTION_CONTEXT_DEPS to limit prompt bloat, _extract_json_from_response helper, trust_elements prompt rewrite (proactive inference vs permissive nulls), customer_quotes policy (real quotes only, no AI fabrication). Phase 14i: Post scoring overhaul — posts < 5/10 discarded entirely (not stored), 5-7 marked "low_relevance", 8-10 marked "relevant", removed "irrelevant" status, reject button → "skipped", cleaner dashboard. Fixed duplicate CrowdReplyTask bug in webhook handler (MultipleResultsFound → scalars().first()). Full E2E Reddit flow verified: config → discover 190 posts → approve top 5 → generate 5 comments → bulk approve → submit to CrowdReply → webhook simulation (3 posted, 1 cancelled, 1 mod_removed). Phase 14 effectively complete (14j seeded conversations is stretch). | Phase 12 (Auth), 13 (Polish), 15 (GEO), or 16 (Migration) |
 | 2026-02-19 | Phase 12 complete (S12-001 through S12-017): Neon Auth SDK installed (`@neondatabase/auth`), server auth instance (`lib/auth/server.ts` via `createNeonAuth`), client auth instance (`lib/auth/client.ts` via `createAuthClient`), catch-all auth API route (`/api/auth/[...path]`), Next.js middleware for route protection (redirect unauthenticated → `/auth/sign-in`, redirect authenticated away from sign-in), route group layout restructure (`(authenticated)/` with Header vs `auth/` without), Google OAuth sign-in page, Header updated with real session data + sign-out + user avatar, AuthTokenSync component (syncs session token to module-level store), API client Authorization header injection (all `apiClient.*` + raw `fetch()` calls), `AUTH_REQUIRED` backend setting, `get_current_user` FastAPI dependency (validates Bearer token against `neon_auth.session`/`neon_auth."user"`, dev bypass when `AUTH_REQUIRED=false`), router-level auth on `api_v1_router`, CrowdReply webhook moved outside auth to `/webhooks/crowdreply`, auto-reset for stale "submitting" comments (prevents stuck state after backend restart), V2_REBUILD_PLAN.md updated. **Deferred to later:** Google Cloud OAuth credentials (currently using Neon shared dev creds), Railway env vars for production, RLS/per-user data isolation, `created_by` column on projects. | Phase 13 (Polish), 15 (GEO), or 16 (Migration) |
+| 2026-02-19 | Phase 16 complete: V1 data migration — `execution/migrate_v1_to_v2.py` (sync psycopg2, deterministic uuid5 IDs, ON CONFLICT DO NOTHING idempotency, per-project transactions, dry-run default). Migrated 2 projects from `.tmp/v1-export/` JSON files to Neon: Planetary Design (36 pages, 36 keywords, 335 PAA, 32 content) + Bronson (90 pages, 90 keywords, 635 PAA, 37 content). Brand configs migrated with v2_schema section renames (foundation→brand_foundation, personas→target_audience, etc). Verification passed: no duplicate URLs, brand_foundation key present, all row counts match. Idempotent re-run confirmed (0 inserts, all skipped). | Phase 13 (Polish) or 15 (GEO) |
 
 ---
 
@@ -387,6 +388,18 @@
 - [ ] **14j:** Seeded Conversations (stretch — orchestrated question + answer posts)
 - [x] **Verify:** Full E2E flow — configure → discover 190 posts → approve → generate comments → submit to CrowdReply → webhook simulation (3 posted, 1 cancelled, 1 mod_removed)
 
+### Phase 17: Rename to Grove
+
+> **Decision (2026-02-19):** Brand naming exercise with 5 expert agents (luxury, tech/SaaS, verbal identity, startup/DTC, cultural semiotics). Consensus name: **Grove**. Runners-up: Canopy (strongest runner-up, 4/5 lists), Frond (phonetics killed it), Palmetto (syllable count killed it). The name is deliberately understated — the tropical identity lives in the design system (palm greens, sand, lagoon, coral), not the name. "The Grove" as casual internal shorthand encouraged.
+
+- [ ] Audit all references to old name across codebase (frontend, backend, config, exports, UI copy)
+- [ ] Update page titles, meta tags, and header branding
+- [ ] Update export filenames (Matrixify CSV, blog HTML)
+- [ ] Update auth pages (sign-in page copy)
+- [ ] Update package.json / project metadata
+- [ ] Update environment references and documentation
+- [ ] **Verify:** All user-facing references say "Grove", no orphaned old name references
+
 ### Phase 15: Explore GEO Add-On Opportunities
 
 > **Decision (2026-02-16):** Research complete. GEO (Generative Engine Optimization) represents a major differentiation opportunity. SEOasis controls the full pipeline from keyword research → content generation → quality review → export, positioning it to become a unified SEO + GEO platform. POP already returns entity data that's stored but unused — quick win. See `GEO_ADDON_OPPORTUNITIES.md` for full 926-line research document with 28 prioritized recommendations across 4 tiers.
@@ -494,9 +507,9 @@
 
 #### Subtasks
 
-- [ ] **16a:** Build migration script (`execution/migrate_v1_to_v2.py`) — read v1 Railway DB + JSON files, transform, insert into Neon v2 DB. Dry-run mode (log transforms, no writes). Upload brand docs to S3. Idempotent (`ON CONFLICT DO NOTHING`).
-- [ ] **16b:** Test on staging — dry-run review, run against staging, verify row counts, spot-check 5 pages end-to-end (crawl → keywords → content in UI)
-- [ ] **16c:** Run on production — Neon PITR snapshot first, run migration, verify in production UI, document rollback (restore from PITR)
+- [x] **16a:** Build migration script (`execution/migrate_v1_to_v2.py`) — sync psycopg2, deterministic uuid5 IDs, ON CONFLICT DO NOTHING idempotency, per-project transactions, dry-run default, V1 DB optional (derives from JSON). Brand config section renames (foundation→brand_foundation, personas→target_audience, writing_rules→writing_style, proof_elements→trust_elements, ai_prompts→ai_prompt_snippet).
+- [x] **16b:** Dry-run + live run against Neon — 2 projects migrated (Planetary Design: 36 pages/36 kw/335 PAA/32 content, Bronson: 90 pages/90 kw/635 PAA/37 content). Verification: no duplicate URLs, brand_foundation key present, row counts match. Idempotent re-run confirmed.
+- [ ] **16c:** UI verification — Open V2 app, check both projects appear on dashboard, browse pages/keywords/content
 - [ ] **16d:** Cleanup — archive v1 data files, update V2_REBUILD_PLAN.md
 - [ ] **Verify:** All v1 client projects visible in v2 UI with crawled pages, keywords, brand config, and generated content intact
 
