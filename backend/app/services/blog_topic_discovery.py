@@ -665,7 +665,8 @@ Example:
 
         if len(results) < 3:
             raise ValueError(
-                f"Too few results after filtering: {len(results)} (expected 8-15)"
+                f"Not enough keyword variations found (only {len(results)}). "
+                "This usually happens with niche or low-volume topics."
             )
 
         # Sort by relevance_score descending

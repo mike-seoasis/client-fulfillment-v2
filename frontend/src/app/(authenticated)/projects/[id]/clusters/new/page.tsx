@@ -6,6 +6,7 @@ import { useState, useCallback } from 'react';
 import { useProject } from '@/hooks/use-projects';
 import { useCreateCluster } from '@/hooks/useClusters';
 import { Button, Input } from '@/components/ui';
+import { ApiError } from '@/lib/api';
 
 function BackArrowIcon({ className }: { className?: string }) {
   return (
@@ -223,24 +224,55 @@ export default function NewClusterPage() {
         {createCluster.isPending ? (
           <ProgressIndicator currentStep={progressStep} />
         ) : createCluster.isError ? (
-          <div>
-            <div className="mb-6 p-4 bg-coral-50 border border-coral-200 rounded-sm">
-              <p className="text-sm font-medium text-coral-800 mb-1">
-                Something went wrong
-              </p>
-              <p className="text-sm text-coral-700">
-                {createCluster.error?.message || 'An unexpected error occurred. Please try again.'}
-              </p>
+          createCluster.error instanceof ApiError &&
+          createCluster.error.status === 422 &&
+          createCluster.error.message?.includes('Not enough keyword variations') ? (
+            <div>
+              <div className="mb-6 p-4 bg-sand-100 border border-sand-300 rounded-sm">
+                <p className="text-sm font-medium text-warm-gray-900 mb-1">
+                  Not enough keywords found
+                </p>
+                <p className="text-sm text-warm-gray-600 mb-3">
+                  {createCluster.error.message}
+                </p>
+                <p className="text-xs text-warm-gray-500">
+                  Tip: Try a broader seed keyword, or create the cluster and add keywords manually.
+                </p>
+              </div>
+              <div className="flex justify-end gap-3">
+                <Link href={`/projects/${projectId}`}>
+                  <Button variant="secondary">Back to Project</Button>
+                </Link>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    createCluster.reset();
+                  }}
+                >
+                  Try a Different Keyword
+                </Button>
+              </div>
             </div>
-            <div className="flex justify-end gap-3">
-              <Link href={`/projects/${projectId}`}>
-                <Button variant="secondary">Cancel</Button>
-              </Link>
-              <Button onClick={handleSubmit}>
-                Try Again
-              </Button>
+          ) : (
+            <div>
+              <div className="mb-6 p-4 bg-coral-50 border border-coral-200 rounded-sm">
+                <p className="text-sm font-medium text-coral-800 mb-1">
+                  Something went wrong
+                </p>
+                <p className="text-sm text-coral-700">
+                  {createCluster.error?.message || 'An unexpected error occurred. Please try again.'}
+                </p>
+              </div>
+              <div className="flex justify-end gap-3">
+                <Link href={`/projects/${projectId}`}>
+                  <Button variant="secondary">Cancel</Button>
+                </Link>
+                <Button onClick={handleSubmit}>
+                  Try Again
+                </Button>
+              </div>
             </div>
-          </div>
+          )
         ) : (
           <div>
             <div className="space-y-5">

@@ -479,7 +479,7 @@ class TestFilterAndRank:
         )
 
         candidates = [{"topic": "one", "format_type": "guide", "search_volume": 100}]
-        with pytest.raises(ValueError, match="Too few results after filtering"):
+        with pytest.raises(ValueError, match="Not enough keyword variations found"):
             await service.filter_and_rank(candidates, "Test")
 
 

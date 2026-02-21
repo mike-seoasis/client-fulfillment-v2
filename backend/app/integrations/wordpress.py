@@ -111,6 +111,67 @@ class WordPressClient:
         resp.raise_for_status()
         return resp
 
+    async def _fetch_posts_paginated(
+        self,
+        status: str,
+        title_filter: list[str] | None = None,
+    ) -> tuple[list[WPPost], int]:
+        """Fetch all posts for a single status value, with pagination.
+
+        Uses WP ``search`` param for server-side filtering when the title
+        filter is a single term.  Falls back to client-side filtering for
+        multi-term filters (WP ``search`` only accepts one string).
+
+        Returns:
+            Tuple of (matched posts, total posts fetched before filtering).
+        """
+        all_posts: list[WPPost] = []
+        total_fetched = 0
+        page = 1
+
+        # Single-term filter → let WP do server-side search
+        use_server_search = title_filter and len(title_filter) == 1
+        # Multi-term → client-side filtering after fetch
+        use_client_filter = title_filter and len(title_filter) > 1
+
+        while True:
+            params: dict[str, Any] = {
+                "per_page": WP_PER_PAGE,
+                "page": page,
+                "status": status,
+                "_embed": "wp:term",
+            }
+            if use_server_search:
+                params["search"] = title_filter[0]
+
+            resp = await self._get_with_retry(
+                f"{self._api_base}/posts",
+                params=params,
+            )
+            posts_data = resp.json()
+
+            if not posts_data:
+                break
+
+            for post in posts_data:
+                total_fetched += 1
+                wp_post = self._parse_post(post)
+
+                # Client-side title filter for multi-term queries
+                if use_client_filter:
+                    title_lower = html.unescape(wp_post.title).lower()
+                    if not any(html.unescape(f).lower() in title_lower for f in title_filter):
+                        continue
+
+                all_posts.append(wp_post)
+
+            total_pages = int(resp.headers.get("X-WP-TotalPages", "1"))
+            if page >= total_pages:
+                break
+            page += 1
+
+        return all_posts, total_fetched
+
     async def fetch_all_posts(
         self,
         title_filter: list[str] | None = None,
@@ -130,53 +191,62 @@ class WordPressClient:
 
         Returns:
             Tuple of (matched posts, total posts fetched before filtering).
+
+        Raises:
+            ValueError: If ``post_status='private'`` and the authenticated
+                user lacks ``read_private_posts`` capability.
         """
-        all_posts: list[WPPost] = []
-        total_fetched = 0
-        page = 1
-
-        # 'any' → fetch both published and private
-        status_param = "publish,private" if post_status == "any" else post_status
-
-        while True:
-            resp = await self._get_with_retry(
-                f"{self._api_base}/posts",
-                params={
-                    "per_page": WP_PER_PAGE,
-                    "page": page,
-                    "status": status_param,
-                    "_embed": "wp:term",
-                },
+        if post_status == "any":
+            # Always fetch published posts first (works for any role)
+            all_posts, total_fetched = await self._fetch_posts_paginated(
+                "publish", title_filter
             )
-            posts_data = resp.json()
 
-            if not posts_data:
-                break
+            # Try private posts — may fail if user lacks read_private_posts
+            try:
+                private_posts, private_total = await self._fetch_posts_paginated(
+                    "private", title_filter
+                )
+                all_posts.extend(private_posts)
+                total_fetched += private_total
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code in (400, 403):
+                    logger.warning(
+                        "Could not fetch private posts — user may lack "
+                        "read_private_posts capability. Returning published "
+                        "posts only.",
+                        extra={"status_code": exc.response.status_code},
+                    )
+                else:
+                    raise
 
-            for post in posts_data:
-                total_fetched += 1
-                wp_post = self._parse_post(post)
+        elif post_status == "private":
+            try:
+                all_posts, total_fetched = await self._fetch_posts_paginated(
+                    "private", title_filter
+                )
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code in (400, 403):
+                    raise ValueError(
+                        "Cannot fetch private posts: the WordPress user does "
+                        "not have the read_private_posts capability. Use an "
+                        "Editor or Administrator role, or switch to "
+                        "'Published' status."
+                    ) from exc
+                raise
 
-                # Apply title filter if provided
-                # Decode HTML entities (WP returns smart quotes etc.)
-                if title_filter:
-                    title_lower = html.unescape(wp_post.title).lower()
-                    if not any(html.unescape(f).lower() in title_lower for f in title_filter):
-                        continue
-
-                all_posts.append(wp_post)
-
-            # Check if there are more pages
-            total_pages = int(resp.headers.get("X-WP-TotalPages", "1"))
-            if page >= total_pages:
-                break
-            page += 1
+        else:
+            # 'publish' or any other single status value
+            all_posts, total_fetched = await self._fetch_posts_paginated(
+                post_status, title_filter
+            )
 
         logger.info(
             "Fetched WordPress posts",
             extra={
                 "matched": len(all_posts),
                 "total_fetched": total_fetched,
+                "status": post_status,
                 "filter": title_filter,
             },
         )

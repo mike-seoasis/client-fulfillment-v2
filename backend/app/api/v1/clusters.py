@@ -98,9 +98,16 @@ async def create_cluster(
             detail="Cluster generation timed out (>90s). Please try again.",
         )
     except ValueError as e:
+        error_msg = str(e)
+        # "Not enough keyword variations" is a valid outcome, not a server error
+        if "Not enough keyword variations" in error_msg:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=error_msg,
+            )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
+            detail=error_msg,
         )
 
     # Load the created cluster with pages for response
@@ -433,6 +440,11 @@ async def regenerate_cluster(
         if "Cannot regenerate" in error_msg:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
+                detail=error_msg,
+            )
+        if "Not enough keyword variations" in error_msg:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=error_msg,
             )
         raise HTTPException(
