@@ -1092,7 +1092,8 @@ export interface BlogLinkMapResponse {
 
 /**
  * Create a new blog campaign from a keyword cluster.
- * Runs the 4-stage topic discovery pipeline (~5-10s).
+ * Runs the 4-stage topic discovery pipeline (~5-90s).
+ * Uses extended timeout to match backend's 90s limit.
  */
 export function createBlogCampaign(
   projectId: string,
@@ -1100,7 +1101,8 @@ export function createBlogCampaign(
 ): Promise<BlogCampaign> {
   return apiClient.post<BlogCampaign>(
     `/projects/${projectId}/blogs`,
-    data
+    data,
+    { timeout: 120_000 }
   );
 }
 
