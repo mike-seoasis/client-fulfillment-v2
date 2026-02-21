@@ -643,12 +643,6 @@ Example:
                 }
             )
 
-        if len(results) < 3:
-            raise ValueError(
-                f"Not enough keyword variations found (only {len(results)}). "
-                "This usually happens with niche or low-volume topics."
-            )
-
         # Sort by composite_score descending, but parent always first
         parent = [r for r in results if r["role"] == "parent"]
         children = [r for r in results if r["role"] == "child"]
@@ -865,6 +859,13 @@ Example:
             raise ValueError(f"Cluster generation failed at Stage 3: {e}") from e
         t3_ms = round((time.perf_counter() - t3_start) * 1000)
 
+        if len(filtered) < 3:
+            warnings.append(
+                f"Only {len(filtered)} keyword variations found. "
+                "This is common with niche or low-volume topics. "
+                "You can add keywords manually."
+            )
+
         total_ms = t1_total_ms + t2_total_ms + t3_ms
 
         generation_metadata: dict[str, Any] = {
@@ -877,6 +878,7 @@ Example:
             "candidates_filtered": len(filtered),
             "volume_unavailable": volume_unavailable,
             "iterations": iterations_run,
+            "few_results": len(filtered) < 3,
         }
 
         # --- Persist to database ---

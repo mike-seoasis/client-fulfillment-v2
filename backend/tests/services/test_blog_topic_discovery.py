@@ -465,10 +465,10 @@ class TestFilterAndRank:
         assert result[0]["search_volume"] == 750
 
     @pytest.mark.asyncio
-    async def test_raises_on_too_few_results(
+    async def test_returns_few_results_without_error(
         self, service: BlogTopicDiscoveryService, mock_claude: AsyncMock
     ) -> None:
-        """Raises ValueError when filter returns fewer than 3 results."""
+        """Returns results even when fewer than 3 are found (no longer raises)."""
         mock_claude.complete.return_value = CompletionResult(
             success=True,
             text=json.dumps([
@@ -479,8 +479,9 @@ class TestFilterAndRank:
         )
 
         candidates = [{"topic": "one", "format_type": "guide", "search_volume": 100}]
-        with pytest.raises(ValueError, match="Not enough keyword variations found"):
-            await service.filter_and_rank(candidates, "Test")
+        result = await service.filter_and_rank(candidates, "Test")
+        assert len(result) == 1
+        assert result[0]["topic"] == "one"
 
 
 # ---------------------------------------------------------------------------

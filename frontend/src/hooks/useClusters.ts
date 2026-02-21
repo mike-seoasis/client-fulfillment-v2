@@ -18,6 +18,7 @@ import {
   getClusters,
   getCluster,
   updateClusterPage,
+  addClusterPage,
   bulkApproveCluster,
   regenerateCluster,
   deleteCluster,
@@ -25,6 +26,7 @@ import {
   type ClusterCreate,
   type ClusterListItem,
   type ClusterPage,
+  type ClusterPageAdd,
   type ClusterPageUpdate,
   type ClusterBulkApproveResponse,
 } from '@/lib/api';
@@ -62,6 +64,12 @@ interface RegenerateClusterInput {
 interface DeleteClusterInput {
   projectId: string;
   clusterId: string;
+}
+
+interface AddClusterPageInput {
+  projectId: string;
+  clusterId: string;
+  data: ClusterPageAdd;
 }
 
 /**
@@ -225,6 +233,31 @@ export function useDeleteCluster(): UseMutationResult<
     mutationFn: ({ projectId, clusterId }: DeleteClusterInput) =>
       deleteCluster(projectId, clusterId),
     onSuccess: (_data, { projectId }) => {
+      queryClient.invalidateQueries({
+        queryKey: clusterKeys.list(projectId),
+      });
+    },
+  });
+}
+
+/**
+ * Manually add a keyword to a cluster.
+ * Invalidates the cluster detail on success.
+ */
+export function useAddClusterPage(): UseMutationResult<
+  ClusterPage,
+  Error,
+  AddClusterPageInput
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ projectId, clusterId, data }: AddClusterPageInput) =>
+      addClusterPage(projectId, clusterId, data),
+    onSuccess: (_data, { projectId, clusterId }) => {
+      queryClient.invalidateQueries({
+        queryKey: clusterKeys.detail(projectId, clusterId),
+      });
       queryClient.invalidateQueries({
         queryKey: clusterKeys.list(projectId),
       });

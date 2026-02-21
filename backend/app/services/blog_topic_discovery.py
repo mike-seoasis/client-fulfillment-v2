@@ -663,12 +663,6 @@ Example:
                 "source_page_id": original.get("source_page_id"),
             })
 
-        if len(results) < 3:
-            raise ValueError(
-                f"Not enough keyword variations found (only {len(results)}). "
-                "This usually happens with niche or low-volume topics."
-            )
-
         # Sort by relevance_score descending
         results.sort(key=lambda x: -(x.get("relevance_score") or 0))
 

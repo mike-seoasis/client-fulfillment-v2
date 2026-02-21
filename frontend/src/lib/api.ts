@@ -539,6 +539,11 @@ export interface ClusterPageUpdate {
   role?: string;
 }
 
+/** Request to manually add a keyword to a cluster. */
+export interface ClusterPageAdd {
+  keyword: string;
+}
+
 /** Response for bulk cluster approval. */
 export interface ClusterBulkApproveResponse {
   bridged_count: number;
@@ -641,6 +646,20 @@ export function deleteCluster(
 ): Promise<void> {
   return apiClient.delete<void>(
     `/projects/${projectId}/clusters/${clusterId}`
+  );
+}
+
+/**
+ * Manually add a keyword to a cluster.
+ */
+export function addClusterPage(
+  projectId: string,
+  clusterId: string,
+  data: ClusterPageAdd
+): Promise<ClusterPage> {
+  return apiClient.post<ClusterPage>(
+    `/projects/${projectId}/clusters/${clusterId}/pages`,
+    data
   );
 }
 

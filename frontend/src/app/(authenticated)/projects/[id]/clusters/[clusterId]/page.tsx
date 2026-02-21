@@ -7,6 +7,7 @@ import { useProject } from '@/hooks/use-projects';
 import {
   useCluster,
   useUpdateClusterPage,
+  useAddClusterPage,
   useBulkApproveCluster,
   useRegenerateCluster,
   useDeleteCluster,
@@ -491,9 +492,13 @@ export default function ClusterDetailPage() {
   const deleteConfirmTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const deleteButtonRef = useRef<HTMLButtonElement>(null);
 
+  // Add keyword state
+  const [addKeywordValue, setAddKeywordValue] = useState('');
+
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
   const { data: cluster, isLoading: isClusterLoading, error: clusterError } = useCluster(projectId, clusterId);
   const updatePage = useUpdateClusterPage();
+  const addClusterPage = useAddClusterPage();
   const bulkApprove = useBulkApproveCluster();
   const regenerateCluster = useRegenerateCluster();
   const deleteClusterMutation = useDeleteCluster();
@@ -602,6 +607,25 @@ export default function ClusterDetailPage() {
     }
     handleShowToast(`${unapproved.length} suggestions approved`, 'success');
   }, [cluster, sortedPages, updatePage, projectId, clusterId, handleShowToast]);
+
+  // Add keyword manually
+  const handleAddKeyword = useCallback(() => {
+    const keyword = addKeywordValue.trim();
+    if (keyword.length < 2) return;
+
+    addClusterPage.mutate(
+      { projectId, clusterId, data: { keyword } },
+      {
+        onSuccess: () => {
+          setAddKeywordValue('');
+          handleShowToast(`Added "${keyword}"`, 'success');
+        },
+        onError: (err) => {
+          handleShowToast(err.message || 'Failed to add keyword', 'error');
+        },
+      }
+    );
+  }, [addKeywordValue, addClusterPage, projectId, clusterId, handleShowToast]);
 
   // Generate Content (bulk approve then navigate)
   const handleGenerateContent = useCallback(() => {
@@ -762,6 +786,16 @@ export default function ClusterDetailPage() {
           </span>
         </div>
 
+        {/* Few results notice */}
+        {cluster.generation_metadata &&
+          (cluster.generation_metadata as Record<string, unknown>).few_results === true && (
+          <div className="mb-4 p-3 bg-sand-100 border border-sand-300 rounded-sm">
+            <p className="text-sm text-warm-gray-700">
+              Fewer keyword variations were found than usual for this topic. You can add your own keywords below.
+            </p>
+          </div>
+        )}
+
         {/* Suggestions list */}
         <div className="border border-cream-500 rounded-sm overflow-hidden">
           <div className="divide-y divide-cream-300">
@@ -776,6 +810,27 @@ export default function ClusterDetailPage() {
               />
             ))}
           </div>
+        </div>
+
+        {/* Add keyword */}
+        <div className="mt-3 flex items-center gap-2">
+          <input
+            type="text"
+            value={addKeywordValue}
+            onChange={(e) => setAddKeywordValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleAddKeyword();
+            }}
+            placeholder="Add a keyword..."
+            className="flex-1 px-3 py-2 text-sm border border-cream-500 rounded-sm bg-white focus:outline-none focus:ring-1 focus:ring-palm-400 focus:border-palm-400 placeholder:text-warm-gray-400"
+          />
+          <Button
+            variant="secondary"
+            onClick={handleAddKeyword}
+            disabled={addKeywordValue.trim().length < 2 || addClusterPage.isPending}
+          >
+            {addClusterPage.isPending ? 'Adding...' : 'Add'}
+          </Button>
         </div>
 
         <hr className="border-cream-500 my-6" />

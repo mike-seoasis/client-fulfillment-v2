@@ -21,6 +21,7 @@ from app.models.page_keywords import PageKeywords
 from app.schemas.cluster import (
     ClusterCreate,
     ClusterListResponse,
+    ClusterPageAdd,
     ClusterPageResponse,
     ClusterPageUpdate,
     ClusterResponse,
@@ -98,16 +99,9 @@ async def create_cluster(
             detail="Cluster generation timed out (>90s). Please try again.",
         )
     except ValueError as e:
-        error_msg = str(e)
-        # "Not enough keyword variations" is a valid outcome, not a server error
-        if "Not enough keyword variations" in error_msg:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=error_msg,
-            )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=error_msg,
+            detail=str(e),
         )
 
     # Load the created cluster with pages for response
@@ -368,6 +362,72 @@ async def update_cluster_page(
 
 
 @router.post(
+    "/{project_id}/clusters/{cluster_id}/pages",
+    response_model=ClusterPageResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_cluster_page(
+    project_id: str,
+    cluster_id: str,
+    data: ClusterPageAdd,
+    db: AsyncSession = Depends(get_session),
+) -> ClusterPageResponse:
+    """Manually add a keyword to a cluster.
+
+    Creates a new child ClusterPage with the given keyword.
+    Useful when auto-generation didn't find enough variations.
+    """
+    await ProjectService.get_project(db, project_id)
+
+    cluster_stmt = select(KeywordCluster).where(
+        KeywordCluster.id == cluster_id,
+        KeywordCluster.project_id == project_id,
+    )
+    cluster_result = await db.execute(cluster_stmt)
+    cluster = cluster_result.scalar_one_or_none()
+    if cluster is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Cluster {cluster_id} not found",
+        )
+
+    # Generate slug from keyword
+    slug = ClusterKeywordService._keyword_to_slug(data.keyword)
+
+    # Determine role: if cluster has no pages, make this the parent
+    page_count_stmt = (
+        select(func.count())
+        .select_from(ClusterPage)
+        .where(ClusterPage.cluster_id == cluster_id)
+    )
+    page_count_result = await db.execute(page_count_stmt)
+    existing_count = page_count_result.scalar_one()
+    role = "parent" if existing_count == 0 else "child"
+
+    page = ClusterPage(
+        cluster_id=cluster_id,
+        keyword=data.keyword.strip().lower(),
+        role=role,
+        url_slug=slug,
+        is_approved=False,
+    )
+    db.add(page)
+    await db.commit()
+    await db.refresh(page)
+
+    logger.info(
+        "Manually added keyword to cluster",
+        extra={
+            "cluster_id": cluster_id,
+            "keyword": data.keyword,
+            "role": role,
+        },
+    )
+
+    return ClusterPageResponse.model_validate(page)
+
+
+@router.post(
     "/{project_id}/clusters/{cluster_id}/regenerate",
     response_model=ClusterResponse,
     status_code=status.HTTP_200_OK,
@@ -440,11 +500,6 @@ async def regenerate_cluster(
         if "Cannot regenerate" in error_msg:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=error_msg,
-            )
-        if "Not enough keyword variations" in error_msg:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=error_msg,
             )
         raise HTTPException(

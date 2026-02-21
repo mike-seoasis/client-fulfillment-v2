@@ -97,3 +97,13 @@ class ClusterPageUpdate(BaseModel):
     keyword: str | None = Field(None, description="Target keyword")
     url_slug: str | None = Field(None, description="URL slug")
     role: str | None = Field(None, description="Role (parent or child)")
+
+
+class ClusterPageAdd(BaseModel):
+    """Request schema for manually adding a keyword to a cluster."""
+
+    keyword: str = Field(
+        ...,
+        min_length=2,
+        description="Target keyword for the new page",
+    )
