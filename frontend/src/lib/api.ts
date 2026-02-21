@@ -22,6 +22,8 @@ export class ApiError extends Error {
 
 interface RequestOptions extends Omit<RequestInit, "body"> {
   body?: unknown;
+  /** Custom timeout in milliseconds. Defaults to 15_000. */
+  timeout?: number;
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
@@ -49,7 +51,7 @@ export async function api<T>(
   endpoint: string,
   options: RequestOptions = {}
 ): Promise<T> {
-  const { body, headers, ...rest } = options;
+  const { body, headers, timeout = 15_000, ...rest } = options;
 
   const token = getSessionToken();
   const config: RequestInit = {
@@ -69,7 +71,21 @@ export async function api<T>(
     ? `${API_BASE_URL}${endpoint}`
     : `${API_BASE_URL}/${endpoint}`;
 
-  const response = await fetch(url, config);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  let response: Response;
+  try {
+    response = await fetch(url, { ...config, signal: controller.signal });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("Request timed out");
+    }
+    throw err;
+  }
+  clearTimeout(timeoutId);
+
   return handleResponse<T>(response);
 }
 
@@ -534,7 +550,8 @@ export interface ClusterBulkApproveResponse {
 
 /**
  * Create a new keyword cluster from a seed keyword.
- * Runs the 3-stage generation pipeline (~5-10s).
+ * Runs the 3-stage generation pipeline (~5-30s).
+ * Uses extended timeout to match backend's 90s limit.
  */
 export function createCluster(
   projectId: string,
@@ -542,7 +559,8 @@ export function createCluster(
 ): Promise<Cluster> {
   return apiClient.post<Cluster>(
     `/projects/${projectId}/clusters`,
-    data
+    data,
+    { timeout: 120_000 }
   );
 }
 
@@ -601,13 +619,16 @@ export function bulkApproveCluster(
 /**
  * Regenerate unapproved keywords in a cluster.
  * Keeps approved pages and replaces unapproved ones with fresh suggestions.
+ * Uses extended timeout to match backend's 90s limit.
  */
 export function regenerateCluster(
   projectId: string,
   clusterId: string
 ): Promise<Cluster> {
   return apiClient.post<Cluster>(
-    `/projects/${projectId}/clusters/${clusterId}/regenerate`
+    `/projects/${projectId}/clusters/${clusterId}/regenerate`,
+    undefined,
+    { timeout: 120_000 }
   );
 }
 
