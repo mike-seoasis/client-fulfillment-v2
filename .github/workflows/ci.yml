@@ -109,7 +109,7 @@ jobs:
         with:
           context: ./backend
           push: false
-          tags: onboarding-backend:test
+          tags: grove-backend:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

@@ -1882,10 +1882,10 @@ async def export_csv(
             detail="No approved pages available for export",
         )
 
-    # Build filename: "Project Name - Task - Matrixify Export via SEOasis.csv"
+    # Build filename: "Project Name - Task - Matrixify Export via Grove.csv"
     safe_project = ExportService.safe_filename_part(project.name)
     safe_label = ExportService.safe_filename_part(export_label)
-    filename = f"{safe_project} - {safe_label} - Matrixify Export via SEOasis.csv"
+    filename = f"{safe_project} - {safe_label} - Matrixify Export via Grove.csv"
 
     return Response(
         content=csv_string,

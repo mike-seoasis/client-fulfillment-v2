@@ -56,10 +56,10 @@ describe('Header', () => {
       expect(redditLink).toHaveAttribute('href', '/reddit');
     });
 
-    it('renders the app title', () => {
+    it('renders the app logo', () => {
       render(<Header />);
 
-      expect(screen.getByText('Client Onboarding')).toBeInTheDocument();
+      expect(screen.getByAltText('Grove')).toBeInTheDocument();
     });
   });
 

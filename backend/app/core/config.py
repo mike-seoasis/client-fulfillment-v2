@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     )
 
     # Application
-    app_name: str = Field(default="Client Fulfillment App V2")
+    app_name: str = Field(default="Grove")
     app_version: str = Field(default="2.0.0")
     debug: bool = Field(default=False)
     environment: str = Field(default="development")
@@ -273,7 +273,7 @@ class Settings(BaseSettings):
         description="Default sender email address",
     )
     smtp_from_name: str = Field(
-        default="Client Onboarding",
+        default="Grove",
         description="Default sender display name",
     )
     # Circuit breaker settings for email

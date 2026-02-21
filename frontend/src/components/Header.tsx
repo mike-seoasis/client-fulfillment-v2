@@ -38,14 +38,12 @@ export function Header() {
           {/* Logo, title, and nav */}
           <div className="flex items-center gap-8">
             {/* Logo and title */}
-            <div className="flex items-center gap-3">
-              {/* Logo placeholder */}
-              <div className="flex h-9 w-9 items-center justify-center rounded-sm bg-palm-500 text-white font-bold text-lg">
-                C
-              </div>
-              <span className="text-lg font-semibold text-warm-gray-900">
-                Client Onboarding
-              </span>
+            <div className="flex items-center gap-2">
+              <img
+                src="/grove-logo.png"
+                alt="Grove"
+                className="h-16 w-auto"
+              />
             </div>
 
             {/* Navigation links */}

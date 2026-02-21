@@ -29,18 +29,15 @@ export default function SignInPage() {
     <div className="w-full max-w-sm px-4">
       <div className="rounded-sm border border-sand-500 bg-white p-8 shadow-sm">
         {/* Logo and title */}
-        <div className="mb-8 flex flex-col items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-sm bg-palm-500 text-white font-bold text-xl">
-            C
-          </div>
-          <div className="text-center">
-            <h1 className="text-xl font-semibold text-warm-gray-900">
-              Client Onboarding
-            </h1>
-            <p className="mt-1 text-sm text-warm-gray-500">
-              Sign in to continue
-            </p>
-          </div>
+        <div className="mb-8 flex flex-col items-center gap-4">
+          <img
+            src="/grove-logo.png"
+            alt="Grove by SEOasis"
+            className="h-28 w-auto"
+          />
+          <p className="text-sm text-warm-gray-500">
+            Sign in to continue
+          </p>
         </div>
 
         {/* Error message */}

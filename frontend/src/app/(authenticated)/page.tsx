@@ -44,7 +44,7 @@ function FolderIcon({ className }: { className?: string }) {
 }
 
 export default function Dashboard() {
-  const { data, isLoading, error } = useProjects();
+  const { data, isLoading, error, refetch } = useProjects();
 
   const projects = data?.items ?? [];
   const hasProjects = projects.length > 0;
@@ -67,7 +67,14 @@ export default function Dashboard() {
       {/* Error state */}
       {error && (
         <div className="rounded-sm bg-coral-50 border border-coral-200 p-4 text-coral-700">
-          Failed to load projects. Please try again.
+          <p>Failed to load projects. Please try again.</p>
+          <p className="text-sm mt-1 text-coral-500">{error.message}</p>
+          <button
+            onClick={() => refetch()}
+            className="mt-3 bg-palm-500 text-white rounded-sm px-4 py-2 text-sm hover:bg-palm-600"
+          >
+            Retry
+          </button>
         </div>
       )}
 
@@ -79,7 +86,7 @@ export default function Dashboard() {
         <EmptyState
           icon={<FolderIcon />}
           title="No projects yet"
-          description="Create your first project to get started with client onboarding."
+          description="Create your first project to get started."
           action={
             <Link href="/projects/new">
               <Button>Create First Project</Button>

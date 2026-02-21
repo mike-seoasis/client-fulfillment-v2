@@ -1,1 +1,1 @@
-"""Test suite for Client Fulfillment App V2."""
+"""Test suite for Grove."""

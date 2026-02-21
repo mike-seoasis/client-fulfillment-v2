@@ -262,4 +262,4 @@ class TestExportEndpoint:
 
         assert resp.status_code == 200
         disposition = resp.headers["content-disposition"]
-        assert "Test Project - Onboarding - Matrixify Export via SEOasis.csv" in disposition
+        assert "Test Project - Onboarding - Matrixify Export via Grove.csv" in disposition

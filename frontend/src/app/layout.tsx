@@ -16,8 +16,8 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Client Onboarding",
-  description: "Client onboarding tool for managing projects and content",
+  title: "Grove",
+  description: "Grove by SEOasis — client onboarding and content fulfillment platform",
 };
 
 export default function RootLayout({

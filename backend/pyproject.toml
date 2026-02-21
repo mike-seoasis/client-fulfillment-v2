@@ -6,9 +6,9 @@ build-backend = "setuptools.build_meta"
 include = ["app*"]
 
 [project]
-name = "client-fulfillment-app"
+name = "grove"
 version = "2.0.0"
-description = "Client Fulfillment App V2 - SEO content generation pipeline"
+description = "Grove by SEOasis — client onboarding and content fulfillment platform"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

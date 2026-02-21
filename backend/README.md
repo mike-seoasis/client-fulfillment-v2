@@ -1,6 +1,6 @@
-# Client Onboarding Backend
+# Grove Backend
 
-FastAPI backend for the client onboarding system.
+FastAPI backend for Grove by SEOasis.
 
 ## Quick Start
 
