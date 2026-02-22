@@ -23,6 +23,7 @@ import {
   deleteRedditAccount,
   fetchRedditConfig,
   upsertRedditConfig,
+  deleteRedditConfig,
   triggerRedditDiscovery,
   fetchDiscoveryStatus,
   fetchRedditPosts,
@@ -246,6 +247,27 @@ export function useUpsertRedditConfig(projectId: string): UseMutationResult<
   return useMutation({
     mutationFn: (data: RedditProjectConfigCreate) =>
       upsertRedditConfig(projectId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: redditKeys.config(projectId),
+      });
+    },
+  });
+}
+
+/**
+ * Delete Reddit config (and associated posts/comments) for a project.
+ * Does NOT delete the parent AI SEO project.
+ */
+export function useDeleteRedditConfig(projectId: string): UseMutationResult<
+  void,
+  Error,
+  void
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => deleteRedditConfig(projectId),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: redditKeys.config(projectId),

@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useProject, useUpdateProject, useDeleteProject } from '@/hooks/use-projects';
+import { useProject, useUpdateProject } from '@/hooks/use-projects';
 import {
   useRedditConfig,
   useUpsertRedditConfig,
@@ -18,6 +18,7 @@ import {
   useUpdateComment,
   useDeleteComment,
   useRevertComment,
+  useDeleteRedditConfig,
 } from '@/hooks/useReddit';
 import { Button, Toast, EmptyState } from '@/components/ui';
 import type { RedditDiscoveredPost, RedditCommentResponse, DiscoveryStatus as DiscoveryStatusType, GenerationStatusResponse } from '@/lib/api';
@@ -665,7 +666,7 @@ export default function RedditProjectDetailPage() {
 
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
   const updateProject = useUpdateProject();
-  const deleteProject = useDeleteProject();
+  const deleteRedditConfig = useDeleteRedditConfig(projectId);
   const { data: existingConfig, isLoading: isConfigLoading } = useRedditConfig(projectId);
 
   // Two-step delete confirmation
@@ -687,7 +688,7 @@ export default function RedditProjectDetailPage() {
   const handleDeleteClick = async () => {
     if (!isDeleteConfirming) { setIsDeleteConfirming(true); return; }
     try {
-      await deleteProject.mutateAsync(projectId);
+      await deleteRedditConfig.mutateAsync();
       router.push('/reddit');
     } catch { setIsDeleteConfirming(false); }
   };
@@ -914,9 +915,9 @@ export default function RedditProjectDetailPage() {
             size="sm"
             onClick={handleDeleteClick}
             onBlur={handleDeleteBlur}
-            disabled={deleteProject.isPending}
+            disabled={deleteRedditConfig.isPending}
           >
-            {deleteProject.isPending ? 'Deleting...' : isDeleteConfirming ? 'Confirm Delete' : 'Delete'}
+            {deleteRedditConfig.isPending ? 'Deleting...' : isDeleteConfirming ? 'Confirm Delete' : 'Delete'}
           </Button>
         </div>
       </div>

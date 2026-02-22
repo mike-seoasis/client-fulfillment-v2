@@ -1868,6 +1868,10 @@ export function upsertRedditConfig(
   );
 }
 
+export function deleteRedditConfig(projectId: string): Promise<void> {
+  return apiClient.delete<void>(`/projects/${projectId}/reddit/config`);
+}
+
 // =============================================================================
 // REDDIT DISCOVERY API TYPES
 // =============================================================================

@@ -544,6 +544,47 @@ async def upsert_project_reddit_config(
     return RedditProjectConfigResponse.model_validate(config)
 
 
+@reddit_project_router.delete(
+    "/{project_id}/reddit/config",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        404: {"description": "Reddit config not found"},
+    },
+)
+async def delete_project_reddit_config(
+    project_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> None:
+    """Delete Reddit config for a project.
+
+    Removes the RedditProjectConfig and all associated posts/comments.
+    Does NOT delete the parent project.
+    """
+    stmt = select(RedditProjectConfig).where(
+        RedditProjectConfig.project_id == project_id
+    )
+    result = await db.execute(stmt)
+    config = result.scalar_one_or_none()
+
+    if config is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Reddit config for project {project_id} not found",
+        )
+
+    # Delete comments first (FK to posts), then posts, then config
+    from sqlalchemy import delete as sa_delete
+
+    await db.execute(
+        sa_delete(RedditComment).where(RedditComment.project_id == project_id)
+    )
+    await db.execute(
+        sa_delete(RedditPost).where(RedditPost.project_id == project_id)
+    )
+    await db.delete(config)
+    await db.commit()
+
+
 # ---------------------------------------------------------------------------
 # Discovery endpoints (Phase 14b)
 # ---------------------------------------------------------------------------
