@@ -64,7 +64,7 @@ async function refreshSession(): Promise<string | null> {
     try {
       // Hit the Neon Auth get-session endpoint — this refreshes the session
       // cookie and returns current session data including the session ID.
-      const res = await fetch("/api/auth/get-session", {
+      const res = await fetch("/api/auth/get-session?disableCookieCache=true", {
         credentials: "include",
       });
       if (!res.ok) return null;

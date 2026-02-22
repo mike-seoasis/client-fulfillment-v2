@@ -5,6 +5,7 @@ When AUTH_REQUIRED=false, returns a dev user without checking headers.
 """
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import text
@@ -48,24 +49,34 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_sess
             detail="Not authenticated",
         )
 
-    token = auth_header[7:]  # Strip "Bearer " prefix
+    session_id = auth_header[7:]  # Strip "Bearer " prefix
 
-    # Query neon_auth schema (managed by Neon Auth, not our Alembic models)
+    # Look up by session ID (UUID primary key).
+    # The frontend sends session.id from useSession(), not session.token
+    # (which is a JWT and doesn't match the DB's opaque token column).
     result = await db.execute(
         text(
-            'SELECT u.id, u.email, u.name '
+            'SELECT u.id, u.email, u.name, s."expiresAt" '
             'FROM neon_auth.session s '
             'JOIN neon_auth."user" u ON s."userId" = u.id '
-            'WHERE s.token = :token AND s."expiresAt" > now()'
+            'WHERE s.id = :session_id'
         ),
-        {"token": token},
+        {"session_id": session_id},
     )
     row = result.first()
 
     if row is None:
+        logger.warning("Session not found: %s...", session_id[:8])
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired session",
+            detail="Session not found",
+        )
+
+    if row.expiresAt < datetime.now(timezone.utc):
+        logger.warning("Session expired at %s", row.expiresAt)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session expired",
         )
 
     return UserInfo(id=str(row.id), email=row.email, name=row.name)

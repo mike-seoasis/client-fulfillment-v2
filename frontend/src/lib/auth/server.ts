@@ -10,6 +10,7 @@ export function getAuth() {
       baseUrl: process.env.NEON_AUTH_BASE_URL!,
       cookies: {
         secret: process.env.NEON_AUTH_COOKIE_SECRET!,
+        sessionDataTtl: 60, // Reduce from default 300s to 60s to minimize stale session window
       },
     });
   }
