@@ -886,7 +886,8 @@ Example: [{{"keyword": "keyword one", "relevance_score": 0.95}}, {{"keyword": "k
         category = page.category
 
         # Extract H1 from headings
-        h1 = headings.get("h1", [None])[0] if headings else None
+        h1_list = headings.get("h1", []) if headings else []
+        h1 = h1_list[0] if h1_list else None
         content_excerpt = body_content[:500] if body_content else None
 
         logger.info(
