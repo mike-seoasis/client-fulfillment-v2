@@ -828,6 +828,11 @@ IMPORTANT:
             )
             return []
 
+        logger.info(
+            "Subreddit research raw response",
+            extra={"brand_name": brand_name, "raw_text": result.text[:1000]},
+        )
+
         # Parse response: split by newlines, clean up each line
         import re
 
@@ -845,9 +850,12 @@ IMPORTANT:
             line = re.sub(r"^[-\*•]\s*", "", line)
             # Remove citations like [1], [2]
             line = re.sub(r"\[\d+\]", "", line)
-            # Remove any trailing description after a dash or colon
-            line = re.sub(r"\s*[-–—:].*$", "", line)
+            # Remove any trailing description after a dash, en-dash, em-dash, or colon
+            line = re.sub(r"\s+[-–—:]\s+.*$", "", line)
 
+            line = line.strip()
+            # Strip surrounding ** bold markers
+            line = re.sub(r"^\*\*(.+?)\*\*$", r"\1", line)
             line = line.strip()
 
             # Filter garbage
