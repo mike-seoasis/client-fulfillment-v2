@@ -14,7 +14,7 @@ from itertools import combinations
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.attributes import flag_modified
@@ -467,11 +467,22 @@ async def _generate_blog_taxonomy(
 
         page_summaries.append(summary)
 
-    # Check for existing onboarding page labels in the same project
+    # Check for existing collection page labels in the same project
+    # (onboarding pages + cluster pages with approved content)
     onboarding_labels_section = ""
-    onboarding_stmt = select(CrawledPage).where(
-        CrawledPage.project_id == project_id,
-        CrawledPage.source == "onboarding",
+    onboarding_stmt = (
+        select(CrawledPage)
+        .outerjoin(PageContent, PageContent.crawled_page_id == CrawledPage.id)
+        .where(
+            CrawledPage.project_id == project_id,
+            or_(
+                CrawledPage.source == "onboarding",
+                and_(
+                    CrawledPage.source == "cluster",
+                    PageContent.is_approved.is_(True),
+                ),
+            ),
+        )
     )
     onboarding_result = await db.execute(onboarding_stmt)
     onboarding_pages = list(onboarding_result.scalars().all())
@@ -746,17 +757,25 @@ async def step5_plan_links(
     _wp_progress[job_id] = progress
 
     try:
-        # Detect whether project has onboarding (collection) pages
-        onboarding_count_stmt = (
+        # Detect whether project has collection pages
+        # (onboarding pages + cluster pages with approved content)
+        coll_count_stmt = (
             select(func.count())
             .select_from(CrawledPage)
+            .outerjoin(PageContent, PageContent.crawled_page_id == CrawledPage.id)
             .where(
                 CrawledPage.project_id == project_id,
-                CrawledPage.source == "onboarding",
+                or_(
+                    CrawledPage.source == "onboarding",
+                    and_(
+                        CrawledPage.source == "cluster",
+                        PageContent.is_approved.is_(True),
+                    ),
+                ),
             )
         )
-        onboarding_count_result = await db.execute(onboarding_count_stmt)
-        has_collection_pages = onboarding_count_result.scalar_one() > 0
+        coll_count_result = await db.execute(coll_count_stmt)
+        has_collection_pages = coll_count_result.scalar_one() > 0
 
         if has_collection_pages:
             logger.info("Mixed project detected — using collection-aware link planning")
@@ -774,12 +793,22 @@ async def step5_plan_links(
             progress["result"] = {"total_links": 0, "groups_processed": 0}
             return progress["result"]
 
-        # Pre-load onboarding pages once if this is a mixed project
+        # Pre-load collection pages if this is a mixed project
         collection_pages: list[CrawledPage] = []
         if has_collection_pages:
-            coll_stmt = select(CrawledPage).where(
-                CrawledPage.project_id == project_id,
-                CrawledPage.source == "onboarding",
+            coll_stmt = (
+                select(CrawledPage)
+                .outerjoin(PageContent, PageContent.crawled_page_id == CrawledPage.id)
+                .where(
+                    CrawledPage.project_id == project_id,
+                    or_(
+                        CrawledPage.source == "onboarding",
+                        and_(
+                            CrawledPage.source == "cluster",
+                            PageContent.is_approved.is_(True),
+                        ),
+                    ),
+                )
             )
             coll_result = await db.execute(coll_stmt)
             collection_pages = list(coll_result.scalars().all())
@@ -1076,7 +1105,7 @@ def _build_silo_graph_with_collections(
                 "url": cp.normalized_url,
                 "labels": cp.labels or [],
                 "is_priority": bool(cp.category and cp.category.lower() in ("collection", "product")),
-                "source": "onboarding",
+                "source": "collection",
             })
 
     all_nodes = wp_nodes + coll_nodes
@@ -1159,7 +1188,7 @@ def select_targets_wp_with_collections(
         # Split budget: reserve slots for collection targets
         collection_targets_available = [
             tid for tid in neighbors
-            if pages_by_id[tid].get("source") == "onboarding"
+            if pages_by_id[tid].get("source") == "collection"
         ]
         collection_budget = min(len(collection_targets_available), max(1, budget // 2))
         blog_budget = budget - collection_budget
@@ -1177,7 +1206,7 @@ def select_targets_wp_with_collections(
             excess_inbound = inbound_counts[target_id] - avg_inbound
             diversity_penalty = max(0.0, excess_inbound * 0.5)
 
-            if target_page.get("source") == "onboarding":
+            if target_page.get("source") == "collection":
                 # Collection page — boost score
                 priority_bonus = PRIORITY_BONUS if target_page.get("is_priority") else 0.0
                 score = overlap + COLLECTION_BONUS + priority_bonus - diversity_penalty
@@ -1205,7 +1234,7 @@ def select_targets_wp_with_collections(
                 "is_priority": target_page.get("is_priority", False),
                 "label_overlap": neighbors[target_id],
                 "score": score,
-                "source": "onboarding",
+                "source": "collection",
             })
             inbound_counts[target_id] += 1
 
@@ -1234,7 +1263,7 @@ def select_targets_wp_with_collections(
             "total_links": sum(len(t) for t in result.values()),
             "collection_links": sum(
                 1 for targets in result.values()
-                for t in targets if t.get("source") == "onboarding"
+                for t in targets if t.get("source") == "collection"
             ),
         },
     )
@@ -1457,12 +1486,23 @@ async def step6_get_review(
     total_link_count = 0
 
     # Pre-aggregate collection link counts in a single query
-    onboarding_ids_stmt = select(CrawledPage.id).where(
-        CrawledPage.project_id == project_id,
-        CrawledPage.source == "onboarding",
+    # Include onboarding pages + cluster pages with approved content
+    collection_ids_stmt = (
+        select(CrawledPage.id)
+        .outerjoin(PageContent, PageContent.crawled_page_id == CrawledPage.id)
+        .where(
+            CrawledPage.project_id == project_id,
+            or_(
+                CrawledPage.source == "onboarding",
+                and_(
+                    CrawledPage.source == "cluster",
+                    PageContent.is_approved.is_(True),
+                ),
+            ),
+        )
     )
-    onboarding_ids_result = await db.execute(onboarding_ids_stmt)
-    onboarding_page_ids = set(onboarding_ids_result.scalars().all())
+    collection_ids_result = await db.execute(collection_ids_stmt)
+    onboarding_page_ids = set(collection_ids_result.scalars().all())
 
     collection_counts_by_cluster: dict[str, int] = {}
     if onboarding_page_ids:

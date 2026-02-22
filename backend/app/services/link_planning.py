@@ -159,19 +159,28 @@ class SiloLinkPlanner:
         project_id: str,
         db: AsyncSession,
     ) -> dict[str, Any]:
-        """Build label-overlap graph from onboarding pages.
+        """Build label-overlap graph from collection pages.
 
+        Includes both onboarding pages and cluster pages with approved content.
         Only includes pages where PageContent.status='complete' and
-        PageKeywords.is_approved=True. Edges are created between page pairs
-        with label overlap >= LABEL_OVERLAP_THRESHOLD.
+        PageKeywords.is_approved=True. Cluster pages additionally require
+        PageContent.is_approved=True (export-ready).
         """
+        from sqlalchemy import and_, or_
+
         stmt = (
             select(CrawledPage)
             .join(PageContent, PageContent.crawled_page_id == CrawledPage.id)
             .join(PageKeywords, PageKeywords.crawled_page_id == CrawledPage.id)
             .where(
                 CrawledPage.project_id == project_id,
-                CrawledPage.source == "onboarding",
+                or_(
+                    CrawledPage.source == "onboarding",
+                    and_(
+                        CrawledPage.source == "cluster",
+                        PageContent.is_approved.is_(True),
+                    ),
+                ),
                 PageContent.status == "complete",
                 PageKeywords.is_approved.is_(True),
             )

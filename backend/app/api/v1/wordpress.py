@@ -79,19 +79,35 @@ async def connect(body: WPConnectRequest) -> WPConnectResponse:
 async def list_linkable_projects(
     db: AsyncSession = Depends(get_session),
 ) -> list[WPProjectOption]:
-    """List projects that have onboarding collection pages (for the project picker)."""
-    from sqlalchemy import func, select as sa_select
+    """List projects that have collection pages (for the project picker).
+
+    Counts both onboarding pages and cluster-generated pages whose content
+    has been approved (export-ready).
+    """
+    from sqlalchemy import and_, func, or_, select as sa_select
 
     from app.models.crawled_page import CrawledPage
+    from app.models.page_content import PageContent
     from app.models.project import Project
 
-    # Find projects with at least one onboarding page
+    # Find projects with at least one collection page:
+    # - All onboarding pages, OR
+    # - Cluster pages whose content has been approved (export-ready)
     subq = (
         sa_select(
             CrawledPage.project_id,
             func.count().label("page_count"),
         )
-        .where(CrawledPage.source == "onboarding")
+        .outerjoin(PageContent, PageContent.crawled_page_id == CrawledPage.id)
+        .where(
+            or_(
+                CrawledPage.source == "onboarding",
+                and_(
+                    CrawledPage.source == "cluster",
+                    PageContent.is_approved.is_(True),
+                ),
+            )
+        )
         .group_by(CrawledPage.project_id)
         .subquery()
     )
