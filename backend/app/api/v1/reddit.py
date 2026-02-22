@@ -394,26 +394,66 @@ async def get_project_reddit_config(
     return RedditProjectConfigResponse.model_validate(config)
 
 
-async def _run_initial_subreddit_research(project_id: str) -> None:
-    """Background task: auto-populate target_subreddits from brand config.
+async def _run_initial_reddit_setup(project_id: str) -> None:
+    """Background task: auto-populate Reddit config from project data.
 
-    Runs after a new RedditProjectConfig is created. Fetches the project's
-    brand config, extracts brand info, and calls Perplexity to discover
-    relevant subreddits.
+    Runs after a new RedditProjectConfig is created. Does two things:
+    1. Seeds search_keywords from collection page primary keywords
+    2. Discovers target_subreddits via Perplexity using brand config data
     """
     from app.integrations.perplexity import get_perplexity
+    from app.models.crawled_page import CrawledPage
+    from app.models.page_keywords import PageKeywords
     from sqlalchemy.orm.attributes import flag_modified
 
     try:
-        perplexity = await get_perplexity()
-        if not perplexity.available:
-            logger.warning(
-                "Skipping initial subreddit research — Perplexity not available",
-                extra={"project_id": project_id},
-            )
-            return
-
         async with db_manager.session_factory() as db:
+            # --- Seed search_keywords from collection pages ---
+            kw_stmt = (
+                select(PageKeywords.primary_keyword)
+                .join(CrawledPage, PageKeywords.crawled_page_id == CrawledPage.id)
+                .where(
+                    CrawledPage.project_id == project_id,
+                    CrawledPage.category == "collection",
+                    PageKeywords.primary_keyword.isnot(None),
+                )
+                .distinct()
+            )
+            kw_result = await db.execute(kw_stmt)
+            keywords = [row[0] for row in kw_result.all() if row[0]]
+
+            rc_stmt = select(RedditProjectConfig).where(
+                RedditProjectConfig.project_id == project_id
+            )
+            rc_result = await db.execute(rc_stmt)
+            reddit_config = rc_result.scalar_one_or_none()
+
+            if not reddit_config:
+                return
+
+            if keywords and not reddit_config.search_keywords:
+                reddit_config.search_keywords = keywords
+                flag_modified(reddit_config, "search_keywords")
+                await db.commit()
+
+                logger.info(
+                    "Auto-populated search_keywords from collection pages",
+                    extra={
+                        "project_id": project_id,
+                        "keyword_count": len(keywords),
+                        "keywords": keywords,
+                    },
+                )
+
+            # --- Discover subreddits via Perplexity ---
+            perplexity = await get_perplexity()
+            if not perplexity.available:
+                logger.warning(
+                    "Skipping initial subreddit research — Perplexity not available",
+                    extra={"project_id": project_id},
+                )
+                return
+
             # Fetch brand config
             bc_stmt = select(BrandConfig).where(
                 BrandConfig.project_id == project_id
@@ -445,18 +485,12 @@ Products: {bf.get("what_they_sell", {}).get("primary_products_services", "")}
 Target audience: {ta.get("audience_overview", {}).get("primary_persona", "")}
 USP: {bf.get("differentiators", {}).get("primary_usp", "")}"""
 
-            # Run Perplexity subreddit research
             subreddits = await perplexity.research_subreddits(brand_name, brand_info)
 
             if subreddits:
-                # Update the reddit config with discovered subreddits
-                rc_stmt = select(RedditProjectConfig).where(
-                    RedditProjectConfig.project_id == project_id
-                )
-                rc_result = await db.execute(rc_stmt)
-                reddit_config = rc_result.scalar_one_or_none()
-
-                if reddit_config and not reddit_config.target_subreddits:
+                # Re-fetch in case config was updated during Perplexity call
+                await db.refresh(reddit_config)
+                if not reddit_config.target_subreddits:
                     reddit_config.target_subreddits = subreddits
                     flag_modified(reddit_config, "target_subreddits")
                     await db.commit()
@@ -477,7 +511,7 @@ USP: {bf.get("differentiators", {}).get("primary_usp", "")}"""
 
     except Exception as e:
         logger.warning(
-            "Initial subreddit research failed (non-fatal)",
+            "Initial Reddit setup failed (non-fatal)",
             extra={"project_id": project_id, "error": str(e)},
         )
 
@@ -539,7 +573,7 @@ async def upsert_project_reddit_config(
     await db.refresh(config)
 
     # Trigger background subreddit research for new configs
-    background_tasks.add_task(_run_initial_subreddit_research, project_id)
+    background_tasks.add_task(_run_initial_reddit_setup, project_id)
     response.status_code = status.HTTP_201_CREATED
     return RedditProjectConfigResponse.model_validate(config)
 
