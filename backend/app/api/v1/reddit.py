@@ -11,8 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import cast
 
-from app.core.database import get_session
+from app.core.database import db_manager, get_session
 from app.core.logging import get_logger
+from app.models.brand_config import BrandConfig
 from app.models.project import Project
 from app.models.reddit_account import RedditAccount
 from app.models.reddit_comment import RedditComment
@@ -393,6 +394,94 @@ async def get_project_reddit_config(
     return RedditProjectConfigResponse.model_validate(config)
 
 
+async def _run_initial_subreddit_research(project_id: str) -> None:
+    """Background task: auto-populate target_subreddits from brand config.
+
+    Runs after a new RedditProjectConfig is created. Fetches the project's
+    brand config, extracts brand info, and calls Perplexity to discover
+    relevant subreddits.
+    """
+    from app.integrations.perplexity import get_perplexity
+    from sqlalchemy.orm.attributes import flag_modified
+
+    try:
+        perplexity = await get_perplexity()
+        if not perplexity.available:
+            logger.warning(
+                "Skipping initial subreddit research — Perplexity not available",
+                extra={"project_id": project_id},
+            )
+            return
+
+        async with db_manager.session_factory() as db:
+            # Fetch brand config
+            bc_stmt = select(BrandConfig).where(
+                BrandConfig.project_id == project_id
+            )
+            bc_result = await db.execute(bc_stmt)
+            brand_config = bc_result.scalar_one_or_none()
+
+            if not brand_config or not brand_config.v2_schema:
+                logger.info(
+                    "Skipping initial subreddit research — no brand config",
+                    extra={"project_id": project_id},
+                )
+                return
+
+            schema = brand_config.v2_schema
+            bf = schema.get("brand_foundation", {})
+            ta = schema.get("target_audience", {})
+
+            brand_name = bf.get("company_overview", {}).get("company_name", "") or brand_config.brand_name
+            if not brand_name:
+                logger.warning(
+                    "Skipping initial subreddit research — no brand name",
+                    extra={"project_id": project_id},
+                )
+                return
+
+            brand_info = f"""Industry: {bf.get("company_overview", {}).get("industry", "")}
+Products: {bf.get("what_they_sell", {}).get("primary_products_services", "")}
+Target audience: {ta.get("audience_overview", {}).get("primary_persona", "")}
+USP: {bf.get("differentiators", {}).get("primary_usp", "")}"""
+
+            # Run Perplexity subreddit research
+            subreddits = await perplexity.research_subreddits(brand_name, brand_info)
+
+            if subreddits:
+                # Update the reddit config with discovered subreddits
+                rc_stmt = select(RedditProjectConfig).where(
+                    RedditProjectConfig.project_id == project_id
+                )
+                rc_result = await db.execute(rc_stmt)
+                reddit_config = rc_result.scalar_one_or_none()
+
+                if reddit_config and not reddit_config.target_subreddits:
+                    reddit_config.target_subreddits = subreddits
+                    flag_modified(reddit_config, "target_subreddits")
+                    await db.commit()
+
+                    logger.info(
+                        "Auto-populated target_subreddits on Reddit config creation",
+                        extra={
+                            "project_id": project_id,
+                            "subreddit_count": len(subreddits),
+                            "subreddits": subreddits,
+                        },
+                    )
+            else:
+                logger.warning(
+                    "Initial subreddit research returned no results",
+                    extra={"project_id": project_id},
+                )
+
+    except Exception as e:
+        logger.warning(
+            "Initial subreddit research failed (non-fatal)",
+            extra={"project_id": project_id, "error": str(e)},
+        )
+
+
 @reddit_project_router.post(
     "/{project_id}/reddit/config",
     response_model=RedditProjectConfigResponse,
@@ -406,11 +495,13 @@ async def upsert_project_reddit_config(
     project_id: str,
     data: RedditProjectConfigCreate,
     response: Response,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_session),
 ) -> RedditProjectConfigResponse:
     """Create or update Reddit config for a project.
 
     Returns 201 if created, 200 if updated. Returns 404 if project doesn't exist.
+    On new creation, triggers background subreddit research using brand config data.
     """
     # Verify project exists
     project_stmt = select(Project.id).where(Project.id == project_id)
@@ -446,6 +537,9 @@ async def upsert_project_reddit_config(
     db.add(config)
     await db.commit()
     await db.refresh(config)
+
+    # Trigger background subreddit research for new configs
+    background_tasks.add_task(_run_initial_subreddit_research, project_id)
     response.status_code = status.HTTP_201_CREATED
     return RedditProjectConfigResponse.model_validate(config)
 
