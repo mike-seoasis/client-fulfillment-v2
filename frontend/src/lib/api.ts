@@ -1,10 +1,11 @@
 /**
  * API client with fetch wrapper.
  *
- * Handles base URL configuration and JSON serialization for API requests.
+ * Handles base URL configuration, JSON serialization, and automatic
+ * session refresh on 401 errors for API requests.
  */
 
-import { getSessionToken } from "./auth-token";
+import { getSessionToken, setSessionToken } from "./auth-token";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
@@ -24,6 +25,8 @@ interface RequestOptions extends Omit<RequestInit, "body"> {
   body?: unknown;
   /** Custom timeout in milliseconds. Defaults to 15_000. */
   timeout?: number;
+  /** @internal — prevents infinite retry loops on 401. */
+  _isRetry?: boolean;
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
@@ -47,11 +50,45 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return response.json();
 }
 
+/**
+ * Refresh the session token by calling the Neon Auth get-session endpoint.
+ * This extends the session expiration in the DB and returns a fresh session ID.
+ * Deduplicates concurrent refresh attempts.
+ */
+let refreshPromise: Promise<string | null> | null = null;
+
+async function refreshSession(): Promise<string | null> {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    try {
+      // Hit the Neon Auth get-session endpoint — this refreshes the session
+      // cookie and returns current session data including the session ID.
+      const res = await fetch("/api/auth/get-session", {
+        credentials: "include",
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const newSessionId = data?.session?.id ?? null;
+      if (newSessionId) {
+        setSessionToken(newSessionId);
+      }
+      return newSessionId;
+    } catch {
+      return null;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
 export async function api<T>(
   endpoint: string,
   options: RequestOptions = {}
 ): Promise<T> {
-  const { body, headers, timeout = 15_000, ...rest } = options;
+  const { body, headers, timeout = 15_000, _isRetry, ...rest } = options;
 
   const token = getSessionToken();
   const config: RequestInit = {
@@ -85,6 +122,16 @@ export async function api<T>(
     throw err;
   }
   clearTimeout(timeoutId);
+
+  // On 401, try refreshing the session token and retry once.
+  // The session may have expired in the DB while the user was still
+  // browsing — Neon Auth's get-session endpoint will extend it.
+  if (response.status === 401 && !_isRetry) {
+    const newToken = await refreshSession();
+    if (newToken) {
+      return api<T>(endpoint, { ...options, _isRetry: true });
+    }
+  }
 
   return handleResponse<T>(response);
 }
