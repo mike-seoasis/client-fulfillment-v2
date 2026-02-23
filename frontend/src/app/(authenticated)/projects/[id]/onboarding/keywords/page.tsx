@@ -406,11 +406,11 @@ export default function KeywordsPage() {
     }
   }, [isLoading, keywordGen.status, pagesWithKeywords, totalPages, keywordGen.isStarting]);
 
-  // Refetch pages when generation completes (or fails with partial results)
-  const prevGenStatus = useRef(keywordGen.status);
+  // Refetch pages when generation completes or fails
+  const prevGenStatus = useRef<string | undefined>(undefined);
   useEffect(() => {
     const wasGenerating = prevGenStatus.current === 'generating';
-    const isDone = keywordGen.status === 'completed' || keywordGen.status === 'failed' || keywordGen.status === 'partial';
+    const isDone = keywordGen.status === 'completed' || keywordGen.status === 'failed';
     if (wasGenerating && isDone) {
       refetchPages();
     }
