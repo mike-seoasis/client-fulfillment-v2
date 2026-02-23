@@ -1572,7 +1572,7 @@ async def replan_links(
             del_stmt = del_stmt.where(InternalLink.cluster_id == cluster_id)
 
         del_result = await write_db.execute(del_stmt)
-        deleted_count: int = del_result.rowcount  # type: ignore[union-attr,unused-ignore]
+        deleted_count: int = del_result.rowcount  # type: ignore[attr-defined,union-attr,unused-ignore]
         await write_db.commit()
 
     logger.info(

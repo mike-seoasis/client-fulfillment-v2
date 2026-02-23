@@ -824,7 +824,7 @@ async def bulk_post_action(
     result = await db.execute(stmt)
     await db.commit()
 
-    return {"updated": result.rowcount}  # type: ignore[union-attr,unused-ignore]
+    return {"updated": result.rowcount}  # type: ignore[attr-defined,union-attr,unused-ignore]
 
 
 # ---------------------------------------------------------------------------
@@ -1022,7 +1022,7 @@ async def bulk_approve_comments(
     result = await db.execute(stmt)
     await db.commit()
 
-    return {"approved_count": result.rowcount}  # type: ignore[union-attr,unused-ignore]
+    return {"approved_count": result.rowcount}  # type: ignore[attr-defined,union-attr,unused-ignore]
 
 
 @reddit_project_router.post(
@@ -1050,7 +1050,7 @@ async def bulk_reject_comments(
     result = await db.execute(stmt)
     await db.commit()
 
-    return {"rejected_count": result.rowcount}  # type: ignore[union-attr,unused-ignore]
+    return {"rejected_count": result.rowcount}  # type: ignore[attr-defined,union-attr,unused-ignore]
 
 
 # ---------------------------------------------------------------------------
