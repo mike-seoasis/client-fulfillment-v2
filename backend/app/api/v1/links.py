@@ -139,10 +139,14 @@ async def plan_links(
                 missing_content_ids.append(page.id)
 
             # Check keyword approval
-            kw_stmt = select(PageKeywords).where(
-                PageKeywords.crawled_page_id == page.id,
-                PageKeywords.is_approved.is_(True),
-            ).limit(1)
+            kw_stmt = (
+                select(PageKeywords)
+                .where(
+                    PageKeywords.crawled_page_id == page.id,
+                    PageKeywords.is_approved.is_(True),
+                )
+                .limit(1)
+            )
             kw_result = await db.execute(kw_stmt)
             kw = kw_result.scalar_one_or_none()
             if not kw:
@@ -172,10 +176,14 @@ async def plan_links(
                 missing_content_ids.append(cp.crawled_page_id)
 
             # Check keyword approval
-            kw_stmt = select(PageKeywords).where(
-                PageKeywords.crawled_page_id == cp.crawled_page_id,
-                PageKeywords.is_approved.is_(True),
-            ).limit(1)
+            kw_stmt = (
+                select(PageKeywords)
+                .where(
+                    PageKeywords.crawled_page_id == cp.crawled_page_id,
+                    PageKeywords.is_approved.is_(True),
+                )
+                .limit(1)
+            )
             kw_result = await db.execute(kw_stmt)
             kw = kw_result.scalar_one_or_none()
             if not kw:
@@ -706,9 +714,13 @@ async def get_anchor_suggestions(
         )
 
     # Get primary keyword
-    kw_stmt = select(PageKeywords).where(
-        PageKeywords.crawled_page_id == target_page_id,
-    ).limit(1)
+    kw_stmt = (
+        select(PageKeywords)
+        .where(
+            PageKeywords.crawled_page_id == target_page_id,
+        )
+        .limit(1)
+    )
     kw_result = await db.execute(kw_stmt)
     page_kw = kw_result.scalar_one_or_none()
     primary_keyword = page_kw.primary_keyword if page_kw else ""
@@ -891,9 +903,13 @@ async def add_link(
     if p_idx is None:
         # Fall back to LLM injection
         # Get target keyword for relevance scoring
-        kw_stmt = select(PageKeywords).where(
-            PageKeywords.crawled_page_id == target_page_id,
-        ).limit(1)
+        kw_stmt = (
+            select(PageKeywords)
+            .where(
+                PageKeywords.crawled_page_id == target_page_id,
+            )
+            .limit(1)
+        )
         kw_result = await db.execute(kw_stmt)
         target_kw = kw_result.scalar_one_or_none()
         target_keyword = target_kw.primary_keyword if target_kw else ""

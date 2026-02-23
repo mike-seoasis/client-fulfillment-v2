@@ -714,7 +714,9 @@ class POPClient:
             # Extract task_id
             task_id = response_data.get("task_id") or response_data.get("taskId")
             if not task_id:
-                task_id = response_data.get("id") or response_data.get("data", {}).get("task_id")
+                task_id = response_data.get("id") or response_data.get("data", {}).get(
+                    "task_id"
+                )
 
             if task_id:
                 logger.info(
@@ -1275,9 +1277,7 @@ class POPMockClient:
         """Derive a deterministic integer seed from a keyword."""
         return int(hashlib.sha256(keyword.lower().strip().encode()).hexdigest(), 16)
 
-    def _generate_lsa_phrases(
-        self, keyword: str, seed: int
-    ) -> list[dict[str, Any]]:
+    def _generate_lsa_phrases(self, keyword: str, seed: int) -> list[dict[str, Any]]:
         """Generate 15-25 realistic LSI terms seeded by keyword hash."""
         import random
 
@@ -1382,8 +1382,11 @@ class POPMockClient:
         slug = "-".join(tokens)
 
         domains = [
-            "competitor1.com", "bigretailer.com", "expertsite.org",
-            "topreviews.com", "bestpicks.net",
+            "competitor1.com",
+            "bigretailer.com",
+            "expertsite.org",
+            "topreviews.com",
+            "bestpicks.net",
         ]
         rng.shuffle(domains)
 
@@ -1396,7 +1399,9 @@ class POPMockClient:
             competitors.append(
                 {
                     "url": f"https://{domain}/{slug}",
-                    "h2Texts": [f"H2 heading {j + 1} about {keyword}" for j in range(h2_count)],
+                    "h2Texts": [
+                        f"H2 heading {j + 1} about {keyword}" for j in range(h2_count)
+                    ],
                     "h3Texts": [f"H3 subtopic {j + 1}" for j in range(h3_count)],
                     "pageScore": page_score,
                     "wordCount": word_count,
@@ -1491,18 +1496,42 @@ class POPMockClient:
         rng = random.Random(seed + 50)
 
         exact_keyword_recs: list[dict[str, Any]] = [
-            {"signal": "Meta Title", "target": 1, "comment": f'Include "{keyword}" in meta title'},
-            {"signal": "H1", "target": 1, "comment": f'Include "{keyword}" in H1 heading'},
-            {"signal": "URL", "target": 1, "comment": f'Include "{keyword}" slug in URL'},
+            {
+                "signal": "Meta Title",
+                "target": 1,
+                "comment": f'Include "{keyword}" in meta title',
+            },
+            {
+                "signal": "H1",
+                "target": 1,
+                "comment": f'Include "{keyword}" in H1 heading',
+            },
+            {
+                "signal": "URL",
+                "target": 1,
+                "comment": f'Include "{keyword}" slug in URL',
+            },
         ]
 
         tokens = keyword.lower().split()
         lsi_signals: list[dict[str, Any]] = [
             {"signal": "Meta Title", "phrase": f"best {keyword}", "target": 1},
-            {"signal": "H3", "phrase": tokens[0] if tokens else keyword, "target": rng.randint(1, 3)},
-            {"signal": "Paragraph Text", "phrase": keyword, "target": rng.randint(3, 8)},
+            {
+                "signal": "H3",
+                "phrase": tokens[0] if tokens else keyword,
+                "target": rng.randint(1, 3),
+            },
+            {
+                "signal": "Paragraph Text",
+                "phrase": keyword,
+                "target": rng.randint(3, 8),
+            },
             {"signal": "Bold", "phrase": keyword, "target": rng.randint(1, 2)},
-            {"signal": "Italic", "phrase": tokens[-1] if tokens else keyword, "target": 1},
+            {
+                "signal": "Italic",
+                "phrase": tokens[-1] if tokens else keyword,
+                "target": 1,
+            },
         ]
 
         tag_counts = self._generate_tag_counts(seed)

@@ -79,7 +79,9 @@ async def create_cluster(
     bc_stmt = select(BrandConfig).where(BrandConfig.project_id == project_id)
     bc_result = await db.execute(bc_stmt)
     brand_config_row = bc_result.scalar_one_or_none()
-    brand_config: dict[str, Any] = brand_config_row.v2_schema if brand_config_row else {}
+    brand_config: dict[str, Any] = (
+        brand_config_row.v2_schema if brand_config_row else {}
+    )
 
     # Run generation with timeout
     service = ClusterKeywordService(claude, dataforseo)
@@ -479,7 +481,9 @@ async def regenerate_cluster(
     bc_stmt = select(BrandConfig).where(BrandConfig.project_id == project_id)
     bc_result = await db.execute(bc_stmt)
     brand_config_row = bc_result.scalar_one_or_none()
-    brand_config: dict[str, Any] = brand_config_row.v2_schema if brand_config_row else {}
+    brand_config: dict[str, Any] = (
+        brand_config_row.v2_schema if brand_config_row else {}
+    )
 
     service = ClusterKeywordService(claude, dataforseo)
     try:

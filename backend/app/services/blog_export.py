@@ -49,9 +49,13 @@ class BlogExportService:
 
         # 1. Strip highlight spans — unwrap <span class="hl-*"> keeping children
         for span in soup.find_all("span"):
-            classes = span.get("class", [])
-            if isinstance(classes, str):
-                classes = classes.split()
+            raw_classes = span.get("class")
+            if raw_classes is None:
+                classes: list[str] = []
+            elif isinstance(raw_classes, str):
+                classes = raw_classes.split()
+            else:
+                classes = list(raw_classes)
             if any(cls in HIGHLIGHT_CLASSES for cls in classes):
                 span.unwrap()
 

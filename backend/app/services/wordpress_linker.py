@@ -190,7 +190,9 @@ async def step2_import(
                 name=f"WP Blog: {site_url}",
                 site_url=site_url,
                 status="active",
-                phase_status={"wordpress": {"source": "wordpress", "import_count": len(posts)}},
+                phase_status={
+                    "wordpress": {"source": "wordpress", "import_count": len(posts)}
+                },
             )
             db.add(project)
             await db.flush()
@@ -446,8 +448,7 @@ async def _generate_blog_taxonomy(
         if page.content_brief and page.content_brief.keyword_targets:
             targets = page.content_brief.keyword_targets[:5]
             kw_list = [
-                t.get("keyword", "") if isinstance(t, dict) else str(t)
-                for t in targets
+                t.get("keyword", "") if isinstance(t, dict) else str(t) for t in targets
             ]
             if kw_list:
                 summary += f"\n  Keyword targets: {', '.join(kw_list)}"
@@ -492,7 +493,7 @@ async def _generate_blog_taxonomy(
             onboarding_labels_section = f"""
 
 IMPORTANT: This blog exists alongside collection/product pages that already use these labels:
-{', '.join(sorted(existing_labels))}
+{", ".join(sorted(existing_labels))}
 
 You MUST reuse these existing labels where they are topically relevant to blog posts. This creates label overlap between blog posts and collection pages, which enables cross-linking. You may also create new labels for blog topics not covered by existing labels."""
 
@@ -516,7 +517,9 @@ Generate a taxonomy that captures the main topics. Each label should group posts
         await client.close()
 
     if not completion.success:
-        logger.error("Blog taxonomy generation failed", extra={"error": completion.error})
+        logger.error(
+            "Blog taxonomy generation failed", extra={"error": completion.error}
+        )
         return None
 
     try:
@@ -616,12 +619,14 @@ Respond with JSON only."""
             )
 
             if not completion.success:
-                assignments.append({
-                    "page_id": page.id,
-                    "labels": [],
-                    "success": False,
-                    "error": completion.error,
-                })
+                assignments.append(
+                    {
+                        "page_id": page.id,
+                        "labels": [],
+                        "success": False,
+                        "error": completion.error,
+                    }
+                )
                 continue
 
             try:
@@ -632,7 +637,8 @@ Respond with JSON only."""
 
                 # Filter to valid labels only
                 valid_assigned = [
-                    label.strip().lower() for label in labels
+                    label.strip().lower()
+                    for label in labels
                     if label.strip().lower() in valid_labels
                 ]
 
@@ -651,19 +657,23 @@ Respond with JSON only."""
                 page.labels = valid_assigned
                 await db.flush()
 
-                assignments.append({
-                    "page_id": page.id,
-                    "labels": valid_assigned,
-                    "success": True,
-                })
+                assignments.append(
+                    {
+                        "page_id": page.id,
+                        "labels": valid_assigned,
+                        "success": True,
+                    }
+                )
 
             except json.JSONDecodeError as e:
-                assignments.append({
-                    "page_id": page.id,
-                    "labels": [],
-                    "success": False,
-                    "error": f"JSON parse error: {e}",
-                })
+                assignments.append(
+                    {
+                        "page_id": page.id,
+                        "labels": [],
+                        "success": False,
+                        "error": f"JSON parse error: {e}",
+                    }
+                )
 
     finally:
         await client.close()
@@ -819,8 +829,13 @@ async def step5_plan_links(
 
             if has_collection_pages and collection_pages:
                 links_in_group = await _plan_links_for_silo_with_collections(
-                    db, project_id, cluster, collection_pages,
-                    injector, validator, anchor_selector,
+                    db,
+                    project_id,
+                    cluster,
+                    collection_pages,
+                    injector,
+                    validator,
+                    anchor_selector,
                 )
             else:
                 links_in_group = await _plan_links_for_silo(
@@ -865,8 +880,7 @@ async def _plan_links_for_silo(
     )
     result = await db.execute(stmt)
     cluster_pages = [
-        cp for cp in result.unique().scalars().all()
-        if cp.crawled_page_id is not None
+        cp for cp in result.unique().scalars().all() if cp.crawled_page_id is not None
     ]
 
     if len(cluster_pages) < 2:
@@ -930,13 +944,15 @@ async def _plan_links_for_silo(
             if target_url and not target_url.startswith("http"):
                 target_url = f"{site_base}/{target_url.lstrip('/')}"
 
-            planned_links.append({
-                **target,
-                "anchor_text": anchor_result["anchor_text"],
-                "anchor_type": anchor_result["anchor_type"],
-                "target_page_id": target_id,
-                "url": target_url,
-            })
+            planned_links.append(
+                {
+                    **target,
+                    "anchor_text": anchor_result["anchor_text"],
+                    "anchor_type": anchor_result["anchor_type"],
+                    "target_page_id": target_id,
+                    "url": target_url,
+                }
+            )
 
         page_link_plans[source_id] = planned_links
 
@@ -961,15 +977,17 @@ async def _plan_links_for_silo(
 
             if p_idx is not None:
                 current_html = modified_html
-                injection_results.append({
-                    "source_page_id": source_id,
-                    "target_page_id": target_id,
-                    "anchor_text": anchor_text,
-                    "anchor_type": link_plan["anchor_type"],
-                    "placement_method": "rule_based",
-                    "position_in_content": p_idx,
-                    "is_mandatory": False,
-                })
+                injection_results.append(
+                    {
+                        "source_page_id": source_id,
+                        "target_page_id": target_id,
+                        "anchor_text": anchor_text,
+                        "anchor_type": link_plan["anchor_type"],
+                        "placement_method": "rule_based",
+                        "position_in_content": p_idx,
+                        "is_mandatory": False,
+                    }
+                )
             else:
                 target_keyword = link_plan.get("keyword", "")
                 modified_html, p_idx = await injector.inject_llm_fallback(
@@ -977,15 +995,17 @@ async def _plan_links_for_silo(
                 )
                 if p_idx is not None:
                     current_html = modified_html
-                    injection_results.append({
-                        "source_page_id": source_id,
-                        "target_page_id": target_id,
-                        "anchor_text": anchor_text,
-                        "anchor_type": link_plan["anchor_type"],
-                        "placement_method": "llm_fallback",
-                        "position_in_content": p_idx,
-                        "is_mandatory": False,
-                    })
+                    injection_results.append(
+                        {
+                            "source_page_id": source_id,
+                            "target_page_id": target_id,
+                            "anchor_text": anchor_text,
+                            "anchor_type": link_plan["anchor_type"],
+                            "placement_method": "llm_fallback",
+                            "position_in_content": p_idx,
+                            "is_mandatory": False,
+                        }
+                    )
 
         pages_html[source_id] = current_html
 
@@ -1037,13 +1057,15 @@ def _build_silo_graph(cluster_pages: list[ClusterPage]) -> dict[str, Any]:
         crawled = cp.crawled_page
         if not crawled:
             continue
-        pages.append({
-            "page_id": crawled.id,
-            "keyword": crawled.title or cp.keyword,
-            "url": crawled.normalized_url,
-            "labels": crawled.labels or [],
-            "is_priority": False,
-        })
+        pages.append(
+            {
+                "page_id": crawled.id,
+                "keyword": crawled.title or cp.keyword,
+                "url": crawled.normalized_url,
+                "labels": crawled.labels or [],
+                "is_priority": False,
+            }
+        )
 
     # Build edges from label overlap
     edges: list[dict[str, Any]] = []
@@ -1052,11 +1074,13 @@ def _build_silo_graph(cluster_pages: list[ClusterPage]) -> dict[str, Any]:
         labels_b = set(b.get("labels", []))
         overlap = len(labels_a & labels_b)
         # Always create an edge for pages in the same silo, min weight 1
-        edges.append({
-            "source": a["page_id"],
-            "target": b["page_id"],
-            "weight": max(overlap, 1),
-        })
+        edges.append(
+            {
+                "source": a["page_id"],
+                "target": b["page_id"],
+                "weight": max(overlap, 1),
+            }
+        )
 
     return {"pages": pages, "edges": edges}
 
@@ -1077,14 +1101,16 @@ def _build_silo_graph_with_collections(
         crawled = cp.crawled_page
         if not crawled:
             continue
-        wp_nodes.append({
-            "page_id": crawled.id,
-            "keyword": crawled.title or cp.keyword,
-            "url": crawled.normalized_url,
-            "labels": crawled.labels or [],
-            "is_priority": False,
-            "source": "wordpress",
-        })
+        wp_nodes.append(
+            {
+                "page_id": crawled.id,
+                "keyword": crawled.title or cp.keyword,
+                "url": crawled.normalized_url,
+                "labels": crawled.labels or [],
+                "is_priority": False,
+                "source": "wordpress",
+            }
+        )
 
     # Find collection pages that share labels with this silo's WP posts
     silo_labels: set[str] = set()
@@ -1095,14 +1121,19 @@ def _build_silo_graph_with_collections(
     for coll_page in collection_pages:
         page_labels = set(coll_page.labels or [])
         if page_labels & silo_labels:  # Only include if there's label overlap
-            coll_nodes.append({
-                "page_id": coll_page.id,
-                "keyword": coll_page.title or coll_page.normalized_url,
-                "url": coll_page.normalized_url,
-                "labels": coll_page.labels or [],
-                "is_priority": bool(coll_page.category and coll_page.category.lower() in ("collection", "product")),
-                "source": "collection",
-            })
+            coll_nodes.append(
+                {
+                    "page_id": coll_page.id,
+                    "keyword": coll_page.title or coll_page.normalized_url,
+                    "url": coll_page.normalized_url,
+                    "labels": coll_page.labels or [],
+                    "is_priority": bool(
+                        coll_page.category
+                        and coll_page.category.lower() in ("collection", "product")
+                    ),
+                    "source": "collection",
+                }
+            )
 
     all_nodes = wp_nodes + coll_nodes
 
@@ -1114,11 +1145,13 @@ def _build_silo_graph_with_collections(
         labels_a = set(a.get("labels", []))
         labels_b = set(b.get("labels", []))
         overlap = len(labels_a & labels_b)
-        edges.append({
-            "source": a["page_id"],
-            "target": b["page_id"],
-            "weight": max(overlap, 1),
-        })
+        edges.append(
+            {
+                "source": a["page_id"],
+                "target": b["page_id"],
+                "weight": max(overlap, 1),
+            }
+        )
 
     # WP → collection edges (one-directional)
     for wp_node in wp_nodes:
@@ -1127,11 +1160,13 @@ def _build_silo_graph_with_collections(
             coll_labels = set(coll_node.get("labels", []))
             overlap = len(wp_labels & coll_labels)
             if overlap > 0:
-                edges.append({
-                    "source": wp_node["page_id"],
-                    "target": coll_node["page_id"],
-                    "weight": overlap,
-                })
+                edges.append(
+                    {
+                        "source": wp_node["page_id"],
+                        "target": coll_node["page_id"],
+                        "weight": overlap,
+                    }
+                )
 
     return {"pages": all_nodes, "edges": edges}
 
@@ -1162,7 +1197,11 @@ def select_targets_wp_with_collections(
             adjacency[edge["source"]][edge["target"]] = edge["weight"]
         # For WP→WP edges, also add reverse direction
         target_page = pages_by_id.get(edge["target"])
-        if target_page and target_page.get("source") == "wordpress" and source_page.get("source") == "wordpress":
+        if (
+            target_page
+            and target_page.get("source") == "wordpress"
+            and source_page.get("source") == "wordpress"
+        ):
             adjacency[edge["target"]][edge["source"]] = edge["weight"]
 
     inbound_counts: dict[str, int] = {p["page_id"]: 0 for p in graph["pages"]}
@@ -1183,8 +1222,7 @@ def select_targets_wp_with_collections(
 
         # Split budget: reserve slots for collection targets
         collection_targets_available = [
-            tid for tid in neighbors
-            if pages_by_id[tid].get("source") == "collection"
+            tid for tid in neighbors if pages_by_id[tid].get("source") == "collection"
         ]
         collection_budget = min(len(collection_targets_available), max(1, budget // 2))
 
@@ -1203,7 +1241,9 @@ def select_targets_wp_with_collections(
 
             if target_page.get("source") == "collection":
                 # Collection page — boost score
-                priority_bonus = PRIORITY_BONUS if target_page.get("is_priority") else 0.0
+                priority_bonus = (
+                    PRIORITY_BONUS if target_page.get("is_priority") else 0.0
+                )
                 score = overlap + COLLECTION_BONUS + priority_bonus - diversity_penalty
                 scored_collection.append((score, target_id))
             else:
@@ -1222,15 +1262,17 @@ def select_targets_wp_with_collections(
             if len(targets) >= collection_budget:
                 break
             target_page = pages_by_id[target_id]
-            targets.append({
-                "page_id": target_id,
-                "keyword": target_page["keyword"],
-                "url": target_page["url"],
-                "is_priority": target_page.get("is_priority", False),
-                "label_overlap": neighbors[target_id],
-                "score": score,
-                "source": "collection",
-            })
+            targets.append(
+                {
+                    "page_id": target_id,
+                    "keyword": target_page["keyword"],
+                    "url": target_page["url"],
+                    "is_priority": target_page.get("is_priority", False),
+                    "label_overlap": neighbors[target_id],
+                    "score": score,
+                    "source": "collection",
+                }
+            )
             inbound_counts[target_id] += 1
 
         # Fill remaining with blog targets
@@ -1238,15 +1280,17 @@ def select_targets_wp_with_collections(
             if len(targets) >= budget:
                 break
             target_page = pages_by_id[target_id]
-            targets.append({
-                "page_id": target_id,
-                "keyword": target_page["keyword"],
-                "url": target_page["url"],
-                "is_priority": target_page.get("is_priority", False),
-                "label_overlap": neighbors[target_id],
-                "score": score,
-                "source": "wordpress",
-            })
+            targets.append(
+                {
+                    "page_id": target_id,
+                    "keyword": target_page["keyword"],
+                    "url": target_page["url"],
+                    "is_priority": target_page.get("is_priority", False),
+                    "label_overlap": neighbors[target_id],
+                    "score": score,
+                    "source": "wordpress",
+                }
+            )
             inbound_counts[target_id] += 1
 
         result[page_id] = targets
@@ -1257,8 +1301,10 @@ def select_targets_wp_with_collections(
             "page_count": len(result),
             "total_links": sum(len(t) for t in result.values()),
             "collection_links": sum(
-                1 for targets in result.values()
-                for t in targets if t.get("source") == "collection"
+                1
+                for targets in result.values()
+                for t in targets
+                if t.get("source") == "collection"
             ),
         },
     )
@@ -1287,8 +1333,7 @@ async def _plan_links_for_silo_with_collections(
     )
     result = await db.execute(stmt)
     cluster_pages = [
-        cp for cp in result.unique().scalars().all()
-        if cp.crawled_page_id is not None
+        cp for cp in result.unique().scalars().all() if cp.crawled_page_id is not None
     ]
 
     if len(cluster_pages) < 2 and not collection_pages:
@@ -1300,8 +1345,7 @@ async def _plan_links_for_silo_with_collections(
 
     # 2. Calculate budgets (only for WP pages — they're the sources)
     wp_page_ids = [
-        p["page_id"] for p in graph["pages"]
-        if p.get("source") == "wordpress"
+        p["page_id"] for p in graph["pages"] if p.get("source") == "wordpress"
     ]
     word_counts = await _load_word_counts(db, wp_page_ids)
     budgets = {pid: calculate_budget(wc) for pid, wc in word_counts.items()}
@@ -1358,13 +1402,15 @@ async def _plan_links_for_silo_with_collections(
             if target_url and not target_url.startswith("http"):
                 target_url = f"{site_base}/{target_url.lstrip('/')}"
 
-            planned_links.append({
-                **target,
-                "anchor_text": anchor_result["anchor_text"],
-                "anchor_type": anchor_result["anchor_type"],
-                "target_page_id": target_id,
-                "url": target_url,
-            })
+            planned_links.append(
+                {
+                    **target,
+                    "anchor_text": anchor_result["anchor_text"],
+                    "anchor_type": anchor_result["anchor_type"],
+                    "target_page_id": target_id,
+                    "url": target_url,
+                }
+            )
 
         page_link_plans[source_id] = planned_links
 
@@ -1389,15 +1435,17 @@ async def _plan_links_for_silo_with_collections(
 
             if p_idx is not None:
                 current_html = modified_html
-                injection_results.append({
-                    "source_page_id": source_id,
-                    "target_page_id": target_id,
-                    "anchor_text": anchor_text,
-                    "anchor_type": link_plan["anchor_type"],
-                    "placement_method": "rule_based",
-                    "position_in_content": p_idx,
-                    "is_mandatory": False,
-                })
+                injection_results.append(
+                    {
+                        "source_page_id": source_id,
+                        "target_page_id": target_id,
+                        "anchor_text": anchor_text,
+                        "anchor_type": link_plan["anchor_type"],
+                        "placement_method": "rule_based",
+                        "position_in_content": p_idx,
+                        "is_mandatory": False,
+                    }
+                )
             else:
                 target_keyword = link_plan.get("keyword", "")
                 modified_html, p_idx = await injector.inject_llm_fallback(
@@ -1405,15 +1453,17 @@ async def _plan_links_for_silo_with_collections(
                 )
                 if p_idx is not None:
                     current_html = modified_html
-                    injection_results.append({
-                        "source_page_id": source_id,
-                        "target_page_id": target_id,
-                        "anchor_text": anchor_text,
-                        "anchor_type": link_plan["anchor_type"],
-                        "placement_method": "llm_fallback",
-                        "position_in_content": p_idx,
-                        "is_mandatory": False,
-                    })
+                    injection_results.append(
+                        {
+                            "source_page_id": source_id,
+                            "target_page_id": target_id,
+                            "anchor_text": anchor_text,
+                            "anchor_type": link_plan["anchor_type"],
+                            "placement_method": "llm_fallback",
+                            "position_in_content": p_idx,
+                            "is_mandatory": False,
+                        }
+                    )
 
         pages_html[source_id] = current_html
 
@@ -1514,34 +1564,50 @@ async def step6_get_review(
 
     for cluster in clusters:
         # Count links for this cluster
-        link_count_stmt = select(func.count()).select_from(InternalLink).where(
-            InternalLink.cluster_id == cluster.id,
+        link_count_stmt = (
+            select(func.count())
+            .select_from(InternalLink)
+            .where(
+                InternalLink.cluster_id == cluster.id,
+            )
         )
         link_count_result = await db.execute(link_count_stmt)
         link_count = link_count_result.scalar_one()
 
         # Count pages in cluster
-        page_count_stmt = select(func.count()).select_from(ClusterPage).where(
-            ClusterPage.cluster_id == cluster.id,
+        page_count_stmt = (
+            select(func.count())
+            .select_from(ClusterPage)
+            .where(
+                ClusterPage.cluster_id == cluster.id,
+            )
         )
         page_count_result = await db.execute(page_count_stmt)
         page_count = page_count_result.scalar_one()
 
         # Count verified links
-        verified_stmt = select(func.count()).select_from(InternalLink).where(
-            InternalLink.cluster_id == cluster.id,
-            InternalLink.status == "verified",
+        verified_stmt = (
+            select(func.count())
+            .select_from(InternalLink)
+            .where(
+                InternalLink.cluster_id == cluster.id,
+                InternalLink.status == "verified",
+            )
         )
         verified_result = await db.execute(verified_stmt)
         verified = verified_result.scalar_one()
 
-        groups.append({
-            "group_name": cluster.name,
-            "post_count": page_count,
-            "link_count": link_count,
-            "avg_links_per_post": link_count / page_count if page_count > 0 else 0,
-            "collection_link_count": collection_counts_by_cluster.get(cluster.id, 0),
-        })
+        groups.append(
+            {
+                "group_name": cluster.name,
+                "post_count": page_count,
+                "link_count": link_count,
+                "avg_links_per_post": link_count / page_count if page_count > 0 else 0,
+                "collection_link_count": collection_counts_by_cluster.get(
+                    cluster.id, 0
+                ),
+            }
+        )
 
         total_links += link_count
         total_posts += page_count
@@ -1601,13 +1667,15 @@ async def step7_export(
         # Apply title filter
         if title_filter:
             pages = [
-                p for p in pages
+                p
+                for p in pages
                 if p.title and any(f.lower() in p.title.lower() for f in title_filter)
             ]
 
         # Filter to pages that have links (updated content)
         pages_to_export = [
-            p for p in pages
+            p
+            for p in pages
             if p.page_content and p.page_content.bottom_description and p.raw_url
         ]
         progress["total"] = len(pages_to_export)
@@ -1622,7 +1690,11 @@ async def step7_export(
             async with semaphore:
                 try:
                     wp_post_id = int(page.raw_url or "0")
-                    content = page.page_content.bottom_description if page.page_content else ""
+                    content = (
+                        page.page_content.bottom_description
+                        if page.page_content
+                        else ""
+                    )
                     await client.update_post_content(wp_post_id, content or "")
                     success_count += 1
                 except Exception:

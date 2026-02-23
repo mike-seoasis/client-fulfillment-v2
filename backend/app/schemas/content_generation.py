@@ -82,7 +82,9 @@ class PageGenerationStatusItem(BaseModel):
         description="Page generation status (pending, generating_brief, writing, checking, complete, failed)",
     )
     error: str | None = Field(None, description="Error message if failed")
-    qa_passed: bool | None = Field(None, description="Whether QA checks passed (null if not yet checked)")
+    qa_passed: bool | None = Field(
+        None, description="Whether QA checks passed (null if not yet checked)"
+    )
     qa_issue_count: int = Field(0, description="Number of QA issues found")
     is_approved: bool = Field(False, description="Whether content has been approved")
 
@@ -177,12 +179,8 @@ class PageContentResponse(BaseModel):
         description="Content status (pending, generating_brief, writing, checking, complete, failed)",
     )
     is_approved: bool = Field(False, description="Whether content has been approved")
-    approved_at: datetime | None = Field(
-        None, description="When content was approved"
-    )
-    qa_results: dict[str, Any] | None = Field(
-        None, description="Quality check results"
-    )
+    approved_at: datetime | None = Field(None, description="When content was approved")
+    qa_results: dict[str, Any] | None = Field(None, description="Quality check results")
     brief_summary: BriefSummary | None = Field(
         None, description="Summary of the content brief used"
     )
@@ -208,14 +206,10 @@ class PromptLogResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str = Field(..., description="PromptLog UUID")
-    step: str = Field(
-        ..., description="Pipeline step name (e.g. 'content_writing')"
-    )
+    step: str = Field(..., description="Pipeline step name (e.g. 'content_writing')")
     role: str = Field(..., description="Message role ('system' or 'user')")
     prompt_text: str = Field(..., description="The prompt sent to Claude")
-    response_text: str | None = Field(
-        None, description="Claude's response text"
-    )
+    response_text: str | None = Field(None, description="Claude's response text")
     model: str | None = Field(None, description="Claude model identifier used")
     input_tokens: int | None = Field(None, description="Input tokens consumed")
     output_tokens: int | None = Field(None, description="Output tokens consumed")

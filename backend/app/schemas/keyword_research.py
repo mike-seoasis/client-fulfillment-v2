@@ -613,9 +613,7 @@ class PrimaryKeywordGenerationStatus(BaseModel):
     current_page: str | None = Field(
         None, description="URL or title of page currently being processed"
     )
-    error: str | None = Field(
-        None, description="Error message if generation failed"
-    )
+    error: str | None = Field(None, description="Error message if generation failed")
 
 
 class AlternativeKeyword(BaseModel):

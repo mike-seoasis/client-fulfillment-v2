@@ -58,7 +58,8 @@ class Settings(BaseSettings):
         default=30, description="Command timeout in seconds"
     )
     db_pool_recycle: int = Field(
-        default=300, description="Recycle connections after N seconds to match Neon idle timeout"
+        default=300,
+        description="Recycle connections after N seconds to match Neon idle timeout",
     )
 
     # Redis

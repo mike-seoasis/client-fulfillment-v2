@@ -210,7 +210,7 @@ class DataForSEOClient:
                 "settings_password_set": bool(settings.dataforseo_api_password),
                 "api_login_param": api_login,
                 "api_password_param": bool(api_password),
-            }
+            },
         )
 
         self._api_login = api_login or settings.dataforseo_api_login

@@ -103,9 +103,7 @@ async def list_accounts(
     stmt = select(RedditAccount).order_by(RedditAccount.created_at.desc())
 
     if niche is not None:
-        stmt = stmt.where(
-            RedditAccount.niche_tags.op("@>")(cast([niche], JSONB))
-        )
+        stmt = stmt.where(RedditAccount.niche_tags.op("@>")(cast([niche], JSONB)))
 
     if status_filter is not None:
         stmt = stmt.where(RedditAccount.status == status_filter)
@@ -129,9 +127,7 @@ async def create_account(
     db: AsyncSession = Depends(get_session),
 ) -> RedditAccountResponse:
     """Create a new Reddit account. Returns 409 if username already exists."""
-    existing_stmt = select(RedditAccount).where(
-        RedditAccount.username == data.username
-    )
+    existing_stmt = select(RedditAccount).where(RedditAccount.username == data.username)
     existing_result = await db.execute(existing_stmt)
     if existing_result.scalar_one_or_none() is not None:
         raise HTTPException(
@@ -322,9 +318,8 @@ async def list_all_comments(
         base_conditions.append(RedditComment.body.ilike(f"%{escaped}%"))
 
     # Status counts (always unfiltered by status so tabs can show all counts)
-    count_stmt = (
-        select(RedditComment.status, func.count())
-        .group_by(RedditComment.status)
+    count_stmt = select(RedditComment.status, func.count()).group_by(
+        RedditComment.status
     )
     for cond in base_conditions:
         count_stmt = count_stmt.where(cond)
@@ -465,9 +460,7 @@ async def _run_initial_reddit_setup(project_id: str) -> None:
                 return
 
             # Fetch brand config
-            bc_stmt = select(BrandConfig).where(
-                BrandConfig.project_id == project_id
-            )
+            bc_stmt = select(BrandConfig).where(BrandConfig.project_id == project_id)
             bc_result = await db.execute(bc_stmt)
             brand_config = bc_result.scalar_one_or_none()
 
@@ -482,7 +475,10 @@ async def _run_initial_reddit_setup(project_id: str) -> None:
             bf = schema.get("brand_foundation", {})
             ta = schema.get("target_audience", {})
 
-            brand_name = bf.get("company_overview", {}).get("company_name", "") or brand_config.brand_name
+            brand_name = (
+                bf.get("company_overview", {}).get("company_name", "")
+                or brand_config.brand_name
+            )
             if not brand_name:
                 logger.warning(
                     "Skipping initial subreddit research — no brand name",
@@ -622,9 +618,7 @@ async def delete_project_reddit_config(
     await db.execute(
         sa_delete(RedditComment).where(RedditComment.project_id == project_id)
     )
-    await db.execute(
-        sa_delete(RedditPost).where(RedditPost.project_id == project_id)
-    )
+    await db.execute(sa_delete(RedditPost).where(RedditPost.project_id == project_id))
     await db.delete(config)
     await db.commit()
 
@@ -763,9 +757,7 @@ async def list_posts(
 
     if intent is not None:
         # JSONB contains check: intent_categories @> '["research"]'
-        stmt = stmt.where(
-            RedditPost.intent_categories.op("@>")(cast([intent], JSONB))
-        )
+        stmt = stmt.where(RedditPost.intent_categories.op("@>")(cast([intent], JSONB)))
 
     if subreddit is not None:
         stmt = stmt.where(RedditPost.subreddit == subreddit)
@@ -832,7 +824,7 @@ async def bulk_post_action(
     result = await db.execute(stmt)
     await db.commit()
 
-    return {"updated": result.rowcount}
+    return {"updated": result.rowcount}  # type: ignore[union-attr,unused-ignore]
 
 
 # ---------------------------------------------------------------------------
@@ -895,9 +887,7 @@ async def generate_single_comment(
     return RedditCommentResponse.model_validate(comment)
 
 
-async def _run_batch_generation(
-    project_id: str, post_ids: list[str] | None
-) -> None:
+async def _run_batch_generation(project_id: str, post_ids: list[str] | None) -> None:
     """Background task wrapper for generate_batch."""
     try:
         await generate_batch(project_id=project_id, post_ids=post_ids)
@@ -1032,7 +1022,7 @@ async def bulk_approve_comments(
     result = await db.execute(stmt)
     await db.commit()
 
-    return {"approved_count": result.rowcount}
+    return {"approved_count": result.rowcount}  # type: ignore[union-attr,unused-ignore]
 
 
 @reddit_project_router.post(
@@ -1060,7 +1050,7 @@ async def bulk_reject_comments(
     result = await db.execute(stmt)
     await db.commit()
 
-    return {"rejected_count": result.rowcount}
+    return {"rejected_count": result.rowcount}  # type: ignore[union-attr,unused-ignore]
 
 
 # ---------------------------------------------------------------------------
@@ -1342,9 +1332,7 @@ async def submit_comments(
     comment_ids = data.comment_ids if data else None
     upvotes = data.upvotes_per_comment if data else None
 
-    background_tasks.add_task(
-        _run_submit_background, project_id, comment_ids, upvotes
-    )
+    background_tasks.add_task(_run_submit_background, project_id, comment_ids, upvotes)
 
     return CommentSubmitResponse(
         message="Submission started",

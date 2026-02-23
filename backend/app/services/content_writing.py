@@ -28,7 +28,9 @@ logger = get_logger(__name__)
 CONTENT_WRITING_MODEL = "claude-sonnet-4-5"
 CONTENT_WRITING_MAX_TOKENS = 8192
 CONTENT_WRITING_TEMPERATURE = 0.7
-CONTENT_WRITING_TIMEOUT = 180.0  # Longer timeout for content generation (POP targets can be 1500+ words)
+CONTENT_WRITING_TIMEOUT = (
+    180.0  # Longer timeout for content generation (POP targets can be 1500+ words)
+)
 
 # Default word count target when ContentBrief is missing
 DEFAULT_WORD_COUNT_MIN = 300
@@ -36,14 +38,41 @@ DEFAULT_WORD_COUNT_MAX = 400
 
 
 # Marketplace domains to skip when extracting competitor brand names from URLs
-_MARKETPLACE_DOMAINS = frozenset({
-    "amazon", "ebay", "walmart", "target", "etsy", "alibaba",
-    "aliexpress", "wish", "wayfair", "overstock", "bestbuy",
-    "homedepot", "lowes", "costco", "samsclub", "kohls",
-    "macys", "nordstrom", "zappos", "chewy", "google",
-    "youtube", "facebook", "instagram", "pinterest", "tiktok",
-    "reddit", "twitter", "linkedin", "yelp", "bbb",
-})
+_MARKETPLACE_DOMAINS = frozenset(
+    {
+        "amazon",
+        "ebay",
+        "walmart",
+        "target",
+        "etsy",
+        "alibaba",
+        "aliexpress",
+        "wish",
+        "wayfair",
+        "overstock",
+        "bestbuy",
+        "homedepot",
+        "lowes",
+        "costco",
+        "samsclub",
+        "kohls",
+        "macys",
+        "nordstrom",
+        "zappos",
+        "chewy",
+        "google",
+        "youtube",
+        "facebook",
+        "instagram",
+        "pinterest",
+        "tiktok",
+        "reddit",
+        "twitter",
+        "linkedin",
+        "yelp",
+        "bbb",
+    }
+)
 
 
 def extract_competitor_brands(competitors: list[dict[str, Any]]) -> list[str]:
@@ -183,12 +212,18 @@ def build_blog_content_prompt(
     """
     system_prompt = _build_system_prompt(brand_config, content_type="blog")
     user_prompt = _build_blog_user_prompt(
-        blog_post, keyword, brand_config, content_brief, trend_context=trend_context,
+        blog_post,
+        keyword,
+        brand_config,
+        content_brief,
+        trend_context=trend_context,
     )
     return PromptPair(system_prompt=system_prompt, user_prompt=user_prompt)
 
 
-def _build_system_prompt(brand_config: dict[str, Any], content_type: str = "collection") -> str:
+def _build_system_prompt(
+    brand_config: dict[str, Any], content_type: str = "collection"
+) -> str:
     """Build the system prompt using ai_prompt_snippet from brand config.
 
     Includes copywriting craft guidelines, AI trope avoidance rules, and
@@ -209,10 +244,26 @@ def _build_system_prompt(brand_config: dict[str, Any], content_type: str = "coll
     if content_type == "blog":
         # Extract brand identity for the role description
         brand_foundation = brand_config.get("brand_foundation", {})
-        company_overview = brand_foundation.get("company_overview", {}) if isinstance(brand_foundation, dict) else {}
-        company_name = company_overview.get("company_name", "") if isinstance(company_overview, dict) else ""
-        what_they_sell = brand_foundation.get("what_they_sell", {}) if isinstance(brand_foundation, dict) else {}
-        primary_products = what_they_sell.get("primary_products_services", "") if isinstance(what_they_sell, dict) else ""
+        company_overview = (
+            brand_foundation.get("company_overview", {})
+            if isinstance(brand_foundation, dict)
+            else {}
+        )
+        company_name = (
+            company_overview.get("company_name", "")
+            if isinstance(company_overview, dict)
+            else ""
+        )
+        what_they_sell = (
+            brand_foundation.get("what_they_sell", {})
+            if isinstance(brand_foundation, dict)
+            else {}
+        )
+        primary_products = (
+            what_they_sell.get("primary_products_services", "")
+            if isinstance(what_they_sell, dict)
+            else ""
+        )
 
         if company_name and primary_products:
             role_desc = (
@@ -243,15 +294,15 @@ def _build_system_prompt(brand_config: dict[str, Any], content_type: str = "coll
         role_desc,
         "",
         "## Writing Rules",
-        "- Benefits over features (apply the \"So What?\" test)",
-        "- Be specific, not vague (\"Ships in 2-3 days\" not \"Fast shipping\")",
+        '- Benefits over features (apply the "So What?" test)',
+        '- Be specific, not vague ("Ships in 2-3 days" not "Fast shipping")',
         "- One idea per sentence",
         "- Write like you talk — read it aloud, if it sounds stiff, rewrite",
         "- Every word earns its place — cut filler ruthlessly",
-        "- Use \"you\" and \"your\" — make it about the reader",
+        '- Use "you" and "your" — make it about the reader',
         "- Use contractions (you'll, we're, don't)",
         "- Active voice, not passive",
-        "- Show, don't tell (\"Double-stitched seams\" not \"High quality\")",
+        '- Show, don\'t tell ("Double-stitched seams" not "High quality")',
         "",
         "## AI Writing Avoidance (Critical)",
         "NEVER use these words: delve, unlock, unleash, harness, leverage, embark, "
@@ -261,16 +312,16 @@ def _build_system_prompt(brand_config: dict[str, Any], content_type: str = "coll
         "Limit to MAX 1 per piece: indeed, furthermore, moreover, robust, seamless, "
         "comprehensive, streamline, enhance, optimize, elevate, curated, tailored, bespoke",
         "",
-        "NEVER use these phrases: \"In today's...\", \"Whether you're...\", "
-        "\"It's no secret...\", \"When it comes to...\", \"In order to...\", "
-        "\"It's important to note...\", \"At the end of the day...\"",
+        'NEVER use these phrases: "In today\'s...", "Whether you\'re...", '
+        '"It\'s no secret...", "When it comes to...", "In order to...", '
+        '"It\'s important to note...", "At the end of the day..."',
         "",
         "Avoid these patterns:",
         "- \"It's not just X, it's Y\" (max 1 per piece)",
-        "- Triplet lists: \"X, Y, and Z\" — max 2 per piece. Vary your list structures: "
-        "use pairs, use \"including\", use \"such as\", or restructure as separate sentences",
-        "- Three parallel items in a row (\"Fast. Simple. Powerful.\")",
-        "- Rhetorical question then answer (\"The result? ...\")",
+        '- Triplet lists: "X, Y, and Z" — max 2 per piece. Vary your list structures: '
+        'use pairs, use "including", use "such as", or restructure as separate sentences',
+        '- Three parallel items in a row ("Fast. Simple. Powerful.")',
+        '- Rhetorical question then answer ("The result? ...")',
         "- Em dashes (—) — use commas or periods instead",
         "",
         "## Formatting",
@@ -456,14 +507,10 @@ def _build_entity_association_section(brand_config: dict[str, Any]) -> str | Non
         return None
 
     lines = ["## Brand Positioning (Critical)"]
-    lines.append(
-        f"You are writing this article on behalf of **{company_name}**."
-    )
+    lines.append(f"You are writing this article on behalf of **{company_name}**.")
 
     if primary_products:
-        lines.append(
-            f"{company_name} specializes in **{primary_products}**."
-        )
+        lines.append(f"{company_name} specializes in **{primary_products}**.")
 
     if location:
         lines.append(f"Based in {location}.")
@@ -570,14 +617,16 @@ def _build_blog_output_format_section(
         "before supporting details (this makes content extractable by AI)",
         "  - Use H3 subheadings where appropriate",
         "  - 2-4 paragraphs per section, benefits-focused",
-        "  - Address the reader directly with \"you\" and \"your\"",
+        '  - Address the reader directly with "you" and "your"',
         "",
     ]
 
     # Content-type-specific structure instructions
     if content_type == "how-to":
         lines.append("  **Content Type: How-To**")
-        lines.append("  - Use numbered steps in body sections. Each step should be an H2.")
+        lines.append(
+            "  - Use numbered steps in body sections. Each step should be an H2."
+        )
         lines.append("")
     elif content_type == "comparison":
         lines.append("  **Content Type: Comparison**")
@@ -592,7 +641,9 @@ def _build_blog_output_format_section(
     elif content_type == "review":
         lines.append("  **Content Type: Review**")
         lines.append("  - Include pros/cons section.")
-        lines.append('  - End with clear recommendation and "who is this best for" section.')
+        lines.append(
+            '  - End with clear recommendation and "who is this best for" section.'
+        )
         lines.append("")
 
     # FAQ section with specific questions from POP
@@ -607,17 +658,21 @@ def _build_blog_output_format_section(
     else:
         lines.append("  **3. FAQ Section**")
         lines.append('  - Wrap in an H2 heading: "Frequently Asked Questions"')
-        lines.append("  - Include 3-5 relevant questions as H3 headings with concise answers")
+        lines.append(
+            "  - Include 3-5 relevant questions as H3 headings with concise answers"
+        )
         lines.append("")
 
-    lines.extend([
-        "  **4. Conclusion**",
-        "  - Summarize key takeaways",
-        "  - End with a clear call to action",
-        "  - 1-2 paragraphs",
-        "",
-        "Use semantic HTML only (h2, h3, p, ul, ol, li, table, thead, tbody, tr, th, td tags). No inline styles. No div wrappers. No class attributes.",
-    ])
+    lines.extend(
+        [
+            "  **4. Conclusion**",
+            "  - Summarize key takeaways",
+            "  - End with a clear call to action",
+            "  - 1-2 paragraphs",
+            "",
+            "Use semantic HTML only (h2, h3, p, ul, ol, li, table, thead, tbody, tr, th, td tags). No inline styles. No div wrappers. No class attributes.",
+        ]
+    )
 
     return "\n".join(lines)
 
@@ -685,7 +740,9 @@ def _build_seo_targets_section(
     cb = raw.get("cleanedContentBrief")
 
     if isinstance(cb, dict) and cb:
-        lines.extend(_build_from_cleaned_brief(cb, keyword, content_brief, raw, competitor_names))
+        lines.extend(
+            _build_from_cleaned_brief(cb, keyword, content_brief, raw, competitor_names)
+        )
     else:
         # Fallback: use parsed ContentBrief fields (mock mode)
         lines.extend(_build_from_parsed_brief(content_brief, competitor_names))
@@ -720,7 +777,7 @@ def _build_from_cleaned_brief(
             t_min = brief.get("targetMin")
             t_max = brief.get("targetMax")
             count_str = _format_target_count(target, t_min, t_max)
-            lines.append(f"  - \"{phrase}\" ({term_type}): {count_str}")
+            lines.append(f'  - "{phrase}" ({term_type}): {count_str}')
         title_total = cb.get("titleTotal") or cb.get("pageTitleTotal", {})
         if isinstance(title_total, dict) and title_total:
             lines.append(
@@ -741,7 +798,7 @@ def _build_from_cleaned_brief(
             term_type = term.get("type", "")
             t_min = brief.get("targetMin")
             count_str = _format_min_target_count(t_min)
-            lines.append(f"  - \"{phrase}\" ({term_type}): {count_str}")
+            lines.append(f'  - "{phrase}" ({term_type}): {count_str}')
         sub_total = cb.get("subHeadingsTotal", {})
         if isinstance(sub_total, dict) and sub_total:
             lines.append(
@@ -762,7 +819,7 @@ def _build_from_cleaned_brief(
             term_type = term.get("type", "")
             t_min = brief.get("targetMin")
             count_str = _format_min_target_count(t_min)
-            lines.append(f"  - \"{phrase}\" ({term_type}): {count_str}")
+            lines.append(f'  - "{phrase}" ({term_type}): {count_str}')
         p_total = cb.get("pTotal", {})
         if isinstance(p_total, dict) and p_total:
             lines.append(
@@ -772,8 +829,10 @@ def _build_from_cleaned_brief(
     # --- Heading structure (from pageStructure recs) ---
     heading_targets: list[dict[str, Any]] = content_brief.heading_targets or []
     heading_items = [
-        h for h in heading_targets
-        if h.get("tag", "").lower().startswith("h") and "tag total" in h.get("tag", "").lower()
+        h
+        for h in heading_targets
+        if h.get("tag", "").lower().startswith("h")
+        and "tag total" in h.get("tag", "").lower()
     ]
     if heading_items:
         lines.append("")
@@ -858,9 +917,7 @@ def _build_from_parsed_brief(
                 continue
             weight = term.get("weight", 0)
             avg_count = term.get("averageCount", 0)
-            lines.append(
-                f"  - {phrase} (weight: {weight}, target count: {avg_count})"
-            )
+            lines.append(f"  - {phrase} (weight: {weight}, target count: {avg_count})")
 
     variations: list[str] = content_brief.related_searches or []
     if variations:
@@ -922,9 +979,7 @@ def _build_brand_voice_section(brand_config: dict[str, Any]) -> str | None:
 
     competitors: list[str] = vocabulary.get("competitors", [])
     if competitors:
-        parts.append(
-            f"**Competitor Brands (never mention):** {', '.join(competitors)}"
-        )
+        parts.append(f"**Competitor Brands (never mention):** {', '.join(competitors)}")
 
     if not parts:
         return None
@@ -971,7 +1026,9 @@ def _build_output_format_section(
 
     # --- Shared formatting rules ---
     lines.append("")
-    lines.append("Use semantic HTML only (h2, h3, p tags). No inline styles. No div wrappers. No class attributes.")
+    lines.append(
+        "Use semantic HTML only (h2, h3, p tags). No inline styles. No div wrappers. No class attributes."
+    )
 
     return "\n".join(lines)
 
@@ -1034,7 +1091,12 @@ def _build_bottom_description_spec(
 # Content generation service
 # ---------------------------------------------------------------------------
 
-REQUIRED_CONTENT_KEYS = {"page_title", "meta_description", "top_description", "bottom_description"}
+REQUIRED_CONTENT_KEYS = {
+    "page_title",
+    "meta_description",
+    "top_description",
+    "bottom_description",
+}
 
 STRICT_RETRY_PROMPT = (
     "Your previous response was not valid JSON. "
@@ -1179,7 +1241,9 @@ async def _retry_with_strict_prompt(
 
     Creates new PromptLog records for the retry attempt.
     """
-    retry_user_prompt = f"{STRICT_RETRY_PROMPT}\n\nOriginal prompt:\n{original_prompts.user_prompt}"
+    retry_user_prompt = (
+        f"{STRICT_RETRY_PROMPT}\n\nOriginal prompt:\n{original_prompts.user_prompt}"
+    )
 
     # Create retry prompt logs
     retry_system_log = PromptLog(
@@ -1315,7 +1379,9 @@ def _repair_json_control_chars(text: str) -> str:
     return re.sub(r'"(?:[^"\\]|\\.)*"', _escape_string_value, text)
 
 
-def _extract_json_keys_fallback(text: str, required_keys: set[str]) -> dict[str, str] | None:
+def _extract_json_keys_fallback(
+    text: str, required_keys: set[str]
+) -> dict[str, str] | None:
     """Last-resort extraction: use key positions as boundaries to find values.
 
     Instead of scanning for individual closing quotes (which fails when HTML
@@ -1345,7 +1411,7 @@ def _extract_json_keys_fallback(text: str, required_keys: set[str]) -> dict[str,
             remaining = text[value_start:]
             last_close = remaining.rfind('"}')
             if last_close == -1:
-                last_brace = remaining.rfind('}')
+                last_brace = remaining.rfind("}")
                 if last_brace == -1:
                     return None
                 last_close = remaining.rfind('"', 0, last_brace)
@@ -1413,5 +1479,8 @@ def _mark_failed(page_content: PageContent, error: str) -> ContentWritingResult:
     page_content.status = ContentStatus.FAILED.value
     page_content.generation_completed_at = datetime.now(UTC)
     page_content.qa_results = {"error": error}
-    logger.error("Content generation failed", extra={"error": error, "page_content_id": page_content.id})
+    logger.error(
+        "Content generation failed",
+        extra={"error": error, "page_content_id": page_content.id},
+    )
     return ContentWritingResult(success=False, page_content=page_content, error=error)

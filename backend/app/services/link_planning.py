@@ -82,7 +82,8 @@ class SiloLinkPlanner:
 
         # Filter to only approved pages with a valid crawled_page_id
         cluster_pages = [
-            cp for cp in all_cluster_pages
+            cp
+            for cp in all_cluster_pages
             if cp.crawled_page_id is not None and cp.is_approved
         ]
 
@@ -249,10 +250,7 @@ class SiloLinkPlanner:
         where each blog_post has a crawled_page_id for InternalLink bridging.
         """
         # Load campaign to get cluster_id and project_id
-        campaign_stmt = (
-            select(BlogCampaign)
-            .where(BlogCampaign.id == campaign_id)
-        )
+        campaign_stmt = select(BlogCampaign).where(BlogCampaign.id == campaign_id)
         campaign_result = await db.execute(campaign_stmt)
         campaign = campaign_result.scalar_one_or_none()
         if campaign is None:
@@ -284,7 +282,8 @@ class SiloLinkPlanner:
         )
         cluster_result = await db.execute(cluster_stmt)
         cluster_pages = [
-            cp for cp in cluster_result.unique().scalars().all()
+            cp
+            for cp in cluster_result.unique().scalars().all()
             if cp.crawled_page_id is not None
         ]
 
@@ -344,21 +343,25 @@ class SiloLinkPlanner:
         for post_node in blog_post_nodes:
             # UP edges: blog → each cluster page
             for cp_node in cluster_page_nodes:
-                edges.append({
-                    "source": post_node["crawled_page_id"],
-                    "target": cp_node["crawled_page_id"],
-                    "type": "blog_to_cluster",
-                    "target_role": cp_node["role"],
-                })
+                edges.append(
+                    {
+                        "source": post_node["crawled_page_id"],
+                        "target": cp_node["crawled_page_id"],
+                        "type": "blog_to_cluster",
+                        "target_role": cp_node["role"],
+                    }
+                )
 
             # SIDEWAYS edges: blog → sibling blogs
             for sibling_node in blog_post_nodes:
                 if sibling_node["post_id"] != post_node["post_id"]:
-                    edges.append({
-                        "source": post_node["crawled_page_id"],
-                        "target": sibling_node["crawled_page_id"],
-                        "type": "blog_to_blog",
-                    })
+                    edges.append(
+                        {
+                            "source": post_node["crawled_page_id"],
+                            "target": sibling_node["crawled_page_id"],
+                            "type": "blog_to_blog",
+                        }
+                    )
 
         logger.info(
             "Built blog graph",
@@ -643,13 +646,15 @@ def select_targets_blog(
         # Slot 1: mandatory parent link (first link)
         if parent_pages:
             parent = parent_pages[0]
-            targets.append({
-                "crawled_page_id": parent["crawled_page_id"],
-                "keyword": parent["keyword"],
-                "url": parent.get("url"),
-                "is_mandatory": True,
-                "role": "parent",
-            })
+            targets.append(
+                {
+                    "crawled_page_id": parent["crawled_page_id"],
+                    "keyword": parent["keyword"],
+                    "url": parent.get("url"),
+                    "is_mandatory": True,
+                    "role": "parent",
+                }
+            )
             inbound_counts[parent["crawled_page_id"]] += 1
 
         # Slots 2-4: additional cluster pages (children), sorted by least-linked
@@ -657,37 +662,40 @@ def select_targets_blog(
             child_pages,
             key=lambda c: inbound_counts.get(c["crawled_page_id"], 0),
         )
-        cluster_link_budget = min(3, len(children_ranked))  # 2-4 total cluster links (1 parent + up to 3 children)
+        cluster_link_budget = min(
+            3, len(children_ranked)
+        )  # 2-4 total cluster links (1 parent + up to 3 children)
         for child in children_ranked:
             if len(targets) >= 1 + cluster_link_budget:
                 break
-            targets.append({
-                "crawled_page_id": child["crawled_page_id"],
-                "keyword": child["keyword"],
-                "url": child.get("url"),
-                "is_mandatory": False,
-                "role": "child",
-            })
+            targets.append(
+                {
+                    "crawled_page_id": child["crawled_page_id"],
+                    "keyword": child["keyword"],
+                    "url": child.get("url"),
+                    "is_mandatory": False,
+                    "role": "child",
+                }
+            )
             inbound_counts[child["crawled_page_id"]] += 1
 
         # Sideways slots: 1-2 sibling blogs
-        siblings = [
-            bp for bp in blog_posts
-            if bp["post_id"] != blog_node["post_id"]
-        ]
+        siblings = [bp for bp in blog_posts if bp["post_id"] != blog_node["post_id"]]
         siblings_ranked = sorted(
             siblings,
             key=lambda s: inbound_counts.get(s["crawled_page_id"], 0),
         )
         sibling_budget = min(2, len(siblings_ranked))
         for sibling in siblings_ranked[:sibling_budget]:
-            targets.append({
-                "crawled_page_id": sibling["crawled_page_id"],
-                "keyword": sibling["keyword"],
-                "url": sibling.get("url_slug"),
-                "is_mandatory": False,
-                "role": "blog",
-            })
+            targets.append(
+                {
+                    "crawled_page_id": sibling["crawled_page_id"],
+                    "keyword": sibling["keyword"],
+                    "url": sibling.get("url_slug"),
+                    "is_mandatory": False,
+                    "role": "blog",
+                }
+            )
             inbound_counts[sibling["crawled_page_id"]] += 1
 
         # Enforce total budget cap of 6
@@ -1110,9 +1118,7 @@ async def run_link_planning_pipeline(
 
         for page in pages:
             source_id = _page_id_for_scope(page, scope)
-            page_targets = targets_map.get(
-                page.get("page_id", source_id), []
-            )
+            page_targets = targets_map.get(page.get("page_id", source_id), [])
             planned_links: list[dict[str, Any]] = []
 
             # Load source page content for context_fit scoring
@@ -1156,9 +1162,7 @@ async def run_link_planning_pipeline(
             "Step 2 complete: targets and anchors selected",
             extra={
                 "project_id": project_id,
-                "total_planned_links": sum(
-                    len(v) for v in page_link_plans.values()
-                ),
+                "total_planned_links": sum(len(v) for v in page_link_plans.values()),
             },
         )
 
@@ -1360,9 +1364,7 @@ async def run_link_planning_pipeline(
 
             # Update PageContent.bottom_description with injected HTML
             for page_id, updated_html in pages_html.items():
-                stmt = select(PageContent).where(
-                    PageContent.crawled_page_id == page_id
-                )
+                stmt = select(PageContent).where(PageContent.crawled_page_id == page_id)
                 pc_result = await write_db.execute(stmt)
                 pc = pc_result.scalar_one_or_none()
                 if pc is not None:
@@ -1570,7 +1572,7 @@ async def replan_links(
             del_stmt = del_stmt.where(InternalLink.cluster_id == cluster_id)
 
         del_result = await write_db.execute(del_stmt)
-        deleted_count: int = del_result.rowcount
+        deleted_count: int = del_result.rowcount  # type: ignore[union-attr,unused-ignore]
         await write_db.commit()
 
     logger.info(
@@ -1723,7 +1725,9 @@ async def run_blog_link_planning(
 
         if source_crawled_id is None:
             progress["status"] = "failed"
-            progress["error"] = "Blog post not found in graph (not approved or no content?)"
+            progress["error"] = (
+                "Blog post not found in graph (not approved or no content?)"
+            )
             return {"status": "failed", "error": progress["error"]}
 
         # Step 2: Select targets
@@ -1788,7 +1792,9 @@ async def run_blog_link_planning(
 
             # If no candidates from DB, use the keyword directly
             if not candidates:
-                candidates = [{"anchor_text": target_keyword, "anchor_type": "exact_match"}]
+                candidates = [
+                    {"anchor_text": target_keyword, "anchor_type": "exact_match"}
+                ]
 
             anchor_result = anchor_selector.select_anchor(
                 candidates, current_html, target_id, usage_tracker
@@ -1809,15 +1815,17 @@ async def run_blog_link_planning(
 
             if p_idx is not None:
                 current_html = modified_html
-                injection_results.append({
-                    "source_page_id": source_crawled_id,
-                    "target_page_id": target_id,
-                    "anchor_text": anchor_text,
-                    "anchor_type": anchor_result["anchor_type"],
-                    "placement_method": "rule_based",
-                    "position_in_content": p_idx,
-                    "is_mandatory": is_mandatory,
-                })
+                injection_results.append(
+                    {
+                        "source_page_id": source_crawled_id,
+                        "target_page_id": target_id,
+                        "anchor_text": anchor_text,
+                        "anchor_type": anchor_result["anchor_type"],
+                        "placement_method": "rule_based",
+                        "position_in_content": p_idx,
+                        "is_mandatory": is_mandatory,
+                    }
+                )
             else:
                 # LLM fallback
                 modified_html, p_idx = await injector.inject_llm_fallback(
@@ -1829,15 +1837,17 @@ async def run_blog_link_planning(
                 )
                 if p_idx is not None:
                     current_html = modified_html
-                    injection_results.append({
-                        "source_page_id": source_crawled_id,
-                        "target_page_id": target_id,
-                        "anchor_text": anchor_text,
-                        "anchor_type": anchor_result["anchor_type"],
-                        "placement_method": "llm_fallback",
-                        "position_in_content": p_idx,
-                        "is_mandatory": is_mandatory,
-                    })
+                    injection_results.append(
+                        {
+                            "source_page_id": source_crawled_id,
+                            "target_page_id": target_id,
+                            "anchor_text": anchor_text,
+                            "anchor_type": anchor_result["anchor_type"],
+                            "placement_method": "llm_fallback",
+                            "position_in_content": p_idx,
+                            "is_mandatory": is_mandatory,
+                        }
+                    )
                 else:
                     logger.warning(
                         "Blog link injection failed for target",

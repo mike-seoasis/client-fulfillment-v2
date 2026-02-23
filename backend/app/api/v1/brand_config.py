@@ -217,7 +217,9 @@ async def run_generation(
             )
 
             # Get source file IDs for metadata
-            source_file_ids = await BrandConfigService.get_source_file_ids(db, project_id)
+            source_file_ids = await BrandConfigService.get_source_file_ids(
+                db, project_id
+            )
 
             # Store brand config
             await BrandConfigService.store_brand_config(
@@ -567,6 +569,7 @@ async def regenerate_brand_config(
 
     # Override steps_total for regeneration (may be fewer than full generation)
     from app.services.brand_config import GENERATION_STEPS, SECTION_PROMPTS
+
     sections_to_regenerate = sections if sections else GENERATION_STEPS
     actual_steps = len([s for s in sections_to_regenerate if s in SECTION_PROMPTS])
     generation_status.steps_total = actual_steps

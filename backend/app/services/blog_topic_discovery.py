@@ -105,9 +105,7 @@ class BlogTopicDiscoveryService:
                         persona_parts.append(f"Summary: {summary}")
 
                     if persona_parts:
-                        parts.append(
-                            "## Target Audience\n" + "\n".join(persona_parts)
-                        )
+                        parts.append("## Target Audience\n" + "\n".join(persona_parts))
 
         competitor_context = brand_config.get("competitor_context")
         if isinstance(competitor_context, dict):
@@ -140,13 +138,10 @@ class BlogTopicDiscoveryService:
             List of dicts with keys: seed, source_type, source_page_id.
         """
         # Query approved cluster pages that have a crawled_page_id
-        stmt = (
-            select(ClusterPage)
-            .where(
-                ClusterPage.cluster_id == cluster_id,
-                ClusterPage.is_approved == True,  # noqa: E712
-                ClusterPage.crawled_page_id.isnot(None),
-            )
+        stmt = select(ClusterPage).where(
+            ClusterPage.cluster_id == cluster_id,
+            ClusterPage.is_approved == True,  # noqa: E712
+            ClusterPage.crawled_page_id.isnot(None),
         )
         result = await db.execute(stmt)
         approved_pages = list(result.scalars().all())
@@ -159,12 +154,13 @@ class BlogTopicDiscoveryService:
             return []
 
         # Collect crawled_page_ids to look up content briefs
-        crawled_page_ids = [p.crawled_page_id for p in approved_pages if p.crawled_page_id]
+        crawled_page_ids = [
+            p.crawled_page_id for p in approved_pages if p.crawled_page_id
+        ]
 
         # Query content briefs for those crawled pages
-        brief_stmt = (
-            select(ContentBrief)
-            .where(ContentBrief.page_id.in_(crawled_page_ids))
+        brief_stmt = select(ContentBrief).where(
+            ContentBrief.page_id.in_(crawled_page_ids)
         )
         brief_result = await db.execute(brief_stmt)
         briefs = list(brief_result.scalars().all())
@@ -189,11 +185,13 @@ class BlogTopicDiscoveryService:
                         normalized = search.strip().lower()
                         if normalized and normalized not in seen:
                             seen.add(normalized)
-                            seeds.append({
-                                "seed": normalized,
-                                "source_type": "related_search",
-                                "source_page_id": source_page_id,
-                            })
+                            seeds.append(
+                                {
+                                    "seed": normalized,
+                                    "source_type": "related_search",
+                                    "source_page_id": source_page_id,
+                                }
+                            )
 
             # Extract related_questions (list[str])
             if isinstance(brief.related_questions, list):
@@ -202,11 +200,13 @@ class BlogTopicDiscoveryService:
                         normalized = question.strip().lower()
                         if normalized and normalized not in seen:
                             seen.add(normalized)
-                            seeds.append({
-                                "seed": normalized,
-                                "source_type": "related_question",
-                                "source_page_id": source_page_id,
-                            })
+                            seeds.append(
+                                {
+                                    "seed": normalized,
+                                    "source_type": "related_question",
+                                    "source_page_id": source_page_id,
+                                }
+                            )
 
         logger.info(
             "Extracted POP seeds",
@@ -240,9 +240,7 @@ class BlogTopicDiscoveryService:
         # Build seed summary for the prompt
         seed_lines: list[str] = []
         for i, s in enumerate(seeds, 1):
-            seed_lines.append(
-                f'{i}. "{s["seed"]}" (from {s["source_type"]})'
-            )
+            seed_lines.append(f'{i}. "{s["seed"]}" (from {s["source_type"]})')
         seeds_text = "\n".join(seed_lines)
 
         brand_section = ""
@@ -328,15 +326,19 @@ Example:
             # Map source_seed_index back to source_page_id
             source_seed_index = item.get("source_seed_index")
             source_page_id = None
-            if isinstance(source_seed_index, int) and 1 <= source_seed_index <= len(seeds):
+            if isinstance(source_seed_index, int) and 1 <= source_seed_index <= len(
+                seeds
+            ):
                 source_page_id = seeds[source_seed_index - 1].get("source_page_id")
 
-            valid_candidates.append({
-                "topic": topic.strip().lower(),
-                "format_type": item.get("format_type", "guide"),
-                "rationale": item.get("rationale", ""),
-                "source_page_id": source_page_id,
-            })
+            valid_candidates.append(
+                {
+                    "topic": topic.strip().lower(),
+                    "format_type": item.get("format_type", "guide"),
+                    "rationale": item.get("rationale", ""),
+                    "source_page_id": source_page_id,
+                }
+            )
 
         if len(valid_candidates) < 5:
             raise ValueError(
@@ -434,7 +436,8 @@ Example:
             # Filter zero-volume topics
             before_count = len(candidates)
             candidates = [
-                c for c in candidates
+                c
+                for c in candidates
                 if c.get("search_volume") and c["search_volume"] > 0
             ]
             filtered_count = before_count - len(candidates)
@@ -512,7 +515,7 @@ Example:
             candidate_lines.append(
                 f'{i}. "{c["topic"]}" — volume: {vol_str}, '
                 f"CPC: {cpc_str}, competition: {comp_str}, "
-                f'format: {c.get("format_type", "guide")}'
+                f"format: {c.get('format_type', 'guide')}"
             )
 
         candidates_text = "\n".join(candidate_lines)
@@ -627,9 +630,7 @@ Example:
                     },
                 )
 
-            url_slug = self._topic_to_slug(
-                item.get("url_slug", topic_normalized)
-            )
+            url_slug = self._topic_to_slug(item.get("url_slug", topic_normalized))
             relevance_score = item.get("relevance_score", 0.7)
             if not isinstance(relevance_score, (int, float)):
                 relevance_score = 0.7
@@ -642,26 +643,28 @@ Example:
             # Validate alternative_keywords
             raw_alts = item.get("alternative_keywords", [])
             alternative_keywords = [
-                a.strip().lower()
-                for a in raw_alts
-                if isinstance(a, str) and a.strip()
+                a.strip().lower() for a in raw_alts if isinstance(a, str) and a.strip()
             ][:3]
 
-            results.append({
-                "topic": topic_normalized,
-                "topic_title": item.get("topic_title"),
-                "alternative_keywords": alternative_keywords,
-                "format_type": item.get("format_type", original.get("format_type", "guide")),
-                "intent_type": intent_type,
-                "url_slug": url_slug,
-                "relevance_score": float(relevance_score),
-                "reasoning": item.get("reasoning", ""),
-                "search_volume": original.get("search_volume"),
-                "cpc": original.get("cpc"),
-                "competition": original.get("competition"),
-                "competition_level": original.get("competition_level"),
-                "source_page_id": original.get("source_page_id"),
-            })
+            results.append(
+                {
+                    "topic": topic_normalized,
+                    "topic_title": item.get("topic_title"),
+                    "alternative_keywords": alternative_keywords,
+                    "format_type": item.get(
+                        "format_type", original.get("format_type", "guide")
+                    ),
+                    "intent_type": intent_type,
+                    "url_slug": url_slug,
+                    "relevance_score": float(relevance_score),
+                    "reasoning": item.get("reasoning", ""),
+                    "search_volume": original.get("search_volume"),
+                    "cpc": original.get("cpc"),
+                    "competition": original.get("competition"),
+                    "competition_level": original.get("competition_level"),
+                    "source_page_id": original.get("source_page_id"),
+                }
+            )
 
         # Sort by relevance_score descending
         results.sort(key=lambda x: -(x.get("relevance_score") or 0))
@@ -815,9 +818,7 @@ Example:
                             enriched_alts: list[dict[str, Any]] = []
                             for kw in topic.get("alternative_keywords", []):
                                 vol = alt_volume_map.get(kw.strip().lower())
-                                enriched_alts.append(
-                                    {"keyword": kw, "volume": vol}
-                                )
+                                enriched_alts.append({"keyword": kw, "volume": vol})
                             topic["alternative_keywords"] = enriched_alts
 
                         logger.info(
@@ -865,11 +866,16 @@ Example:
         dedup_filtered_count = 0
         dedup_warned_count = 0
         try:
-            from app.services.blog_dedup import check_duplicates, get_existing_articles
+            from app.services.blog_dedup import (  # type: ignore[import-not-found,unused-ignore]
+                check_duplicates,
+                get_existing_articles,
+            )
 
             existing_articles = await get_existing_articles(project_id, db)
             if existing_articles:
-                titles = [t.get("topic", "") or t.get("topic_title", "") for t in filtered]
+                titles = [
+                    t.get("topic", "") or t.get("topic_title", "") for t in filtered
+                ]
                 dedup_results = check_duplicates(titles, existing_articles)
 
                 deduped_filtered: list[dict[str, Any]] = []
@@ -893,8 +899,8 @@ Example:
                             "similarity": round(dedup.similarity, 2),
                         }
                         warnings.append(
-                            f"Topic \"{dedup.title}\" is similar ({round(dedup.similarity * 100)}%) "
-                            f"to existing post \"{dedup.existing_title}\""
+                            f'Topic "{dedup.title}" is similar ({round(dedup.similarity * 100)}%) '
+                            f'to existing post "{dedup.existing_title}"'
                         )
                     deduped_filtered.append(topic_data)
 

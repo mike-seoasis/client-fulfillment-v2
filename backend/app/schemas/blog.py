@@ -191,7 +191,9 @@ class BlogLinkPlanTriggerResponse(BaseModel):
 class BlogLinkStatusResponse(BaseModel):
     """Status of blog link planning for a single post."""
 
-    status: str = Field(..., description="Planning status (pending/planning/complete/failed)")
+    status: str = Field(
+        ..., description="Planning status (pending/planning/complete/failed)"
+    )
     step: str | None = Field(None, description="Current pipeline step")
     links_planned: int = Field(0, description="Number of links planned/injected")
     error: str | None = Field(None, description="Error message if failed")
@@ -202,10 +204,14 @@ class BlogLinkMapItem(BaseModel):
 
     target_page_id: str = Field(..., description="CrawledPage UUID of the target")
     anchor_text: str = Field(..., description="Anchor text used for the link")
-    anchor_type: str = Field(..., description="Type of anchor text (exact_match/partial_match/natural)")
+    anchor_type: str = Field(
+        ..., description="Type of anchor text (exact_match/partial_match/natural)"
+    )
     target_keyword: str | None = Field(None, description="Target page keyword")
     target_url: str | None = Field(None, description="Target page URL")
-    placement_method: str = Field(..., description="How the link was placed (rule_based/llm_fallback)")
+    placement_method: str = Field(
+        ..., description="How the link was placed (rule_based/llm_fallback)"
+    )
     status: str = Field(..., description="Link status (planned/injected/verified)")
 
 
@@ -213,6 +219,10 @@ class BlogLinkMapResponse(BaseModel):
     """Full link map for a blog post."""
 
     blog_post_id: str = Field(..., description="BlogPost UUID")
-    crawled_page_id: str | None = Field(None, description="CrawledPage UUID for this blog post")
+    crawled_page_id: str | None = Field(
+        None, description="CrawledPage UUID for this blog post"
+    )
     total_links: int = Field(..., description="Total number of links")
-    links: list[BlogLinkMapItem] = Field(default_factory=list, description="List of planned links")
+    links: list[BlogLinkMapItem] = Field(
+        default_factory=list, description="List of planned links"
+    )

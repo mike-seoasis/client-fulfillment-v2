@@ -138,8 +138,12 @@ class LinkMapOutboundLink(BaseModel):
     anchor_text: str = Field(..., description="Anchor text of the link")
     target_url: str = Field(..., description="Target page URL")
     target_title: str = Field("", description="Target page title")
-    anchor_type: str = Field(..., description="Anchor type: exact_match, partial_match, natural")
-    placement_method: str = Field(..., description="How placed: rule_based or llm_fallback")
+    anchor_type: str = Field(
+        ..., description="Anchor type: exact_match, partial_match, natural"
+    )
+    placement_method: str = Field(
+        ..., description="How placed: rule_based or llm_fallback"
+    )
 
 
 class LinkMapPageSummary(BaseModel):
@@ -157,7 +161,9 @@ class LinkMapPageSummary(BaseModel):
         None,
         description="Page labels from onboarding taxonomy",
     )
-    outbound_count: int = Field(..., description="Number of outbound links from this page")
+    outbound_count: int = Field(
+        ..., description="Number of outbound links from this page"
+    )
     inbound_count: int = Field(..., description="Number of inbound links to this page")
     outbound_links: list[LinkMapOutboundLink] = Field(
         default_factory=list,

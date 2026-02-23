@@ -17,7 +17,8 @@ from collections import Counter
 from typing import Any
 from urllib.parse import urlparse
 
-from bs4 import BeautifulSoup, NavigableString, Tag
+from bs4 import BeautifulSoup, Tag
+from bs4.element import NavigableString
 
 from app.core.logging import get_logger
 from app.integrations.claude import ClaudeClient, get_api_key
@@ -558,9 +559,7 @@ class LinkValidator:
                     for p in cluster_data.get("pages", [])
                 }
                 if link.target_page_id not in cluster_page_ids:
-                    violations.append(
-                        f"Link {link.id} targets page outside cluster"
-                    )
+                    violations.append(f"Link {link.id} targets page outside cluster")
 
         if violations:
             return {
@@ -598,15 +597,12 @@ class LinkValidator:
         """Rule: no_duplicate_links — no page links to same target twice."""
         target_counts = Counter(link.target_page_id for link in page_links)
         duplicates = {
-            target_id: count
-            for target_id, count in target_counts.items()
-            if count > 1
+            target_id: count for target_id, count in target_counts.items() if count > 1
         }
 
         if duplicates:
             msgs = [
-                f"Target {tid} linked {count}x"
-                for tid, count in duplicates.items()
+                f"Target {tid} linked {count}x" for tid, count in duplicates.items()
             ]
             return {
                 "rule": "no_duplicate_links",
@@ -814,9 +810,7 @@ class LinkValidator:
             "message": f"All links follow {page_role} direction rules",
         }
 
-    def _get_page_role(
-        self, page_id: str, cluster_data: dict[str, Any]
-    ) -> str | None:
+    def _get_page_role(self, page_id: str, cluster_data: dict[str, Any]) -> str | None:
         """Get the role of a page within the cluster (parent/child)."""
         for p in cluster_data.get("pages", []):
             pid = p.get("crawled_page_id") or p.get("page_id")
@@ -835,11 +829,7 @@ class LinkValidator:
         failing_rules_by_page: dict[str, list[str]] = {}
         for page_result in results:
             page_id = page_result["page_id"]
-            failing = [
-                r["rule"]
-                for r in page_result["rules"]
-                if not r["passed"]
-            ]
+            failing = [r["rule"] for r in page_result["rules"] if not r["passed"]]
             if failing:
                 failing_rules_by_page[page_id] = failing
 
@@ -857,9 +847,7 @@ class LinkValidator:
             extra={
                 "total_links": len(links),
                 "verified": sum(1 for lnk in links if lnk.status == "verified"),
-                "flagged": sum(
-                    1 for lnk in links if lnk.status.startswith("failed:")
-                ),
+                "flagged": sum(1 for lnk in links if lnk.status.startswith("failed:")),
             },
         )
 

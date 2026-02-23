@@ -395,9 +395,7 @@ async def get_review(
         total_posts=review_data["total_posts"],
         total_links=review_data["total_links"],
         avg_links_per_post=review_data["avg_links_per_post"],
-        groups=[
-            WPReviewGroup(**g) for g in review_data["groups"]
-        ],
+        groups=[WPReviewGroup(**g) for g in review_data["groups"]],
         validation_pass_rate=review_data["validation_pass_rate"],
     )
 

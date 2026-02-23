@@ -138,7 +138,9 @@ async def create_blog_campaign(
     bc_stmt = select(BrandConfig).where(BrandConfig.project_id == project_id)
     bc_result = await db.execute(bc_stmt)
     brand_config_row = bc_result.scalar_one_or_none()
-    brand_config: dict[str, Any] = brand_config_row.v2_schema if brand_config_row else {}
+    brand_config: dict[str, Any] = (
+        brand_config_row.v2_schema if brand_config_row else {}
+    )
 
     # Run discovery with timeout
     service = BlogTopicDiscoveryService(claude, dataforseo)
@@ -362,7 +364,10 @@ async def update_blog_post(
         setattr(post, field, value)
 
     # Transition campaign to 'writing' when a post is individually approved
-    if update_data.get("is_approved") is True and campaign.status == CampaignStatus.PLANNING.value:
+    if (
+        update_data.get("is_approved") is True
+        and campaign.status == CampaignStatus.PLANNING.value
+    ):
         campaign.status = CampaignStatus.WRITING.value
 
     await db.commit()
@@ -676,7 +681,9 @@ async def get_blog_content_status(
     posts_total = len(approved_posts)
     if posts_total == 0:
         overall_status = "idle"
-    elif blog_id in _active_blog_generations or any(p.content_status in generating_statuses for p in approved_posts):
+    elif blog_id in _active_blog_generations or any(
+        p.content_status in generating_statuses for p in approved_posts
+    ):
         overall_status = "generating"
     elif posts_completed + posts_failed >= posts_total:
         overall_status = "complete" if posts_failed == 0 else "failed"
@@ -1060,9 +1067,8 @@ async def get_blog_link_status(
 
     # Check if links already exist (completed previously)
     crawled_stmt = select(CrawledPage).where(
-        CrawledPage.normalized_url == (
-            select(BlogPost.url_slug).where(BlogPost.id == post_id).scalar_subquery()
-        ),
+        CrawledPage.normalized_url
+        == (select(BlogPost.url_slug).where(BlogPost.id == post_id).scalar_subquery()),
         CrawledPage.source == "blog",
     )
     crawled_result = await db.execute(crawled_stmt)
@@ -1276,11 +1282,11 @@ async def download_blog_post_html(
     # Build a minimal HTML document
     html_doc = (
         "<!DOCTYPE html>\n"
-        "<html lang=\"en\">\n"
+        '<html lang="en">\n'
         "<head>\n"
-        f"  <meta charset=\"utf-8\">\n"
+        f'  <meta charset="utf-8">\n'
         f"  <title>{post.title or post.primary_keyword}</title>\n"
-        f"  <meta name=\"description\" content=\"{post.meta_description or ''}\">\n"
+        f'  <meta name="description" content="{post.meta_description or ""}">\n'
         "</head>\n"
         "<body>\n"
         f"{clean_html}\n"

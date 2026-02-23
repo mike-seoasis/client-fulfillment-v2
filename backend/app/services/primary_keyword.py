@@ -236,16 +236,16 @@ class PrimaryKeywordService:
                 headings_text += f"H2: {', '.join(h2_list[:5])}"
 
         # Build prompt
-        prompt = f"""Analyze this {category or 'web'} page and generate high-level keyword ideas.
+        prompt = f"""Analyze this {category or "web"} page and generate high-level keyword ideas.
 
 Page Data:
 - URL: {url}
-- Title: {title or 'N/A'}
-- H1: {h1 or 'N/A'}
-{f'- Headings: {headings_text}' if headings_text else ''}- Content excerpt (first 500 chars):
-{(content_excerpt or '')[:500]}
-- Category: {category or 'other'}
-{f'- Product count: {product_count}' if product_count else ''}
+- Title: {title or "N/A"}
+- H1: {h1 or "N/A"}
+{f"- Headings: {headings_text}" if headings_text else ""}- Content excerpt (first 500 chars):
+{(content_excerpt or "")[:500]}
+- Category: {category or "other"}
+{f"- Product count: {product_count}" if product_count else ""}
 
 Generate 20-25 relevant keyword variations including:
 - Head terms (short, 1-2 words, likely high volume)
@@ -254,7 +254,7 @@ Generate 20-25 relevant keyword variations including:
 - Question-based keywords (if relevant)
 - Semantic variations and synonyms
 
-Category-specific guidelines for {category or 'other'} pages:
+Category-specific guidelines for {category or "other"} pages:
 {guidelines}
 
 IMPORTANT: Return ONLY a JSON array of keyword strings. No explanations, no markdown, just the array.
@@ -283,7 +283,9 @@ Example: ["keyword one", "keyword two", "keyword three"]"""
 
             # Handle markdown code blocks
             if "```json" in response_text:
-                response_text = response_text.split("```json")[1].split("```")[0].strip()
+                response_text = (
+                    response_text.split("```json")[1].split("```")[0].strip()
+                )
             elif "```" in response_text:
                 response_text = response_text.split("```")[1].split("```")[0].strip()
 
@@ -295,9 +297,7 @@ Example: ["keyword one", "keyword two", "keyword three"]"""
 
             # Filter to valid strings and clean up
             keywords = [
-                k.strip().lower()
-                for k in keywords
-                if isinstance(k, str) and k.strip()
+                k.strip().lower() for k in keywords if isinstance(k, str) and k.strip()
             ]
 
             if len(keywords) < 5:
@@ -508,14 +508,14 @@ Example: ["keyword one", "keyword two", "keyword three"]"""
         keywords_text = "\n".join(keywords_formatted)
 
         # Build the specificity filtering prompt
-        prompt = f"""Filter this keyword list to only the MOST SPECIFIC keywords for this {category or 'web'} page.
+        prompt = f"""Filter this keyword list to only the MOST SPECIFIC keywords for this {category or "web"} page.
 
 Page content:
 - URL: {url}
-- Title: {title or 'N/A'}
-- H1: {h1 or 'N/A'}
-- Category: {category or 'other'}
-- Body text sample: {(content_excerpt or '')[:400]}
+- Title: {title or "N/A"}
+- H1: {h1 or "N/A"}
+- Category: {category or "other"}
+- Body text sample: {(content_excerpt or "")[:400]}
 
 All keywords with search volume:
 {keywords_text}
@@ -568,7 +568,9 @@ Example: [{{"keyword": "keyword one", "relevance_score": 0.95}}, {{"keyword": "k
 
             # Handle markdown code blocks
             if "```json" in response_text:
-                response_text = response_text.split("```json")[1].split("```")[0].strip()
+                response_text = (
+                    response_text.split("```json")[1].split("```")[0].strip()
+                )
             elif "```" in response_text:
                 response_text = response_text.split("```")[1].split("```")[0].strip()
 
@@ -991,7 +993,9 @@ Example: [{{"keyword": "keyword one", "relevance_score": 0.95}}, {{"keyword": "k
             alternatives = selection.get("alternatives", [])
 
             if primary is None:
-                raise ValueError("Could not select primary keyword (all candidates already used)")
+                raise ValueError(
+                    "Could not select primary keyword (all candidates already used)"
+                )
 
             primary_keyword = primary.get("keyword", "")
             primary_score = primary.get("composite_score")

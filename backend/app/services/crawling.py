@@ -75,7 +75,9 @@ class CrawlingService:
         semaphore = asyncio.Semaphore(self._settings.crawl_concurrency)
 
         # Crawl all pages in parallel with semaphore (network only, no db access)
-        async def crawl_with_semaphore(page_id: str, url: str) -> tuple[str, CrawlResult]:
+        async def crawl_with_semaphore(
+            page_id: str, url: str
+        ) -> tuple[str, CrawlResult]:
             async with semaphore:
                 logger.debug(
                     "Starting crawl",

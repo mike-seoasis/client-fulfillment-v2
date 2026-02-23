@@ -24,7 +24,9 @@ ALLOWED_CONTENT_TYPES = {
 }
 
 
-@router.post("", response_model=ProjectFileResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=ProjectFileResponse, status_code=status.HTTP_201_CREATED
+)
 async def upload_file(
     project_id: str,
     file: UploadFile,

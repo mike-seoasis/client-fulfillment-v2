@@ -267,7 +267,9 @@ def run_migrations() -> bool:
         return False
 
 
-async def verify_database_connection(max_retries: int = 5, retry_delay: float = 3.0) -> bool:
+async def verify_database_connection(
+    max_retries: int = 5, retry_delay: float = 3.0
+) -> bool:
     """Verify database connection during deployment with retries.
 
     Railway's internal networking may not be ready immediately when the

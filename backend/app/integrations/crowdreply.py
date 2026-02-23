@@ -187,9 +187,7 @@ class CrowdReplyClient:
         for attempt in range(self._max_retries):
             attempt_start = time.monotonic()
             try:
-                response = await client.request(
-                    method, path, json=json, params=params
-                )
+                response = await client.request(method, path, json=json, params=params)
                 duration_ms = (time.monotonic() - attempt_start) * 1000
 
                 if response.status_code == 429:
@@ -364,9 +362,7 @@ class CrowdReplyClient:
 
         return None
 
-    async def list_tasks(
-        self, filters: dict[str, Any] | None = None
-    ) -> list[TaskInfo]:
+    async def list_tasks(self, filters: dict[str, Any] | None = None) -> list[TaskInfo]:
         """GET /tasks with optional filters."""
         response = await self._request("GET", "/tasks", params=filters)
         tasks = response.json() if response.status_code == 200 else []

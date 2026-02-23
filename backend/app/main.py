@@ -210,7 +210,9 @@ async def lifespan(app: FastAPI) -> Any:
 
     perplexity_client = await init_perplexity()
     if perplexity_client.available:
-        logger.info("Perplexity client initialized", extra={"model": perplexity_client.model})
+        logger.info(
+            "Perplexity client initialized", extra={"model": perplexity_client.model}
+        )
     else:
         logger.warning("Perplexity not configured (missing PERPLEXITY_API_KEY)")
 
@@ -443,8 +445,12 @@ def create_app() -> FastAPI:
                 "mock_mode": settings.pop_use_mock,
                 "is_mock_client": is_mock,
                 "api_key_set": bool(settings.pop_api_key),
-                "available": getattr(pop_client, "available", False) if not is_mock else True,
-                "circuit_breaker": cb.state.value if (cb := getattr(pop_client, "_circuit_breaker", None)) is not None else "n/a",
+                "available": getattr(pop_client, "available", False)
+                if not is_mock
+                else True,
+                "circuit_breaker": cb.state.value
+                if (cb := getattr(pop_client, "_circuit_breaker", None)) is not None
+                else "n/a",
             },
             "dataforseo": {
                 "login_set": bool(settings.dataforseo_api_login),
@@ -468,7 +474,10 @@ def create_app() -> FastAPI:
             return {"status": "skipped", "reason": "Using mock client"}
 
         if not pop_client.available:
-            return {"status": "error", "reason": "POP client not available (missing API key)"}
+            return {
+                "status": "error",
+                "reason": "POP client not available (missing API key)",
+            }
 
         steps: dict[str, Any] = {}
 
@@ -534,8 +543,14 @@ def create_app() -> FastAPI:
                 "status": report_poll.status.value if report_poll.status else None,
                 "response_keys": list(report_data.keys()),
                 "has_report_key": "report" in report_data,
-                "report_keys": list(report_data.get("report", {}).keys()) if isinstance(report_data.get("report"), dict) else None,
-                "competitors_count": len(report_data.get("report", {}).get("competitors", [])) if isinstance(report_data.get("report"), dict) else 0,
+                "report_keys": list(report_data.get("report", {}).keys())
+                if isinstance(report_data.get("report"), dict)
+                else None,
+                "competitors_count": len(
+                    report_data.get("report", {}).get("competitors", [])
+                )
+                if isinstance(report_data.get("report"), dict)
+                else 0,
             }
 
         except Exception as e:
@@ -556,24 +571,32 @@ def create_app() -> FastAPI:
 
         async with db_manager.session_factory() as db:
             # Get all pages for project
-            pages_stmt = sa_select(CrawledPage).where(CrawledPage.project_id == project_id)
+            pages_stmt = sa_select(CrawledPage).where(
+                CrawledPage.project_id == project_id
+            )
             pages_result = await db.execute(pages_stmt)
             pages = list(pages_result.scalars().all())
 
             page_data: list[dict[str, Any]] = []
             for page in pages:
                 # Get keywords
-                kw_stmt = sa_select(PageKeywords).where(PageKeywords.crawled_page_id == page.id)
+                kw_stmt = sa_select(PageKeywords).where(
+                    PageKeywords.crawled_page_id == page.id
+                )
                 kw_result = await db.execute(kw_stmt)
                 kw = kw_result.scalar_one_or_none()
 
                 # Get content
-                content_stmt = sa_select(PageContent).where(PageContent.crawled_page_id == page.id)
+                content_stmt = sa_select(PageContent).where(
+                    PageContent.crawled_page_id == page.id
+                )
                 content_result = await db.execute(content_stmt)
                 content = content_result.scalar_one_or_none()
 
                 # Get brief
-                brief_stmt = sa_select(ContentBrief).where(ContentBrief.page_id == page.id)
+                brief_stmt = sa_select(ContentBrief).where(
+                    ContentBrief.page_id == page.id
+                )
                 brief_result = await db.execute(brief_stmt)
                 brief = brief_result.scalar_one_or_none()
 
@@ -584,18 +607,33 @@ def create_app() -> FastAPI:
                     raw_keys = list(brief.raw_response.keys())
                     prepare_id_value = brief.raw_response.get("prepareId")
 
-                page_data.append({
-                    "page_id": page.id,
-                    "url": page.normalized_url[:60],
-                    "keyword": kw.primary_keyword if kw else None,
-                    "keyword_approved": kw.is_approved if kw else False,
-                    "content_status": content.status if content else None,
-                    "has_brief": brief is not None,
-                    "brief_lsi_count": len(brief.lsi_terms) if brief and brief.lsi_terms else 0,
-                    "brief_competitors": len(brief.competitors) if brief and brief.competitors else 0,
-                    "brief_pop_task_id": brief.pop_task_id[:20] if brief and brief.pop_task_id else None,
-                    **({"raw_response_keys": raw_keys, "prepareId": prepare_id_value} if raw_keys is not None else {}),
-                })
+                page_data.append(
+                    {
+                        "page_id": page.id,
+                        "url": page.normalized_url[:60],
+                        "keyword": kw.primary_keyword if kw else None,
+                        "keyword_approved": kw.is_approved if kw else False,
+                        "content_status": content.status if content else None,
+                        "has_brief": brief is not None,
+                        "brief_lsi_count": len(brief.lsi_terms)
+                        if brief and brief.lsi_terms
+                        else 0,
+                        "brief_competitors": len(brief.competitors)
+                        if brief and brief.competitors
+                        else 0,
+                        "brief_pop_task_id": brief.pop_task_id[:20]
+                        if brief and brief.pop_task_id
+                        else None,
+                        **(
+                            {
+                                "raw_response_keys": raw_keys,
+                                "prepareId": prepare_id_value,
+                            }
+                            if raw_keys is not None
+                            else {}
+                        ),
+                    }
+                )
 
             return {
                 "project_id": project_id,

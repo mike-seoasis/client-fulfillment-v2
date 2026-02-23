@@ -360,7 +360,9 @@ async def simulate_webhook(
     comment = comment_result.scalar_one_or_none()
 
     if not comment:
-        logger.warning("Simulate webhook: comment not found", extra={"comment_id": comment_id})
+        logger.warning(
+            "Simulate webhook: comment not found", extra={"comment_id": comment_id}
+        )
         return False
 
     # Find the CrowdReplyTask for this comment (most recent if duplicates)
@@ -387,7 +389,10 @@ async def simulate_webhook(
     }
 
     if status == "published":
-        url = submission_url or f"https://reddit.com/r/example/comments/sim/{comment_id[:8]}"
+        url = (
+            submission_url
+            or f"https://reddit.com/r/example/comments/sim/{comment_id[:8]}"
+        )
         fake_payload["taskSubmission"] = [{"submissionUrl": url}]
 
     return await handle_crowdreply_webhook(fake_payload, db)

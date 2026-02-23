@@ -12,7 +12,7 @@ import json
 import re
 from dataclasses import dataclass, field
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 # Maximum body content size in bytes (50KB)
 MAX_BODY_CONTENT_BYTES = 50 * 1024
@@ -35,13 +35,30 @@ class ExtractedContent:
 
 # Elements to remove when extracting main content (boilerplate)
 BOILERPLATE_SELECTORS = [
-    "script", "style", "noscript", "iframe",
-    "header", "nav", "footer",
-    "[role='navigation']", "[role='banner']", "[role='contentinfo']",
-    ".header", ".nav", ".navigation", ".footer", ".site-header", ".site-footer",
-    ".cart-drawer", ".cart-notification", ".announcement-bar",
-    ".cookie-banner", ".popup", ".modal",
-    "#shopify-section-header", "#shopify-section-footer",
+    "script",
+    "style",
+    "noscript",
+    "iframe",
+    "header",
+    "nav",
+    "footer",
+    "[role='navigation']",
+    "[role='banner']",
+    "[role='contentinfo']",
+    ".header",
+    ".nav",
+    ".navigation",
+    ".footer",
+    ".site-header",
+    ".site-footer",
+    ".cart-drawer",
+    ".cart-notification",
+    ".announcement-bar",
+    ".cookie-banner",
+    ".popup",
+    ".modal",
+    "#shopify-section-header",
+    "#shopify-section-footer",
     "#shopify-section-announcement-bar",
 ]
 
@@ -66,7 +83,9 @@ def _extract_main_content(
         return markdown.strip()
 
     # Use cleaned_html if available
-    source_html = cleaned_html if cleaned_html and isinstance(cleaned_html, str) else html
+    source_html = (
+        cleaned_html if cleaned_html and isinstance(cleaned_html, str) else html
+    )
     if not source_html or not isinstance(source_html, str):
         return None
 
@@ -97,7 +116,7 @@ def _extract_main_content(
         text = soup.get_text(separator=" ", strip=True)
 
     # Clean up excessive whitespace
-    text = re.sub(r'\s+', ' ', text).strip()
+    text = re.sub(r"\s+", " ", text).strip()
 
     return text if text else None
 
@@ -155,7 +174,9 @@ def extract_content_from_html(
     return result
 
 
-def extract_shopify_products(soup: BeautifulSoup, html: str) -> tuple[int | None, list[str]]:
+def extract_shopify_products(
+    soup: BeautifulSoup, html: str
+) -> tuple[int | None, list[str]]:
     """Extract product count and names from Shopify collection pages.
 
     Prioritizes counting visible product cards on the page (more accurate than
@@ -222,6 +243,7 @@ def _extract_from_product_cards(soup: BeautifulSoup) -> tuple[int | None, list[s
     # If no main grid found, create a copy and remove non-collection sections
     if not main_grid:
         from copy import copy
+
         search_area = copy(soup)
         # Remove sections that typically contain non-collection products
         non_collection_selectors = [
@@ -255,7 +277,7 @@ def _extract_from_product_cards(soup: BeautifulSoup) -> tuple[int | None, list[s
         re.compile(r"collection-product", re.I),
     ]
 
-    product_cards = []
+    product_cards: list[Tag] = []
     for pattern in product_card_patterns:
         cards = search_area.find_all(class_=pattern)
         if cards:
@@ -286,11 +308,11 @@ def _extract_from_product_cards(soup: BeautifulSoup) -> tuple[int | None, list[s
     return unique_count, product_names
 
 
-def _extract_product_name_from_card(card: BeautifulSoup) -> str | None:
+def _extract_product_name_from_card(card: Tag) -> str | None:
     """Extract product name from a product card element.
 
     Args:
-        card: BeautifulSoup element representing a product card.
+        card: Tag element representing a product card.
 
     Returns:
         Product name or None if not found.
@@ -303,7 +325,8 @@ def _extract_product_name_from_card(card: BeautifulSoup) -> str | None:
         ".card__title",
         ".ProductItem__Title",
         "[data-product-title]",
-        "h3", "h4",  # Fallback to heading tags
+        "h3",
+        "h4",  # Fallback to heading tags
     ]
 
     for selector in title_selectors:
@@ -364,10 +387,20 @@ def _extract_product_names_from_json(html: str) -> list[str]:
         # Filter out common non-product titles
         if name and name not in product_names:
             lower_name = name.lower()
-            if not any(skip in lower_name for skip in [
-                "shipping", "cart", "checkout", "policy", "subscribe",
-                "newsletter", "cookie", "privacy", "terms"
-            ]):
+            if not any(
+                skip in lower_name
+                for skip in [
+                    "shipping",
+                    "cart",
+                    "checkout",
+                    "policy",
+                    "subscribe",
+                    "newsletter",
+                    "cookie",
+                    "privacy",
+                    "terms",
+                ]
+            ):
                 product_names.append(name)
         if len(product_names) >= 50:  # Limit to prevent huge lists
             break

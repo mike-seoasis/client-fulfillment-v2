@@ -251,7 +251,9 @@ async def _auto_blog_link_planning(
                 post_result = await db.execute(post_stmt)
                 post = post_result.scalar_one_or_none()
 
-                crawled_page_id = getattr(post, "crawled_page_id", None) if post else None
+                crawled_page_id = (
+                    getattr(post, "crawled_page_id", None) if post else None
+                )
                 if crawled_page_id:
                     del_stmt = delete(InternalLink).where(
                         InternalLink.source_page_id == crawled_page_id,
@@ -642,7 +644,8 @@ async def _fetch_blog_brief(
     # (not just discovery_metadata from the topic discovery pipeline)
     cached = blog_post.pop_brief or {}
     has_pop_data = any(
-        k in cached for k in ("lsi_terms", "word_count_target", "competitors", "related_searches")
+        k in cached
+        for k in ("lsi_terms", "word_count_target", "competitors", "related_searches")
     )
     if not refresh_briefs and has_pop_data:
         logger.info(
@@ -785,7 +788,11 @@ async def _generate_blog_content(
     """
     # Build prompts
     prompts = build_blog_content_prompt(
-        blog_post, keyword, brand_config, content_brief, trend_context=trend_context,
+        blog_post,
+        keyword,
+        brand_config,
+        content_brief,
+        trend_context=trend_context,
     )
 
     # Call Claude
@@ -831,7 +838,11 @@ async def _generate_blog_content(
         raw_snippet = (result.text or "")[:500]
         logger.warning(
             "Blog content JSON parse failed, retrying with strict prompt",
-            extra={"post_id": blog_post.id, "keyword": keyword[:50], "raw_snippet": raw_snippet},
+            extra={
+                "post_id": blog_post.id,
+                "keyword": keyword[:50],
+                "raw_snippet": raw_snippet,
+            },
         )
         retry_prompt = (
             "Your previous response could not be parsed as valid JSON. "
@@ -968,7 +979,9 @@ def _extract_json_keys_fallback(text: str) -> dict[str, str] | None:
     positions and uses the gaps between them to determine value boundaries.
     """
     # Find positions of all required keys
-    key_positions: list[tuple[str, int, int]] = []  # (key, key_match_start, value_start)
+    key_positions: list[
+        tuple[str, int, int]
+    ] = []  # (key, key_match_start, value_start)
     for key in BLOG_CONTENT_KEYS:
         pattern = rf'"{key}"\s*:\s*"'
         match = re.search(pattern, text)
@@ -1000,7 +1013,7 @@ def _extract_json_keys_fallback(text: str) -> dict[str, str] | None:
             last_close = remaining.rfind('"}')
             if last_close == -1:
                 # Try with whitespace before }
-                last_brace = remaining.rfind('}')
+                last_brace = remaining.rfind("}")
                 if last_brace == -1:
                     return None
                 last_close = remaining.rfind('"', 0, last_brace)

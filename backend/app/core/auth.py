@@ -30,7 +30,9 @@ class UserInfo:
 _DEV_USER = UserInfo(id="dev-user", email="dev@localhost", name="Dev User")
 
 
-async def get_current_user(request: Request, db: AsyncSession = Depends(get_session)) -> UserInfo:
+async def get_current_user(
+    request: Request, db: AsyncSession = Depends(get_session)
+) -> UserInfo:
     """FastAPI dependency that validates the session token and returns the current user.
 
     When AUTH_REQUIRED=false, returns a dev user without checking headers.
@@ -57,9 +59,9 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_sess
     result = await db.execute(
         text(
             'SELECT u.id, u.email, u.name, s."expiresAt" '
-            'FROM neon_auth.session s '
+            "FROM neon_auth.session s "
             'JOIN neon_auth."user" u ON s."userId" = u.id '
-            'WHERE s.id = :session_id'
+            "WHERE s.id = :session_id"
         ),
         {"session_id": session_id},
     )

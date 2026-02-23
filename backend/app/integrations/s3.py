@@ -312,7 +312,11 @@ class S3Client:
                 )
 
                 # Handle specific error codes
-                if error_code in ("AccessDenied", "InvalidAccessKeyId", "SignatureDoesNotMatch"):
+                if error_code in (
+                    "AccessDenied",
+                    "InvalidAccessKeyId",
+                    "SignatureDoesNotMatch",
+                ):
                     await self._circuit_breaker.record_failure()
                     raise S3AuthError(
                         f"Authentication failed: {error_message}",

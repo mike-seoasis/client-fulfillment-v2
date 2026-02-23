@@ -273,7 +273,7 @@ class SerpAPIClient:
                     )
                     await self._circuit_breaker.record_failure()
                     if attempt < self._max_retries - 1:
-                        delay = self._retry_delay * (2 ** attempt)
+                        delay = self._retry_delay * (2**attempt)
                         await asyncio.sleep(delay)
                         continue
                     return []
@@ -300,7 +300,7 @@ class SerpAPIClient:
                     )
                     await self._circuit_breaker.record_failure()
                     if attempt < self._max_retries - 1:
-                        delay = self._retry_delay * (2 ** attempt)
+                        delay = self._retry_delay * (2**attempt)
                         await asyncio.sleep(delay)
                         continue
                     return []
@@ -363,7 +363,7 @@ class SerpAPIClient:
                 )
                 await self._circuit_breaker.record_failure()
                 if attempt < self._max_retries - 1:
-                    delay = self._retry_delay * (2 ** attempt)
+                    delay = self._retry_delay * (2**attempt)
                     await asyncio.sleep(delay)
                     continue
                 last_error = SerpAPIError(f"Request timed out after {self._timeout}s")
@@ -381,7 +381,7 @@ class SerpAPIClient:
                 )
                 await self._circuit_breaker.record_failure()
                 if attempt < self._max_retries - 1:
-                    delay = self._retry_delay * (2 ** attempt)
+                    delay = self._retry_delay * (2**attempt)
                     await asyncio.sleep(delay)
                     continue
                 last_error = SerpAPIError(f"Request failed: {e}")

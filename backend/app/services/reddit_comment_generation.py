@@ -90,9 +90,7 @@ def _extract_brand_context(brand_config: BrandConfig) -> dict[str, Any]:
     # --- Brand description ---
     positioning = bf.get("brand_positioning", {})
     brand_desc = (
-        positioning.get("one_sentence_description")
-        or bf.get("brand_description")
-        or ""
+        positioning.get("one_sentence_description") or bf.get("brand_description") or ""
     )
 
     # --- What they sell (for context) ---
@@ -171,9 +169,7 @@ async def build_comment_prompt(
             f"Words that resonate with you: {', '.join(ctx['power_words'][:8])}"
         )
     if ctx["banned_words"]:
-        voice_lines.append(
-            f"Words you NEVER use: {', '.join(ctx['banned_words'][:8])}"
-        )
+        voice_lines.append(f"Words you NEVER use: {', '.join(ctx['banned_words'][:8])}")
     if ctx["words_we_prefer"]:
         pref_strs = [
             f'say "{wp["we_say"]}" instead of "{wp["instead_of"]}"'
@@ -191,7 +187,7 @@ async def build_comment_prompt(
     post_context = f"""REDDIT POST TO REPLY TO:
 Subreddit: r/{post.subreddit}
 Post Title: "{post.title}"
-Context/Preview: {(post.snippet or 'No content available')[:500]}
+Context/Preview: {(post.snippet or "No content available")[:500]}
 
 IMPORTANT: You are writing a TOP-LEVEL REPLY to the original post (responding to the title/question).
 The "Context/Preview" above may include text from other comments - ignore those and focus on the post title."""

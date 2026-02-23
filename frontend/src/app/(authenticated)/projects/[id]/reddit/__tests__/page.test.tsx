@@ -27,6 +27,13 @@ const mockUseDiscoveryStatus = vi.fn();
 const mockUseRedditPosts = vi.fn();
 const mockUpdatePostMutate = vi.fn();
 const mockUseUpdatePostStatus = vi.fn();
+const mockUseComments = vi.fn();
+const mockUseGenerationStatus = vi.fn();
+const mockUseGenerateComment = vi.fn();
+const mockUseGenerateBatch = vi.fn();
+const mockUseUpdateComment = vi.fn();
+const mockUseDeleteComment = vi.fn();
+const mockUseRevertComment = vi.fn();
 vi.mock('@/hooks/useReddit', () => ({
   useRedditConfig: (...args: unknown[]) => mockUseRedditConfig(...args),
   useUpsertRedditConfig: (...args: unknown[]) => mockUseUpsertRedditConfig(...args),
@@ -34,6 +41,13 @@ vi.mock('@/hooks/useReddit', () => ({
   useDiscoveryStatus: (...args: unknown[]) => mockUseDiscoveryStatus(...args),
   useRedditPosts: (...args: unknown[]) => mockUseRedditPosts(...args),
   useUpdatePostStatus: (...args: unknown[]) => mockUseUpdatePostStatus(...args),
+  useComments: (...args: unknown[]) => mockUseComments(...args),
+  useGenerationStatus: (...args: unknown[]) => mockUseGenerationStatus(...args),
+  useGenerateComment: (...args: unknown[]) => mockUseGenerateComment(...args),
+  useGenerateBatch: (...args: unknown[]) => mockUseGenerateBatch(...args),
+  useUpdateComment: (...args: unknown[]) => mockUseUpdateComment(...args),
+  useDeleteComment: (...args: unknown[]) => mockUseDeleteComment(...args),
+  useRevertComment: (...args: unknown[]) => mockUseRevertComment(...args),
 }));
 
 // ============================================================================
@@ -177,6 +191,23 @@ const defaultMockUpdatePost = () => ({
   isPending: false,
 });
 
+const defaultMockComments = () => ({
+  data: [],
+  isLoading: false,
+  error: null,
+});
+
+const defaultMockGenerationStatus = () => ({
+  data: null,
+  isLoading: false,
+  error: null,
+});
+
+const defaultMockMutation = () => ({
+  mutate: vi.fn(),
+  isPending: false,
+});
+
 // ============================================================================
 // Tests
 // ============================================================================
@@ -190,6 +221,13 @@ describe('ProjectRedditConfigPage', () => {
     mockUseDiscoveryStatus.mockReturnValue(defaultMockDiscoveryStatus());
     mockUseRedditPosts.mockReturnValue(defaultMockPosts());
     mockUseUpdatePostStatus.mockReturnValue(defaultMockUpdatePost());
+    mockUseComments.mockReturnValue(defaultMockComments());
+    mockUseGenerationStatus.mockReturnValue(defaultMockGenerationStatus());
+    mockUseGenerateComment.mockReturnValue(defaultMockMutation());
+    mockUseGenerateBatch.mockReturnValue(defaultMockMutation());
+    mockUseUpdateComment.mockReturnValue(defaultMockMutation());
+    mockUseDeleteComment.mockReturnValue(defaultMockMutation());
+    mockUseRevertComment.mockReturnValue(defaultMockMutation());
   });
 
   // ============================================================================

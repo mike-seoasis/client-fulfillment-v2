@@ -119,7 +119,11 @@ async def fetch_content_brief(
                 error_msg = task_result.error or "POP task failed"
                 logger.warning(
                     "POP task failed",
-                    extra={"page_id": page_id, "keyword": keyword[:50], "error": error_msg},
+                    extra={
+                        "page_id": page_id,
+                        "keyword": keyword[:50],
+                        "error": error_msg,
+                    },
                 )
                 return ContentBriefResult(success=False, error=error_msg)
 
@@ -129,7 +133,11 @@ async def fetch_content_brief(
                 )
                 logger.warning(
                     "POP task returned failure status",
-                    extra={"page_id": page_id, "keyword": keyword[:50], "error": error_msg},
+                    extra={
+                        "page_id": page_id,
+                        "keyword": keyword[:50],
+                        "error": error_msg,
+                    },
                 )
                 return ContentBriefResult(success=False, error=error_msg)
 
@@ -257,7 +265,9 @@ async def _run_real_3step_flow(
     pop_task_id = task_result.task_id
 
     if not poll_result.success or poll_result.status == POPTaskStatus.FAILURE:
-        error_msg = poll_result.error or poll_result.data.get("error", "POP get-terms failed")
+        error_msg = poll_result.error or poll_result.data.get(
+            "error", "POP get-terms failed"
+        )
         raise Exception(error_msg)  # noqa: TRY002
 
     response_data = dict(poll_result.data or {})

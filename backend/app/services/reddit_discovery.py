@@ -514,7 +514,11 @@ async def score_posts_batch(
         except Exception as e:
             logger.error(
                 "Unexpected error scoring post",
-                extra={"url": post.url, "error": str(e), "error_type": type(e).__name__},
+                extra={
+                    "url": post.url,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                },
             )
             results.append(
                 ScoringResult(
@@ -537,7 +541,9 @@ async def score_posts_batch(
             "total_posts": total,
             "scored": len(results),
             "relevant": sum(1 for r in results if r.filter_status == "relevant"),
-            "low_relevance": sum(1 for r in results if r.filter_status == "low_relevance"),
+            "low_relevance": sum(
+                1 for r in results if r.filter_status == "low_relevance"
+            ),
             "discarded": sum(1 for r in results if r.filter_status is None),
         },
     )
@@ -646,7 +652,9 @@ async def store_discovered_posts(
     stored = 0
     skipped = 0
 
-    for post, intent, scoring in zip(posts, intent_results, scoring_results, strict=False):
+    for post, intent, scoring in zip(
+        posts, intent_results, scoring_results, strict=False
+    ):
         # Skip posts that scored below threshold (filter_status=None means discard)
         if scoring.filter_status is None:
             skipped += 1
@@ -785,11 +793,11 @@ async def discover_posts(
                 raise ValueError(f"No Reddit config found for project {project_id}")
 
             if not config.search_keywords:
-                raise ValueError(f"No search keywords configured for project {project_id}")
+                raise ValueError(
+                    f"No search keywords configured for project {project_id}"
+                )
 
-            brand_stmt = select(BrandConfig).where(
-                BrandConfig.project_id == project_id
-            )
+            brand_stmt = select(BrandConfig).where(BrandConfig.project_id == project_id)
             brand_result = await db.execute(brand_stmt)
             brand = brand_result.scalar_one_or_none()
 
@@ -808,8 +816,16 @@ async def discover_posts(
                 )
 
             search_keywords: list[str] = [str(k) for k in config.search_keywords]
-            target_subreddits: list[str] = [str(s) for s in config.target_subreddits] if config.target_subreddits else []
-            banned_subreddits: list[str] = [str(s) for s in config.banned_subreddits] if config.banned_subreddits else []
+            target_subreddits: list[str] = (
+                [str(s) for s in config.target_subreddits]
+                if config.target_subreddits
+                else []
+            )
+            banned_subreddits: list[str] = (
+                [str(s) for s in config.banned_subreddits]
+                if config.banned_subreddits
+                else []
+            )
 
         progress.total_keywords = len(search_keywords)
 
@@ -863,8 +879,7 @@ async def discover_posts(
 
         # --- Step 4: Filter ---
         filtered_posts = [
-            p for p in unique_posts
-            if not is_excluded_post(p, banned_subreddits)
+            p for p in unique_posts if not is_excluded_post(p, banned_subreddits)
         ]
 
         logger.info(

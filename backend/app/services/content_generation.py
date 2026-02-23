@@ -131,10 +131,8 @@ async def run_content_pipeline(
     if force_refresh:
         async with db_manager.session_factory() as reset_db:
             page_ids = [pd["page_id"] for pd in pages_data]
-            reset_stmt = (
-                select(PageContent).where(
-                    PageContent.crawled_page_id.in_(page_ids)
-                )
+            reset_stmt = select(PageContent).where(
+                PageContent.crawled_page_id.in_(page_ids)
             )
             reset_result = await reset_db.execute(reset_stmt)
             for pc in reset_result.scalars().all():
@@ -241,9 +239,7 @@ async def _prefetch_all_briefs(
     # polling endpoint can see the status immediately.
     async with db_manager.session_factory() as status_db:
         page_ids = [pd["page_id"] for pd in pages_needing_briefs]
-        stmt = select(PageContent).where(
-            PageContent.crawled_page_id.in_(page_ids)
-        )
+        stmt = select(PageContent).where(PageContent.crawled_page_id.in_(page_ids))
         result = await status_db.execute(stmt)
         existing = {pc.crawled_page_id: pc for pc in result.scalars().all()}
 
@@ -664,7 +660,9 @@ async def _log_content_brief(
                 phrase = term.get("phrase", "")
                 weight = term.get("weight", 0)
                 avg_count = term.get("averageCount", 0)
-                summary_parts.append(f"  - {phrase} (weight: {weight}, target: {avg_count})")
+                summary_parts.append(
+                    f"  - {phrase} (weight: {weight}, target: {avg_count})"
+                )
 
         # Keyword Variations
         variations = content_brief.related_searches or []
@@ -693,7 +691,9 @@ async def _log_content_brief(
         # Heading Structure Targets
         heading_targets = content_brief.heading_targets or []
         if heading_targets:
-            summary_parts.append(f"\nHeading Structure Targets ({len(heading_targets)}):")
+            summary_parts.append(
+                f"\nHeading Structure Targets ({len(heading_targets)}):"
+            )
             for h in heading_targets:
                 tag = h.get("tag", "")
                 target = h.get("target", 0)
@@ -702,7 +702,9 @@ async def _log_content_brief(
         # Keyword Placement Targets
         keyword_targets = content_brief.keyword_targets or []
         if keyword_targets:
-            summary_parts.append(f"\nKeyword Placement Targets ({len(keyword_targets)}):")
+            summary_parts.append(
+                f"\nKeyword Placement Targets ({len(keyword_targets)}):"
+            )
             for kt in keyword_targets:
                 signal = kt.get("signal", "")
                 kt_type = kt.get("type", "")
@@ -730,9 +732,13 @@ async def _log_content_brief(
             wc_str = "N/A"
         summary_parts.append(f"\nWord Count Range: {wc_str}")
 
-        response_text = "\n".join(summary_parts) if summary_parts else json.dumps(raw, indent=2)
+        response_text = (
+            "\n".join(summary_parts) if summary_parts else json.dumps(raw, indent=2)
+        )
     else:
-        response_text = f"POP brief fetch failed: {brief_result.error or 'unknown error'}"
+        response_text = (
+            f"POP brief fetch failed: {brief_result.error or 'unknown error'}"
+        )
 
     log = PromptLog(
         page_content_id=page_content.id,
@@ -801,6 +807,7 @@ async def _enrich_competitors_from_pop(
             config_record.v2_schema = updated_schema
 
             from sqlalchemy.orm.attributes import flag_modified
+
             flag_modified(config_record, "v2_schema")
             await db.flush()
 

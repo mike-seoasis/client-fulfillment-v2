@@ -368,8 +368,12 @@ async def _crawl_pages_background(
                     }
                 # Increment progress (handles incremental crawling)
                 crawl_progress = project.phase_status["onboarding"]["crawl"]
-                crawl_progress["completed"] = crawl_progress.get("completed", 0) + success_count
-                crawl_progress["failed"] = crawl_progress.get("failed", 0) + failed_count
+                crawl_progress["completed"] = (
+                    crawl_progress.get("completed", 0) + success_count
+                )
+                crawl_progress["failed"] = (
+                    crawl_progress.get("failed", 0) + failed_count
+                )
                 flag_modified(project, "phase_status")
                 await db.commit()
 
@@ -379,7 +383,8 @@ async def _crawl_pages_background(
             all_pages = list(result.scalars().all())
 
             pending_or_crawling = sum(
-                1 for p in all_pages
+                1
+                for p in all_pages
                 if p.status in (CrawlStatus.PENDING.value, CrawlStatus.CRAWLING.value)
             )
 
@@ -440,9 +445,7 @@ async def _crawl_pages_background(
             )
 
             # Assign labels to all pages
-            assignments = await taxonomy_service.assign_labels(
-                db, project_id, taxonomy
-            )
+            assignments = await taxonomy_service.assign_labels(db, project_id, taxonomy)
             await db.commit()
 
             # Update project phase_status to 'labels_complete'
@@ -734,6 +737,7 @@ async def regenerate_taxonomy(
     project.phase_status["onboarding"]["status"] = "labeling"
 
     from sqlalchemy.orm.attributes import flag_modified
+
     flag_modified(project, "phase_status")
     await db.commit()
 
@@ -763,7 +767,9 @@ async def regenerate_taxonomy(
                 # Update phase_status
                 task_project = await task_db.get(Project, project_id)
                 if task_project:
-                    task_project.phase_status["onboarding"]["status"] = "labels_complete"
+                    task_project.phase_status["onboarding"]["status"] = (
+                        "labels_complete"
+                    )
                     flag_modified(task_project, "phase_status")
 
                 await task_db.commit()
@@ -979,6 +985,7 @@ async def recrawl_all_pages(
     project.phase_status["onboarding"]["status"] = "crawling"
 
     from sqlalchemy.orm.attributes import flag_modified
+
     flag_modified(project, "phase_status")
 
     await db.commit()
@@ -1400,7 +1407,9 @@ async def update_primary_keyword(
 
         if dataforseo_client.available:
             try:
-                volume_result = await dataforseo_client.get_keyword_volume([new_keyword])
+                volume_result = await dataforseo_client.get_keyword_volume(
+                    [new_keyword]
+                )
 
                 if volume_result.success and volume_result.keywords:
                     kw_data = volume_result.keywords[0]
@@ -1419,7 +1428,9 @@ async def update_primary_keyword(
                     if competition is None:
                         competition_score = 50.0
                     else:
-                        norm_comp = competition / 100.0 if competition > 1.0 else competition
+                        norm_comp = (
+                            competition / 100.0 if competition > 1.0 else competition
+                        )
                         competition_score = (1.0 - norm_comp) * 100
 
                     relevance_score = relevance * 100
@@ -1863,6 +1874,7 @@ async def export_csv(
 
     # Extract placeholder tag from BrandConfig.v2_schema.vocabulary
     from app.models.brand_config import BrandConfig
+
     shopify_tag = ""
     bc_stmt = select(BrandConfig).where(BrandConfig.project_id == project_id)
     bc_result = await db.execute(bc_stmt)
@@ -1873,7 +1885,11 @@ async def export_csv(
 
     # Generate CSV (onboarding = UPDATE, clusters will use NEW)
     csv_string, row_count = await ExportService.generate_csv(
-        db, project_id, parsed_page_ids, command="UPDATE", shopify_placeholder_tag=shopify_tag
+        db,
+        project_id,
+        parsed_page_ids,
+        command="UPDATE",
+        shopify_placeholder_tag=shopify_tag,
     )
 
     if row_count == 0:

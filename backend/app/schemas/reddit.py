@@ -96,7 +96,8 @@ class RedditProjectConfigCreate(BaseModel):
         None, description="Advanced discovery configuration"
     )
     is_active: bool | None = Field(
-        None, description="Whether Reddit engagement is active (defaults to True on create)"
+        None,
+        description="Whether Reddit engagement is active (defaults to True on create)",
     )
 
 
@@ -192,7 +193,10 @@ class DiscoveryTriggerResponse(BaseModel):
 class DiscoveryStatusResponse(BaseModel):
     """Response schema for polling discovery progress."""
 
-    status: str = Field(..., description="Pipeline status: searching | scoring | storing | complete | failed | idle")
+    status: str = Field(
+        ...,
+        description="Pipeline status: searching | scoring | storing | complete | failed | idle",
+    )
     total_keywords: int = Field(0, description="Total keywords to search")
     keywords_searched: int = Field(0, description="Keywords searched so far")
     total_posts_found: int = Field(0, description="Raw posts found from SERP")
@@ -303,7 +307,9 @@ class CommentQueueResponse(BaseModel):
     items: list[RedditCommentResponse] = Field(
         ..., description="Comment list for the current page"
     )
-    total: int = Field(..., description="Total count matching current filters (excl. pagination)")
+    total: int = Field(
+        ..., description="Total count matching current filters (excl. pagination)"
+    )
     counts: CommentQueueStatusCounts = Field(
         ..., description="Status counts (independent of status filter)"
     )

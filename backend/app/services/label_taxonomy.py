@@ -93,7 +93,9 @@ def validate_labels(
     errors: list[LabelValidationError] = []
 
     # Convert taxonomy to set for O(1) lookup
-    valid_taxonomy = set(taxonomy_labels) if isinstance(taxonomy_labels, list) else taxonomy_labels
+    valid_taxonomy = (
+        set(taxonomy_labels) if isinstance(taxonomy_labels, list) else taxonomy_labels
+    )
 
     # Normalize labels (lowercase, strip whitespace)
     normalized_labels = [label.strip().lower() for label in labels if label.strip()]
@@ -133,7 +135,9 @@ def validate_labels(
         )
 
     # Validate all labels are in taxonomy
-    invalid_labels = [label for label in normalized_labels if label not in valid_taxonomy]
+    invalid_labels = [
+        label for label in normalized_labels if label not in valid_taxonomy
+    ]
     if invalid_labels:
         # Format list nicely for error message
         if len(invalid_labels) == 1:
@@ -512,9 +516,7 @@ Generate a taxonomy that captures the main content types and purposes of these p
                 )
                 return []
 
-            stored_taxonomy = (
-                project.phase_status.get("onboarding", {}).get("taxonomy")
-            )
+            stored_taxonomy = project.phase_status.get("onboarding", {}).get("taxonomy")
             if not stored_taxonomy:
                 logger.error(
                     "No taxonomy found for project",
@@ -562,8 +564,7 @@ Generate a taxonomy that captures the main content types and purposes of these p
 
         # Build taxonomy description for prompt
         taxonomy_desc = "\n".join(
-            f"- {label.name}: {label.description}"
-            for label in taxonomy.labels
+            f"- {label.name}: {label.description}" for label in taxonomy.labels
         )
 
         assignments: list[LabelAssignment] = []
@@ -677,7 +678,9 @@ Respond with JSON only."""
                             "AI assigned labels not in taxonomy",
                             extra={
                                 "page_id": page.id,
-                                "invalid_labels": error.details.get("invalid_labels", []),
+                                "invalid_labels": error.details.get(
+                                    "invalid_labels", []
+                                ),
                             },
                         )
                     elif error.code in ("too_few_labels", "too_many_labels"):
@@ -688,8 +691,7 @@ Respond with JSON only."""
 
             # Filter to only valid labels from taxonomy
             valid_assigned = [
-                label for label in validation_result.labels
-                if label in valid_labels
+                label for label in validation_result.labels if label in valid_labels
             ]
 
             return LabelAssignment(

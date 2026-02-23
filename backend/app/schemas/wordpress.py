@@ -15,7 +15,9 @@ from pydantic import BaseModel, Field
 class WPConnectRequest(BaseModel):
     """Request to validate WordPress credentials."""
 
-    site_url: str = Field(..., description="WordPress site URL (e.g. https://example.com)")
+    site_url: str = Field(
+        ..., description="WordPress site URL (e.g. https://example.com)"
+    )
     username: str = Field(..., description="WordPress username")
     app_password: str = Field(..., description="WordPress application password")
 
@@ -105,9 +107,15 @@ class WPTaxonomyLabel(BaseModel):
 class WPLabelReviewResponse(BaseModel):
     """Response for reviewing taxonomy and label assignments."""
 
-    taxonomy: list[WPTaxonomyLabel] = Field(..., description="Generated taxonomy labels")
-    assignments: list[WPLabelAssignment] = Field(..., description="Per-post label assignments")
-    total_groups: int = Field(..., description="Number of silo groups (unique primary labels)")
+    taxonomy: list[WPTaxonomyLabel] = Field(
+        ..., description="Generated taxonomy labels"
+    )
+    assignments: list[WPLabelAssignment] = Field(
+        ..., description="Per-post label assignments"
+    )
+    total_groups: int = Field(
+        ..., description="Number of silo groups (unique primary labels)"
+    )
 
 
 # =============================================================================
@@ -133,7 +141,9 @@ class WPReviewGroup(BaseModel):
     post_count: int = Field(..., description="Number of posts in this group")
     link_count: int = Field(..., description="Number of internal links in this group")
     avg_links_per_post: float = Field(..., description="Average links per post")
-    collection_link_count: int = Field(0, description="Number of links targeting collection/onboarding pages")
+    collection_link_count: int = Field(
+        0, description="Number of links targeting collection/onboarding pages"
+    )
 
 
 class WPReviewResponse(BaseModel):
@@ -141,9 +151,13 @@ class WPReviewResponse(BaseModel):
 
     total_posts: int = Field(..., description="Total posts with links")
     total_links: int = Field(..., description="Total internal links planned")
-    avg_links_per_post: float = Field(..., description="Average links per post across all groups")
+    avg_links_per_post: float = Field(
+        ..., description="Average links per post across all groups"
+    )
     groups: list[WPReviewGroup] = Field(..., description="Per-group link stats")
-    validation_pass_rate: float = Field(..., description="Percentage of pages passing validation (0-100)")
+    validation_pass_rate: float = Field(
+        ..., description="Percentage of pages passing validation (0-100)"
+    )
 
 
 # =============================================================================
@@ -175,7 +189,9 @@ class WPProjectOption(BaseModel):
     id: str = Field(..., description="Project UUID")
     name: str = Field(..., description="Project name")
     site_url: str = Field(..., description="Project site URL")
-    collection_page_count: int = Field(..., description="Number of onboarding collection pages")
+    collection_page_count: int = Field(
+        ..., description="Number of onboarding collection pages"
+    )
 
 
 # =============================================================================
@@ -187,7 +203,9 @@ class WPProgressResponse(BaseModel):
     """Progress response for any background operation."""
 
     job_id: str = Field(..., description="Job ID being tracked")
-    step: str = Field(..., description="Current step name (e.g. 'import', 'analyze', 'label')")
+    step: str = Field(
+        ..., description="Current step name (e.g. 'import', 'analyze', 'label')"
+    )
     step_label: str = Field(..., description="Human-readable step description")
     status: str = Field(..., description="Status: 'running', 'complete', 'failed'")
     current: int = Field(0, description="Current progress count")

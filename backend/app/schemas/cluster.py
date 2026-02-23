@@ -43,14 +43,18 @@ class ClusterPageResponse(BaseModel):
     reasoning: str | None = Field(
         None, description="AI reasoning for this page's inclusion"
     )
-    search_volume: int | None = Field(None, description="Estimated monthly search volume")
+    search_volume: int | None = Field(
+        None, description="Estimated monthly search volume"
+    )
     cpc: float | None = Field(None, description="Cost per click")
     competition: float | None = Field(None, description="Competition score (0-1)")
     competition_level: str | None = Field(None, description="Competition level label")
     composite_score: float | None = Field(
         None, description="Overall score combining metrics"
     )
-    is_approved: bool = Field(..., description="Whether approved for content generation")
+    is_approved: bool = Field(
+        ..., description="Whether approved for content generation"
+    )
     crawled_page_id: str | None = Field(
         None, description="Link to existing crawled page"
     )

@@ -194,9 +194,7 @@ class ClaudeClient:
         settings = get_settings()
 
         self._api_key = (
-            api_key
-            or settings.anthropic_api_key
-            or os.environ.get("ANTHROPIC_API_KEY")
+            api_key or settings.anthropic_api_key or os.environ.get("ANTHROPIC_API_KEY")
         )
         self._model = model or settings.claude_model
         self._timeout = timeout or settings.claude_timeout

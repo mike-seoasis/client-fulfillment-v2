@@ -127,9 +127,7 @@ class ClusterKeywordService:
                         persona_parts.append(f"Summary: {summary}")
 
                     if persona_parts:
-                        parts.append(
-                            "## Target Audience\n" + "\n".join(persona_parts)
-                        )
+                        parts.append("## Target Audience\n" + "\n".join(persona_parts))
 
         # Competitor context — competitor names
         competitor_context = brand_config.get("competitor_context")
@@ -520,7 +518,7 @@ Example:
             cpc_str = f"${cpc:.2f}" if cpc is not None else "N/A"
             comp_str = f"{comp:.2f}" if comp is not None else "N/A"
             candidate_lines.append(
-                f"{i}. \"{c['keyword']}\" — volume: {vol_str}, "
+                f'{i}. "{c["keyword"]}" — volume: {vol_str}, '
                 f"CPC: {cpc_str}, competition: {comp_str} ({comp_level}), "
                 f"strategy: {c.get('expansion_strategy', 'unknown')}"
             )
@@ -608,9 +606,7 @@ Example:
             original = candidate_map.get(kw_normalized, {})
 
             role = "parent" if kw_normalized == seed_normalized else "child"
-            url_slug = self._keyword_to_slug(
-                item.get("url_slug", kw_normalized)
-            )
+            url_slug = self._keyword_to_slug(item.get("url_slug", kw_normalized))
             relevance = item.get("relevance", 0.7)
             if not isinstance(relevance, (int, float)):
                 relevance = 0.7
@@ -736,7 +732,9 @@ Example:
                         extra={"seed_keyword": seed_keyword, "error": str(e)},
                         exc_info=True,
                     )
-                    raise ValueError(f"Cluster generation failed at Stage 1: {e}") from e
+                    raise ValueError(
+                        f"Cluster generation failed at Stage 1: {e}"
+                    ) from e
                 # Later iterations: stop looping but use what we have
                 logger.warning(
                     f"Stage 1 failed on iteration {iteration + 1}, using accumulated candidates",
@@ -796,7 +794,8 @@ Example:
 
             # Count candidates with volume
             with_volume = sum(
-                1 for c in all_candidates
+                1
+                for c in all_candidates
                 if c.get("search_volume") and c["search_volume"] > 0
             )
             total_enriched = with_volume
@@ -821,7 +820,8 @@ Example:
 
         if not volume_unavailable:
             total_enriched = sum(
-                1 for c in candidates
+                1
+                for c in candidates
                 if c.get("search_volume") and c["search_volume"] > 0
             )
 
@@ -831,7 +831,8 @@ Example:
         if not volume_unavailable:
             before_count = len(candidates)
             candidates = [
-                c for c in candidates
+                c
+                for c in candidates
                 if c["keyword"] == seed_normalized
                 or (c.get("search_volume") and c["search_volume"] > 0)
             ]
@@ -935,7 +936,9 @@ Example:
                 extra={"seed_keyword": seed_keyword, "error": str(e)},
                 exc_info=True,
             )
-            raise ValueError(f"Cluster generation failed during persistence: {e}") from e
+            raise ValueError(
+                f"Cluster generation failed during persistence: {e}"
+            ) from e
 
     async def regenerate_unapproved(
         self,
@@ -1074,7 +1077,8 @@ Example:
             t2_total_ms += round((time.perf_counter() - t2_start) * 1000)
 
             with_volume = sum(
-                1 for c in all_candidates
+                1
+                for c in all_candidates
                 if c.get("search_volume") and c["search_volume"] > 0
             )
             if with_volume >= MIN_WITH_VOLUME:
@@ -1084,7 +1088,8 @@ Example:
         seed_normalized = cluster.seed_keyword.strip().lower()
         if not volume_unavailable:
             all_candidates = [
-                c for c in all_candidates
+                c
+                for c in all_candidates
                 if c["keyword"] == seed_normalized
                 or (c.get("search_volume") and c["search_volume"] > 0)
             ]
@@ -1281,6 +1286,4 @@ Example:
                 extra={"cluster_id": cluster_id, "error": str(e)},
                 exc_info=True,
             )
-            raise ValueError(
-                f"Cluster approval failed during persistence: {e}"
-            ) from e
+            raise ValueError(f"Cluster approval failed during persistence: {e}") from e

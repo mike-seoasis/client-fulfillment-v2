@@ -55,14 +55,14 @@ SECTION_CONFIG: dict[str, tuple[int, int]] = {
     "vocabulary": (16384, 300),
     "trust_elements": (16384, 300),
     "competitor_context": (16384, 300),
-    "ai_prompt_snippet": (8192, 180),    # embeds in downstream prompts, keep smaller
+    "ai_prompt_snippet": (8192, 180),  # embeds in downstream prompts, keep smaller
 }
 
 # Which prior sections to include as context for each section.
 # Limits prompt size — later sections only get the context they actually need,
 # rather than ALL prior sections (which can balloon to 40K+ chars).
 SECTION_CONTEXT_DEPS: dict[str, list[str] | None] = {
-    "brand_foundation": None,                                    # just research
+    "brand_foundation": None,  # just research
     "target_audience": ["brand_foundation"],
     "voice_dimensions": ["brand_foundation", "target_audience"],
     "voice_characteristics": ["voice_dimensions"],
@@ -70,20 +70,24 @@ SECTION_CONTEXT_DEPS: dict[str, list[str] | None] = {
     "vocabulary": ["voice_characteristics", "writing_style"],
     "trust_elements": ["brand_foundation", "target_audience"],
     "competitor_context": ["brand_foundation", "target_audience"],
-    "ai_prompt_snippet": None,                                   # ALL sections (it's a summary)
+    "ai_prompt_snippet": None,  # ALL sections (it's a summary)
 }
 
 # Execution batches for parallel synthesis. Sections in the same batch run
 # concurrently via asyncio.gather. Order derived from SECTION_CONTEXT_DEPS:
 # a section can run once ALL its dependency sections have been generated.
 SYNTHESIS_BATCHES: list[list[str]] = [
-    ["brand_foundation"],                                          # no deps
-    ["target_audience"],                                           # brand_foundation
-    ["voice_dimensions", "trust_elements", "competitor_context"],  # brand_foundation + target_audience
-    ["voice_characteristics"],                                     # voice_dimensions
-    ["writing_style"],                                             # voice_characteristics
-    ["vocabulary"],                                                # voice_characteristics + writing_style
-    ["ai_prompt_snippet"],                                         # ALL sections
+    ["brand_foundation"],  # no deps
+    ["target_audience"],  # brand_foundation
+    [
+        "voice_dimensions",
+        "trust_elements",
+        "competitor_context",
+    ],  # brand_foundation + target_audience
+    ["voice_characteristics"],  # voice_dimensions
+    ["writing_style"],  # voice_characteristics
+    ["vocabulary"],  # voice_characteristics + writing_style
+    ["ai_prompt_snippet"],  # ALL sections
 ]
 
 
@@ -112,7 +116,7 @@ def fix_json_control_chars(json_text: str) -> str:
             escape_next = False
             continue
 
-        if char == '\\' and in_string:
+        if char == "\\" and in_string:
             result.append(char)
             escape_next = True
             continue
@@ -124,20 +128,20 @@ def fix_json_control_chars(json_text: str) -> str:
 
         if in_string:
             # Escape control characters inside strings
-            if char == '\n':
-                result.append('\\n')
-            elif char == '\r':
-                result.append('\\r')
-            elif char == '\t':
-                result.append('\\t')
+            if char == "\n":
+                result.append("\\n")
+            elif char == "\r":
+                result.append("\\r")
+            elif char == "\t":
+                result.append("\\t")
             elif ord(char) < 32:  # Other control characters
-                result.append(f'\\u{ord(char):04x}')
+                result.append(f"\\u{ord(char):04x}")
             else:
                 result.append(char)
         else:
             result.append(char)
 
-    return ''.join(result)
+    return "".join(result)
 
 
 class GenerationStatusValue(str, Enum):
@@ -781,7 +785,9 @@ async def _generate_section(
     if context_deps is None:
         context_sections = generated_sections
     else:
-        context_sections = {k: v for k, v in generated_sections.items() if k in context_deps}
+        context_sections = {
+            k: v for k, v in generated_sections.items() if k in context_deps
+        }
 
     if context_sections:
         user_prompt_parts.append("\n# Previously Generated Sections")
@@ -829,7 +835,14 @@ async def _generate_section(
             )
         except TimeoutError:
             error_msg = f"Timeout generating {section_name} (exceeded {attempt_timeout}s, attempt {attempt}/{MAX_SECTION_RETRIES})"
-            logger.warning(error_msg, extra={"project_id": project_id, "section": section_name, "attempt": attempt})
+            logger.warning(
+                error_msg,
+                extra={
+                    "project_id": project_id,
+                    "section": section_name,
+                    "attempt": attempt,
+                },
+            )
             if attempt < MAX_SECTION_RETRIES:
                 continue
             errors.append(error_msg)
@@ -837,7 +850,14 @@ async def _generate_section(
 
         if not result.success:
             error_msg = f"Failed to generate {section_name}: {result.error} (attempt {attempt}/{MAX_SECTION_RETRIES})"
-            logger.warning(error_msg, extra={"project_id": project_id, "section": section_name, "attempt": attempt})
+            logger.warning(
+                error_msg,
+                extra={
+                    "project_id": project_id,
+                    "section": section_name,
+                    "attempt": attempt,
+                },
+            )
             if attempt < MAX_SECTION_RETRIES:
                 continue
             errors.append(error_msg)
@@ -891,7 +911,9 @@ async def _generate_section(
 
     # Exhausted all retries without returning
     if not errors:
-        errors.append(f"Failed to generate {section_name} after {MAX_SECTION_RETRIES} attempts")
+        errors.append(
+            f"Failed to generate {section_name} after {MAX_SECTION_RETRIES} attempts"
+        )
     return (section_name, None, errors)
 
 
@@ -1148,7 +1170,9 @@ class BrandConfigService:
             "complete_generation: status updated",
             extra={
                 "project_id": project_id,
-                "updated_status": project.brand_wizard_state.get("generation", {}).get("status"),
+                "updated_status": project.brand_wizard_state.get("generation", {}).get(
+                    "status"
+                ),
             },
         )
 
@@ -1496,7 +1520,9 @@ class BrandConfigService:
         if research_context.document_texts:
             docs_combined = "\n---\n".join(research_context.document_texts)
             if len(docs_combined) > DOC_TEXT_MAX_CHARS:
-                docs_combined = docs_combined[:DOC_TEXT_MAX_CHARS] + "\n... (documents truncated)"
+                docs_combined = (
+                    docs_combined[:DOC_TEXT_MAX_CHARS] + "\n... (documents truncated)"
+                )
             research_text_parts.append(f"## Uploaded Documents\n{docs_combined}")
 
         research_text = "\n\n".join(research_text_parts)
@@ -1698,7 +1724,9 @@ class BrandConfigService:
         try:
             logger.info("Calling complete_generation", extra={"project_id": project_id})
             await BrandConfigService.complete_generation(db, project_id)
-            logger.info("complete_generation returned", extra={"project_id": project_id})
+            logger.info(
+                "complete_generation returned", extra={"project_id": project_id}
+            )
         except Exception as e:
             logger.exception(
                 "Error in complete_generation",
@@ -1901,7 +1929,9 @@ class BrandConfigService:
         if research_context.document_texts:
             docs_combined = "\n---\n".join(research_context.document_texts)
             if len(docs_combined) > DOC_TEXT_MAX_CHARS:
-                docs_combined = docs_combined[:DOC_TEXT_MAX_CHARS] + "\n... (documents truncated)"
+                docs_combined = (
+                    docs_combined[:DOC_TEXT_MAX_CHARS] + "\n... (documents truncated)"
+                )
             research_text_parts.append(f"## Uploaded Documents\n{docs_combined}")
 
         research_text = "\n\n".join(research_text_parts)
@@ -1992,7 +2022,9 @@ class BrandConfigService:
                 attempt_max_tokens = base_max_tokens
                 attempt_timeout = base_timeout
                 if attempt > 1:
-                    attempt_max_tokens = int(base_max_tokens * (1 + 0.5 * (attempt - 1)))
+                    attempt_max_tokens = int(
+                        base_max_tokens * (1 + 0.5 * (attempt - 1))
+                    )
                     attempt_timeout = int(base_timeout * (1 + 0.25 * (attempt - 1)))
 
                 try:

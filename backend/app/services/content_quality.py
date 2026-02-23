@@ -13,7 +13,12 @@ from typing import Any
 from app.models.page_content import PageContent
 
 # Content fields to check
-CONTENT_FIELDS = ("page_title", "meta_description", "top_description", "bottom_description")
+CONTENT_FIELDS = (
+    "page_title",
+    "meta_description",
+    "top_description",
+    "bottom_description",
+)
 
 # Common AI opener phrases (case-insensitive match at start of sentence)
 AI_OPENER_PATTERNS = [
@@ -33,20 +38,57 @@ TRIPLET_PATTERN = re.compile(
 
 # Tier 1: Universal banned AI words (never use)
 TIER1_AI_WORDS = [
-    "delve", "delving", "unpack", "uncover",
-    "unlock", "unleash", "harness", "leverage", "tap into",
-    "embark", "navigate", "landscape", "realm", "at the forefront",
-    "game-changer", "revolutionary", "transformative", "cutting-edge",
-    "groundbreaking", "unprecedented",
-    "crucial", "essential", "vital", "pivotal", "critical",
+    "delve",
+    "delving",
+    "unpack",
+    "uncover",
+    "unlock",
+    "unleash",
+    "harness",
+    "leverage",
+    "tap into",
+    "embark",
+    "navigate",
+    "landscape",
+    "realm",
+    "at the forefront",
+    "game-changer",
+    "revolutionary",
+    "transformative",
+    "cutting-edge",
+    "groundbreaking",
+    "unprecedented",
+    "crucial",
+    "essential",
+    "vital",
+    "pivotal",
+    "critical",
 ]
 
 # Tier 2: AI words allowed max 1 per piece
 TIER2_AI_WORDS = [
-    "indeed", "furthermore", "moreover", "therefore", "additionally",
-    "consequently", "subsequently", "accordingly", "notably", "significantly",
-    "robust", "seamless", "comprehensive", "streamline", "enhance",
-    "optimize", "elevate", "curated", "tailored", "bespoke", "nuanced", "intricate",
+    "indeed",
+    "furthermore",
+    "moreover",
+    "therefore",
+    "additionally",
+    "consequently",
+    "subsequently",
+    "accordingly",
+    "notably",
+    "significantly",
+    "robust",
+    "seamless",
+    "comprehensive",
+    "streamline",
+    "enhance",
+    "optimize",
+    "elevate",
+    "curated",
+    "tailored",
+    "bespoke",
+    "nuanced",
+    "intricate",
 ]
 
 # Negation/contrast pattern: "It's not (just) X, it's Y"
@@ -89,7 +131,9 @@ class QualityResult:
         }
 
 
-def run_quality_checks(content: PageContent, brand_config: dict[str, Any]) -> QualityResult:
+def run_quality_checks(
+    content: PageContent, brand_config: dict[str, Any]
+) -> QualityResult:
     """Run all deterministic quality checks on generated content.
 
     Checks:
@@ -240,7 +284,9 @@ def _check_ai_openers(fields: dict[str, str]) -> list[QualityIssue]:
                         type="ai_pattern",
                         field=field_name,
                         description=f'AI opener pattern detected: "{_strip_html_tags(match.group())}"',
-                        context=_extract_context(text, match.start(), match.end(), pad=40),
+                        context=_extract_context(
+                            text, match.start(), match.end(), pad=40
+                        ),
                     )
                 )
 
@@ -472,8 +518,10 @@ TIER3_HYPE_PHRASES = [
 ]
 
 ALL_TIER3_PHRASES = (
-    TIER3_OPENING_PHRASES + TIER3_FILLER_PHRASES
-    + TIER3_CLOSING_PHRASES + TIER3_HYPE_PHRASES
+    TIER3_OPENING_PHRASES
+    + TIER3_FILLER_PHRASES
+    + TIER3_CLOSING_PHRASES
+    + TIER3_HYPE_PHRASES
 )
 
 # Empty transition signposts that add no meaning

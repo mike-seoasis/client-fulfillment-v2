@@ -181,7 +181,12 @@ def _extract_markdown(markdown_data: str | dict[str, Any] | None) -> str | None:
 
     if isinstance(markdown_data, dict):
         # Prefer fit_markdown (main body content) over raw_markdown (full page)
-        for key in ("fit_markdown", "raw_markdown", "markdown_with_citations", "content"):
+        for key in (
+            "fit_markdown",
+            "raw_markdown",
+            "markdown_with_citations",
+            "content",
+        ):
             if key in markdown_data and isinstance(markdown_data[key], str):
                 chosen: str = markdown_data[key]
                 if chosen.strip():

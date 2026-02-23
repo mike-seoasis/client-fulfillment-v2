@@ -407,7 +407,12 @@ async def update_page_content(
 
     # Apply partial updates — only set fields that were provided
     update_data = body.model_dump(exclude_unset=True)
-    content_fields = {"page_title", "meta_description", "top_description", "bottom_description"}
+    content_fields = {
+        "page_title",
+        "meta_description",
+        "top_description",
+        "bottom_description",
+    }
     has_content_change = False
     for field, value in update_data.items():
         if field in content_fields and getattr(content, field) != value:
@@ -416,7 +421,12 @@ async def update_page_content(
 
     # Recalculate word_count from all 4 fields (strip HTML tags, count words)
     total_words = 0
-    for field_name in ("page_title", "meta_description", "top_description", "bottom_description"):
+    for field_name in (
+        "page_title",
+        "meta_description",
+        "top_description",
+        "bottom_description",
+    ):
         value = getattr(content, field_name)
         if value:
             text_only = re.sub(r"<[^>]+>", " ", value)
@@ -689,7 +699,9 @@ async def recheck_content(
         extra={
             "project_id": project_id,
             "page_id": page_id,
-            "qa_passed": content.qa_results.get("passed") if content.qa_results else None,
+            "qa_passed": content.qa_results.get("passed")
+            if content.qa_results
+            else None,
         },
     )
 

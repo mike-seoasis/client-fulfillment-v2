@@ -97,7 +97,7 @@ class WordPressClient:
         for attempt in range(MAX_RETRIES + 1):
             resp = await self._client.get(url, params=params)
             if resp.status_code == 429 and attempt < MAX_RETRIES:
-                delay = RETRY_BASE_DELAY * (2 ** attempt)
+                delay = RETRY_BASE_DELAY * (2**attempt)
                 logger.warning(
                     "WP API rate limited, retrying",
                     extra={"attempt": attempt + 1, "delay": delay, "url": url},
@@ -159,7 +159,9 @@ class WordPressClient:
                 # Client-side title filter for multi-term queries
                 if use_client_filter and title_filter:
                     title_lower = html.unescape(wp_post.title).lower()
-                    if not any(html.unescape(f).lower() in title_lower for f in title_filter):
+                    if not any(
+                        html.unescape(f).lower() in title_lower for f in title_filter
+                    ):
                         continue
 
                 all_posts.append(wp_post)

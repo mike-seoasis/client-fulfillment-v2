@@ -127,20 +127,22 @@ class ExportService:
 
         row_count = 0
         for page, content in rows:
-            writer.writerow([
-                command,
-                ExportService.extract_handle(page.normalized_url),
-                content.page_title or "",
-                content.bottom_description or "",
-                content.meta_description or "",
-                content.top_description or "",
-                "Best Selling",
-                "FALSE",
-                "all conditions",
-                "Tag",
-                "Equals",
-                shopify_placeholder_tag,
-            ])
+            writer.writerow(
+                [
+                    command,
+                    ExportService.extract_handle(page.normalized_url),
+                    content.page_title or "",
+                    content.bottom_description or "",
+                    content.meta_description or "",
+                    content.top_description or "",
+                    "Best Selling",
+                    "FALSE",
+                    "all conditions",
+                    "Tag",
+                    "Equals",
+                    shopify_placeholder_tag,
+                ]
+            )
             row_count += 1
 
         csv_string = output.getvalue()
