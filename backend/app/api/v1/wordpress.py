@@ -18,15 +18,15 @@ from app.schemas.wordpress import (
     WPExportRequest,
     WPImportRequest,
     WPImportResponse,
+    WPLabelAssignment,
     WPLabelRequest,
     WPLabelReviewResponse,
     WPPlanRequest,
     WPProgressResponse,
     WPProjectOption,
-    WPReviewResponse,
     WPReviewGroup,
+    WPReviewResponse,
     WPTaxonomyLabel,
-    WPLabelAssignment,
 )
 from app.services.wordpress_linker import (
     get_wp_progress,
@@ -84,7 +84,8 @@ async def list_linkable_projects(
     Counts both onboarding pages and cluster-generated pages whose content
     has been approved (export-ready).
     """
-    from sqlalchemy import and_, func, or_, select as sa_select
+    from sqlalchemy import and_, func, or_
+    from sqlalchemy import select as sa_select
 
     from app.models.crawled_page import CrawledPage
     from app.models.page_content import PageContent
@@ -315,11 +316,11 @@ async def get_labels(
     # Build taxonomy response
     taxonomy = [
         WPTaxonomyLabel(
-            name=l.get("name", ""),
-            description=l.get("description", ""),
-            post_count=label_counts.get(l.get("name", ""), 0),
+            name=label.get("name", ""),
+            description=label.get("description", ""),
+            post_count=label_counts.get(label.get("name", ""), 0),
         )
-        for l in taxonomy_labels_raw
+        for label in taxonomy_labels_raw
     ]
 
     # Build assignments

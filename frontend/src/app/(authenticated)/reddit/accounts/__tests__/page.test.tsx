@@ -325,9 +325,7 @@ describe('RedditAccountsPage', () => {
       const user = userEvent.setup();
 
       // First render: all accounts present for unfiltered, empty for filtered
-      let callCount = 0;
       mockUseRedditAccounts.mockImplementation((params: unknown) => {
-        callCount++;
         // Unfiltered calls (no params) return accounts
         if (!params || (typeof params === 'object' && Object.keys(params as object).length === 0)) {
           return { data: [mockAccount], isLoading: false, error: null };

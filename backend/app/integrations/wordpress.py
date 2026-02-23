@@ -4,11 +4,10 @@ Uses httpx with HTTP Basic Auth (application passwords). Handles paginated
 post fetching with _embed for inline terms, and single-post content updates.
 """
 
+import asyncio
 import html
 from dataclasses import dataclass
-from typing import Any
-
-import asyncio
+from typing import Any, cast
 
 import httpx
 
@@ -93,7 +92,7 @@ class WordPressClient:
             total_posts=total_posts,
         )
 
-    async def _get_with_retry(self, url: str, params: dict) -> httpx.Response:
+    async def _get_with_retry(self, url: str, params: dict[str, Any]) -> httpx.Response:
         """GET request with retry on 429 Too Many Requests."""
         for attempt in range(MAX_RETRIES + 1):
             resp = await self._client.get(url, params=params)
@@ -141,7 +140,7 @@ class WordPressClient:
                 "status": status,
                 "_embed": "wp:term",
             }
-            if use_server_search:
+            if use_server_search and title_filter:
                 params["search"] = title_filter[0]
 
             resp = await self._get_with_retry(
@@ -158,7 +157,7 @@ class WordPressClient:
                 wp_post = self._parse_post(post)
 
                 # Client-side title filter for multi-term queries
-                if use_client_filter:
+                if use_client_filter and title_filter:
                     title_lower = html.unescape(wp_post.title).lower()
                     if not any(html.unescape(f).lower() in title_lower for f in title_filter):
                         continue
@@ -259,7 +258,7 @@ class WordPressClient:
             params={"per_page": WP_PER_PAGE},
         )
         resp.raise_for_status()
-        return resp.json()
+        return cast(list[dict[str, Any]], resp.json())
 
     async def fetch_tags(self) -> list[dict[str, Any]]:
         """Fetch all tags."""
@@ -268,7 +267,7 @@ class WordPressClient:
             params={"per_page": WP_PER_PAGE},
         )
         resp.raise_for_status()
-        return resp.json()
+        return cast(list[dict[str, Any]], resp.json())
 
     async def update_post_content(self, post_id: int, content: str) -> dict[str, Any]:
         """Update a post's content HTML.
@@ -285,7 +284,7 @@ class WordPressClient:
             json={"content": content},
         )
         resp.raise_for_status()
-        return resp.json()
+        return cast(dict[str, Any], resp.json())
 
     async def close(self) -> None:
         """Close the underlying httpx client."""

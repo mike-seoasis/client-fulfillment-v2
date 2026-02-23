@@ -23,6 +23,7 @@ export const GENERATION_STEPS = [
   'writing_style',
   'vocabulary',
   'trust_elements',
+  'examples_bank',
   'competitor_context',
   // Summary
   'ai_prompt_snippet',
@@ -44,6 +45,7 @@ export const STEP_DISPLAY_NAMES: Record<GenerationStep, string> = {
   writing_style: 'Setting writing style rules',
   vocabulary: 'Building vocabulary guide',
   trust_elements: 'Compiling trust elements',
+  examples_bank: 'Building examples bank',
   competitor_context: 'Analyzing competitor context',
   ai_prompt_snippet: 'Generating AI prompt snippet',
 };

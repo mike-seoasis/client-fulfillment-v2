@@ -96,7 +96,7 @@ describe("api() 401 retry with refreshSession", () => {
       .mockResolvedValueOnce(mockResponse(401, {}, "Unauthorized"))
       .mockResolvedValueOnce(mockResponse(401, {}, "Unauthorized")); // refresh fails
 
-    const error = await api("/secret").catch((e) => e);
+    const error = await api("/secret").catch((e) => e) as ApiError;
     expect(error).toBeInstanceOf(ApiError);
     expect(error.status).toBe(401);
   });
@@ -106,7 +106,7 @@ describe("api() 401 retry with refreshSession", () => {
     // The refresh endpoint should only be called once.
     let refreshCallCount = 0;
 
-    fetchSpy.mockImplementation((url) => {
+    fetchSpy.mockImplementation((url: string | URL | Request) => {
       const urlStr = typeof url === "string" ? url : (url as Request).url;
 
       if (urlStr.includes("/api/auth/get-session")) {
@@ -131,7 +131,7 @@ describe("api() 401 retry with refreshSession", () => {
     fetchSpy.mockReset();
 
     let apiCallCount = 0;
-    fetchSpy.mockImplementation((url) => {
+    fetchSpy.mockImplementation((url: string | URL | Request) => {
       const urlStr = typeof url === "string" ? url : (url as Request).url;
 
       if (urlStr.includes("/api/auth/get-session")) {

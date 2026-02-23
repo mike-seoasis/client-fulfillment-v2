@@ -105,9 +105,9 @@ class CrawlingService:
             crawl_results[page_id] = crawl_result
 
             # Update the page with crawl result
-            page = pages.get(page_id)
-            if page:
-                self._apply_crawl_result(page, crawl_result)
+            matched_page = pages.get(page_id)
+            if matched_page:
+                self._apply_crawl_result(matched_page, crawl_result)
 
         # Flush all changes to database
         await db.flush()

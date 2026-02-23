@@ -731,7 +731,8 @@ def _extract_json_from_response(response_text: str) -> dict[str, Any]:
     # Fix unescaped control characters in string values
     json_text = fix_json_control_chars(json_text)
 
-    return json.loads(json_text)
+    result: dict[str, Any] = json.loads(json_text)
+    return result
 
 
 async def _generate_section(
@@ -1987,7 +1988,6 @@ class BrandConfigService:
                 section_name, (2048, SECTION_TIMEOUT_SECONDS)
             )
 
-            section_regenerated = False
             for attempt in range(1, MAX_SECTION_RETRIES + 1):
                 attempt_max_tokens = base_max_tokens
                 attempt_timeout = base_timeout
@@ -2025,7 +2025,6 @@ class BrandConfigService:
                 try:
                     section_data = _extract_json_from_response(result.text or "")
                     regenerated_sections[section_name] = section_data
-                    section_regenerated = True
 
                     logger.info(
                         "Section regenerated successfully",

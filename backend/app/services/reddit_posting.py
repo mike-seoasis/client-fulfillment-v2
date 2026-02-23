@@ -4,8 +4,10 @@ Submits approved comments to CrowdReply and handles webhook-based status trackin
 Follows the same background task + in-memory progress pattern as reddit_comment_generation.py.
 """
 
+import contextlib
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +16,11 @@ from sqlalchemy.orm import selectinload
 from app.core.database import db_manager
 from app.core.logging import get_logger
 from app.integrations.crowdreply import get_crowdreply
-from app.models.crowdreply_task import CrowdReplyTask, CrowdReplyTaskStatus, CrowdReplyTaskType
+from app.models.crowdreply_task import (
+    CrowdReplyTask,
+    CrowdReplyTaskStatus,
+    CrowdReplyTaskType,
+)
 from app.models.reddit_comment import CommentStatus, RedditComment
 from app.models.reddit_post import RedditPost
 
@@ -228,7 +234,7 @@ async def submit_approved_comments(
 
 
 async def handle_crowdreply_webhook(
-    payload: dict,
+    payload: dict[str, Any],
     db: AsyncSession,
 ) -> bool:
     """Process a CrowdReply webhook payload.
@@ -294,12 +300,10 @@ async def handle_crowdreply_webhook(
     if client_price is not None:
         cr_task.price = float(client_price)
     if published_at_str:
-        try:
+        with contextlib.suppress(ValueError, TypeError):
             cr_task.published_at = datetime.fromisoformat(
                 published_at_str.replace("Z", "+00:00")
             )
-        except (ValueError, TypeError):
-            pass
 
     # Update associated comment
     if cr_task.comment_id:
@@ -371,7 +375,7 @@ async def simulate_webhook(
     external_id = cr_task.external_task_id if cr_task else f"sim_{comment_id[:8]}"
 
     # Build fake payload
-    fake_payload: dict = {
+    fake_payload: dict[str, Any] = {
         "_id": external_id,
         "threadUrl": cr_task.target_url if cr_task else "",
         "taskType": "comment",

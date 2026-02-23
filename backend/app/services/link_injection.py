@@ -17,7 +17,7 @@ from collections import Counter
 from typing import Any
 from urllib.parse import urlparse
 
-from bs4 import BeautifulSoup, NavigableString, Tag  # type: ignore[attr-defined]
+from bs4 import BeautifulSoup, NavigableString, Tag
 
 from app.core.logging import get_logger
 from app.integrations.claude import ClaudeClient, get_api_key

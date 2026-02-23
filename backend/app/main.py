@@ -432,7 +432,7 @@ def create_app() -> FastAPI:
     async def integrations_health() -> dict[str, Any]:
         """Check status of external integrations (POP, DataForSEO, Claude)."""
         from app.core.config import get_settings
-        from app.integrations.pop import get_pop_client, POPMockClient
+        from app.integrations.pop import POPMockClient, get_pop_client
 
         settings = get_settings()
         pop_client = await get_pop_client()
@@ -444,7 +444,7 @@ def create_app() -> FastAPI:
                 "is_mock_client": is_mock,
                 "api_key_set": bool(settings.pop_api_key),
                 "available": getattr(pop_client, "available", False) if not is_mock else True,
-                "circuit_breaker": getattr(pop_client, "_circuit_breaker", None).state.value if hasattr(pop_client, "_circuit_breaker") else "n/a",
+                "circuit_breaker": cb.state.value if (cb := getattr(pop_client, "_circuit_breaker", None)) is not None else "n/a",
             },
             "dataforseo": {
                 "login_set": bool(settings.dataforseo_api_login),
@@ -460,7 +460,7 @@ def create_app() -> FastAPI:
     @app.get("/health/pop-test", tags=["Health"])
     async def pop_full_test() -> dict[str, Any]:
         """Run the full 3-step POP flow and report each step's result."""
-        from app.integrations.pop import get_pop_client, POPMockClient, POPTaskStatus
+        from app.integrations.pop import POPMockClient, get_pop_client
 
         pop_client = await get_pop_client()
 
@@ -526,8 +526,6 @@ def create_app() -> FastAPI:
             if not report_task.success or not report_task.task_id:
                 return {"steps": steps, "diagnosis": "create-report failed"}
 
-            report_id = (report_task.data or {}).get("reportId")
-
             report_poll = await pop_client.poll_for_result(report_task.task_id)
             report_data = report_poll.data or {}
 
@@ -550,6 +548,7 @@ def create_app() -> FastAPI:
     async def project_debug(project_id: str) -> dict[str, Any]:
         """Debug endpoint showing content generation state for a project."""
         from sqlalchemy import select as sa_select
+
         from app.models.content_brief import ContentBrief
         from app.models.crawled_page import CrawledPage
         from app.models.page_content import PageContent
@@ -561,7 +560,7 @@ def create_app() -> FastAPI:
             pages_result = await db.execute(pages_stmt)
             pages = list(pages_result.scalars().all())
 
-            page_data = []
+            page_data: list[dict[str, Any]] = []
             for page in pages:
                 # Get keywords
                 kw_stmt = sa_select(PageKeywords).where(PageKeywords.crawled_page_id == page.id)

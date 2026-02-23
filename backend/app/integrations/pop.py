@@ -1388,7 +1388,7 @@ class POPMockClient:
         rng.shuffle(domains)
 
         competitors: list[dict[str, Any]] = []
-        for i, domain in enumerate(domains[:3]):
+        for _i, domain in enumerate(domains[:3]):
             page_score = round(rng.uniform(55.0, 95.0), 1)
             word_count = rng.randint(600, 2000)
             h2_count = rng.randint(3, 8)

@@ -105,6 +105,7 @@ const createMockLinkMapPage = (
   labels: ['shoes'],
   outbound_count: 3,
   inbound_count: 2,
+  outbound_links: [],
   methods: { rule_based: 2 },
   validation_status: 'verified',
   ...overrides,

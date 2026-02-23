@@ -5,6 +5,7 @@ plus content generation trigger/poll, content CRUD, approval, and quality rechec
 """
 
 import asyncio
+from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from sqlalchemy import func, select
@@ -137,7 +138,7 @@ async def create_blog_campaign(
     bc_stmt = select(BrandConfig).where(BrandConfig.project_id == project_id)
     bc_result = await db.execute(bc_stmt)
     brand_config_row = bc_result.scalar_one_or_none()
-    brand_config: dict = brand_config_row.v2_schema if brand_config_row else {}
+    brand_config: dict[str, Any] = brand_config_row.v2_schema if brand_config_row else {}
 
     # Run discovery with timeout
     service = BlogTopicDiscoveryService(claude, dataforseo)
@@ -361,9 +362,8 @@ async def update_blog_post(
         setattr(post, field, value)
 
     # Transition campaign to 'writing' when a post is individually approved
-    if update_data.get("is_approved") is True:
-        if campaign.status == CampaignStatus.PLANNING.value:
-            campaign.status = CampaignStatus.WRITING.value
+    if update_data.get("is_approved") is True and campaign.status == CampaignStatus.PLANNING.value:
+        campaign.status = CampaignStatus.WRITING.value
 
     await db.commit()
     await db.refresh(post)
@@ -379,7 +379,7 @@ async def approve_blog_posts(
     project_id: str,
     blog_id: str,
     db: AsyncSession = Depends(get_session),
-) -> dict:
+) -> dict[str, Any]:
     """Bulk approve all unapproved posts in a blog campaign.
 
     Sets is_approved=True on all unapproved posts. If all posts are now
@@ -676,9 +676,7 @@ async def get_blog_content_status(
     posts_total = len(approved_posts)
     if posts_total == 0:
         overall_status = "idle"
-    elif blog_id in _active_blog_generations:
-        overall_status = "generating"
-    elif any(p.content_status in generating_statuses for p in approved_posts):
+    elif blog_id in _active_blog_generations or any(p.content_status in generating_statuses for p in approved_posts):
         overall_status = "generating"
     elif posts_completed + posts_failed >= posts_total:
         overall_status = "complete" if posts_failed == 0 else "failed"

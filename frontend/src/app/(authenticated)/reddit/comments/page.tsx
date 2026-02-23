@@ -988,8 +988,8 @@ export default function CommentQueuePage() {
         totalApproved += data.approved_count;
       }
       toast(`${totalApproved} comment${totalApproved !== 1 ? 's' : ''} approved`, 'success');
-    } catch (err: any) {
-      toast(err.message || 'Failed to bulk approve', 'error');
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Failed to bulk approve', 'error');
     }
     setSelectedIds(new Set());
     setSelectedIndex(0);
@@ -1009,8 +1009,8 @@ export default function CommentQueuePage() {
         totalRejected += data.rejected_count;
       }
       toast(`${totalRejected} comment${totalRejected !== 1 ? 's' : ''} rejected`, 'success');
-    } catch (err: any) {
-      toast(err.message || 'Failed to bulk reject', 'error');
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Failed to bulk reject', 'error');
     }
     setSelectedIds(new Set());
     setShowRejectPicker(false);
@@ -1034,8 +1034,8 @@ export default function CommentQueuePage() {
         totalSubmitted += data.submitted_count;
       }
       toast(`${totalSubmitted} comment${totalSubmitted !== 1 ? 's' : ''} submitted to CrowdReply`, 'success');
-    } catch (err: any) {
-      toast(err.message || 'Failed to submit comments', 'error');
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Failed to submit comments', 'error');
     }
   }, [comments, submitMutation, toast]);
 

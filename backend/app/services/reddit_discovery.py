@@ -12,8 +12,8 @@ Follows the trigger → background task → poll status pattern
 from content_generation.py.
 """
 
+import contextlib
 import json
-from app.core.logging import get_logger
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -23,6 +23,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import db_manager
+from app.core.logging import get_logger
 from app.integrations.claude import ClaudeClient, get_api_key
 from app.integrations.serpapi import SerpResult, get_serpapi
 from app.models.brand_config import BrandConfig
@@ -527,10 +528,8 @@ async def score_posts_batch(
 
         # Progress callback
         if on_progress:
-            try:
+            with contextlib.suppress(Exception):
                 on_progress(i + 1, total)
-            except Exception:
-                pass  # Don't let progress callback errors break scoring
 
     logger.info(
         "Batch scoring complete",
@@ -647,7 +646,7 @@ async def store_discovered_posts(
     stored = 0
     skipped = 0
 
-    for post, intent, scoring in zip(posts, intent_results, scoring_results):
+    for post, intent, scoring in zip(posts, intent_results, scoring_results, strict=False):
         # Skip posts that scored below threshold (filter_status=None means discard)
         if scoring.filter_status is None:
             skipped += 1

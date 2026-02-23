@@ -5,7 +5,7 @@ When AUTH_REQUIRED=false, returns a dev user without checking headers.
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import text
@@ -72,7 +72,7 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_sess
             detail="Session not found",
         )
 
-    if row.expiresAt < datetime.now(timezone.utc):
+    if row.expiresAt < datetime.now(UTC):
         logger.warning("Session expired at %s", row.expiresAt)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

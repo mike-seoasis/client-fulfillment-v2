@@ -14,6 +14,7 @@ Key design decisions:
 import random
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -67,7 +68,7 @@ ORGANIC_APPROACHES = {
 # ---------------------------------------------------------------------------
 
 
-def _extract_brand_context(brand_config: BrandConfig) -> dict:
+def _extract_brand_context(brand_config: BrandConfig) -> dict[str, Any]:
     """Extract brand context from v2_schema, handling varying key structures.
 
     The v2_schema structure varies depending on how it was generated.
@@ -209,7 +210,7 @@ The "Context/Preview" above may include text from other comments - ignore those 
     if is_promotional:
         # Build rich brand context
         brand_lines = [
-            f"\nBRAND TO MENTION (naturally, as part of your experience):",
+            "\nBRAND TO MENTION (naturally, as part of your experience):",
             f"- Brand: {brand_name}",
         ]
         if ctx["brand_desc"]:

@@ -23,6 +23,7 @@ const mockProject: Project = {
   phase_status: {},
   brand_config_status: 'pending',
   has_brand_config: false,
+  reddit_only: false,
   uploaded_files_count: 0,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-15T10:30:00Z',

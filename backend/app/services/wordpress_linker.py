@@ -9,21 +9,17 @@ and reuses the existing link planning pipeline for per-silo link generation.
 import asyncio
 import json
 import re
-from collections import Counter
 from itertools import combinations
-from typing import Any
-from uuid import uuid4
+from typing import Any, cast
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.attributes import flag_modified
 
-from app.core.database import db_manager
 from app.core.logging import get_logger
 from app.integrations.claude import ClaudeClient, get_api_key
 from app.integrations.wordpress import WordPressClient, WPSiteInfo
-from app.models.content_brief import ContentBrief
 from app.models.crawled_page import CrawledPage, CrawlStatus
 from app.models.internal_link import InternalLink
 from app.models.keyword_cluster import ClusterPage, KeywordCluster
@@ -175,7 +171,7 @@ async def step2_import(
                 "total_fetched": total_fetched,
                 "title_filter": title_filter,
             }
-            return progress["result"]
+            return cast(dict[str, Any], progress["result"])
 
         # Use existing project or create a new one
         if existing_project_id:
@@ -526,7 +522,7 @@ Generate a taxonomy that captures the main topics. Each label should group posts
     try:
         response_text = completion.text or ""
         json_text = _extract_json(response_text)
-        parsed = json.loads(json_text)
+        parsed: dict[str, Any] = json.loads(json_text)
 
         # Store taxonomy in project phase_status
         project = await db.get(Project, project_id)
@@ -541,7 +537,7 @@ Generate a taxonomy that captures the main topics. Each label should group posts
             "Blog taxonomy generated",
             extra={
                 "label_count": len(parsed.get("labels", [])),
-                "labels": [l["name"] for l in parsed.get("labels", [])],
+                "labels": [label["name"] for label in parsed.get("labels", [])],
             },
         )
         return parsed
@@ -636,8 +632,8 @@ Respond with JSON only."""
 
                 # Filter to valid labels only
                 valid_assigned = [
-                    l.strip().lower() for l in labels
-                    if l.strip().lower() in valid_labels
+                    label.strip().lower() for label in labels
+                    if label.strip().lower() in valid_labels
                 ]
 
                 # Ensure 2-4 labels
@@ -791,7 +787,7 @@ async def step5_plan_links(
         if not clusters:
             progress["status"] = "complete"
             progress["result"] = {"total_links": 0, "groups_processed": 0}
-            return progress["result"]
+            return cast(dict[str, Any], progress["result"])
 
         # Pre-load collection pages if this is a mixed project
         collection_pages: list[CrawledPage] = []
@@ -1096,15 +1092,15 @@ def _build_silo_graph_with_collections(
         silo_labels.update(node.get("labels", []))
 
     coll_nodes: list[dict[str, Any]] = []
-    for cp in collection_pages:
-        page_labels = set(cp.labels or [])
+    for coll_page in collection_pages:
+        page_labels = set(coll_page.labels or [])
         if page_labels & silo_labels:  # Only include if there's label overlap
             coll_nodes.append({
-                "page_id": cp.id,
-                "keyword": cp.title or cp.normalized_url,
-                "url": cp.normalized_url,
-                "labels": cp.labels or [],
-                "is_priority": bool(cp.category and cp.category.lower() in ("collection", "product")),
+                "page_id": coll_page.id,
+                "keyword": coll_page.title or coll_page.normalized_url,
+                "url": coll_page.normalized_url,
+                "labels": coll_page.labels or [],
+                "is_priority": bool(coll_page.category and coll_page.category.lower() in ("collection", "product")),
                 "source": "collection",
             })
 
@@ -1191,7 +1187,6 @@ def select_targets_wp_with_collections(
             if pages_by_id[tid].get("source") == "collection"
         ]
         collection_budget = min(len(collection_targets_available), max(1, budget // 2))
-        blog_budget = budget - collection_budget
 
         total_inbound = sum(inbound_counts.values())
         page_count = len(graph["pages"])
@@ -1515,7 +1510,7 @@ async def step6_get_review(
             .group_by(InternalLink.cluster_id)
         )
         coll_counts_result = await db.execute(coll_counts_stmt)
-        collection_counts_by_cluster = dict(coll_counts_result.all())
+        collection_counts_by_cluster = dict(coll_counts_result.all())  # type: ignore[arg-type]
 
     for cluster in clusters:
         # Count links for this cluster
@@ -1626,9 +1621,9 @@ async def step7_export(
             nonlocal success_count, fail_count
             async with semaphore:
                 try:
-                    wp_post_id = int(page.raw_url)
-                    content = page.page_content.bottom_description
-                    await client.update_post_content(wp_post_id, content)
+                    wp_post_id = int(page.raw_url or "0")
+                    content = page.page_content.bottom_description if page.page_content else ""
+                    await client.update_post_content(wp_post_id, content or "")
                     success_count += 1
                 except Exception:
                     fail_count += 1

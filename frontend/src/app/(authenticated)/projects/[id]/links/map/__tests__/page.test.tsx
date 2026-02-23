@@ -54,6 +54,7 @@ const createMockPage = (
   labels: ['shoes'],
   outbound_count: 3,
   inbound_count: 2,
+  outbound_links: [],
   methods: { rule_based: 2, llm_fallback: 1 },
   validation_status: 'verified',
   ...overrides,

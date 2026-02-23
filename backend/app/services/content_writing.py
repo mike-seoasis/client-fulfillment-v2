@@ -46,7 +46,7 @@ _MARKETPLACE_DOMAINS = frozenset({
 })
 
 
-def extract_competitor_brands(competitors: list[dict]) -> list[str]:
+def extract_competitor_brands(competitors: list[dict[str, Any]]) -> list[str]:
     """Extract brand names from POP competitor URLs.
 
     Parses domains, strips 'www.', takes the second-level domain,
@@ -106,10 +106,7 @@ def is_competitor_term(phrase: str, competitor_names: list[str]) -> bool:
         True if phrase contains any competitor name.
     """
     phrase_lower = phrase.lower()
-    for name in competitor_names:
-        if name.lower() in phrase_lower:
-            return True
-    return False
+    return any(name.lower() in phrase_lower for name in competitor_names)
 
 
 def _get_word_count_override(brand_config: dict[str, Any]) -> int | None:
@@ -829,7 +826,7 @@ def _build_from_cleaned_brief(
     variations: list[str] = content_brief.related_searches or []
     if variations:
         lines.append("")
-        lines.append(f"### Keyword Variations")
+        lines.append("### Keyword Variations")
         lines.append(f"{', '.join(variations)}")
 
     # --- Competitor context ---
@@ -1297,7 +1294,7 @@ def _parse_content_json(text: str) -> dict[str, str] | None:
     return {k: str(v) for k, v in parsed.items() if k in REQUIRED_CONTENT_KEYS}
 
 
-def _try_json_loads(text: str) -> dict | None:
+def _try_json_loads(text: str) -> dict[str, Any] | None:
     """Try json.loads, return None on failure."""
     try:
         result = json.loads(text)
@@ -1309,8 +1306,8 @@ def _try_json_loads(text: str) -> dict | None:
 def _repair_json_control_chars(text: str) -> str:
     """Repair common JSON issues: unescaped control characters in string values."""
 
-    def _escape_string_value(m: re.Match) -> str:
-        val = m.group(0)
+    def _escape_string_value(m: re.Match[str]) -> str:
+        val: str = m.group(0)
         val = val.replace("\t", "\\t")
         val = val.replace("\r\n", "\\n").replace("\r", "\\n").replace("\n", "\\n")
         return val

@@ -4,7 +4,17 @@ REST endpoints for Reddit account CRUD, per-project Reddit configuration,
 post discovery, post management, and comment generation.
 """
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
+from typing import Any
+
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    Response,
+    status,
+)
 from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,11 +48,11 @@ from app.schemas.reddit import (
     GenerateCommentRequest,
     GenerationStatusResponse,
     PostUpdateRequest,
-    RedditCommentUpdateRequest,
     RedditAccountCreate,
     RedditAccountResponse,
     RedditAccountUpdate,
     RedditCommentResponse,
+    RedditCommentUpdateRequest,
     RedditPostResponse,
     RedditProjectCardResponse,
     RedditProjectConfigCreate,
@@ -58,7 +68,6 @@ from app.services.reddit_comment_generation import (
     is_generation_active,
 )
 from app.services.reddit_discovery import (
-    DiscoveryProgress,
     discover_posts,
     get_discovery_progress,
     is_discovery_active,
@@ -240,7 +249,7 @@ async def list_reddit_projects(
         .group_by(RedditPost.project_id)
     )
     post_result = await db.execute(post_counts_stmt)
-    post_counts = dict(post_result.all())
+    post_counts: dict[str, int] = dict(post_result.all())  # type: ignore[arg-type]
 
     # Count total comments per project
     comment_counts_stmt = (
@@ -249,7 +258,7 @@ async def list_reddit_projects(
         .group_by(RedditComment.project_id)
     )
     comment_result = await db.execute(comment_counts_stmt)
-    comment_counts = dict(comment_result.all())
+    comment_counts: dict[str, int] = dict(comment_result.all())  # type: ignore[arg-type]
 
     # Count draft comments per project
     draft_counts_stmt = (
@@ -261,7 +270,7 @@ async def list_reddit_projects(
         .group_by(RedditComment.project_id)
     )
     draft_result = await db.execute(draft_counts_stmt)
-    draft_counts = dict(draft_result.all())
+    draft_counts: dict[str, int] = dict(draft_result.all())  # type: ignore[arg-type]
 
     items = [
         RedditProjectCardResponse(
@@ -320,7 +329,7 @@ async def list_all_comments(
     for cond in base_conditions:
         count_stmt = count_stmt.where(cond)
     count_result = await db.execute(count_stmt)
-    status_map = dict(count_result.all())
+    status_map: dict[str, int] = dict(count_result.all())  # type: ignore[arg-type]
 
     counts = CommentQueueStatusCounts(
         draft=status_map.get("draft", 0),
@@ -401,10 +410,11 @@ async def _run_initial_reddit_setup(project_id: str) -> None:
     1. Seeds search_keywords from collection page primary keywords
     2. Discovers target_subreddits via Perplexity using brand config data
     """
+    from sqlalchemy.orm.attributes import flag_modified
+
     from app.integrations.perplexity import get_perplexity
     from app.models.crawled_page import CrawledPage
     from app.models.page_keywords import PageKeywords
-    from sqlalchemy.orm.attributes import flag_modified
 
     try:
         async with db_manager.session_factory() as db:
@@ -805,7 +815,7 @@ async def bulk_post_action(
     project_id: str,
     data: BulkPostActionRequest,
     db: AsyncSession = Depends(get_session),
-) -> dict:
+) -> dict[str, Any]:
     """Bulk update filter status for multiple posts."""
     if not data.post_ids:
         return {"updated": 0}
@@ -914,7 +924,7 @@ async def trigger_batch_generation(
     project_id: str,
     background_tasks: BackgroundTasks,
     data: BatchGenerateRequest | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Trigger batch comment generation as a background task.
 
     If post_ids provided, generates for those posts only.
@@ -1004,7 +1014,7 @@ async def bulk_approve_comments(
     project_id: str,
     data: BulkCommentActionRequest,
     db: AsyncSession = Depends(get_session),
-) -> dict:
+) -> dict[str, Any]:
     """Bulk approve draft comments. Non-draft comments are skipped."""
     if not data.comment_ids:
         return {"approved_count": 0}
@@ -1032,7 +1042,7 @@ async def bulk_reject_comments(
     project_id: str,
     data: BulkCommentRejectRequest,
     db: AsyncSession = Depends(get_session),
-) -> dict:
+) -> dict[str, Any]:
     """Bulk reject draft comments with a shared reason. Non-draft comments are skipped."""
     if not data.comment_ids:
         return {"rejected_count": 0}
@@ -1403,7 +1413,7 @@ async def get_submit_status(
 async def crowdreply_webhook(
     payload: CrowdReplyWebhookPayload,
     db: AsyncSession = Depends(get_session),
-) -> dict:
+) -> dict[str, Any]:
     """Receive webhook callbacks from CrowdReply.
 
     Processes status updates for submitted tasks.
@@ -1441,7 +1451,7 @@ async def get_crowdreply_balance() -> CrowdReplyBalanceResponse:
 async def simulate_crowdreply_webhook(
     data: WebhookSimulateRequest,
     db: AsyncSession = Depends(get_session),
-) -> dict:
+) -> dict[str, Any]:
     """Simulate a CrowdReply webhook for development/staging.
 
     Only available in development and staging environments.

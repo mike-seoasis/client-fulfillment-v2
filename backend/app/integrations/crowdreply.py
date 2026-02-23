@@ -15,8 +15,7 @@ async httpx, circuit breaker, retry, global instance.
 import asyncio
 import time
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -281,16 +280,15 @@ class CrowdReplyClient:
         by polling GET /tasks after a short delay.
         """
         cr_project = project_id or self._project_id
-        payload = {
-            "taskData": {
-                "taskType": "comment",
-                "type": "RedditCommentTask",
-                "platform": "reddit",
-                "project": cr_project,
-                "content": content,
-                "threadUrl": thread_url,
-            }
+        task_data: dict[str, Any] = {
+            "taskType": "comment",
+            "type": "RedditCommentTask",
+            "platform": "reddit",
+            "project": cr_project,
+            "content": content,
+            "threadUrl": thread_url,
         }
+        payload: dict[str, Any] = {"taskData": task_data}
         if schedule_at:
             payload["taskData"]["scheduleAt"] = schedule_at
         if upvotes is not None:
@@ -360,7 +358,7 @@ class CrowdReplyClient:
                             task.get("threadUrl") == thread_url
                             and task.get("content") == content
                         ):
-                            return task.get("_id")
+                            return cast(str, task.get("_id"))
         except CrowdReplyError:
             logger.warning("Failed to reconcile CrowdReply task ID")
 
@@ -478,8 +476,8 @@ class CrowdReplyMockClient:
         thread_url: str,
         content: str,
         project_id: str | None = None,
-        schedule_at: str | None = None,
-        upvotes: int | None = None,
+        schedule_at: str | None = None,  # noqa: ARG002
+        upvotes: int | None = None,  # noqa: ARG002
     ) -> CreateTaskResult:
         self._task_counter += 1
         task_id = f"mock_task_{self._task_counter}"
@@ -518,7 +516,7 @@ class CrowdReplyMockClient:
         )
 
     async def list_tasks(
-        self, filters: dict[str, Any] | None = None
+        self, _filters: dict[str, Any] | None = None
     ) -> list[TaskInfo]:
         return list(self._tasks.values())
 
@@ -532,7 +530,7 @@ class CrowdReplyMockClient:
         return False
 
     async def send_upvotes(
-        self, task_id: str, quantity: int, delivery: str = "standard"
+        self, task_id: str, _quantity: int, _delivery: str = "standard"
     ) -> bool:
         return task_id in self._tasks
 

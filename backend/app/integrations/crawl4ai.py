@@ -163,7 +163,7 @@ class CrawlOptions:
         }
 
 
-def _extract_markdown(markdown_data: str | dict | None) -> str | None:
+def _extract_markdown(markdown_data: str | dict[str, Any] | None) -> str | None:
     """Extract markdown string from potentially nested response format.
 
     Crawl4AI API may return markdown as:
@@ -183,7 +183,7 @@ def _extract_markdown(markdown_data: str | dict | None) -> str | None:
         # Prefer fit_markdown (main body content) over raw_markdown (full page)
         for key in ("fit_markdown", "raw_markdown", "markdown_with_citations", "content"):
             if key in markdown_data and isinstance(markdown_data[key], str):
-                chosen = markdown_data[key]
+                chosen: str = markdown_data[key]
                 if chosen.strip():
                     return chosen
         # If it's a dict but we can't find a string, log and return None

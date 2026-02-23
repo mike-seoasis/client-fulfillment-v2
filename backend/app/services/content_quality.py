@@ -250,7 +250,7 @@ def _check_ai_openers(fields: dict[str, str]) -> list[QualityIssue]:
 def _check_triplet_lists(fields: dict[str, str]) -> list[QualityIssue]:
     """Check 4: Flag each 'X, Y, and Z' pattern instance if total exceeds 2."""
     issues: list[QualityIssue] = []
-    all_matches: list[tuple[str, re.Match]] = []
+    all_matches: list[tuple[str, re.Match[str]]] = []
 
     for field_name, text in fields.items():
         for match in TRIPLET_PATTERN.finditer(text):
@@ -274,7 +274,7 @@ def _check_triplet_lists(fields: dict[str, str]) -> list[QualityIssue]:
 def _check_rhetorical_questions(fields: dict[str, str]) -> list[QualityIssue]:
     """Check 5: Flag each rhetorical question outside FAQ if total exceeds 1."""
     issues: list[QualityIssue] = []
-    all_questions: list[tuple[str, re.Match]] = []
+    all_questions: list[tuple[str, re.Match[str]]] = []
 
     for field_name, text in fields.items():
         check_text = text
@@ -345,7 +345,7 @@ def _check_tier1_ai_words(fields: dict[str, str]) -> list[QualityIssue]:
 def _check_tier2_ai_words(fields: dict[str, str]) -> list[QualityIssue]:
     """Check 7: Flag each Tier 2 AI word if total exceeds 1."""
     issues: list[QualityIssue] = []
-    found: list[tuple[str, str, re.Match]] = []
+    found: list[tuple[str, str, re.Match[str]]] = []
 
     for field_name, text in fields.items():
         for word in TIER2_AI_WORDS:
@@ -372,7 +372,7 @@ def _check_tier2_ai_words(fields: dict[str, str]) -> list[QualityIssue]:
 def _check_negation_contrast(fields: dict[str, str]) -> list[QualityIssue]:
     """Check 8: Flag each negation/contrast pattern if total exceeds 1."""
     issues: list[QualityIssue] = []
-    all_matches: list[tuple[str, re.Match]] = []
+    all_matches: list[tuple[str, re.Match[str]]] = []
 
     for field_name, text in fields.items():
         for match in NEGATION_PATTERN.finditer(text):

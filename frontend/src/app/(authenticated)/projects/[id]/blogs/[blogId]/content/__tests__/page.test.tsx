@@ -20,6 +20,7 @@ vi.mock('next/link', () => ({
 // Mock UI components
 // ============================================================================
 vi.mock('@/components/ui', () => ({
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   Button: ({ children, onClick, disabled, variant, ref: _ref, ...rest }: any) => (
     <button onClick={onClick} disabled={disabled} data-variant={variant} {...rest}>{children}</button>
   ),

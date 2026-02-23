@@ -861,6 +861,61 @@ Example:
                     if isinstance(kw, str)
                 ]
 
+        # --- Blog deduplication (Shopify articles) ---
+        dedup_filtered_count = 0
+        dedup_warned_count = 0
+        try:
+            from app.services.blog_dedup import check_duplicates, get_existing_articles
+
+            existing_articles = await get_existing_articles(project_id, db)
+            if existing_articles:
+                titles = [t.get("topic", "") or t.get("topic_title", "") for t in filtered]
+                dedup_results = check_duplicates(titles, existing_articles)
+
+                deduped_filtered: list[dict[str, Any]] = []
+                for topic_data, dedup in zip(filtered, dedup_results, strict=False):
+                    if dedup.action == "filter":
+                        dedup_filtered_count += 1
+                        logger.info(
+                            "Dedup: silently filtered topic",
+                            extra={
+                                "title": dedup.title,
+                                "similarity": round(dedup.similarity, 2),
+                                "existing_title": dedup.existing_title,
+                            },
+                        )
+                        continue
+                    elif dedup.action == "warn":
+                        dedup_warned_count += 1
+                        topic_data["dedup_warning"] = {
+                            "existing_title": dedup.existing_title,
+                            "existing_url": dedup.existing_url,
+                            "similarity": round(dedup.similarity, 2),
+                        }
+                        warnings.append(
+                            f"Topic \"{dedup.title}\" is similar ({round(dedup.similarity * 100)}%) "
+                            f"to existing post \"{dedup.existing_title}\""
+                        )
+                    deduped_filtered.append(topic_data)
+
+                filtered = deduped_filtered
+
+                if dedup_filtered_count:
+                    logger.info(
+                        "Blog dedup complete",
+                        extra={
+                            "filtered_out": dedup_filtered_count,
+                            "warned": dedup_warned_count,
+                            "remaining": len(filtered),
+                        },
+                    )
+        except Exception as e:
+            logger.warning(
+                "Blog dedup check failed, continuing without dedup",
+                extra={"error": str(e)},
+                exc_info=True,
+            )
+
         total_ms = t1_ms + t2_ms + t3_ms + t4_ms
 
         generation_metadata: dict[str, Any] = {
@@ -873,6 +928,8 @@ Example:
             "candidates_expanded": len(candidates),
             "candidates_filtered": len(filtered),
             "volume_unavailable": volume_unavailable,
+            "dedup_filtered": dedup_filtered_count,
+            "dedup_warned": dedup_warned_count,
         }
 
         # --- Persist to database ---

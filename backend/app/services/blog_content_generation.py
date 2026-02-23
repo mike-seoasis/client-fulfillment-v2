@@ -246,15 +246,15 @@ async def _auto_blog_link_planning(
                 # (run_blog_link_planning creates CrawledPage bridge records;
                 #  the source_page_id is the bridge crawled_page_id)
                 from app.models.blog import BlogPost
-                from app.models.crawled_page import CrawledPage
 
                 post_stmt = select(BlogPost).where(BlogPost.id == post_id)
                 post_result = await db.execute(post_stmt)
                 post = post_result.scalar_one_or_none()
 
-                if post and post.crawled_page_id:
+                crawled_page_id = getattr(post, "crawled_page_id", None) if post else None
+                if crawled_page_id:
                     del_stmt = delete(InternalLink).where(
-                        InternalLink.source_page_id == post.crawled_page_id,
+                        InternalLink.source_page_id == crawled_page_id,
                         InternalLink.scope == "blog",
                     )
                     await db.execute(del_stmt)
@@ -930,7 +930,7 @@ def _parse_blog_content_json(text: str) -> dict[str, str] | None:
     return {k: str(v) for k, v in parsed.items() if k in BLOG_CONTENT_KEYS}
 
 
-def _try_json_loads(text: str) -> dict | None:
+def _try_json_loads(text: str) -> dict[str, Any] | None:
     """Try json.loads, return None on failure."""
     try:
         result = json.loads(text)
@@ -945,9 +945,9 @@ def _repair_json_control_chars(text: str) -> str:
     # This is a lightweight repair — we escape control chars that break json.loads
     import re as _re
 
-    def _escape_string_value(m: _re.Match) -> str:
+    def _escape_string_value(m: _re.Match[str]) -> str:
         """Escape control chars inside a matched JSON string value."""
-        val = m.group(0)
+        val: str = m.group(0)
         # Don't touch already-escaped sequences
         # Replace literal newlines/tabs with escaped versions
         val = val.replace("\t", "\\t")

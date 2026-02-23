@@ -8,7 +8,7 @@ export function makeQueryClient() {
         refetchOnWindowFocus: true,
         retry: (failureCount, error) => {
           // Don't retry auth errors — need token refresh, not retries
-          if (error instanceof Error && 'status' in error && (error as any).status === 401) {
+          if (error instanceof Error && 'status' in error && (error as Record<string, unknown>).status === 401) {
             return false;
           }
           // Allow up to 3 retries (4 total attempts)

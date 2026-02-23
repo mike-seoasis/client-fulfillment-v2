@@ -310,7 +310,7 @@ def _extract_product_name_from_card(card: BeautifulSoup) -> str | None:
         try:
             title_elem = card.select_one(selector)
             if title_elem:
-                text = title_elem.get_text(strip=True)
+                text = str(title_elem.get_text(strip=True))
                 if text and len(text) > 2:  # Filter out empty or very short
                     return text
         except Exception:
@@ -319,7 +319,7 @@ def _extract_product_name_from_card(card: BeautifulSoup) -> str | None:
     # Last resort: look for any link with product in the href
     product_link = card.find("a", href=re.compile(r"/products/"))
     if product_link:
-        text = product_link.get_text(strip=True)
+        text = str(product_link.get_text(strip=True))
         if text and len(text) > 2:
             return text
 

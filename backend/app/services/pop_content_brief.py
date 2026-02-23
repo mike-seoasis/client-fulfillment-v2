@@ -10,6 +10,7 @@ Handles caching, force refresh, and graceful error handling so that content
 generation is never blocked.
 """
 
+import contextlib
 from dataclasses import dataclass
 from typing import Any
 
@@ -631,10 +632,8 @@ def _parse_word_count_range(
             if isinstance(c, dict):
                 wc = c.get("wordCount")
                 if wc is not None:
-                    try:
+                    with contextlib.suppress(ValueError, TypeError):
                         word_counts.append(int(wc))
-                    except (ValueError, TypeError):
-                        pass
         if word_counts:
             return min(word_counts), max(word_counts)
 
@@ -683,10 +682,8 @@ def _parse_page_score(response_data: dict[str, Any]) -> float | None:
             if isinstance(c, dict):
                 cs = c.get("pageScore")
                 if cs is not None:
-                    try:
+                    with contextlib.suppress(ValueError, TypeError):
                         scores.append(float(cs))
-                    except (ValueError, TypeError):
-                        pass
         if scores:
             return round(sum(scores) / len(scores), 1)
 

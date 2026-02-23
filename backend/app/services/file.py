@@ -10,8 +10,6 @@ import logging
 from typing import BinaryIO
 from uuid import uuid4
 
-logger = logging.getLogger(__name__)
-
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +21,8 @@ from app.utils.text_extraction import (
     UnsupportedFileTypeError,
     extract_text,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class FileService:

@@ -4,6 +4,7 @@ REST endpoints for creating, listing, updating, approving, and deleting keyword 
 """
 
 import asyncio
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
@@ -78,7 +79,7 @@ async def create_cluster(
     bc_stmt = select(BrandConfig).where(BrandConfig.project_id == project_id)
     bc_result = await db.execute(bc_stmt)
     brand_config_row = bc_result.scalar_one_or_none()
-    brand_config: dict = brand_config_row.v2_schema if brand_config_row else {}
+    brand_config: dict[str, Any] = brand_config_row.v2_schema if brand_config_row else {}
 
     # Run generation with timeout
     service = ClusterKeywordService(claude, dataforseo)
@@ -478,7 +479,7 @@ async def regenerate_cluster(
     bc_stmt = select(BrandConfig).where(BrandConfig.project_id == project_id)
     bc_result = await db.execute(bc_stmt)
     brand_config_row = bc_result.scalar_one_or_none()
-    brand_config: dict = brand_config_row.v2_schema if brand_config_row else {}
+    brand_config: dict[str, Any] = brand_config_row.v2_schema if brand_config_row else {}
 
     service = ClusterKeywordService(claude, dataforseo)
     try:
@@ -527,7 +528,7 @@ async def approve_cluster(
     project_id: str,
     cluster_id: str,
     db: AsyncSession = Depends(get_session),
-) -> dict:
+) -> dict[str, Any]:
     """Bulk-approve a cluster, bridging approved pages into the content pipeline.
 
     Calls ClusterKeywordService.bulk_approve_cluster() which creates
