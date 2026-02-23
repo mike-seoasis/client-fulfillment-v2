@@ -406,6 +406,17 @@ export default function KeywordsPage() {
     }
   }, [isLoading, keywordGen.status, pagesWithKeywords, totalPages, keywordGen.isStarting]);
 
+  // Refetch pages when generation completes (or fails with partial results)
+  const prevGenStatus = useRef(keywordGen.status);
+  useEffect(() => {
+    const wasGenerating = prevGenStatus.current === 'generating';
+    const isDone = keywordGen.status === 'completed' || keywordGen.status === 'failed' || keywordGen.status === 'partial';
+    if (wasGenerating && isDone) {
+      refetchPages();
+    }
+    prevGenStatus.current = keywordGen.status;
+  }, [keywordGen.status, refetchPages]);
+
   // Handle approve all
   const handleApproveAll = async () => {
     try {
