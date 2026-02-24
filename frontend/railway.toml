@@ -8,8 +8,8 @@ dockerfilePath = "Dockerfile"
 
 [deploy]
 # Health check configuration
-healthcheckPath = "/"
-healthcheckTimeout = 30
+healthcheckPath = "/api/health"
+healthcheckTimeout = 60
 
 # Restart policy for resilience
 restartPolicyType = "ON_FAILURE"
