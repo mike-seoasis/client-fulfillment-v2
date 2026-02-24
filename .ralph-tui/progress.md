@@ -5,525 +5,249 @@ after each iteration and it's included in prompts for context.
 
 ## Codebase Patterns (Study These First)
 
-### External API Configuration Pattern
-When adding a new external API integration to `backend/app/core/config.py`:
-1. **API credentials**: `{prefix}_api_key` or `{prefix}_api_login`/`{prefix}_api_password` (str | None, default=None)
-2. **Base URL**: `{prefix}_api_url` (str with default value)
-3. **Polling/timeout settings**: `{prefix}_task_poll_interval`, `{prefix}_task_timeout` for async task-based APIs
-4. **Circuit breaker**: `{prefix}_circuit_failure_threshold` (int, default=5) and `{prefix}_circuit_recovery_timeout` (float, default=60.0)
-5. All fields use pydantic `Field()` with `description` parameter
-
-### Alembic Migration Pattern
-When creating new database tables in `backend/alembic/versions/`:
-1. **File naming**: `{nnnn}_{descriptive_name}.py` where nnnn is zero-padded sequence number
-2. **Revision chain**: Set `revision = "{nnnn}"` and `down_revision = "{previous_nnnn}"`
-3. **UUID primary keys**: Use `postgresql.UUID(as_uuid=False)` with `server_default=sa.text("gen_random_uuid()")`
-4. **JSONB columns**: Use `postgresql.JSONB(astext_type=sa.Text())` with appropriate defaults (`'[]'::jsonb` for arrays, `'{}'::jsonb` for objects)
-5. **Timestamps**: `created_at` and `updated_at` with `server_default=sa.text("now()")` and `timezone=True`
-6. **Foreign keys**: Use `sa.ForeignKeyConstraint()` with `ondelete="CASCADE"` and named constraints like `fk_{table}_{column}`
-7. **Indexes**: Create indexes for foreign keys and commonly queried columns using `op.f("ix_{table}_{column}")`
-8. **Verify**: Run `alembic heads` and `alembic history` to verify migration chain
-
-### POP Integration Client Pattern
-When creating the POP API integration client in `backend/app/integrations/pop.py`:
-1. **Auth in body**: POP uses `apiKey` in JSON request body (not HTTP headers like DataForSEO)
-2. **Pattern**: Follow `backend/app/integrations/dataforseo.py` structure exactly
-3. **Components**: CircuitBreaker, exception classes (POPError, POPTimeoutError, etc.), POPClient class
-4. **Factory**: `get_pop_client()` async function for FastAPI dependency injection
-5. **Masking**: Use `_mask_api_key()` to redact apiKey from logs
-
-### SQLAlchemy Model Pattern
-When creating new SQLAlchemy models in `backend/app/models/`:
-1. **File naming**: `{table_name_singular}.py` (e.g., `content_brief.py` for `content_briefs` table)
-2. **UUID primary keys**: Use `UUID(as_uuid=False)` with `default=lambda: str(uuid4())` and `server_default=text("gen_random_uuid()")`
-3. **JSONB columns**: Use `Mapped[list[Any]]` for arrays, `Mapped[dict[str, Any]]` for objects, with `default=list` or `default=dict`
-4. **Timestamps**: Use `DateTime(timezone=True)` with `default=lambda: datetime.now(UTC)` and `server_default=text("now()")`
-5. **Foreign keys**: Use `ForeignKey("table.id", ondelete="CASCADE")` directly in `mapped_column()`
-6. **Relationships**: Use `TYPE_CHECKING` guard for forward references, `back_populates` for bidirectional, `cascade="all, delete-orphan"` for parent side
-7. **Exports**: Add new models to `app/models/__init__.py` imports and `__all__` list
+- **Neon Auth server singleton**: `import { auth } from '@/lib/auth/server'` — provides `.handler()`, `.middleware()`, `.getSession()`, and all Better Auth server methods (signIn, signUp, etc.).
+- **Neon Auth client singleton**: `import { authClient } from '@/lib/auth/client'` — provides `signIn.social()`, `signOut()`, `useSession()`, and org management hooks for React components.
+- **Neon Auth middleware**: `auth.middleware({ loginUrl: '/auth/sign-in' })` returns an `async (request: NextRequest) => NextResponse` function. SDK auto-skips `/api/auth`, `/auth/sign-in`, `/auth/sign-up`, `/auth/callback`, `/auth/magic-link`, `/auth/email-otp`, `/auth/forgot-password`. Session cookie name: `__Secure-neon-auth.session_token`.
+- **Route group layout pattern**: Root layout (`app/layout.tsx`) has html/body/fonts/providers/bg only — NO Header. Authenticated routes live in `app/(authenticated)/layout.tsx` which adds `<Header />` + `<main>` wrapper. Auth pages live in `app/auth/layout.tsx` with no Header. Route groups don't affect URLs.
+- **Backend auth dependency**: `from app.core.auth import get_current_user, UserInfo` — FastAPI dependency that validates Bearer tokens against `neon_auth.session`/`neon_auth."user"`. Returns `UserInfo(id, email, name)`. When `AUTH_REQUIRED=false`, returns dev user. Self-contained: `db` param has `Depends(get_session)` default so it works both as route-level `user: UserInfo = Depends(get_current_user)` and as router-level `dependencies=[Depends(get_current_user)]`.
+- **Router-level auth**: `api_v1_router` in `backend/app/api/v1/__init__.py` has `dependencies=[Depends(get_current_user)]` — all `/api/v1/*` endpoints require auth by default. Health checks at `/health` are on `app` directly, unaffected.
 
 ---
 
-## 2026-02-02 - US-001
-- Added POP API configuration settings to `backend/app/core/config.py`:
-  - `pop_api_key`: API key for PageOptimizer Pro
-  - `pop_api_url`: Base URL (default: https://api.pageoptimizer.pro)
-  - `pop_task_poll_interval`: Polling interval for async tasks (default: 2.0s)
-  - `pop_task_timeout`: Maximum wait time for task completion (default: 300s)
-  - `pop_circuit_failure_threshold`: Circuit breaker threshold (default: 5)
-  - `pop_circuit_recovery_timeout`: Circuit recovery timeout (default: 60s)
-- Created `backend/.env.example` with documented environment variables including POP_API_KEY
+## 2026-02-19 - S12-001
+- Installed `@neondatabase/auth@^0.2.0-beta.1` in frontend/
+- Files changed: `frontend/package.json`, `frontend/package-lock.json`
+- **Learnings:**
+  - All versions of `@neondatabase/auth` require Next.js 16+ as a peerOptional dependency. Project is on Next 14.2.35. Required `--legacy-peer-deps` flag to install. The peer dep is optional so this should work fine at runtime.
+  - The SDK bundles `better-auth@1.4.6`, `@neondatabase/auth-ui`, `@supabase/auth-js`, `jose`, and `zod` internally.
+  - Pre-existing typecheck errors exist in the codebase (unrelated to this change).
+---
+
+## 2026-02-19 - S12-002
+- Created server-side auth instance at `frontend/src/lib/auth/server.ts`
+- Exports `auth` singleton via `createNeonAuth` from `@neondatabase/auth/next/server`
+- Configured with `process.env.NEON_AUTH_BASE_URL` and `process.env.NEON_AUTH_COOKIE_SECRET`
+- Env vars already existed in `frontend/.env.local` with real values (not placeholders)
+- Files changed: `frontend/src/lib/auth/server.ts` (new)
+- **Learnings:**
+  - The SDK's `next/server` export path is `@neondatabase/auth/next/server` (not `@neondatabase/auth/next`). The `@neondatabase/auth/next` path is the client-side Next.js export.
+  - `createNeonAuth()` returns a unified object with: all Better Auth server methods + `.handler()` (for API route) + `.middleware()` (for route protection).
+  - Config takes `{ baseUrl, cookies: { secret, sessionDataTtl?, domain? } }`. Cookie secret must be >= 32 chars.
+  - No new typecheck errors introduced. Pre-existing test file errors remain.
+---
+
+## 2026-02-19 - S12-004
+- Created catch-all auth API route at `frontend/src/app/api/auth/[...path]/route.ts`
+- Imports `auth` from `@/lib/auth/server` and destructures `GET` and `POST` from `auth.handler()`
+- Handles all Better Auth endpoints: `/api/auth/sign-in/social`, `/api/auth/get-session`, `/api/auth/callback/google`, etc.
+- Files changed: `frontend/src/app/api/auth/[...path]/route.ts` (new)
+- **Learnings:**
+  - `auth.handler()` returns an object with `GET` and `POST` properties that can be directly destructured as Next.js route handler exports — very clean pattern.
+  - The `[...path]` catch-all segment is required so Better Auth can handle its own sub-routing for all auth endpoints.
+  - No new typecheck errors introduced. Pre-existing test file errors remain.
+---
+
+## 2026-02-19 - S12-003
+- Created client-side auth instance at `frontend/src/lib/auth/client.ts`
+- Exports `authClient` singleton via `createAuthClient` from `@neondatabase/auth/next`
+- `createAuthClient()` takes no arguments — config is inferred from the server-side setup
+- Exposes `signIn.social()`, `signOut()`, `useSession()`, plus org management hooks
+- Files changed: `frontend/src/lib/auth/client.ts` (new)
+- **Learnings:**
+  - Client import path is `@neondatabase/auth/next` (not `/next/client` — the `/next` path IS the client export, while `/next/server` is the server export)
+  - `createAuthClient()` takes zero arguments — no baseUrl or cookie config needed on the client side
+  - The client instance also exposes `useActiveOrganization()`, `useListOrganizations()`, and other org-related hooks beyond the core auth methods
+  - No new typecheck errors introduced. Pre-existing test file errors remain.
+---
+
+## 2026-02-19 - S12-005
+- Created Next.js route protection middleware at `frontend/src/middleware.ts`
+- Uses `auth.middleware()` from Neon Auth SDK for core route protection (unauthenticated → /auth/sign-in redirect, OAuth callback handling, session refresh)
+- Added custom logic: authenticated users on `/auth/sign-in` are redirected to `/` by checking for session cookie (`__Secure-neon-auth.session_token`)
+- Matcher regex excludes: `_next/static`, `_next/image`, `fonts`, `favicon.ico`, `api/auth`
+- Files changed: `frontend/src/middleware.ts` (new)
+- **Learnings:**
+  - `auth.middleware({ loginUrl })` returns `async (request: NextRequest) => NextResponse` — can be called directly as a sub-middleware
+  - The SDK middleware auto-skips these routes internally: `/api/auth`, `/auth/callback`, `/auth/sign-in`, `/auth/sign-up`, `/auth/magic-link`, `/auth/email-otp`, `/auth/forgot-password`
+  - SDK middleware does NOT redirect authenticated users away from login pages — that must be handled manually
+  - Session cookie name is `__Secure-neon-auth.session_token` (prefix `__Secure-neon-auth` + `.session_token`). Checking cookie presence is sufficient for the redirect-from-login case (no need for full session validation there)
+  - No new typecheck errors introduced. Pre-existing test file errors remain.
+---
+
+## 2026-02-19 - S12-012
+- Added `auth_required: bool = Field(default=True)` to Settings class in `backend/app/core/config.py`
+- Placed in the `# Application` section alongside `app_name`, `debug`, `environment`
+- Description: "Require authentication for API requests (disable for local development)"
+- Defaults to `True` (production-safe); set `AUTH_REQUIRED=false` env var to bypass auth in local dev
+- Files changed: `backend/app/core/config.py`
+- **Learnings:**
+  - Settings class uses `case_sensitive=False` so env var `AUTH_REQUIRED` maps to `auth_required` field automatically
+  - `_env_file=None` can be passed to Settings constructor in tests to avoid loading `.env`
+---
+
+## 2026-02-19 - S12-006
+- Created auth layout at `frontend/src/app/auth/layout.tsx` — renders children without Header, centered on screen
+- Restructured app to use route groups: moved Header/main from root layout to `(authenticated)/layout.tsx`
+- Root layout now only has html/body/fonts/QueryProvider/bg-cream-100 (shared by all routes)
+- Moved all existing pages (`page.tsx`, `projects/`, `reddit/`, `tools/`, `design-test/`) into `(authenticated)/` route group
 - Files changed:
-  - `backend/app/core/config.py` - Added POP API settings
-  - `backend/.env.example` - New file with all backend env vars documented
+  - `frontend/src/app/layout.tsx` (modified — removed Header import and rendering)
+  - `frontend/src/app/(authenticated)/layout.tsx` (new — Header + main wrapper)
+  - `frontend/src/app/auth/layout.tsx` (new — centered children, no Header)
+  - Moved 5 items into `(authenticated)/`: `page.tsx`, `projects/`, `reddit/`, `tools/`, `design-test/`
 - **Learnings:**
-  - Backend config lives in `backend/app/core/config.py`, not `app/core/config.py`
-  - No `.env.example` existed for backend previously; created one with all documented API keys
-  - Pattern: All external APIs follow same structure with circuit breaker settings
-  - ruff is available globally but mypy needs to be installed in venv (dev dependency)
+  - Next.js route groups `(name)` don't affect URL paths — `(authenticated)/projects/[id]` still serves `/projects/[id]`
+  - After moving files, `.next/types/` cache has stale references — delete it to get clean typecheck results
+  - Layouts in Next.js nest, they don't replace — the only way to avoid a parent layout's component is to use route groups so different children get different intermediate layouts
 ---
 
-## 2026-02-02 - US-002
-- Created database migrations for POP content data persistence:
-  - `0012_create_content_briefs_table.py`: Stores content brief data from POP API
-  - `0013_create_content_scores_table.py`: Stores content scoring results from POP API
-- **content_briefs table columns**: id, page_id (FK), keyword, pop_task_id, word_count_target/min/max, heading_targets (JSONB), keyword_targets (JSONB), lsi_terms (JSONB), entities (JSONB), related_questions (JSONB), related_searches (JSONB), competitors (JSONB), page_score_target, raw_response (JSONB), created_at, updated_at
-- **content_scores table columns**: id, page_id (FK), pop_task_id, page_score, passed, keyword_analysis (JSONB), lsi_coverage (JSONB), word_count_current, heading_analysis (JSONB), recommendations (JSONB), fallback_used, raw_response (JSONB), scored_at, created_at
+## 2026-02-19 - S12-008
+- Verified all layout restructuring is already complete (done as part of S12-006)
+- Root layout: html/body/fonts/QueryProvider only — NO Header ✅
+- `(authenticated)/layout.tsx`: Header + main wrapper for all app routes ✅
+- `auth/layout.tsx`: centered children, no Header ✅
+- All pages (/, /projects/*, /reddit/*, /tools/*, /design-test/*) inside `(authenticated)/` ✅
+- AuthTokenSync: component does not exist yet (created in S12-009), root layout is ready for it
+- Files changed: none (already implemented)
+- **Learnings:**
+  - S12-006 already handled the full layout restructuring including route groups
+  - AuthTokenSync mounting depends on S12-009 which creates the component
+---
+
+## 2026-02-19 - S12-007
+- Created Google OAuth sign-in page at `frontend/src/app/auth/sign-in/page.tsx`
+- 'use client' component with loading state management via useState
+- Centered card with 'C' logo (matching Header), "Client Onboarding" title, "Sign in to continue" subtitle
+- "Sign in with Google" button calls `authClient.signIn.social({ provider: 'google', callbackURL: window.location.origin })`
+- Loading state: button disabled, spinner replaces Google icon, text changes to "Redirecting…"
+- Styled with tropical oasis design: bg-white card, border-sand-500, palm-500 button, warm-gray text, rounded-sm
+- Uses auth layout (no Header) — centered via parent `auth/layout.tsx`
+- Files changed: `frontend/src/app/auth/sign-in/page.tsx` (new)
+- **Learnings:**
+  - `authClient.signIn.social()` is async but triggers a redirect — the loading state is mainly to give visual feedback during the brief window before the browser navigates away
+  - Auth layout already handles centering (`flex min-h-screen items-center justify-center`), so the sign-in page just needs to constrain its width
+  - No new typecheck or lint errors introduced. Pre-existing test file errors remain.
+---
+
+## 2026-02-19 - S12-009
+- Updated Header component to use real auth session data instead of hardcoded placeholder
+- `authClient.useSession()` provides `{ data: { user: { name, email } }, isPending }` for display
+- User avatar shows first letter of name (or email as fallback) instead of hardcoded 'U'
+- User name displayed next to avatar (hidden on small screens via `hidden sm:inline`)
+- Dropdown menu with user name/email and "Sign out" button
+- Sign out calls `authClient.signOut()` with `onSuccess` callback to redirect to `/auth/sign-in`
+- Loading state: skeleton pulse animation on avatar and name while session loads
+- Dropdown uses invisible backdrop overlay to close on outside click
+- Files changed: `frontend/src/components/Header.tsx` (modified)
+- **Learnings:**
+  - `authClient.useSession()` returns `{ data, isPending }` — `data` is the session object with `user` and `session` properties, or `null` if not authenticated
+  - `authClient.signOut()` accepts `{ fetchOptions: { onSuccess } }` for post-signout redirect — cleaner than chaining `.then()` since the SDK handles cookie cleanup internally
+  - Dropdown pattern: invisible fixed backdrop `div` + `z-index` layering is a clean way to handle click-outside-to-close without `useRef`/`useEffect` event listeners
+  - No new typecheck or lint errors introduced. Pre-existing test file errors remain.
+---
+
+## 2026-02-19 - S12-010
+- Created auth token store at `frontend/src/lib/auth-token.ts` with `setSessionToken()` and `getSessionToken()` using a module-level variable
+- Created `frontend/src/components/AuthTokenSync.tsx` ('use client') that syncs `authClient.useSession()` data into the token store via `useEffect`
+- AuthTokenSync renders `null` (invisible component)
+- Mounted AuthTokenSync in root layout (`frontend/src/app/layout.tsx`) inside QueryProvider
 - Files changed:
-  - `backend/alembic/versions/0012_create_content_briefs_table.py` - New migration
-  - `backend/alembic/versions/0013_create_content_scores_table.py` - New migration
+  - `frontend/src/lib/auth-token.ts` (new)
+  - `frontend/src/components/AuthTokenSync.tsx` (new)
+  - `frontend/src/app/layout.tsx` (modified — added AuthTokenSync import and rendering)
 - **Learnings:**
-  - Running `alembic upgrade head` requires DATABASE_URL in environment (no mock/test mode)
-  - Can verify migrations without database by: importing Python module, running `alembic heads`, and `alembic history`
-  - Use `DATABASE_URL="postgresql://user:pass@localhost:5432/db"` prefix for alembic commands when env var not set
-  - Both tables have FK to `crawled_pages.id` with CASCADE delete
+  - `authClient.useSession()` returns `{ data }` where `data?.session?.token` is the bearer token string needed for backend API calls
+  - Module-level variable pattern works well for decoupling auth state from React context — any module can import `getSessionToken()` without needing hooks or providers
+  - No new typecheck or lint errors introduced. Pre-existing test file errors remain.
 ---
 
-## 2026-02-02 - US-003
-- Created POP integration client base in `backend/app/integrations/pop.py`:
-  - `POPClient` class with async httpx client
-  - Circuit breaker for fault tolerance
-  - Retry logic with exponential backoff
-  - Auth via `apiKey` in request body (not headers)
-  - Exception hierarchy: POPError, POPTimeoutError, POPRateLimitError, POPAuthError, POPCircuitOpenError
-  - Factory function `get_pop_client()` for FastAPI dependency injection
-  - Init/close lifecycle functions `init_pop()` and `close_pop()`
+## 2026-02-19 - S12-011
+- Updated `api()` function to read token via `getSessionToken()` and add `Authorization: Bearer ${token}` header when token is available
+- When token is null, Authorization header is omitted entirely (no empty Bearer)
+- All `apiClient` methods (get, post, patch, put, delete) automatically inherit the header via `api()`
+- Updated `exportProject()` raw `fetch()` call to include Authorization header
+- Updated `downloadBlogPostHtml()` raw `fetch()` call to include Authorization header
+- Files changed: `frontend/src/lib/api.ts` (modified — added import + 3 token injection points)
+- **Learnings:**
+  - The `api()` function is the single choke point for all `apiClient.*` methods, so adding the header there covers all JSON API calls automatically
+  - The two raw `fetch()` calls (`exportProject`, `downloadBlogPostHtml`) are separate because they handle blob responses — these need individual token injection
+  - Conditional spread `...(token ? { Authorization: \`Bearer ${token}\` } : {})` is a clean pattern for optional headers without sending empty values
+  - No new typecheck or lint errors introduced. Pre-existing test file errors remain.
+---
+
+## 2026-02-19 - S12-013
+- Created `backend/app/core/auth.py` with `get_current_user` FastAPI dependency and `UserInfo` dataclass
+- `UserInfo` dataclass: `id` (str), `email` (str), `name` (str)
+- When `AUTH_REQUIRED=false`: returns `UserInfo(id='dev-user', email='dev@localhost', name='Dev User')` without checking headers
+- When `AUTH_REQUIRED=true`: extracts Bearer token from Authorization header, queries `neon_auth.session` joined with `neon_auth."user"` where token matches and `expiresAt > now()`
+- Returns 401 `{'detail': 'Not authenticated'}` if no Authorization header or not Bearer format
+- Returns 401 `{'detail': 'Invalid or expired session'}` if token not found or expired
+- Uses `text()` for raw SQL since neon_auth tables are not in our SQLAlchemy models
+- Files changed: `backend/app/core/auth.py` (new)
+- **Learnings:**
+  - Neon Auth uses camelCase column names (`userId`, `expiresAt`, `createdAt`, `updatedAt`) — must quote them in SQL
+  - `"user"` is a reserved word in Postgres — must be double-quoted in SQL (`neon_auth."user"`)
+  - Module-level `_DEV_USER` constant avoids creating a new object per request in dev mode
+  - The dependency signature `(request: Request, db: AsyncSession = Depends(get_session))` lets FastAPI resolve the full dependency chain automatically — both at route-level and router-level usage
+---
+
+## 2026-02-19 - S12-014
+- Applied `get_current_user` as a router-level dependency on `api_v1_router` using `dependencies=[Depends(get_current_user)]`
+- All `/api/v1/*` endpoints now require a valid Bearer token (or bypass when `AUTH_REQUIRED=false`)
+- Health check at `/health` is unaffected (mounted directly on `app` in `main.py`, not on the v1 router)
+- Also updated `get_current_user` signature to declare `db: AsyncSession = Depends(get_session)` so FastAPI can resolve the dependency chain when used as a router-level dependency (previously had no default, relying on route-level `Depends(get_session)`)
 - Files changed:
-  - `backend/app/integrations/pop.py` - New file
+  - `backend/app/api/v1/__init__.py` (modified — added Depends import, get_current_user import, router-level dependency)
+  - `backend/app/core/auth.py` (modified — added Depends/get_session imports, added `Depends(get_session)` default to db param)
 - **Learnings:**
-  - POP authenticates via `apiKey` in JSON body, not HTTP Basic Auth like DataForSEO
-  - `_mask_api_key()` helper needed to redact apiKey from logged request bodies
-  - Global client singleton pattern matches dataforseo.py: `_pop_client` variable with init/close/get functions
-  - All quality checks pass: ruff check, ruff format, mypy
+  - Router-level dependencies via `APIRouter(dependencies=[...])` apply to ALL routes on that router and all included sub-routers — clean way to enforce auth globally
+  - When a dependency function is used as a router-level dependency, all its parameters must be self-resolving (either special types like `Request` or have `Depends(...)` defaults). A bare `db: AsyncSession` without `Depends(get_session)` works when the route also declares `db`, but fails as a router-level dependency since FastAPI can't resolve it
+  - isort (via ruff) groups `app.api.*` and `app.core.*` together alphabetically — `app.api` imports must come before `app.core` imports
 ---
 
-## 2026-02-02 - US-004
-- Implemented POP task creation and polling methods in `backend/app/integrations/pop.py`:
-  - `create_report_task(keyword, url)`: POSTs to POP API to create content analysis task
-  - `get_task_result(task_id)`: GETs task status/results from `/api/task/:task_id/results/`
-  - `poll_for_result(task_id, poll_interval, timeout)`: Polling loop that waits for SUCCESS or FAILURE
-- Added supporting dataclasses:
-  - `POPTaskStatus` enum: PENDING, PROCESSING, SUCCESS, FAILURE, UNKNOWN
-  - `POPTaskResult` dataclass: success, task_id, status, data, error, duration_ms, request_id
-- Polling behavior:
-  - Default poll interval: 3s (from `pop_task_poll_interval` setting, but code uses 2.0s default)
-  - Default timeout: 300s (from `pop_task_timeout` setting)
-  - Raises `POPTimeoutError` with task_id and elapsed time on timeout
-  - Stops on SUCCESS or FAILURE status
+## 2026-02-19 - S12-015
+- Moved CrowdReply webhook endpoint outside the authenticated `/api/v1` router
+- Created `webhook_router` (APIRouter with `prefix="/webhooks"`) in `backend/app/api/v1/reddit.py`
+- Moved `POST /webhooks/crowdreply` handler from `reddit_router` to `webhook_router`
+- Mounted `webhook_router` directly on the app in `main.py` (no auth dependency)
+- Webhook simulator endpoint (`POST /api/v1/reddit/webhooks/crowdreply/simulate`) stays inside authenticated router
+- Old URL: `POST /api/v1/reddit/webhooks/crowdreply` → New URL: `POST /webhooks/crowdreply`
 - Files changed:
-  - `backend/app/integrations/pop.py` - Added task methods and dataclasses
+  - `backend/app/api/v1/reddit.py` (modified — added `webhook_router`, moved webhook handler to it)
+  - `backend/app/api/v1/__init__.py` (modified — re-export `webhook_router`)
+  - `backend/app/main.py` (modified — import and mount `webhook_router` on app directly)
 - **Learnings:**
-  - POP uses `/api/task/:task_id/results/` endpoint for getting task results
-  - Task status mapping needed for various API status strings (success/complete/completed/done → SUCCESS)
-  - GET requests to POP still include apiKey in body (handled by `_make_request`)
-  - Poll loop logs at DEBUG level during polling, INFO on start/completion
-  - Config has `pop_task_poll_interval=2.0` by default, acceptance criteria mentions 3s default - used configurable parameter
+  - When re-exporting a symbol from `__init__.py` that isn't used locally, ruff F401 requires explicit re-export syntax: `from module import thing as thing` (redundant alias signals intentional re-export)
+  - Mounting a router directly on `app` via `app.include_router()` bypasses any router-level dependencies on `api_v1_router` — clean way to exempt specific routes from auth
 ---
 
-## 2026-02-02 - US-005
-- CircuitBreaker was already implemented in US-003 as part of the POP client base
-- Verified all acceptance criteria are met:
-  - CircuitBreaker class with CLOSED, OPEN, HALF_OPEN states (CircuitState enum)
-  - Circuit opens after failure_threshold consecutive failures (default 5 from config)
-  - Circuit recovers after recovery_timeout seconds (default 60 from config)
-  - Half-open state allows one test request through (can_execute returns True)
-  - Successful test closes circuit (record_success), failure reopens it (record_failure)
-- Files: No changes needed - `backend/app/integrations/pop.py` already complete
+## 2026-02-19 - S12-016
+- Updated V2_REBUILD_PLAN.md to reflect Phase 12 completion
+- Marked all Phase 12 checkboxes as `[x]` complete
+- Updated Current Status table: Phase=12 Auth complete, Last Session=2026-02-19, Next Action=Phase 13/15/16
+- Added Session Log row summarizing all Phase 12 work (S12-001 through S12-016)
+- Files changed: `V2_REBUILD_PLAN.md`
 - **Learnings:**
-  - CircuitBreaker was implemented alongside the client base in US-003 following dataforseo.py pattern
-  - The implementation is async-safe using asyncio.Lock for state transitions
-  - State change logging uses logger.warning for visibility in production
+  - No code changes — purely a status tracking task
+  - Phase 12 implemented 16 stories covering: SDK install, server/client auth instances, API route, middleware, sign-in page, layout restructure, Header auth integration, token sync, API client headers, backend auth dependency, router-level auth, webhook exemption, and plan updates
 ---
 
-## 2026-02-02 - US-006
-- Retry logic was already implemented in US-003 as part of `_make_request()` method
-- Verified all acceptance criteria are met:
-  - Exponential backoff for 5xx errors and timeouts: `delay = self._retry_delay * (2**attempt)`
-  - Auth errors (401, 403) raise `POPAuthError` immediately without retry
-  - Client errors (4xx except 429) raise `POPError` immediately without retry
-  - Rate limit (429) retries with Retry-After header if ≤60s
-  - Max retries configurable (default 3)
-  - Each retry logs attempt number
-- Added `pop_max_retries` and `pop_retry_delay` config settings for consistency with other integrations
-- Updated POPClient to use config settings instead of hardcoded defaults
-- Files changed:
-  - `backend/app/core/config.py` - Added `pop_max_retries` and `pop_retry_delay` settings
-  - `backend/app/integrations/pop.py` - Updated constructor to use settings for retry config
+## 2026-02-19 - S12-017
+- Verified full Phase 12 auth flow end-to-end (code review, all acceptance criteria)
+- Files changed: none (verification-only task)
+- **Acceptance Criteria Results:**
+  - [x] Unauthenticated user visiting `/` is redirected to `/auth/sign-in` — `middleware.ts` uses `auth.middleware({ loginUrl: "/auth/sign-in" })`, matcher covers all non-static routes
+  - [x] Sign-in page renders with Google button and tropical oasis styling — `auth/sign-in/page.tsx` has Google SVG icon, `bg-palm-500` button, `border-sand-500` card, `rounded-sm`, loading state
+  - [x] Google OAuth sign-in completes and redirects to dashboard — `authClient.signIn.social({ provider: 'google', callbackURL: window.location.origin })` redirects to `/`
+  - [x] Header shows user name and sign-out button after sign-in — `authClient.useSession()` drives avatar, name display, dropdown with sign-out
+  - [x] API calls include Authorization header and succeed — `api()` injects `Bearer ${token}` via `getSessionToken()`, both `apiClient.*` and raw `fetch()` calls covered, `AuthTokenSync` in root layout
+  - [x] Backend returns 401 for requests without valid Bearer token — `get_current_user` validates Bearer token against `neon_auth.session`/`neon_auth."user"`, returns 401 for missing/invalid tokens
+  - [x] Sign-out clears session and redirects to `/auth/sign-in` — `authClient.signOut()` with `onSuccess: () => router.push('/auth/sign-in')`
+  - [x] Health check at `/health` works without auth — mounted on `app` directly (not `api_v1_router`), bypasses `get_current_user` dependency
+  - [x] No uncommitted changes remain — only `.ralph-tui/` session files and `prd.json` modified (expected during Ralph session, not auth code)
 - **Learnings:**
-  - Retry logic was proactively implemented in US-003 as part of the base client
-  - All integrations in codebase follow pattern of having `{prefix}_max_retries` and `{prefix}_retry_delay` config settings
-  - When verifying "already implemented" features, still check for missing config settings for consistency
+  - All 16 Phase 12 stories (S12-001 through S12-016) are correctly wired together into a complete auth stack
+  - The three-layer token flow works: Neon Auth cookie → `useSession()` → `AuthTokenSync` → module-level store → `api()` header injection → backend `get_current_user` validation
+  - Route protection has two layers: Next.js middleware (frontend redirect) + FastAPI router-level dependency (backend 401)
+  - Webhook router correctly bypasses auth by mounting directly on `app` instead of through `api_v1_router`
 ---
-
-## 2026-02-02 - US-007
-- Implemented comprehensive logging in POP client for API traceability and debugging:
-  - Added INFO-level logging for all outbound API calls with endpoint, method, timing
-  - Added DEBUG-level logging for request/response bodies with >5KB truncation via `_truncate_for_logging()` helper
-  - Verified credential masking - `_mask_api_key()` ensures apiKey never appears in logs
-  - Enhanced timeout error logging with elapsed_ms, configured_timeout_seconds
-  - Enhanced rate limit (429) logging with retry-after header presence and value
-  - Auth failure (401/403) logging explicitly notes credentials are not logged (`credentials_logged: False`)
-  - All retry-related logs include `retry_attempt` and `max_retries` fields
-  - Added API credits/cost logging - extracts `credits_used` and `credits_remaining` from responses if provided
-  - Circuit breaker state changes already logged at WARNING level (verified from US-005)
-  - Enhanced poll attempt logging with task_id, poll_attempt number, and current status
-- Files changed:
-  - `backend/app/integrations/pop.py` - Added `_truncate_for_logging()` helper, enhanced all logging statements
-- **Learnings:**
-  - POP client already had good logging foundation from US-003/005/006; this story enhanced structure and consistency
-  - Response body truncation uses JSON serialization to measure actual size in bytes
-  - For auth failures, explicitly noting `credentials_logged: False` in logs provides audit trail
-  - Poll logging at INFO level (not DEBUG) helps trace long-running async tasks in production
-  - Credits/cost fields are optional - POP may or may not provide this data
----
-
-## 2026-02-02 - US-009
-- Created SQLAlchemy models for POP content data persistence:
-  - `backend/app/models/content_brief.py`: ContentBrief model matching content_briefs table schema
-  - `backend/app/models/content_score.py`: ContentScore model matching content_scores table schema
-- Added bidirectional relationships between CrawledPage and new models:
-  - `CrawledPage.content_briefs` → list of ContentBrief records
-  - `CrawledPage.content_scores` → list of ContentScore records
-  - Both use `cascade="all, delete-orphan"` for proper cascade deletes
-- Updated `backend/app/models/__init__.py` to export ContentBrief and ContentScore
-- Files changed:
-  - `backend/app/models/content_brief.py` - New file
-  - `backend/app/models/content_score.py` - New file
-  - `backend/app/models/crawled_page.py` - Added relationship imports and relationship properties
-  - `backend/app/models/__init__.py` - Added ContentBrief and ContentScore exports
-- **Learnings:**
-  - Use `TYPE_CHECKING` guard for forward reference imports to avoid circular import issues
-  - SQLAlchemy relationships with `back_populates` require matching property names on both sides
-  - JSONB columns: use `list[Any]` for arrays, `dict[str, Any]` for objects
-  - Existing models don't have ForeignKey in column definition - use separate ForeignKey constraint; but new models can use ForeignKey directly in mapped_column for cleaner code
----
-
-## 2026-02-02 - US-010
-- Created Pydantic schemas for POP content brief and content score API validation:
-  - `backend/app/schemas/content_brief.py`: ContentBriefRequest, ContentBriefResponse with nested schemas
-  - `backend/app/schemas/content_score.py`: ContentScoreRequest, ContentScoreResponse with nested schemas
-- Nested schemas created for complex fields:
-  - Content Brief: HeadingTargetSchema, KeywordTargetSchema, LSITermSchema, EntitySchema, RelatedQuestionSchema, RelatedSearchSchema, CompetitorSchema
-  - Content Score: KeywordAnalysisSchema, KeywordSectionAnalysisSchema, LSICoverageSchema, LSICoverageItemSchema, HeadingAnalysisSchema, HeadingLevelAnalysisSchema, RecommendationSchema
-- Added batch request/response schemas for both content brief and content score
-- Added stats response schemas for project-level aggregation
-- Updated `backend/app/schemas/__init__.py` with all new exports
-- Files changed:
-  - `backend/app/schemas/content_brief.py` - New file
-  - `backend/app/schemas/content_score.py` - New file
-  - `backend/app/schemas/__init__.py` - Added imports and exports for new schemas
-- **Learnings:**
-  - Pydantic schemas use `ConfigDict(from_attributes=True)` for ORM model compatibility
-  - Use `Field(default_factory=list)` for list fields with defaults, not `Field(default=[])`
-  - Nested schemas enable better validation and documentation for complex JSONB fields
-  - ruff auto-sorts imports alphabetically by module name; new imports may be reordered
-  - Response schemas should mirror all fields from corresponding SQLAlchemy models
----
-
-## 2026-02-02 - US-011
-- Created POPContentBriefService in `backend/app/services/pop_content_brief.py`:
-  - `POPContentBriefService` class with POP client dependency injection
-  - `fetch_brief(project_id, page_id, keyword, target_url)` method for fetching content briefs
-  - `POPContentBriefResult` dataclass for structured return values
-  - Exception classes: `POPContentBriefServiceError`, `POPContentBriefValidationError`
-  - Global singleton pattern with `get_pop_content_brief_service()` factory
-  - Convenience function `fetch_content_brief()` for simple usage
-- Follows `paa_enrichment.py` pattern exactly:
-  - ERROR LOGGING REQUIREMENTS docstring at module level
-  - DEBUG-level logging for method entry/exit with entity IDs
-  - INFO-level logging for phase transitions (task creation, polling, completion)
-  - ERROR-level logging with stack traces for exceptions
-  - Timing logs for operations exceeding SLOW_OPERATION_THRESHOLD_MS (1000ms)
-- Files changed:
-  - `backend/app/services/pop_content_brief.py` - New file
-- **Learnings:**
-  - Service pattern follows paa_enrichment.py: class with DI client, result dataclass, validation errors, singleton factory
-  - POP integration uses create_report_task + poll_for_result flow (async task-based API)
-  - POPTaskResult has `data` field containing raw API response, needs parsing for structured fields
-  - mypy errors in unrelated repository files don't affect new service file validation
----
-
-## 2026-02-02 - US-012
-- Implemented content brief data extraction from POP API responses in `backend/app/services/pop_content_brief.py`:
-  - `_extract_word_count_target()`: Extracts from `wordCount.target`, no min/max from POP so derives 80%/120% of target
-  - `_extract_word_count_min()`: Checks `tagCounts` for word count entry, falls back to 80% of target
-  - `_extract_word_count_max()`: Checks `tagCounts` for word count entry, falls back to 120% of target
-  - `_extract_heading_targets()`: Parses `tagCounts` array for H1-H4 entries with min/max counts
-  - `_extract_keyword_targets()`: Parses `cleanedContentBrief` sections (title, pageTitle, subHeadings, p) for keyword density targets
-  - `_extract_lsi_terms()`: Extracts from `lsaPhrases` array with phrase, weight, averageCount, targetCount
-  - `_extract_related_questions()`: Parses `relatedQuestions` array for PAA data (question, snippet, link)
-  - `_extract_competitors()`: Extracts from `competitors` array with url, title, pageScore
-  - `_extract_page_score_target()`: Gets from `cleanedContentBrief.pageScore` or `cleanedContentBrief.pageScoreValue`
-- All extraction methods handle missing fields gracefully with None defaults
-- Refactored monolithic `_parse_brief_data()` into focused private methods for better maintainability
-- Files changed:
-  - `backend/app/services/pop_content_brief.py` - Added 11 private extraction methods
-- **Learnings:**
-  - POP API response structure uses camelCase field names (wordCount, tagCounts, lsaPhrases, cleanedContentBrief)
-  - POP doesn't provide explicit word count min/max at top level; must derive from competitors or use heuristics
-  - `tagCounts` uses `tagLabel` strings like "H1 tag total", "H2 tag total" - need pattern matching
-  - `cleanedContentBrief` has nested structure: sections (title, pageTitle, subHeadings, p) with arrays of term objects
-  - Each term object has `term.phrase`, `term.type`, `term.weight` and `contentBrief.current`, `contentBrief.target`
-  - Section totals (titleTotal, pageTitleTotal, subHeadingsTotal, pTotal) have min/max values
-  - mypy type narrowing requires storing `.get()` result in variable before isinstance check to avoid "Any | None" errors
-  - Competitor position is inferred from array order (not explicitly provided by POP)
----
-
-## 2026-02-02 - US-013
-- Implemented content brief persistence in `backend/app/services/pop_content_brief.py`:
-  - Added `save_brief(page_id, keyword, result, project_id)` method with upsert logic
-  - Queries for existing brief by page_id, updates if found, creates new if not
-  - Added `fetch_and_save_brief(project_id, page_id, keyword, target_url)` convenience method
-  - Added `fetch_and_save_content_brief()` module-level convenience function accepting session
-  - Added `brief_id` field to `POPContentBriefResult` dataclass for returning DB record ID
-  - Updated constructor to accept optional `AsyncSession` for database operations
-- All acceptance criteria met:
-  - Saves brief to content_briefs table after successful fetch ✓
-  - Links brief to page via page_id foreign key ✓
-  - Stores pop_task_id for reference/debugging ✓
-  - Stores structured fields (word_count_*, heading_targets, etc.) ✓
-  - Stores raw_response JSON for debugging ✓
-  - Replaces existing brief if one exists for the same page (upsert) ✓
-- Files changed:
-  - `backend/app/services/pop_content_brief.py` - Added persistence methods and session handling
-- **Learnings:**
-  - Services that need database persistence follow pattern: accept `AsyncSession | None` in constructor
-  - Use `session.flush()` + `session.refresh(obj)` to get updated IDs after add
-  - For upsert logic: query with `select().where()`, check `scalar_one_or_none()`, update if exists else add new
-  - Dataclass fields with defaults must come after fields without defaults (order matters)
-  - Include project_id in all log entries even for persistence methods for consistent tracing
----
-
-## 2026-02-02 - US-014
-- Implemented comprehensive logging in content brief service for traceability:
-  - Added DEBUG-level method entry/exit logs to `fetch_brief`, `save_brief`, `fetch_and_save_brief` with sanitized parameters
-  - Method exit logs include result summary (success/failure, brief_id)
-  - Added INFO-level phase state transition logs: `brief_fetch_started`, `brief_fetch_completed`
-  - Added `brief_extraction_stats` INFO log with: word_count_target, word_count_min/max, lsi_term_count, competitor_count, heading_target_count, keyword_target_count, related_question_count, page_score_target
-  - Ensured all log messages include entity IDs (project_id, page_id, brief_id where applicable, task_id)
-  - Exception logging already had full stack traces from previous story (US-011/US-013)
-  - Validation failures already logged with field name and rejected value (US-011)
-  - Timing logs for operations >1 second already in place via SLOW_OPERATION_THRESHOLD_MS
-- Files changed:
-  - `backend/app/services/pop_content_brief.py` - Enhanced logging throughout all methods
-- **Learnings:**
-  - Service logging pattern: method entry/exit at DEBUG, phase transitions at INFO, errors at ERROR
-  - Phase transition log messages should be verbs/events: `brief_fetch_started`, `brief_fetch_completed`
-  - Stats logs should be noun-based: `brief_extraction_stats`
-  - Always include all relevant entity IDs in every log message for traceability
-  - Method exit logs should be added to all exit paths including early returns for error cases
----
-
-## 2026-02-02 - US-016
-- Created POPContentScoreService in `backend/app/services/pop_content_score.py`:
-  - `POPContentScoreService` class with POP client dependency injection
-  - `score_content(project_id, page_id, keyword, content_url)` method signature
-  - `POPContentScoreResult` dataclass for structured return values
-  - Exception classes: `POPContentScoreServiceError`, `POPContentScoreValidationError`
-  - Global singleton pattern with `get_pop_content_score_service()` factory
-  - Convenience function `score_content()` for simple usage
-- Follows same pattern as `pop_content_brief.py` exactly:
-  - ERROR LOGGING REQUIREMENTS docstring at module level
-  - DEBUG-level logging for method entry/exit with entity IDs
-  - INFO-level logging for phase transitions (score_started, score_completed)
-  - ERROR-level logging with stack traces for exceptions
-  - Timing logs for operations exceeding SLOW_OPERATION_THRESHOLD_MS (1000ms)
-- Files changed:
-  - `backend/app/services/pop_content_score.py` - New file
-- **Learnings:**
-  - Service structure pattern is consistent: class with DI client, result dataclass, validation errors, singleton factory
-  - For service structure stories, actual API integration can be placeholder - method signature is what matters
-  - mypy errors in unrelated repository files don't affect new service file validation
-  - Unused variable warning for `client` can be suppressed with `_ = client` when client will be used in future stories
----
-
-## 2026-02-02 - US-017
-- Implemented content scoring data extraction from POP API responses in `backend/app/services/pop_content_score.py`:
-  - `_parse_score_data()`: Main parsing method that orchestrates extraction
-  - `_extract_page_score()`: Extracts page score (0-100) from `pageScore` or `pageScoreValue` in cleanedContentBrief or top-level
-  - `_extract_keyword_analysis()`: Parses `cleanedContentBrief` sections (title, pageTitle, subHeadings, p) for keyword density current vs target
-  - `_extract_lsi_coverage()`: Extracts from `lsaPhrases` array with phrase, current_count, target_count, weight, plus coverage stats
-  - `_extract_word_count_current()`: Gets `wordCount.current` for current word count
-  - `_extract_word_count_target()`: Gets `wordCount.target` for target word count
-  - `_extract_heading_analysis()`: Parses `tagCounts` array for H1-H4 structure (current vs min/max per level) with issue tracking
-  - `_extract_recommendations()`: Parses recommendations endpoint response (exactKeyword, lsi, pageStructure, variations categories)
-- Updated `score_content()` method to actually integrate with POP API (task creation, polling, response parsing)
-- Added `word_count_target` field to `POPContentScoreResult` dataclass for word count comparison
-- Added INFO-level `score_extraction_stats` logging with all extracted metrics
-- All extraction methods handle missing fields gracefully with None/empty defaults
-- Files changed:
-  - `backend/app/services/pop_content_score.py` - Added 8 extraction methods, updated score_content, enhanced dataclass
-- **Learnings:**
-  - POP scoring uses same task creation/polling flow as content brief (create_report_task + poll_for_result)
-  - For scoring: `lsaPhrases.targetCount` = current count on target page, `averageCount` = competitor target
-  - `tagCounts.signalCnt` = current count on target page (different field name than in brief context)
-  - Recommendations endpoint is separate from task results - requires `get-custom-recommendations` API call with reportId, strategy, approach
-  - Recommendations come in 4 categories: exactKeyword, lsi, pageStructure, variations
-  - "Leave As Is" recommendations should be filtered out as non-actionable
-  - mypy type narrowing requires storing `.get()` result in intermediate variable with explicit type annotation before comparison
----
-
-## 2026-02-02 - US-018
-- Implemented pass/fail determination for content scoring:
-  - Added `pop_pass_threshold` config setting (default 70) for configurable quality gate
-  - Added `_determine_pass_fail()` method to check page_score >= threshold
-  - Updated `score_content()` to set `passed` boolean based on threshold comparison
-  - Prioritized recommendations returned when content fails (sorted by category: structure > keyword > lsi > variations)
-- Files changed:
-  - `backend/app/core/config.py` - Added `pop_pass_threshold` setting
-  - `backend/app/services/pop_content_score.py` - Added pass/fail determination method and integration
-- **Learnings:**
-  - Pass/fail logic should be separate method for testability and clarity
-  - Recommendations already have per-category `priority` from API order - secondary sort uses this
-  - Category priority for recommendations: structure issues most critical, then keyword density, then LSI, then variations
-  - When content passes, recommendations can still be returned but are not prioritized (pass = meeting minimum quality bar)
----
-
-## 2026-02-02 - US-019
-- Implemented fallback to legacy ContentScoreService when POP is unavailable:
-  - Fallback triggers on `POPCircuitOpenError` (circuit breaker is open)
-  - Fallback triggers on `POPTimeoutError` (timeout after configured limit)
-  - Fallback triggers on `POPError` (API errors after retries exhausted)
-  - Added `_score_with_fallback()` method that calls legacy `ContentScoreService`
-  - Added `_get_legacy_service()` method for lazy-loading legacy service
-  - Updated constructor to accept optional `legacy_service` for DI
-- Response includes `fallback_used: True` flag when fallback is used
-- Fallback events logged at WARNING level with reason: `circuit_open`, `timeout`, `api_error`
-- Legacy score (0.0-1.0 scale) converted to POP scale (0-100) for consistency
-- Files changed:
-  - `backend/app/services/pop_content_score.py` - Added fallback logic, imports, methods
-- **Learnings:**
-  - Exception handling order matters: `POPCircuitOpenError` and `POPTimeoutError` must be caught before generic `POPError`
-  - Legacy ContentScoreService requires actual content text, not URL - for full implementation would need to fetch content
-  - Fallback result conversion: multiply legacy score by 100 to match POP's 0-100 scale
-  - Separate warning logs before fallback vs INFO logs during fallback execution for clear traceability
-  - Import order: import both exception types (`POPCircuitOpenError`, `POPTimeoutError`) from pop.py
----
-
-## 2026-02-02 - US-020
-- Implemented content score persistence in `backend/app/services/pop_content_score.py`:
-  - Added `save_score(page_id, result, project_id)` method for persisting scores
-  - Added `score_and_save_content(project_id, page_id, keyword, content_url)` convenience method
-  - Added module-level `score_and_save_content(session, ...)` convenience function
-  - Updated constructor to accept optional `AsyncSession` for database operations
-- Unlike content briefs, scores are NOT replaced (upsert) - each scoring creates a new record to maintain history
-- All acceptance criteria met:
-  - Save score to content_scores table after successful scoring ✓
-  - Link score to page via page_id foreign key ✓
-  - Store pop_task_id, page_score, passed, fallback_used ✓
-  - Store analysis JSON fields (keyword_analysis, lsi_coverage, heading_analysis, recommendations) ✓
-  - Store raw_response JSON for debugging ✓
-  - Store scored_at timestamp ✓
-- Files changed:
-  - `backend/app/services/pop_content_score.py` - Added persistence methods and session handling
-- **Learnings:**
-  - Content scores should maintain history (append) vs content briefs which replace (upsert)
-  - `scored_at` field uses `datetime.now(UTC)` at save time to capture actual scoring timestamp
-  - Don't import `select` if you're only creating new records (not querying existing ones)
-  - Service persistence pattern: accept `AsyncSession | None` in constructor, check `self._session is not None` before DB ops
-  - Follow same logging pattern as content brief service: method entry/exit at DEBUG, phase transitions at INFO
----
-
-## 2026-02-02 - US-022
-- Implemented comprehensive logging in content scoring service for traceability:
-  - Verified existing logging already met most acceptance criteria from previous stories
-  - Added `scoring_results` INFO log with: page_score, passed, recommendation_count, fallback_used
-  - Added `scoring_api_cost` INFO log for credits_used and credits_remaining (when available in response)
-  - Added logging to fallback path so scoring_results is logged for both POP and legacy service paths
-- Logging checklist verified:
-  - ✓ Method entry at DEBUG level with sanitized parameters
-  - ✓ Method exit at DEBUG level with result summary (score, passed, fallback_used)
-  - ✓ Exceptions with full stack trace, project_id, page_id, and context
-  - ✓ Entity IDs in ALL log messages (project_id, page_id, score_id, task_id)
-  - ✓ Validation failures with field name and rejected value
-  - ✓ Phase state transitions at INFO level (scoring_started, scoring_completed)
-  - ✓ Timing logs for operations >1 second
-  - ✓ Fallback events at WARNING level with reason
-  - ✓ Scoring results at INFO level (new)
-  - ✓ API cost per scoring request (new)
-- Files changed:
-  - `backend/app/services/pop_content_score.py` - Added scoring_results and scoring_api_cost logs
-- **Learnings:**
-  - Much of the logging was already implemented in previous stories (US-016, US-019, US-020)
-  - `scoring_results` log should include both recommendation_count (total) and prioritized_recommendation_count
-  - API cost fields (creditsUsed, creditsRemaining) may be at top level of response - check both camelCase and snake_case
-  - Fallback path needs explicit logging since it bypasses the normal API flow
-  - When adding new logging to existing code, verify you're not creating duplicate variable assignments
----
-
-## 2026-02-02 - US-025
-- Created content scoring API endpoints in `backend/app/api/v1/endpoints/pop_content_score.py`:
-  - POST `/projects/{project_id}/phases/content_score/score` - Score content for a single page
-  - POST `/projects/{project_id}/phases/content_score/batch` - Batch score multiple pages concurrently
-- Endpoints validate project/page existence and return proper error responses (404, 422, 500)
-- All endpoint logs include request_id for traceability
-- Batch endpoint uses asyncio.Semaphore for concurrent request limiting (max_concurrent)
-- Batch endpoint returns detailed statistics: successful_items, failed_items, items_passed, items_failed_threshold, fallback_count
-- Registered router in `backend/app/api/v1/__init__.py` with prefix `/projects/{project_id}/phases/content_score`
-- Files changed:
-  - `backend/app/api/v1/endpoints/pop_content_score.py` - New file
-  - `backend/app/api/v1/__init__.py` - Added pop_content_score import and router registration
-- **Learnings:**
-  - For batch endpoints with page_ids, use comma-separated query parameter `page_ids=uuid1,uuid2,...`
-  - Use `zip(..., strict=True)` to satisfy ruff B905 linting rule
-  - When converting JSONB dict fields to typed Pydantic schemas, use `# type: ignore[arg-type]` for mypy since Pydantic handles coercion at runtime
-  - Batch scoring pattern: semaphore-controlled async tasks + asyncio.gather for concurrent processing
-  - mypy may report errors in unrelated files due to import graph - filter with grep to verify target file is clean
----
-
-## 2026-02-02 - US-024
-- Created content brief API endpoints in `backend/app/api/v1/endpoints/content_brief.py`:
-  - POST `/projects/{project_id}/phases/content_brief/fetch` - Fetch content brief from POP API
-  - GET `/projects/{project_id}/phases/content_brief/pages/{page_id}/brief` - Get existing brief for a page
-- Both endpoints validate project/page existence and return proper error responses (404, 422, 500)
-- All endpoint logs include request_id for traceability
-- Registered router in `backend/app/api/v1/__init__.py` with prefix `/projects/{project_id}/phases/content_brief`
-- Files changed:
-  - `backend/app/api/v1/endpoints/content_brief.py` - New file
-  - `backend/app/api/v1/__init__.py` - Added content_brief import and router registration
-- **Learnings:**
-  - Endpoint pattern follows paa_enrichment.py: helper functions `_get_request_id()`, `_verify_project_exists()`
-  - Page verification requires querying CrawledPage directly since no PageService exists
-  - For POST endpoints that need a page_id, use query parameter (`request.query_params.get("page_id")`)
-  - ContentBriefResponse uses `from_attributes=True` so can convert from ORM model directly via helper
-  - Router registration follows alphabetical pattern in imports but logical grouping in include_router calls
----
-
-## 2026-02-02 - US-026
-- Verified routers already registered in `backend/app/api/v1/__init__.py`:
-  - `content_brief.router` imported and registered with prefix `/projects/{project_id}/phases/content_brief`
-  - `pop_content_score.router` imported and registered with prefix `/projects/{project_id}/phases/content_score`
-- All acceptance criteria met:
-  - ✓ Add content_brief router to app/api/v1/api.py (done in US-024)
-  - ✓ Add pop_content_score router to app/api/v1/api.py (done in US-025)
-  - ✓ Endpoints accessible at /api/v1/projects/{project_id}/phases/...
-  - ✓ OpenAPI docs show new endpoints (via router registration)
-- Quality checks passed: ruff check, ruff format
-- Files: No changes needed - implementation complete from US-024 and US-025
-- **Learnings:**
-  - Router registration is in `backend/app/api/v1/__init__.py`, not a separate `api.py` file
-  - Both content_brief and pop_content_score routers were registered as part of their endpoint creation stories (US-024, US-025)
-  - This story was effectively already complete when endpoint files were created
----
-
-## 2026-02-02 - US-027
-- Added POP feature flags to `backend/app/core/config.py`:
-  - `use_pop_content_brief`: Boolean flag to enable/disable POP for content briefs (default: False)
-  - `use_pop_scoring`: Boolean flag to enable/disable POP for content scoring (default: False)
-- Updated `backend/.env.example` with documented environment variables:
-  - `USE_POP_CONTENT_BRIEF=false`
-  - `USE_POP_SCORING=false`
-- All acceptance criteria met:
-  - ✓ Add use_pop_content_brief boolean setting to config
-  - ✓ Add use_pop_scoring boolean setting to config
-  - ✓ Defaults to False (disabled) for safe rollout
-  - ✓ Settings loadable from environment variables
-- Files changed:
-  - `backend/app/core/config.py` - Added two boolean feature flag settings
-  - `backend/.env.example` - Added feature flag environment variables
-- **Learnings:**
-  - Feature flags follow same Field() pattern as other settings with description parameter
-  - Boolean settings in pydantic-settings parse environment variables case-insensitively (true/True/TRUE all work)
-  - Feature flags should be grouped with related settings (added after pop_pass_threshold in POP section)
----
-

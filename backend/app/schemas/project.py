@@ -6,7 +6,7 @@ Defines request/response models for Project API endpoints with validation rules.
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
 # Valid project statuses
 VALID_PROJECT_STATUSES = frozenset(
@@ -21,11 +21,11 @@ VALID_PHASE_STATUSES = frozenset(
 # Valid phase names (renamed for UX clarity)
 VALID_PHASES = frozenset(
     {
-        "brand_setup",       # was: discovery
-        "site_analysis",     # was: requirements
+        "brand_setup",  # was: discovery
+        "site_analysis",  # was: requirements
         "content_generation",  # was: implementation
-        "review_edit",       # was: review
-        "export",            # was: launch
+        "review_edit",  # was: review
+        "export",  # was: launch
     }
 )
 
@@ -69,15 +69,26 @@ class ProjectCreate(BaseModel):
         max_length=255,
         description="Project name",
     )
-    client_id: str = Field(
+    site_url: HttpUrl = Field(
         ...,
-        min_length=1,
+        description="Client website URL",
+    )
+    client_id: str | None = Field(
+        None,
         max_length=255,
-        description="Client identifier",
+        description="Client identifier (optional)",
+    )
+    additional_info: str | None = Field(
+        None,
+        description="Additional notes or information about the project",
     )
     status: str = Field(
         default="active",
         description="Project status",
+    )
+    reddit_only: bool = Field(
+        default=False,
+        description="If true, project is Reddit-only and hidden from AI SEO dashboard",
     )
     phase_status: dict[str, Any] = Field(
         default_factory=dict,
@@ -95,11 +106,13 @@ class ProjectCreate(BaseModel):
 
     @field_validator("client_id")
     @classmethod
-    def validate_client_id(cls, v: str) -> str:
+    def validate_client_id(cls, v: str | None) -> str | None:
         """Validate client ID."""
+        if v is None:
+            return None
         v = v.strip()
         if not v:
-            raise ValueError("Client ID cannot be empty or whitespace only")
+            return None
         return v
 
     @field_validator("status")
@@ -142,9 +155,17 @@ class ProjectUpdate(BaseModel):
         max_length=255,
         description="New project name",
     )
+    site_url: HttpUrl | None = Field(
+        None,
+        description="New client website URL",
+    )
     status: str | None = Field(
         None,
         description="New project status",
+    )
+    reddit_only: bool | None = Field(
+        None,
+        description="If true, project is Reddit-only and hidden from AI SEO dashboard",
     )
     phase_status: dict[str, Any] | None = Field(
         None,
@@ -233,9 +254,28 @@ class ProjectResponse(BaseModel):
 
     id: str = Field(..., description="Project UUID")
     name: str = Field(..., description="Project name")
-    client_id: str = Field(..., description="Client identifier")
+    site_url: str = Field(..., description="Client website URL")
+    client_id: str | None = Field(None, description="Client identifier")
+    additional_info: str | None = Field(None, description="Additional project notes")
     status: str = Field(..., description="Project status")
     phase_status: dict[str, Any] = Field(..., description="Phase status dictionary")
+    brand_config_status: str = Field(
+        default="pending",
+        description="Brand config generation status (pending, generating, complete, failed)",
+    )
+    has_brand_config: bool = Field(
+        default=False,
+        description="Whether a brand config exists for this project",
+    )
+    reddit_only: bool = Field(
+        default=False,
+        description="If true, project is Reddit-only and hidden from AI SEO dashboard",
+    )
+    uploaded_files_count: int = Field(
+        default=0,
+        ge=0,
+        description="Number of files uploaded for this project",
+    )
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 

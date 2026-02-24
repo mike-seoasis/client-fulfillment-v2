@@ -1,0 +1,367 @@
+{
+  "name": "Phase 1: Project Foundation",
+  "description": "Create basic project CRUD - dashboard showing projects, ability to create and view individual projects with detail views.",
+  "branchName": "feature/phase-1-project-foundation",
+  "userStories": [
+    {
+      "id": "S1-001",
+      "title": "Add site_url field to Project model",
+      "description": "As a developer, I need site_url on the Project model so that we can store client website URLs.",
+      "acceptanceCriteria": [
+        "Add `site_url: Mapped[str]` field to Project model in backend/app/models/project.py",
+        "Field is String(2048), required (nullable=False), indexed",
+        "Make `client_id` field optional (nullable=True) for backward compatibility",
+        "Model imports and type checks pass"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Reference existing field patterns in the model. site_url needs room for long URLs.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S1-002",
+      "title": "Create Alembic migration for site_url",
+      "description": "As a developer, I need a database migration so that the schema matches the model.",
+      "acceptanceCriteria": [
+        "Create migration using: alembic revision --autogenerate -m 'add_site_url_to_projects'",
+        "Migration adds site_url column with index",
+        "Migration makes client_id nullable",
+        "Migration runs successfully: alembic upgrade head",
+        "Verify schema with: alembic current"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Run from backend directory with venv activated.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S1-003",
+      "title": "Create Project Pydantic schemas",
+      "description": "As a developer, I need request/response schemas so that the API has type-safe contracts.",
+      "acceptanceCriteria": [
+        "Create backend/app/schemas/project.py",
+        "ProjectCreate schema: name (str, min_length=1), site_url (HttpUrl)",
+        "ProjectUpdate schema: name (Optional[str]), site_url (Optional[HttpUrl])",
+        "ProjectResponse schema: id, name, site_url, status, created_at, updated_at",
+        "ProjectListResponse: list[ProjectResponse]",
+        "Export schemas from backend/app/schemas/__init__.py"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Use Pydantic v2 patterns. HttpUrl validates URL format automatically.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S1-004",
+      "title": "Create ProjectService with CRUD operations",
+      "description": "As a developer, I need a service layer so that business logic is separated from API routes.",
+      "acceptanceCriteria": [
+        "Create backend/app/services/project.py with ProjectService class",
+        "Implement list_projects(db) - returns all projects ordered by updated_at DESC",
+        "Implement get_project(db, id) - returns project or raises HTTPException 404",
+        "Implement create_project(db, data) - creates and returns new project",
+        "Implement update_project(db, id, data) - updates and returns project",
+        "Implement delete_project(db, id) - deletes project or raises 404",
+        "All methods are async and use SQLAlchemy 2.0 patterns"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Follow async patterns. Use select() for queries, db.execute(), db.commit().",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S1-005",
+      "title": "Create projects API router",
+      "description": "As a developer, I need REST endpoints so that the frontend can manage projects.",
+      "acceptanceCriteria": [
+        "Create backend/app/api/v1/projects.py with APIRouter",
+        "GET /api/v1/projects - returns ProjectListResponse",
+        "POST /api/v1/projects - accepts ProjectCreate, returns ProjectResponse with 201",
+        "GET /api/v1/projects/{id} - returns ProjectResponse or 404",
+        "PATCH /api/v1/projects/{id} - accepts ProjectUpdate, returns ProjectResponse",
+        "DELETE /api/v1/projects/{id} - returns 204 No Content",
+        "Register router in backend/app/api/v1/__init__.py or main app"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Use dependency injection for db session. Return proper HTTP status codes.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S1-006",
+      "title": "Write backend tests for Project API",
+      "description": "As a developer, I need tests so that the API behavior is verified.",
+      "acceptanceCriteria": [
+        "Create backend/tests/api/test_projects.py",
+        "Test list projects (empty and with data)",
+        "Test create project (valid data, missing fields, invalid URL)",
+        "Test get project (exists, not found)",
+        "Test update project (partial update, not found)",
+        "Test delete project (exists, not found)",
+        "All tests pass: pytest backend/tests/api/test_projects.py -v"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Use pytest-asyncio and httpx AsyncClient. Create fixtures for test data.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S1-007",
+      "title": "Set up TanStack Query in frontend",
+      "description": "As a developer, I need TanStack Query configured so that we can fetch data from the API.",
+      "acceptanceCriteria": [
+        "Install @tanstack/react-query: npm install @tanstack/react-query",
+        "Create frontend/src/lib/query-client.ts with QueryClient configuration",
+        "Create frontend/src/components/providers/QueryProvider.tsx",
+        "Wrap app in QueryClientProvider in layout.tsx",
+        "App renders without errors"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Use 'use client' directive for provider component.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S1-008",
+      "title": "Create API client and project hooks",
+      "description": "As a developer, I need API hooks so that components can fetch and mutate project data.",
+      "acceptanceCriteria": [
+        "Create frontend/src/lib/api.ts with fetch wrapper (handles base URL, JSON)",
+        "Create frontend/src/hooks/use-projects.ts",
+        "Implement useProjects() - fetches project list",
+        "Implement useProject(id) - fetches single project",
+        "Implement useCreateProject() - mutation for POST",
+        "Implement useUpdateProject() - mutation for PATCH",
+        "Implement useDeleteProject() - mutation for DELETE with optimistic update",
+        "Mutations invalidate ['projects'] query on success"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Query keys: ['projects'] for list, ['projects', id] for single.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S1-009",
+      "title": "Configure Tailwind with warm color palette",
+      "description": "As a developer, I need the design system colors so that UI matches brand guidelines.",
+      "acceptanceCriteria": [
+        "Update tailwind.config.ts with custom colors",
+        "Add warm primary colors (amber/gold tones)",
+        "Add warm neutral colors (warm grays)",
+        "Add accent colors (soft coral)",
+        "Verify colors work in a test component"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Reference CLAUDE.md design context: warm, airy, sophisticated. Light mode only.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S1-010",
+      "title": "Create base UI components",
+      "description": "As a developer, I need reusable UI primitives so that the app has consistent styling.",
+      "acceptanceCriteria": [
+        "Create frontend/src/components/ui/Button.tsx with variants (primary, secondary, danger, ghost)",
+        "Create frontend/src/components/ui/Input.tsx with label and error state",
+        "Create frontend/src/components/ui/Card.tsx with hover state and onClick support",
+        "Create frontend/src/components/ui/EmptyState.tsx for no-data scenarios",
+        "All components use Tailwind classes and support className prop"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Keep components simple. Use forwardRef for form elements.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S1-011",
+      "title": "Create Header component and update layout",
+      "description": "As a developer, I need the app header so that navigation is consistent.",
+      "acceptanceCriteria": [
+        "Create frontend/src/components/Header.tsx",
+        "Header shows logo placeholder (styled div) and 'Client Onboarding' text",
+        "Header is sticky at top with warm background color",
+        "Update frontend/src/app/layout.tsx to include Header",
+        "Main content area has proper padding and max-width"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference WIREFRAMES.md screen 2 for header layout.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S1-012",
+      "title": "Create ProjectCard component",
+      "description": "As a developer, I need project cards so that the dashboard can display projects.",
+      "acceptanceCriteria": [
+        "Create frontend/src/components/ProjectCard.tsx",
+        "Card displays project name as title",
+        "Card displays site_url below name",
+        "Card shows placeholder metrics: '0 pages', '0 clusters', '0 pending'",
+        "Card shows relative time for last activity (e.g., '2 days ago')",
+        "Card is clickable and navigates to /projects/{id}",
+        "Card has subtle hover effect"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Use date-fns or similar for relative time formatting.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S1-013",
+      "title": "Build Dashboard page",
+      "description": "As a user, I need a dashboard so that I can see and manage all my projects.",
+      "acceptanceCriteria": [
+        "Replace frontend/src/app/page.tsx with dashboard implementation",
+        "Page title: 'Your Projects'",
+        "Shows responsive grid of ProjectCard components (1-3 columns)",
+        "'+ New Project' button in header area links to /projects/new",
+        "Shows EmptyState when no projects exist with CTA to create first project",
+        "Shows loading skeleton while fetching projects",
+        "Projects are sorted by most recently updated first"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference WIREFRAMES.md screen 2.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S1-014",
+      "title": "Create ProjectForm component",
+      "description": "As a developer, I need a reusable form so that projects can be created and edited.",
+      "acceptanceCriteria": [
+        "Create frontend/src/components/ProjectForm.tsx",
+        "Use React Hook Form with Zod validation",
+        "Name field: required, min 1 character",
+        "Site URL field: required, valid URL format",
+        "Shows inline validation errors",
+        "Submit button shows loading state during submission",
+        "Accepts onSubmit callback and optional initialData for edit mode"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Install: npm install react-hook-form @hookform/resolvers zod",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S1-015",
+      "title": "Build Create Project page",
+      "description": "As a user, I need a form page so that I can create new projects.",
+      "acceptanceCriteria": [
+        "Create frontend/src/app/projects/new/page.tsx",
+        "Page title: 'Create New Project'",
+        "Shows ProjectForm component",
+        "Cancel button returns to dashboard",
+        "On successful creation, redirects to /projects/{id}",
+        "Shows error toast on failure",
+        "Back link '← Back to Dashboard' at top"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference WIREFRAMES.md screen 3.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S1-016",
+      "title": "Build Project Detail page",
+      "description": "As a user, I need a project detail view so that I can see project information and access workflows.",
+      "acceptanceCriteria": [
+        "Create frontend/src/app/projects/[id]/page.tsx",
+        "Header shows project name and site_url",
+        "'← All Projects' link returns to dashboard",
+        "Onboarding section with description and disabled 'Continue' button",
+        "New Content section with disabled '+ New Cluster' placeholder",
+        "Disabled 'Edit Brand' button with tooltip 'Coming in Phase 2'",
+        "Shows 404 page for invalid project IDs",
+        "Shows loading state while fetching"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference WIREFRAMES.md screen 4. Sections are placeholders for future phases.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S1-017",
+      "title": "Implement project deletion with two-step confirmation",
+      "description": "As a user, I need safe project deletion so that I don't accidentally delete projects.",
+      "acceptanceCriteria": [
+        "Add 'Delete Project' button to project detail page (danger variant)",
+        "First click changes button to 'Confirm Delete' state",
+        "Second click executes deletion",
+        "Clicking elsewhere resets to normal state",
+        "On successful delete, redirects to dashboard",
+        "Shows toast confirmation 'Project deleted'"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Use useState for confirmation state. Reset on blur or timeout.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S1-018",
+      "title": "Write frontend component tests",
+      "description": "As a developer, I need tests so that UI components work correctly.",
+      "acceptanceCriteria": [
+        "Create frontend/src/components/__tests__/ProjectCard.test.tsx",
+        "Create frontend/src/components/__tests__/ProjectForm.test.tsx",
+        "Test ProjectCard renders name, URL, and metrics",
+        "Test ProjectCard click navigates correctly",
+        "Test ProjectForm validates required fields",
+        "Test ProjectForm validates URL format",
+        "All tests pass: npm test"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Use Vitest with @testing-library/react.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S1-019",
+      "title": "Integration testing and polish",
+      "description": "As a developer, I need to verify the full flow works end-to-end.",
+      "acceptanceCriteria": [
+        "Test full flow: create project → see on dashboard → view detail → delete",
+        "Verify responsive layout on mobile (375px), tablet (768px), desktop (1280px)",
+        "Verify API errors show user-friendly messages",
+        "Verify loading states appear correctly",
+        "No console errors or warnings"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Use browser dev tools for responsive testing.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S1-098",
+      "title": "Update V2_REBUILD_PLAN.md",
+      "description": "As a developer, I need to update the plan status so that progress is tracked.",
+      "acceptanceCriteria": [
+        "Mark Phase 1 checkboxes as [x] complete in V2_REBUILD_PLAN.md",
+        "Update Current Status table: Phase=1, Slice=Complete, Next=Phase 2",
+        "Add new row to Session Log table with today's date, completed items, next up"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "This task maintains our planning discipline.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S1-099",
+      "title": "Verify phase completion and commit",
+      "description": "As a developer, I need to verify all criteria are met before moving on.",
+      "acceptanceCriteria": [
+        "All backend tests pass: cd backend && uv run pytest",
+        "All frontend tests pass: cd frontend && npm test",
+        "Manual verification: Can create project, see on dashboard, view detail, delete",
+        "Git commit created with message: feat(phase-1): Project foundation - dashboard, create, detail views",
+        "No uncommitted changes remain"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Do not proceed to Phase 2 until this passes.",
+      "completionNotes": "Completed by agent"
+    }
+  ],
+  "metadata": {
+    "updatedAt": "2026-02-03T18:22:19.050Z"
+  }
+}

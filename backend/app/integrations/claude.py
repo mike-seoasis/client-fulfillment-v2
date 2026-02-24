@@ -27,13 +27,14 @@ RAILWAY DEPLOYMENT REQUIREMENTS:
 
 import asyncio
 import json
+import os
 import time
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any
 
 import httpx
 
+from app.core.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from app.core.config import get_settings
 from app.core.logging import claude_logger, get_logger
 
@@ -42,128 +43,6 @@ logger = get_logger(__name__)
 # Anthropic API base URL
 ANTHROPIC_API_URL = "https://api.anthropic.com"
 ANTHROPIC_API_VERSION = "2023-06-01"
-
-
-class CircuitState(Enum):
-    """Circuit breaker states."""
-
-    CLOSED = "closed"  # Normal operation
-    OPEN = "open"  # Failing, reject all requests
-    HALF_OPEN = "half_open"  # Testing if service recovered
-
-
-@dataclass
-class CircuitBreakerConfig:
-    """Circuit breaker configuration."""
-
-    failure_threshold: int
-    recovery_timeout: float
-
-
-class CircuitBreaker:
-    """Circuit breaker implementation for Claude operations.
-
-    Prevents cascading failures by stopping requests to a failing service.
-    After recovery_timeout, allows a test request through (half-open state).
-    If test succeeds, circuit closes. If fails, circuit opens again.
-    """
-
-    def __init__(self, config: CircuitBreakerConfig) -> None:
-        self._config = config
-        self._state = CircuitState.CLOSED
-        self._failure_count = 0
-        self._last_failure_time: float | None = None
-        self._lock = asyncio.Lock()
-
-    @property
-    def state(self) -> CircuitState:
-        """Get current circuit state."""
-        return self._state
-
-    @property
-    def is_closed(self) -> bool:
-        """Check if circuit is closed (normal operation)."""
-        return self._state == CircuitState.CLOSED
-
-    @property
-    def is_open(self) -> bool:
-        """Check if circuit is open (rejecting requests)."""
-        return self._state == CircuitState.OPEN
-
-    async def _check_recovery(self) -> bool:
-        """Check if enough time has passed to attempt recovery."""
-        if self._last_failure_time is None:
-            return False
-        elapsed = time.monotonic() - self._last_failure_time
-        return elapsed >= self._config.recovery_timeout
-
-    async def can_execute(self) -> bool:
-        """Check if operation can be executed based on circuit state."""
-        async with self._lock:
-            if self._state == CircuitState.CLOSED:
-                return True
-
-            if self._state == CircuitState.OPEN:
-                if await self._check_recovery():
-                    # Transition to half-open for testing
-                    previous_state = self._state.value
-                    self._state = CircuitState.HALF_OPEN
-                    claude_logger.circuit_state_change(
-                        previous_state, self._state.value, self._failure_count
-                    )
-                    claude_logger.circuit_recovery_attempt()
-                    return True
-                return False
-
-            # HALF_OPEN state - allow single test request
-            return True
-
-    async def record_success(self) -> None:
-        """Record successful operation."""
-        async with self._lock:
-            if self._state == CircuitState.HALF_OPEN:
-                # Recovery successful, close circuit
-                previous_state = self._state.value
-                self._state = CircuitState.CLOSED
-                self._failure_count = 0
-                self._last_failure_time = None
-                claude_logger.circuit_state_change(
-                    previous_state, self._state.value, self._failure_count
-                )
-                claude_logger.circuit_closed()
-            elif self._state == CircuitState.CLOSED:
-                # Reset failure count on success
-                self._failure_count = 0
-
-    async def record_failure(self) -> None:
-        """Record failed operation."""
-        async with self._lock:
-            self._failure_count += 1
-            self._last_failure_time = time.monotonic()
-
-            if self._state == CircuitState.HALF_OPEN:
-                # Recovery failed, open circuit again
-                previous_state = self._state.value
-                self._state = CircuitState.OPEN
-                claude_logger.circuit_state_change(
-                    previous_state, self._state.value, self._failure_count
-                )
-                claude_logger.circuit_open(
-                    self._failure_count, self._config.recovery_timeout
-                )
-            elif (
-                self._state == CircuitState.CLOSED
-                and self._failure_count >= self._config.failure_threshold
-            ):
-                # Too many failures, open circuit
-                previous_state = self._state.value
-                self._state = CircuitState.OPEN
-                claude_logger.circuit_state_change(
-                    previous_state, self._state.value, self._failure_count
-                )
-                claude_logger.circuit_open(
-                    self._failure_count, self._config.recovery_timeout
-                )
 
 
 @dataclass
@@ -230,7 +109,9 @@ class ClaudeRateLimitError(ClaudeError):
         response_body: dict[str, Any] | None = None,
         request_id: str | None = None,
     ) -> None:
-        super().__init__(message, status_code=429, response_body=response_body, request_id=request_id)
+        super().__init__(
+            message, status_code=429, response_body=response_body, request_id=request_id
+        )
         self.retry_after = retry_after
 
 
@@ -304,7 +185,7 @@ class ClaudeClient:
 
         Args:
             api_key: Anthropic API key. Defaults to settings.
-            model: Model to use. Defaults to settings (claude-3-haiku).
+            model: Model to use. Defaults to settings (claude-sonnet-4-5).
             timeout: Request timeout in seconds. Defaults to settings.
             max_retries: Maximum retry attempts. Defaults to settings.
             retry_delay: Base delay between retries. Defaults to settings.
@@ -312,7 +193,9 @@ class ClaudeClient:
         """
         settings = get_settings()
 
-        self._api_key = api_key or settings.anthropic_api_key
+        self._api_key = (
+            api_key or settings.anthropic_api_key or os.environ.get("ANTHROPIC_API_KEY")
+        )
         self._model = model or settings.claude_model
         self._timeout = timeout or settings.claude_timeout
         self._max_retries = max_retries or settings.claude_max_retries
@@ -324,12 +207,25 @@ class ClaudeClient:
             CircuitBreakerConfig(
                 failure_threshold=settings.claude_circuit_failure_threshold,
                 recovery_timeout=settings.claude_circuit_recovery_timeout,
-            )
+            ),
+            name="claude",
         )
 
         # HTTP client (created lazily)
         self._client: httpx.AsyncClient | None = None
         self._available = bool(self._api_key)
+
+        # Debug logging for initialization
+        logger.info(
+            "ClaudeClient instantiated",
+            extra={
+                "instance_id": id(self),
+                "available": self._available,
+                "has_api_key": bool(self._api_key),
+                "model": self._model,
+                "settings_api_key_present": bool(settings.anthropic_api_key),
+            },
+        )
 
     @property
     def available(self) -> bool:
@@ -377,6 +273,8 @@ class ClaudeClient:
         system_prompt: str | None = None,
         max_tokens: int | None = None,
         temperature: float = 0.0,
+        model: str | None = None,
+        timeout: float | None = None,
     ) -> CompletionResult:
         """Send a completion request to Claude.
 
@@ -385,6 +283,10 @@ class ClaudeClient:
             system_prompt: Optional system prompt
             max_tokens: Maximum response tokens (overrides default)
             temperature: Sampling temperature (0.0 = deterministic)
+            model: Optional model override for this request
+            timeout: Per-request HTTP timeout override (seconds). If not set,
+                uses the client-level timeout. Use for long-running requests
+                that need more time than the default (e.g. large token budgets).
 
         Returns:
             CompletionResult with response text and metadata
@@ -408,8 +310,9 @@ class ClaudeClient:
         request_id: str | None = None
 
         # Build request body
+        effective_model = model or self._model
         request_body: dict[str, Any] = {
-            "model": self._model,
+            "model": effective_model,
             "max_tokens": max_tokens or self._max_tokens,
             "temperature": temperature,
             "messages": [{"role": "user", "content": user_prompt}],
@@ -431,8 +334,11 @@ class ClaudeClient:
                 if system_prompt:
                     claude_logger.request_body(self._model, system_prompt, user_prompt)
 
-                # Make request
-                response = await client.post("/v1/messages", json=request_body)
+                # Make request (with optional per-request timeout override)
+                request_kwargs: dict[str, Any] = {"json": request_body}
+                if timeout is not None:
+                    request_kwargs["timeout"] = httpx.Timeout(timeout)
+                response = await client.post("/v1/messages", **request_kwargs)
                 duration_ms = (time.monotonic() - attempt_start) * 1000
 
                 # Extract request ID from response headers
@@ -935,7 +841,7 @@ Respond with JSON only."""
                 )
 
                 # Create failure results for remaining pages in batch
-                for page in batch[len(batch_results):]:
+                for page in batch[len(batch_results) :]:
                     batch_results.append(
                         CategorizationResult(
                             success=False,
@@ -1018,3 +924,13 @@ async def get_claude() -> ClaudeClient:
     if claude_client is None:
         await init_claude()
     return claude_client  # type: ignore[return-value]
+
+
+def get_api_key() -> str | None:
+    """Get the Anthropic API key from settings.
+
+    Use this when creating ClaudeClient instances in background tasks
+    or other contexts outside the request lifecycle, to avoid issues
+    with settings/env loading in background task contexts.
+    """
+    return get_settings().anthropic_api_key

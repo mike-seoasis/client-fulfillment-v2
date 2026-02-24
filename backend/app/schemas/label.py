@@ -19,7 +19,12 @@ class LabelGenerateRequest(BaseModel):
         min_length=1,
         max_length=1000,
         description="List of page URLs in the collection",
-        examples=[["https://example.com/products/widget", "https://example.com/products/gadget"]],
+        examples=[
+            [
+                "https://example.com/products/widget",
+                "https://example.com/products/gadget",
+            ]
+        ],
     )
     titles: list[str] | None = Field(
         None,
@@ -57,7 +62,9 @@ class LabelGenerateRequest(BaseModel):
             if not url:
                 continue
             if not url.startswith(("http://", "https://", "/")):
-                raise ValueError(f"URL must start with http://, https://, or /: {url[:50]}")
+                raise ValueError(
+                    f"URL must start with http://, https://, or /: {url[:50]}"
+                )
             validated.append(url)
         if not validated:
             raise ValueError("At least one valid URL is required")
@@ -103,7 +110,9 @@ class BatchCollectionRequest(BaseModel):
             if not url:
                 continue
             if not url.startswith(("http://", "https://", "/")):
-                raise ValueError(f"URL must start with http://, https://, or /: {url[:50]}")
+                raise ValueError(
+                    f"URL must start with http://, https://, or /: {url[:50]}"
+                )
             validated.append(url)
         if not validated:
             raise ValueError("At least one valid URL is required")

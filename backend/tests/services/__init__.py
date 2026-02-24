@@ -1,1 +1,1 @@
-"""Service tests package."""
+"""Service tests module."""

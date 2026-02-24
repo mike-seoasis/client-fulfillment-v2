@@ -21,10 +21,14 @@ class Settings(BaseSettings):
     )
 
     # Application
-    app_name: str = Field(default="Client Fulfillment App V2")
+    app_name: str = Field(default="Grove")
     app_version: str = Field(default="2.0.0")
     debug: bool = Field(default=False)
     environment: str = Field(default="development")
+    auth_required: bool = Field(
+        default=True,
+        description="Require authentication for API requests (disable for local development)",
+    )
 
     # Server - PORT is set dynamically by Railway
     port: int = Field(default=8000, description="Port to bind to (Railway sets this)")
@@ -48,10 +52,14 @@ class Settings(BaseSettings):
         default=100, description="Threshold for slow query warnings (ms)"
     )
     db_connect_timeout: int = Field(
-        default=60, description="Connection timeout in seconds (Railway cold-start)"
+        default=10, description="Connection timeout in seconds"
     )
     db_command_timeout: int = Field(
-        default=60, description="Command timeout in seconds"
+        default=30, description="Command timeout in seconds"
+    )
+    db_pool_recycle: int = Field(
+        default=300,
+        description="Recycle connections after N seconds to match Neon idle timeout",
     )
 
     # Redis
@@ -110,6 +118,9 @@ class Settings(BaseSettings):
     crawl4ai_circuit_recovery_timeout: float = Field(
         default=60.0, description="Seconds before attempting recovery"
     )
+    crawl_concurrency: int = Field(
+        default=5, description="Maximum concurrent crawl requests"
+    )
 
     # Claude/Anthropic LLM
     anthropic_api_key: str | None = Field(
@@ -117,8 +128,8 @@ class Settings(BaseSettings):
         description="Anthropic API key for Claude models",
     )
     claude_model: str = Field(
-        default="claude-3-haiku-20240307",
-        description="Claude model to use for categorization (default: Haiku for speed/cost)",
+        default="claude-sonnet-4-6",
+        description="Claude model to use (default: Sonnet for quality)",
     )
     claude_timeout: float = Field(
         default=60.0, description="Claude API request timeout in seconds"
@@ -263,7 +274,7 @@ class Settings(BaseSettings):
         description="Default sender email address",
     )
     smtp_from_name: str = Field(
-        default="Client Onboarding",
+        default="Grove",
         description="Default sender display name",
     )
     # Circuit breaker settings for email
@@ -364,7 +375,7 @@ class Settings(BaseSettings):
         description="PageOptimizer Pro API key for content scoring",
     )
     pop_api_url: str = Field(
-        default="https://api.pageoptimizer.pro",
+        default="https://app.pageoptimizer.pro",
         description="PageOptimizer Pro API base URL",
     )
     pop_task_poll_interval: float = Field(
@@ -391,6 +402,11 @@ class Settings(BaseSettings):
         default=70,
         description="Minimum page score (0-100) for content to pass quality gate",
     )
+    # POP mock mode for development (returns fixture data, no API calls)
+    pop_use_mock: bool = Field(
+        default=False,
+        description="Use mock POP client with fixture data instead of real API calls",
+    )
     # POP feature flags for safe rollout
     use_pop_content_brief: bool = Field(
         default=False,
@@ -399,6 +415,103 @@ class Settings(BaseSettings):
     use_pop_scoring: bool = Field(
         default=False,
         description="Enable POP integration for content scoring (default: disabled for safe rollout)",
+    )
+    # POP batch scoring settings
+    pop_batch_rate_limit: int = Field(
+        default=5,
+        description="Maximum concurrent requests for batch scoring operations",
+    )
+    # POP shadow mode for scoring comparison
+    pop_shadow_mode: bool = Field(
+        default=False,
+        description="Enable shadow mode to run both POP and legacy scoring for comparison analysis",
+    )
+
+    # Content generation pipeline
+    content_generation_concurrency: int = Field(
+        default=1,
+        description="Max concurrent page content generations (1=sequential for dev, 5 for production)",
+    )
+
+    # Reddit / CrowdReply
+    serpapi_key: str = Field(
+        default="",
+        description="SerpAPI key for Reddit post discovery",
+    )
+    crowdreply_api_key: str = Field(
+        default="",
+        description="CrowdReply API key for comment posting",
+    )
+    crowdreply_project_id: str = Field(
+        default="",
+        description="CrowdReply project ID",
+    )
+    crowdreply_webhook_secret: str = Field(
+        default="",
+        description="CrowdReply webhook signing secret for verifying callbacks",
+    )
+    crowdreply_base_url: str = Field(
+        default="https://crowdreply.io/api",
+        description="CrowdReply API base URL",
+    )
+    crowdreply_use_mock: bool = Field(
+        default=False,
+        description="Use mock client (no API calls)",
+    )
+    crowdreply_dry_run: bool = Field(
+        default=False,
+        description="Log payloads without sending",
+    )
+    crowdreply_timeout: float = Field(
+        default=30.0,
+        description="CrowdReply API request timeout in seconds",
+    )
+    crowdreply_reconcile_delay: float = Field(
+        default=2.0,
+        description="Seconds before polling for task ID after create",
+    )
+
+    # S3/Object Storage
+    s3_bucket: str | None = Field(
+        default=None,
+        description="S3 bucket name for file storage",
+    )
+    s3_endpoint_url: str | None = Field(
+        default=None,
+        description="S3 endpoint URL (for LocalStack or S3-compatible services)",
+    )
+    s3_access_key: str | None = Field(
+        default=None,
+        description="S3 access key ID",
+    )
+    s3_secret_key: str | None = Field(
+        default=None,
+        description="S3 secret access key",
+    )
+    s3_region: str = Field(
+        default="us-east-1",
+        description="S3 region",
+    )
+    s3_timeout: float = Field(
+        default=30.0,
+        description="S3 operation timeout in seconds",
+    )
+    s3_max_retries: int = Field(
+        default=3,
+        description="Maximum retry attempts for S3 operations",
+    )
+    s3_retry_delay: float = Field(
+        default=1.0,
+        description="Base delay between retries in seconds",
+    )
+    # Circuit breaker settings for S3
+    s3_circuit_failure_threshold: int = Field(
+        default=5,
+        description="Failures before S3 circuit opens",
+    )
+    s3_circuit_recovery_timeout: float = Field(
+        default=60.0,
+        description="Seconds before attempting S3 recovery",
     )
 
 

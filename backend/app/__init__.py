@@ -1,3 +1,3 @@
-"""Client Fulfillment App V2 Backend."""
+"""Grove Backend."""
 
 __version__ = "2.0.0"

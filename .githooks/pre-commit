@@ -1,0 +1,28 @@
+#!/bin/bash
+# Pre-commit hook: Remind to update status files
+
+# Check if this looks like a slice commit
+if git diff --cached --name-only | grep -qE "\.(py|ts|tsx|js|jsx)$"; then
+
+    # Check if V2_REBUILD_PLAN.md is being committed too
+    if ! git diff --cached --name-only | grep -q "V2_REBUILD_PLAN.md"; then
+        echo ""
+        echo "========================================"
+        echo "  REMINDER: Did you update the status?"
+        echo "========================================"
+        echo ""
+        echo "If this is a slice completion, make sure to update:"
+        echo "  - V2_REBUILD_PLAN.md (checkboxes, status, session log)"
+        echo ""
+        echo "To include it in this commit:"
+        echo "  git add V2_REBUILD_PLAN.md"
+        echo ""
+        echo "To skip this reminder:"
+        echo "  git commit --no-verify"
+        echo ""
+        echo "Proceeding with commit..."
+        echo ""
+    fi
+fi
+
+exit 0

@@ -2,11 +2,13 @@
 
 This document lists all environment variables for Railway deployment.
 
+> **Note (2026-02-14):** The database is hosted on **Neon**, not Railway Postgres. `DATABASE_URL` points to the Neon connection string. Do NOT include `?sslmode=require` in the URL — SSL is handled via `connect_args` in the app code (enabled for all non-development environments).
+
 ## Required Variables
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@host:5432/db` |
+| `DATABASE_URL` | Neon PostgreSQL connection string (no `?sslmode=require`) | `postgresql://neondb_owner:xxx@ep-xxx.us-east-1.aws.neon.tech/neondb` |
 | `PORT` | Port to bind (set by Railway) | `8000` |
 
 ## Optional Variables
@@ -55,11 +57,14 @@ These are automatically set by Railway:
 1. Go to [Railway](https://railway.app) and create a new project
 2. Connect your GitHub repository
 
-### Step 2: Add Database Addons
+### Step 2: Configure Database (Neon)
 
-1. **PostgreSQL**: Click "New" > "Database" > "PostgreSQL"
-   - Railway automatically sets `DATABASE_URL`
-   - Use the "Variables" tab to verify connection string
+> **Database is on Neon, NOT Railway.** Do not add a Railway PostgreSQL addon.
+
+1. **Neon PostgreSQL:** Already provisioned (project `spring-fog-49733273` in `aws-us-east-1`)
+   - Set `DATABASE_URL` manually in Railway variables to the Neon connection string
+   - Do NOT include `?sslmode=require` in the URL (SSL is handled in app code)
+   - Neon dashboard: https://console.neon.tech
 
 2. **Redis** (optional): Click "New" > "Database" > "Redis"
    - Railway automatically sets `REDIS_URL`

@@ -1,839 +1,829 @@
-"""Content Generation service for generating page content.
+"""Content generation pipeline orchestrator.
 
-Generates SEO-optimized content for various page types using LLM capabilities.
+Orchestrates the brief → write → check → link pipeline for each approved page
+with concurrency control. Designed to be called from a FastAPI BackgroundTask.
 
-Features:
-- Multi-format content generation (collection, product, blog, landing)
-- Configurable tone and word count
-- Context-aware content (research briefs, brand voice)
-- Batch processing with concurrent execution
+Pipeline phases:
+Phase 1: Pre-fetch POP content briefs concurrently
+Phase 2: Write content + quality checks per page (concurrent with semaphore)
+Phase 3: Auto-run link planning to inject/re-inject internal links
 
-ERROR LOGGING REQUIREMENTS:
-- Log method entry/exit at DEBUG level with parameters (sanitized)
-- Log all exceptions with full stack trace and context
-- Include entity IDs (project_id, page_id) in all service logs
-- Log validation failures with field names and rejected values
-- Log state transitions (phase changes) at INFO level
-- Add timing logs for operations >1 second
+Error isolation: if one page fails, others continue. Failed pages get
+status='failed' with error details in qa_results. Link planning failures
+are non-fatal and logged but don't affect content generation results.
 """
 
 import asyncio
 import json
-import time
-import traceback
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.core.config import get_settings
+from app.core.database import db_manager
 from app.core.logging import get_logger
-from app.integrations.claude import CompletionResult, get_claude
+from app.models.brand_config import BrandConfig
+from app.models.crawled_page import CrawledPage
+from app.models.page_content import ContentStatus, PageContent
+from app.models.page_keywords import PageKeywords
+from app.models.prompt_log import PromptLog
+from app.services.content_quality import run_quality_checks
+from app.services.content_writing import extract_competitor_brands, generate_content
+from app.services.pop_content_brief import fetch_content_brief
 
 logger = get_logger(__name__)
 
-# Constants
-SLOW_OPERATION_THRESHOLD_MS = 1000
-DEFAULT_MAX_CONCURRENT = 5
-CONTENT_PREVIEW_LENGTH = 200
-CONTENT_GENERATION_TEMPERATURE = 0.4
-
-
-# =============================================================================
-# SYSTEM PROMPTS FOR DIFFERENT CONTENT TYPES
-# =============================================================================
-
-CONTENT_GENERATION_SYSTEM_PROMPT = """You are an expert content writer. Your task is to generate high-quality, SEO-optimized content that sounds natural and engaging.
-
-## WRITING GUIDELINES
-
-### Style
-- Write in a clear, accessible style
-- Use short, punchy sentences (one idea per sentence)
-- Address the reader as "you" and "your"
-- Focus on benefits over features
-- Be specific with details, not vague
-
-### Structure
-- Use proper HTML structure with h1, h2, h3, p tags
-- Break content into scannable sections
-- Keep paragraphs to 2-4 sentences
-
-### SEO Best Practices
-- Include the primary keyword naturally in H1, title, and content
-- Title tag: under 60 characters, format "[Keyword] | [Brand]"
-- Meta description: 150-160 characters with soft CTA
-
-### Avoid
-- Em dashes (use periods or commas instead)
-- AI-sounding words: delve, unlock, unleash, journey, game-changer, revolutionary, cutting-edge, elevate, leverage, synergy, innovative, paradigm, holistic, empower, transformative
-- Banned phrases: "In today's fast-paced world", "It's important to note", "When it comes to", "At the end of the day", "Look no further"
-- Triplet patterns: "Fast. Simple. Powerful."
-- Rhetorical questions as openers
-
-## OUTPUT FORMAT
-
-Respond with valid JSON only (no markdown code blocks):
-{
-  "h1": "Page Title Here",
-  "title_tag": "Title Tag Here | Brand",
-  "meta_description": "Meta description here with keyword and CTA.",
-  "body_content": "<h2>...</h2><p>...</p>...",
-  "word_count": 400
-}"""
-
-
-CONTENT_TYPE_PROMPTS = {
-    "collection": """Generate collection page content with:
-- H1: 3-7 words, Title Case, includes primary keyword
-- Body: Product benefits, selection highlights, why shop here
-- Include sections for quality, selection, and value""",
-    "product": """Generate product page content with:
-- H1: Product name with key benefit
-- Body: Features as benefits, use cases, specifications
-- Include social proof elements and CTAs""",
-    "blog": """Generate blog post content with:
-- H1: Engaging title that promises value
-- Body: Educational content with practical takeaways
-- Include introduction, main sections, conclusion""",
-    "landing": """Generate landing page content with:
-- H1: Clear value proposition
-- Body: Problem/solution, benefits, trust signals
-- Include strong CTAs throughout""",
-}
-
-
-# =============================================================================
-# DATA CLASSES
-# =============================================================================
-
 
 @dataclass
-class ContentGenerationInput:
-    """Input data for content generation."""
+class PipelinePageResult:
+    """Result of processing a single page through the pipeline."""
 
-    keyword: str
+    page_id: str
     url: str
-    brand_name: str
-    content_type: str = "collection"
-    tone: str = "professional"
-    target_word_count: int = 400
-    context: dict[str, Any] | None = None
-    project_id: str | None = None
-    page_id: str | None = None
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for serialization."""
-        return {
-            "keyword": self.keyword,
-            "url": self.url,
-            "brand_name": self.brand_name,
-            "content_type": self.content_type,
-            "tone": self.tone,
-            "target_word_count": self.target_word_count,
-            "has_context": self.context is not None,
-            "project_id": self.project_id,
-            "page_id": self.page_id,
-        }
-
-
-@dataclass
-class GeneratedContent:
-    """Generated content from content generation."""
-
-    h1: str
-    title_tag: str
-    meta_description: str
-    body_content: str
-    word_count: int
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for serialization."""
-        return {
-            "h1": self.h1,
-            "title_tag": self.title_tag,
-            "meta_description": self.meta_description,
-            "body_content": self.body_content,
-            "word_count": self.word_count,
-        }
-
-
-@dataclass
-class ContentGenerationResult:
-    """Result of content generation."""
-
     success: bool
-    keyword: str
-    content_type: str
-    content: GeneratedContent | None = None
     error: str | None = None
-    duration_ms: float = 0.0
-    input_tokens: int | None = None
-    output_tokens: int | None = None
-    request_id: str | None = None
-    project_id: str | None = None
-    page_id: str | None = None
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for serialization."""
-        return {
-            "success": self.success,
-            "keyword": self.keyword,
-            "content_type": self.content_type,
-            "content": self.content.to_dict() if self.content else None,
-            "error": self.error,
-            "duration_ms": round(self.duration_ms, 2),
-            "input_tokens": self.input_tokens,
-            "output_tokens": self.output_tokens,
-            "request_id": self.request_id,
-            "project_id": self.project_id,
-            "page_id": self.page_id,
-        }
-
-
-# =============================================================================
-# EXCEPTIONS
-# =============================================================================
-
-
-class ContentGenerationServiceError(Exception):
-    """Base exception for content generation service errors."""
-
-    def __init__(
-        self,
-        message: str,
-        project_id: str | None = None,
-        page_id: str | None = None,
-    ) -> None:
-        super().__init__(message)
-        self.project_id = project_id
-        self.page_id = page_id
-
-
-class ContentGenerationValidationError(ContentGenerationServiceError):
-    """Raised when validation fails."""
-
-    def __init__(
-        self,
-        field_name: str,
-        value: Any,
-        message: str,
-        project_id: str | None = None,
-        page_id: str | None = None,
-    ) -> None:
-        super().__init__(
-            f"Validation error for {field_name}: {message}", project_id, page_id
-        )
-        self.field_name = field_name
-        self.value = value
-
-
-# =============================================================================
-# SERVICE
-# =============================================================================
-
-
-class ContentGenerationService:
-    """Service for content generation.
-
-    Generates SEO-optimized content for various page types:
-    1. Builds prompt with content type-specific instructions
-    2. Includes context (research, brand voice) if provided
-    3. Calls Claude with configured temperature
-    4. Parses and validates response
-
-    Usage:
-        service = ContentGenerationService()
-        result = await service.generate_content(
-            input_data=ContentGenerationInput(
-                keyword="leather wallets",
-                url="/collections/leather-wallets",
-                brand_name="Acme Co",
-                content_type="collection",
-            ),
-        )
-    """
-
-    def __init__(
-        self,
-        max_concurrent: int = DEFAULT_MAX_CONCURRENT,
-    ) -> None:
-        """Initialize content generation service.
-
-        Args:
-            max_concurrent: Maximum concurrent content generations.
-        """
-        self._max_concurrent = max_concurrent
-
-        logger.debug(
-            "ContentGenerationService initialized",
-            extra={
-                "max_concurrent": self._max_concurrent,
-            },
-        )
-
-    def _format_context(self, context: dict[str, Any] | None) -> str:
-        """Format context for prompt insertion.
-
-        Args:
-            context: Additional context (research brief, brand voice, etc.)
-
-        Returns:
-            Formatted string for prompt
-        """
-        if not context:
-            return "No additional context provided."
-
-        parts: list[str] = []
-
-        # Research brief
-        brief = context.get("research_brief")
-        if isinstance(brief, dict):
-            if angle := brief.get("main_angle"):
-                parts.append(f"Main Angle: {angle}")
-            benefits = brief.get("benefits")
-            if isinstance(benefits, list):
-                parts.append("Key Benefits:\n" + "\n".join(f"- {b}" for b in benefits[:5]))
-            questions = brief.get("priority_questions")
-            if isinstance(questions, list):
-                parts.append("Questions to Address:\n" + "\n".join(f"- {q}" for q in questions[:5]))
-
-        # Brand voice
-        voice = context.get("brand_voice")
-        if isinstance(voice, dict):
-            if tone := voice.get("tone"):
-                parts.append(f"Brand Tone: {tone}")
-            personality = voice.get("personality")
-            if isinstance(personality, list):
-                parts.append(f"Brand Personality: {', '.join(personality)}")
-            if style := voice.get("writing_style"):
-                parts.append(f"Writing Style: {style}")
-
-        # Additional notes
-        if notes := context.get("notes"):
-            parts.append(f"Additional Notes: {notes}")
-
-        return "\n\n".join(parts) if parts else "No additional context provided."
-
-    def _build_user_prompt(self, input_data: ContentGenerationInput) -> str:
-        """Build the user prompt with all context.
-
-        Args:
-            input_data: Input data for content generation
-
-        Returns:
-            Complete user prompt
-        """
-        content_type_prompt = CONTENT_TYPE_PROMPTS.get(
-            input_data.content_type,
-            CONTENT_TYPE_PROMPTS["collection"]
-        )
-
-        return f"""Generate {input_data.content_type} page content for:
-
-## Page Details
-- Primary Keyword: {input_data.keyword}
-- URL: {input_data.url}
-- Brand Name: {input_data.brand_name}
-- Desired Tone: {input_data.tone}
-- Target Word Count: {input_data.target_word_count} words
-
-## Content Type Instructions
-{content_type_prompt}
-
-## Context
-{self._format_context(input_data.context)}
-
-## Requirements
-1. H1: Include "{input_data.keyword}" naturally
-2. Title tag: Under 60 chars, format "[Keyword] | {input_data.brand_name}"
-3. Meta description: 150-160 chars with soft CTA
-4. Body content: Approximately {input_data.target_word_count} words
-5. Use {input_data.tone} tone throughout
-6. NO em dashes, banned words, or AI patterns
-7. Address reader as "you/your"
-
-Generate the content now. Respond with JSON only:"""
-
-    def _parse_content_response(
-        self,
-        response_text: str,
-        project_id: str | None,
-        page_id: str | None,
-    ) -> GeneratedContent | None:
-        """Parse LLM response into GeneratedContent.
-
-        Args:
-            response_text: Raw response text from Claude
-            project_id: Project ID for logging
-            page_id: Page ID for logging
-
-        Returns:
-            GeneratedContent or None if parsing fails
-        """
-        try:
-            # Handle markdown code blocks
-            text = response_text.strip()
-            if text.startswith("```"):
-                lines = text.split("\n")
-                text = "\n".join(
-                    line for line in lines if not line.startswith("```")
-                ).strip()
-
-            # Remove any "json" label
-            if text.startswith("json"):
-                text = text[4:].strip()
-
-            parsed = json.loads(text)
-
-            if not isinstance(parsed, dict):
-                logger.warning(
-                    "Content response is not a dict",
-                    extra={
-                        "project_id": project_id,
-                        "page_id": page_id,
-                        "type": type(parsed).__name__,
-                    },
-                )
-                return None
-
-            # Extract and validate fields
-            h1 = parsed.get("h1", "").strip()
-            title_tag = parsed.get("title_tag", "").strip()
-            meta_description = parsed.get("meta_description", "").strip()
-            body_content = parsed.get("body_content", "").strip()
-            word_count = parsed.get("word_count", 0)
-
-            # Basic validation
-            if not h1:
-                logger.warning(
-                    "Validation failed: empty h1",
-                    extra={
-                        "project_id": project_id,
-                        "page_id": page_id,
-                        "field": "h1",
-                        "rejected_value": "",
-                    },
-                )
-                return None
-
-            if not body_content:
-                logger.warning(
-                    "Validation failed: empty body_content",
-                    extra={
-                        "project_id": project_id,
-                        "page_id": page_id,
-                        "field": "body_content",
-                        "rejected_value": "",
-                    },
-                )
-                return None
-
-            # Calculate actual word count if not provided
-            if not word_count:
-                import re
-                clean_text = re.sub(r"<[^>]+>", " ", body_content)
-                word_count = len(clean_text.split())
-
-            logger.debug(
-                "Content response parsed successfully",
-                extra={
-                    "project_id": project_id,
-                    "page_id": page_id,
-                    "h1_length": len(h1),
-                    "word_count": word_count,
-                },
-            )
-
-            return GeneratedContent(
-                h1=h1,
-                title_tag=title_tag,
-                meta_description=meta_description,
-                body_content=body_content,
-                word_count=word_count,
-            )
-
-        except json.JSONDecodeError as e:
-            logger.warning(
-                "Failed to parse content JSON",
-                extra={
-                    "project_id": project_id,
-                    "page_id": page_id,
-                    "error": str(e),
-                    "response_preview": response_text[:CONTENT_PREVIEW_LENGTH],
-                },
-            )
-            return None
-
-    async def generate_content(
-        self,
-        input_data: ContentGenerationInput,
-    ) -> ContentGenerationResult:
-        """Generate content for a single page.
-
-        Content generation process:
-        1. Build prompt with content type-specific instructions
-        2. Include context if provided
-        3. Call Claude with temperature 0.4
-        4. Parse and validate response
-
-        Args:
-            input_data: Input data for content generation
-
-        Returns:
-            ContentGenerationResult with generated content or error
-        """
-        start_time = time.monotonic()
-        project_id = input_data.project_id
-        page_id = input_data.page_id
-
-        logger.debug(
-            "Content generation starting",
-            extra={
-                "keyword": input_data.keyword[:50],
-                "url": input_data.url[:100],
-                "brand_name": input_data.brand_name[:50],
-                "content_type": input_data.content_type,
-                "tone": input_data.tone,
-                "target_word_count": input_data.target_word_count,
-                "has_context": input_data.context is not None,
-                "project_id": project_id,
-                "page_id": page_id,
-            },
-        )
-
-        # Validate inputs
-        if not input_data.keyword or not input_data.keyword.strip():
-            logger.warning(
-                "Content generation validation failed - empty keyword",
-                extra={
-                    "field": "keyword",
-                    "value": "",
-                    "project_id": project_id,
-                    "page_id": page_id,
-                },
-            )
-            raise ContentGenerationValidationError(
-                "keyword",
-                "",
-                "Keyword cannot be empty",
-                project_id=project_id,
-                page_id=page_id,
-            )
-
-        if not input_data.brand_name or not input_data.brand_name.strip():
-            logger.warning(
-                "Content generation validation failed - empty brand_name",
-                extra={
-                    "field": "brand_name",
-                    "value": "",
-                    "project_id": project_id,
-                    "page_id": page_id,
-                },
-            )
-            raise ContentGenerationValidationError(
-                "brand_name",
-                "",
-                "Brand name cannot be empty",
-                project_id=project_id,
-                page_id=page_id,
-            )
-
-        try:
-            # Log phase transition
-            logger.info(
-                "Content generation - in_progress",
-                extra={
-                    "keyword": input_data.keyword[:50],
-                    "content_type": input_data.content_type,
-                    "status": "in_progress",
-                    "project_id": project_id,
-                    "page_id": page_id,
-                },
-            )
-
-            # Get Claude client
-            claude = await get_claude()
-
-            if not claude.available:
-                logger.warning(
-                    "Claude not available for content generation",
-                    extra={
-                        "project_id": project_id,
-                        "page_id": page_id,
-                    },
-                )
-                return ContentGenerationResult(
-                    success=False,
-                    keyword=input_data.keyword,
-                    content_type=input_data.content_type,
-                    error="Claude LLM not available",
-                    duration_ms=(time.monotonic() - start_time) * 1000,
-                    project_id=project_id,
-                    page_id=page_id,
-                )
-
-            # Build prompt
-            user_prompt = self._build_user_prompt(input_data)
-
-            # Call Claude
-            result: CompletionResult = await claude.complete(
-                system_prompt=CONTENT_GENERATION_SYSTEM_PROMPT,
-                user_prompt=user_prompt,
-                temperature=CONTENT_GENERATION_TEMPERATURE,
-                max_tokens=2000,
-            )
-
-            duration_ms = (time.monotonic() - start_time) * 1000
-
-            if not result.success or not result.text:
-                logger.warning(
-                    "LLM content generation failed",
-                    extra={
-                        "keyword": input_data.keyword[:50],
-                        "content_type": input_data.content_type,
-                        "error": result.error,
-                        "status_code": result.status_code,
-                        "request_id": result.request_id,
-                        "duration_ms": round(duration_ms, 2),
-                        "project_id": project_id,
-                        "page_id": page_id,
-                    },
-                )
-                return ContentGenerationResult(
-                    success=False,
-                    keyword=input_data.keyword,
-                    content_type=input_data.content_type,
-                    error=result.error or "LLM generation failed",
-                    duration_ms=duration_ms,
-                    input_tokens=result.input_tokens,
-                    output_tokens=result.output_tokens,
-                    request_id=result.request_id,
-                    project_id=project_id,
-                    page_id=page_id,
-                )
-
-            # Parse response
-            content = self._parse_content_response(
-                result.text, project_id, page_id
-            )
-
-            if not content:
-                return ContentGenerationResult(
-                    success=False,
-                    keyword=input_data.keyword,
-                    content_type=input_data.content_type,
-                    error="Failed to parse LLM response",
-                    duration_ms=duration_ms,
-                    input_tokens=result.input_tokens,
-                    output_tokens=result.output_tokens,
-                    request_id=result.request_id,
-                    project_id=project_id,
-                    page_id=page_id,
-                )
-
-            # Log completion
-            logger.info(
-                "Content generation - completed",
-                extra={
-                    "keyword": input_data.keyword[:50],
-                    "content_type": input_data.content_type,
-                    "h1": content.h1[:50],
-                    "word_count": content.word_count,
-                    "status": "completed",
-                    "duration_ms": round(duration_ms, 2),
-                    "input_tokens": result.input_tokens,
-                    "output_tokens": result.output_tokens,
-                    "request_id": result.request_id,
-                    "project_id": project_id,
-                    "page_id": page_id,
-                },
-            )
-
-            if duration_ms > SLOW_OPERATION_THRESHOLD_MS:
-                logger.warning(
-                    "Slow content generation operation",
-                    extra={
-                        "keyword": input_data.keyword[:50],
-                        "content_type": input_data.content_type,
-                        "duration_ms": round(duration_ms, 2),
-                        "threshold_ms": SLOW_OPERATION_THRESHOLD_MS,
-                        "project_id": project_id,
-                        "page_id": page_id,
-                    },
-                )
-
-            return ContentGenerationResult(
-                success=True,
-                keyword=input_data.keyword,
-                content_type=input_data.content_type,
-                content=content,
-                duration_ms=duration_ms,
-                input_tokens=result.input_tokens,
-                output_tokens=result.output_tokens,
-                request_id=result.request_id,
-                project_id=project_id,
-                page_id=page_id,
-            )
-
-        except ContentGenerationValidationError:
-            raise
-        except Exception as e:
-            duration_ms = (time.monotonic() - start_time) * 1000
-            logger.error(
-                "Content generation unexpected error",
-                extra={
-                    "keyword": input_data.keyword[:50] if input_data.keyword else "",
-                    "content_type": input_data.content_type,
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                    "duration_ms": round(duration_ms, 2),
-                    "project_id": project_id,
-                    "page_id": page_id,
-                    "stack_trace": traceback.format_exc(),
-                },
-                exc_info=True,
-            )
-            return ContentGenerationResult(
-                success=False,
-                keyword=input_data.keyword,
-                content_type=input_data.content_type,
-                error=f"Unexpected error: {e}",
-                duration_ms=duration_ms,
-                project_id=project_id,
-                page_id=page_id,
-            )
-
-    async def generate_content_batch(
-        self,
-        inputs: list[ContentGenerationInput],
-        max_concurrent: int | None = None,
-        project_id: str | None = None,
-    ) -> list[ContentGenerationResult]:
-        """Generate content for multiple pages.
-
-        Args:
-            inputs: List of input data for content generation
-            max_concurrent: Maximum concurrent generations (None = use default)
-            project_id: Project ID for logging
-
-        Returns:
-            List of ContentGenerationResult, one per input
-        """
-        start_time = time.monotonic()
-        max_concurrent = max_concurrent or self._max_concurrent
-
-        logger.info(
-            "Batch content generation started",
-            extra={
-                "input_count": len(inputs),
-                "max_concurrent": max_concurrent,
-                "project_id": project_id,
-            },
-        )
-
-        if not inputs:
-            return []
-
-        semaphore = asyncio.Semaphore(max_concurrent)
-
-        async def generate_one(input_data: ContentGenerationInput) -> ContentGenerationResult:
-            async with semaphore:
-                return await self.generate_content(input_data)
-
-        tasks = [generate_one(inp) for inp in inputs]
-        results = await asyncio.gather(*tasks)
-
-        duration_ms = (time.monotonic() - start_time) * 1000
-        success_count = sum(1 for r in results if r.success)
-
-        logger.info(
-            "Batch content generation complete",
-            extra={
-                "input_count": len(inputs),
-                "success_count": success_count,
-                "failure_count": len(inputs) - success_count,
-                "duration_ms": round(duration_ms, 2),
-                "project_id": project_id,
-            },
-        )
-
-        if duration_ms > SLOW_OPERATION_THRESHOLD_MS:
-            logger.warning(
-                "Slow batch content generation operation",
-                extra={
-                    "input_count": len(inputs),
-                    "duration_ms": round(duration_ms, 2),
-                    "threshold_ms": SLOW_OPERATION_THRESHOLD_MS,
-                    "project_id": project_id,
-                },
-            )
-
-        return list(results)
-
-
-# =============================================================================
-# SINGLETON
-# =============================================================================
-
-
-_content_generation_service: ContentGenerationService | None = None
-
-
-def get_content_generation_service() -> ContentGenerationService:
-    """Get the global content generation service instance.
-
-    Usage:
-        from app.services.content_generation import get_content_generation_service
-        service = get_content_generation_service()
-        result = await service.generate_content(input_data)
-    """
-    global _content_generation_service
-    if _content_generation_service is None:
-        _content_generation_service = ContentGenerationService()
-        logger.info("ContentGenerationService singleton created")
-    return _content_generation_service
-
-
-# =============================================================================
-# CONVENIENCE FUNCTIONS
-# =============================================================================
-
-
-async def generate_content(
-    keyword: str,
-    url: str,
-    brand_name: str,
-    content_type: str = "collection",
-    tone: str = "professional",
-    target_word_count: int = 400,
-    context: dict[str, Any] | None = None,
-    project_id: str | None = None,
-    page_id: str | None = None,
-) -> ContentGenerationResult:
-    """Convenience function for content generation.
+    skipped: bool = False
+
+
+@dataclass
+class PipelineResult:
+    """Result of running the content generation pipeline for a project."""
+
+    project_id: str
+    total_pages: int = 0
+    succeeded: int = 0
+    failed: int = 0
+    skipped: int = 0
+    page_results: list[PipelinePageResult] = field(default_factory=list)
+    started_at: str = ""
+    completed_at: str = ""
+
+
+async def run_content_pipeline(
+    project_id: str,
+    force_refresh: bool = False,
+    refresh_briefs: bool = False,
+) -> PipelineResult:
+    """Run the content generation pipeline for all approved pages in a project.
+
+    Processes each page through: brief → write → check. Uses asyncio.Semaphore
+    for concurrency control (CONTENT_GENERATION_CONCURRENCY env var, default 1).
+
+    Designed to be called from a FastAPI BackgroundTask — creates its own
+    database sessions per-page for isolation.
 
     Args:
-        keyword: Primary keyword for the page
-        url: Page URL
-        brand_name: Brand name for title tag
-        content_type: Type of content (collection, product, blog, landing)
-        tone: Desired tone for the content
-        target_word_count: Target word count
-        context: Additional context (research brief, brand voice)
-        project_id: Project ID for logging
-        page_id: Page ID for logging
+        project_id: UUID of the project to generate content for.
+        force_refresh: If True, regenerate content even for pages with
+            status='complete'.
+        refresh_briefs: If True, also re-fetch POP briefs (costs API credits).
+            Only used when force_refresh is True.
 
     Returns:
-        ContentGenerationResult with generated content
+        PipelineResult with per-page results and aggregate counts.
     """
-    service = get_content_generation_service()
-    input_data = ContentGenerationInput(
-        keyword=keyword,
-        url=url,
-        brand_name=brand_name,
-        content_type=content_type,
-        tone=tone,
-        target_word_count=target_word_count,
-        context=context,
+    settings = get_settings()
+    concurrency = settings.content_generation_concurrency
+
+    result = PipelineResult(
         project_id=project_id,
-        page_id=page_id,
+        started_at=datetime.now(UTC).isoformat(),
     )
-    return await service.generate_content(input_data)
+
+    logger.info(
+        "Starting content generation pipeline",
+        extra={
+            "project_id": project_id,
+            "concurrency": concurrency,
+            "force_refresh": force_refresh,
+        },
+    )
+
+    # Load approved pages and brand config in a read-only session
+    async with db_manager.session_factory() as session:
+        pages_data = await _load_approved_pages(session, project_id)
+        brand_config = await _load_brand_config(session, project_id)
+
+    if not pages_data:
+        logger.info(
+            "No approved pages found for content generation",
+            extra={"project_id": project_id},
+        )
+        result.completed_at = datetime.now(UTC).isoformat()
+        return result
+
+    result.total_pages = len(pages_data)
+
+    logger.info(
+        "Found approved pages for content generation",
+        extra={
+            "project_id": project_id,
+            "total_pages": result.total_pages,
+        },
+    )
+
+    # Reset all page statuses to pending upfront when force-refreshing,
+    # so the frontend immediately sees the pipeline indicators reset.
+    if force_refresh:
+        async with db_manager.session_factory() as reset_db:
+            page_ids = [pd["page_id"] for pd in pages_data]
+            reset_stmt = select(PageContent).where(
+                PageContent.crawled_page_id.in_(page_ids)
+            )
+            reset_result = await reset_db.execute(reset_stmt)
+            for pc in reset_result.scalars().all():
+                pc.status = ContentStatus.PENDING.value
+                pc.generation_started_at = None
+                pc.generation_completed_at = None
+            await reset_db.commit()
+            logger.info(
+                "Reset page statuses to pending for regeneration",
+                extra={"project_id": project_id, "pages_reset": len(page_ids)},
+            )
+
+    # --- Phase 1: Pre-fetch all POP briefs concurrently ---
+    # POP briefs involve async polling loops that are mostly I/O wait.
+    # Fetching all briefs upfront in parallel (ungated) eliminates the
+    # per-page serial bottleneck where brief → write was sequential.
+    await _prefetch_all_briefs(
+        pages_data=pages_data,
+        force_refresh=force_refresh,
+        refresh_briefs=refresh_briefs,
+    )
+
+    # --- Phase 2: Write content + quality checks (briefs are now cached) ---
+    semaphore = asyncio.Semaphore(concurrency)
+
+    async def _process_with_semaphore(
+        page_data: dict[str, Any],
+    ) -> PipelinePageResult:
+        async with semaphore:
+            return await _process_single_page(
+                page_data=page_data,
+                brand_config=brand_config,
+                force_refresh=force_refresh,
+                refresh_briefs=False,  # Briefs already fetched in Phase 1
+            )
+
+    tasks = [_process_with_semaphore(pd) for pd in pages_data]
+    page_results = await asyncio.gather(*tasks)
+
+    # Aggregate results
+    for pr in page_results:
+        result.page_results.append(pr)
+        if pr.skipped:
+            result.skipped += 1
+        elif pr.success:
+            result.succeeded += 1
+        else:
+            result.failed += 1
+
+    result.completed_at = datetime.now(UTC).isoformat()
+
+    logger.info(
+        "Content generation pipeline complete",
+        extra={
+            "project_id": project_id,
+            "total": result.total_pages,
+            "succeeded": result.succeeded,
+            "failed": result.failed,
+            "skipped": result.skipped,
+        },
+    )
+
+    # --- Phase 3: Auto-run link planning to inject/re-inject internal links ---
+    # Only run if at least 2 pages have complete content (link planning needs ≥2)
+    completed_count = result.succeeded + result.skipped  # skipped = already complete
+    if completed_count >= 2:
+        await _auto_link_planning(project_id)
+
+    return result
+
+
+async def _prefetch_all_briefs(
+    pages_data: list[dict[str, Any]],
+    force_refresh: bool,
+    refresh_briefs: bool,
+) -> None:
+    """Phase 1: Pre-fetch POP content briefs for all pages concurrently.
+
+    POP briefs involve async polling loops (2s intervals) that are mostly I/O
+    wait. Running all brief fetches in parallel — instead of gated behind the
+    per-page content-writing semaphore — dramatically reduces wall-clock time.
+
+    Brief results are stored in the database by fetch_content_brief and will be
+    returned from cache when _process_single_page runs in Phase 2.
+    """
+    # Skip pages that will be skipped in Phase 2 (already complete)
+    pages_needing_briefs = [
+        pd
+        for pd in pages_data
+        if force_refresh
+        or pd["existing_content_status"] != ContentStatus.COMPLETE.value
+    ]
+
+    if not pages_needing_briefs:
+        logger.info("Phase 1: All pages already complete, skipping brief pre-fetch")
+        return
+
+    logger.info(
+        "Phase 1: Pre-fetching POP briefs concurrently",
+        extra={"page_count": len(pages_needing_briefs)},
+    )
+
+    # Batch-set all pages to GENERATING_BRIEF and commit so the frontend
+    # polling endpoint can see the status immediately.
+    async with db_manager.session_factory() as status_db:
+        page_ids = [pd["page_id"] for pd in pages_needing_briefs]
+        stmt = select(PageContent).where(PageContent.crawled_page_id.in_(page_ids))
+        result = await status_db.execute(stmt)
+        existing = {pc.crawled_page_id: pc for pc in result.scalars().all()}
+
+        for pd in pages_needing_briefs:
+            pid = pd["page_id"]
+            if pid in existing:
+                existing[pid].status = ContentStatus.GENERATING_BRIEF.value
+            else:
+                status_db.add(
+                    PageContent(
+                        crawled_page_id=pid,
+                        status=ContentStatus.GENERATING_BRIEF.value,
+                    )
+                )
+        await status_db.commit()
+
+    async def _fetch_one_brief(page_data: dict[str, Any]) -> None:
+        page_id = page_data["page_id"]
+        keyword = page_data["keyword"]
+        url = page_data["url"]
+
+        try:
+            async with db_manager.session_factory() as db:
+                stmt = select(CrawledPage).where(CrawledPage.id == page_id)
+                result = await db.execute(stmt)
+                crawled_page = result.scalar_one_or_none()
+
+                if crawled_page is None:
+                    return
+
+                await fetch_content_brief(
+                    db=db,
+                    crawled_page=crawled_page,
+                    keyword=keyword,
+                    target_url=url,
+                    force_refresh=refresh_briefs,
+                )
+        except Exception as exc:
+            # Non-fatal: _process_single_page will retry in Phase 2
+            logger.warning(
+                "Brief pre-fetch failed (will retry in pipeline)",
+                extra={"page_id": page_id, "error": str(exc)},
+            )
+
+    brief_tasks = [_fetch_one_brief(pd) for pd in pages_needing_briefs]
+    await asyncio.gather(*brief_tasks)
+
+    logger.info(
+        "Phase 1: Brief pre-fetch complete",
+        extra={"page_count": len(pages_needing_briefs)},
+    )
+
+
+async def _auto_link_planning(project_id: str) -> None:
+    """Phase 3: Automatically run link planning after content generation.
+
+    Checks if InternalLink records already exist for the project (onboarding
+    scope). If they do, runs replan_links (snapshot → strip → delete → re-run).
+    If none exist, runs the fresh link planning pipeline.
+
+    Failures are non-fatal — logged but don't affect content generation results.
+    """
+    from sqlalchemy import func
+
+    from app.models.internal_link import InternalLink
+    from app.services.link_planning import replan_links, run_link_planning_pipeline
+
+    logger.info(
+        "Phase 3: Starting auto link planning",
+        extra={"project_id": project_id},
+    )
+
+    try:
+        async with db_manager.session_factory() as db:
+            # Check for existing onboarding-scope links
+            count_stmt = (
+                select(func.count())
+                .select_from(InternalLink)
+                .where(
+                    InternalLink.project_id == project_id,
+                    InternalLink.scope == "onboarding",
+                )
+            )
+            count_result = await db.execute(count_stmt)
+            has_existing = (count_result.scalar_one() or 0) > 0
+
+            if has_existing:
+                logger.info(
+                    "Phase 3: Existing links found, re-planning",
+                    extra={"project_id": project_id},
+                )
+                await replan_links(project_id, "onboarding", None, db)
+            else:
+                logger.info(
+                    "Phase 3: No existing links, running fresh link planning",
+                    extra={"project_id": project_id},
+                )
+                await run_link_planning_pipeline(project_id, "onboarding", None, db)
+
+        logger.info(
+            "Phase 3: Auto link planning complete",
+            extra={"project_id": project_id},
+        )
+
+    except Exception as e:
+        # Non-fatal: content generation already succeeded, links can be
+        # planned manually via the UI if auto-planning fails.
+        logger.warning(
+            "Phase 3: Auto link planning failed (non-fatal)",
+            extra={
+                "project_id": project_id,
+                "error": str(e),
+                "error_type": type(e).__name__,
+            },
+            exc_info=True,
+        )
+
+
+async def _load_approved_pages(
+    db: AsyncSession,
+    project_id: str,
+) -> list[dict[str, Any]]:
+    """Load all approved-keyword pages for a project.
+
+    Returns lightweight dicts with page_id, url, and keyword so we can
+    process each page in its own session without holding the read session open.
+    """
+    stmt = (
+        select(CrawledPage)
+        .join(PageKeywords, PageKeywords.crawled_page_id == CrawledPage.id)
+        .where(
+            CrawledPage.project_id == project_id,
+            PageKeywords.is_approved.is_(True),
+        )
+        .options(
+            selectinload(CrawledPage.keywords),
+            selectinload(CrawledPage.page_content),
+        )
+    )
+    result = await db.execute(stmt)
+    pages = result.scalars().all()
+
+    pages_data: list[dict[str, Any]] = []
+    for page in pages:
+        keyword = page.keywords.primary_keyword if page.keywords else None
+        if not keyword:
+            continue
+
+        # Track existing content status for skip logic
+        existing_status = None
+        if page.page_content:
+            existing_status = page.page_content.status
+
+        pages_data.append(
+            {
+                "page_id": page.id,
+                "url": page.normalized_url,
+                "keyword": keyword,
+                "existing_content_status": existing_status,
+            }
+        )
+
+    return pages_data
+
+
+async def _load_brand_config(
+    db: AsyncSession,
+    project_id: str,
+) -> dict[str, Any]:
+    """Load brand config v2_schema for a project.
+
+    Returns empty dict if no brand config exists (services degrade gracefully).
+    """
+    stmt = select(BrandConfig).where(BrandConfig.project_id == project_id)
+    result = await db.execute(stmt)
+    config = result.scalar_one_or_none()
+
+    if config is None:
+        logger.warning(
+            "No brand config found for project",
+            extra={"project_id": project_id},
+        )
+        return {}
+
+    return config.v2_schema or {}
+
+
+async def _process_single_page(
+    page_data: dict[str, Any],
+    brand_config: dict[str, Any],
+    force_refresh: bool,
+    refresh_briefs: bool = False,
+) -> PipelinePageResult:
+    """Process a single page through the brief → write → check pipeline.
+
+    Creates its own database session for error isolation — if this page fails,
+    the session is rolled back without affecting other pages.
+    """
+    page_id: str = page_data["page_id"]
+    url: str = page_data["url"]
+    keyword: str = page_data["keyword"]
+    existing_status: str | None = page_data["existing_content_status"]
+
+    # Skip pages that already have complete content (unless force_refresh)
+    if not force_refresh and existing_status == ContentStatus.COMPLETE.value:
+        logger.info(
+            "Skipping page with complete content",
+            extra={"page_id": page_id, "url": url},
+        )
+        return PipelinePageResult(
+            page_id=page_id,
+            url=url,
+            success=True,
+            skipped=True,
+        )
+
+    logger.info(
+        "Processing page through content pipeline",
+        extra={"page_id": page_id, "url": url, "keyword": keyword[:50]},
+    )
+
+    try:
+        async with db_manager.session_factory() as db:
+            # Re-load the CrawledPage in this session with relationships
+            stmt = (
+                select(CrawledPage)
+                .where(CrawledPage.id == page_id)
+                .options(
+                    selectinload(CrawledPage.page_content),
+                    selectinload(CrawledPage.content_brief),
+                )
+            )
+            result = await db.execute(stmt)
+            crawled_page = result.scalar_one_or_none()
+
+            if crawled_page is None:
+                return PipelinePageResult(
+                    page_id=page_id,
+                    url=url,
+                    success=False,
+                    error="CrawledPage not found",
+                )
+
+            # --- Step 1: Fetch POP brief ---
+            page_content = await _ensure_page_content(db, crawled_page)
+            page_content.status = ContentStatus.GENERATING_BRIEF.value
+            page_content.generation_started_at = datetime.now(UTC)
+            await db.commit()
+
+            # By default, use cached POP brief — force_refresh only controls
+            # whether we re-run the Claude writing step. Re-fetching from POP
+            # (which costs API credits) requires explicit refresh_briefs=True.
+            brief_result = await fetch_content_brief(
+                db=db,
+                crawled_page=crawled_page,
+                keyword=keyword,
+                target_url=url,
+                force_refresh=refresh_briefs,
+            )
+
+            content_brief = brief_result.content_brief
+            if not brief_result.success:
+                logger.warning(
+                    "Content brief fetch failed, continuing without brief",
+                    extra={
+                        "page_id": page_id,
+                        "error": brief_result.error,
+                    },
+                )
+
+            # Log the POP brief result to prompt_logs so it's visible in the inspector
+            await _log_content_brief(
+                db, page_content, keyword, content_brief, brief_result
+            )
+
+            # Auto-enrich vocabulary.competitors from POP competitor URLs
+            if content_brief and content_brief.competitors:
+                brand_config = await _enrich_competitors_from_pop(
+                    db, brand_config, content_brief.competitors, crawled_page.project_id
+                )
+
+            # --- Step 2: Write content ---
+            # generate_content sets status to WRITING internally
+            writing_result = await generate_content(
+                db=db,
+                crawled_page=crawled_page,
+                content_brief=content_brief,
+                brand_config=brand_config,
+                keyword=keyword,
+            )
+
+            if not writing_result.success:
+                # generate_content already marks PageContent as failed
+                await db.commit()
+                return PipelinePageResult(
+                    page_id=page_id,
+                    url=url,
+                    success=False,
+                    error=writing_result.error,
+                )
+
+            # --- Step 3: Run quality checks ---
+            written_content = writing_result.page_content
+            if written_content is None:
+                await db.commit()
+                return PipelinePageResult(
+                    page_id=page_id,
+                    url=url,
+                    success=False,
+                    error="No PageContent after writing",
+                )
+
+            written_content.status = ContentStatus.CHECKING.value
+            await db.commit()
+
+            run_quality_checks(written_content, brand_config)
+
+            # --- Step 4: Mark complete ---
+            written_content.status = ContentStatus.COMPLETE.value
+            written_content.generation_completed_at = datetime.now(UTC)
+            await db.commit()
+
+            logger.info(
+                "Page content generation complete",
+                extra={
+                    "page_id": page_id,
+                    "url": url,
+                    "word_count": written_content.word_count,
+                    "qa_passed": (written_content.qa_results or {}).get("passed"),
+                },
+            )
+
+            return PipelinePageResult(
+                page_id=page_id,
+                url=url,
+                success=True,
+            )
+
+    except Exception as exc:
+        logger.error(
+            "Content pipeline failed for page",
+            extra={
+                "page_id": page_id,
+                "url": url,
+                "error": str(exc),
+            },
+            exc_info=True,
+        )
+
+        # Mark as failed in a new session (previous may be broken)
+        try:
+            async with db_manager.session_factory() as err_db:
+                err_stmt = select(PageContent).where(
+                    PageContent.crawled_page_id == page_id
+                )
+                err_result = await err_db.execute(err_stmt)
+                pc = err_result.scalar_one_or_none()
+                if pc is not None:
+                    pc.status = ContentStatus.FAILED.value
+                    pc.generation_completed_at = datetime.now(UTC)
+                    pc.qa_results = {"error": str(exc)}
+                    await err_db.commit()
+        except Exception:
+            logger.error(
+                "Failed to mark page as failed after pipeline error",
+                extra={"page_id": page_id},
+                exc_info=True,
+            )
+
+        return PipelinePageResult(
+            page_id=page_id,
+            url=url,
+            success=False,
+            error=str(exc),
+        )
+
+
+async def _ensure_page_content(
+    db: AsyncSession,
+    crawled_page: CrawledPage,
+) -> PageContent:
+    """Get or create PageContent record for a CrawledPage."""
+    if crawled_page.page_content is not None:
+        return crawled_page.page_content
+
+    page_content = PageContent(crawled_page_id=crawled_page.id)
+    db.add(page_content)
+    await db.flush()
+    # Attach to relationship so subsequent code can access it
+    crawled_page.page_content = page_content
+    return page_content
+
+
+async def _log_content_brief(
+    db: AsyncSession,
+    page_content: PageContent,
+    keyword: str,
+    content_brief: Any,
+    brief_result: Any,
+) -> None:
+    """Create a PromptLog entry for the POP content brief step.
+
+    Logs the keyword request as prompt_text and the POP API response (or error)
+    as response_text so it's visible in the Prompt Inspector.
+    """
+    prompt_text = f"POP content brief (get-terms + create-report + recommendations) for keyword: {keyword}"
+
+    if brief_result.success and content_brief is not None:
+        # Show a readable summary of all POP response data
+        raw = content_brief.raw_response or {}
+        summary_parts: list[str] = []
+
+        # LSI Terms
+        lsi_terms = content_brief.lsi_terms or []
+        if lsi_terms:
+            summary_parts.append(f"LSI Terms ({len(lsi_terms)}):")
+            for term in lsi_terms[:20]:  # Cap at 20 for readability
+                phrase = term.get("phrase", "")
+                weight = term.get("weight", 0)
+                avg_count = term.get("averageCount", 0)
+                summary_parts.append(
+                    f"  - {phrase} (weight: {weight}, target: {avg_count})"
+                )
+
+        # Keyword Variations
+        variations = content_brief.related_searches or []
+        if variations:
+            summary_parts.append(f"\nKeyword Variations ({len(variations)}):")
+            for v in variations:
+                summary_parts.append(f"  - {v}")
+
+        # Competitors
+        competitors = content_brief.competitors or []
+        if competitors:
+            summary_parts.append(f"\nCompetitors ({len(competitors)}):")
+            for comp in competitors:
+                url = comp.get("url", "")
+                score = comp.get("pageScore") or 0
+                wc = comp.get("wordCount") or 0
+                summary_parts.append(f"  - {url} (score: {score}, words: {wc})")
+
+        # Related Questions
+        related_questions = content_brief.related_questions or []
+        if related_questions:
+            summary_parts.append(f"\nRelated Questions ({len(related_questions)}):")
+            for q in related_questions:
+                summary_parts.append(f"  - {q}")
+
+        # Heading Structure Targets
+        heading_targets = content_brief.heading_targets or []
+        if heading_targets:
+            summary_parts.append(
+                f"\nHeading Structure Targets ({len(heading_targets)}):"
+            )
+            for h in heading_targets:
+                tag = h.get("tag", "")
+                target = h.get("target", 0)
+                summary_parts.append(f"  - {tag}: {target}")
+
+        # Keyword Placement Targets
+        keyword_targets = content_brief.keyword_targets or []
+        if keyword_targets:
+            summary_parts.append(
+                f"\nKeyword Placement Targets ({len(keyword_targets)}):"
+            )
+            for kt in keyword_targets:
+                signal = kt.get("signal", "")
+                kt_type = kt.get("type", "")
+                target = kt.get("target", 0)
+                phrase = kt.get("phrase", kt.get("comment", ""))
+                label = f"{signal} ({kt_type}): target={target}"
+                if phrase:
+                    label += f" [{phrase}]"
+                summary_parts.append(f"  - {label}")
+
+        # Page Score Target
+        page_score = content_brief.page_score_target
+        if page_score is not None:
+            summary_parts.append(f"\nPage Score Target: {page_score}")
+
+        # Word Count Range
+        wc_target = content_brief.word_count_target
+        wc_min = content_brief.word_count_min
+        wc_max = content_brief.word_count_max
+        if wc_min and wc_max:
+            wc_str = f"min={wc_min}, avg={wc_target or 'N/A'}, max={wc_max}"
+        elif wc_target:
+            wc_str = str(wc_target)
+        else:
+            wc_str = "N/A"
+        summary_parts.append(f"\nWord Count Range: {wc_str}")
+
+        response_text = (
+            "\n".join(summary_parts) if summary_parts else json.dumps(raw, indent=2)
+        )
+    else:
+        response_text = (
+            f"POP brief fetch failed: {brief_result.error or 'unknown error'}"
+        )
+
+    log = PromptLog(
+        page_content_id=page_content.id,
+        step="content_brief",
+        role="system",
+        prompt_text=prompt_text,
+        response_text=response_text,
+    )
+    db.add(log)
+    await db.flush()
+
+
+async def _enrich_competitors_from_pop(
+    db: AsyncSession,
+    brand_config: dict[str, Any],
+    competitors: list[dict[str, Any]],
+    project_id: str,
+) -> dict[str, Any]:
+    """Auto-enrich vocabulary.competitors from POP competitor URLs.
+
+    Extracts brand names from competitor domains, merges them into the
+    brand_config's vocabulary.competitors list (case-insensitive dedup),
+    and persists changes back to the database if any new names were added.
+
+    Returns the (potentially updated) brand_config dict for use in the
+    current pipeline run.
+    """
+    new_brands = extract_competitor_brands(competitors)
+    if not new_brands:
+        return brand_config
+
+    # Ensure vocabulary exists
+    vocabulary = brand_config.get("vocabulary")
+    if not isinstance(vocabulary, dict):
+        vocabulary = {}
+        brand_config["vocabulary"] = vocabulary
+
+    existing: list[str] = vocabulary.get("competitors", []) or []
+    existing_lower = {name.lower() for name in existing}
+
+    added: list[str] = []
+    for name in new_brands:
+        if name.lower() not in existing_lower:
+            existing.append(name)
+            existing_lower.add(name.lower())
+            added.append(name)
+
+    if not added:
+        return brand_config
+
+    vocabulary["competitors"] = existing
+
+    # Persist to database
+    try:
+        stmt = select(BrandConfig).where(BrandConfig.project_id == project_id)
+        result = await db.execute(stmt)
+        config_record = result.scalar_one_or_none()
+
+        if config_record and config_record.v2_schema:
+            updated_schema = dict(config_record.v2_schema)
+            vocab = updated_schema.get("vocabulary")
+            if not isinstance(vocab, dict):
+                vocab = {}
+                updated_schema["vocabulary"] = vocab
+            vocab["competitors"] = existing
+            config_record.v2_schema = updated_schema
+
+            from sqlalchemy.orm.attributes import flag_modified
+
+            flag_modified(config_record, "v2_schema")
+            await db.flush()
+
+            logger.info(
+                "Enriched vocabulary.competitors from POP URLs",
+                extra={
+                    "project_id": project_id,
+                    "added": added,
+                    "total": len(existing),
+                },
+            )
+    except Exception:
+        logger.warning(
+            "Failed to persist POP competitor enrichment",
+            extra={"project_id": project_id},
+            exc_info=True,
+        )
+
+    return brand_config

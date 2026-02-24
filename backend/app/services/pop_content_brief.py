@@ -1,22 +1,17 @@
-"""POP Content Brief service for fetching and storing content briefs.
+"""POP content brief service for fetching and storing content briefs.
 
-Fetches content brief data from PageOptimizer Pro API and manages storage.
-Content briefs provide keyword targets, LSI terms, competitor data, and
-optimization recommendations for content creation.
+Fetches content optimization data from PageOptimizer Pro (or mock) and stores
+structured brief data as ContentBrief records. Supports the full 3-step POP flow:
+1. get-terms → LSI phrases, variations, prepareId
+2. create-report → competitors, related questions, word count range, page score
+3. get-custom-recommendations → keyword placement targets, heading structure
 
-ERROR LOGGING REQUIREMENTS:
-- Log method entry/exit at DEBUG level with parameters (sanitized)
-- Log all exceptions with full stack trace and context
-- Include entity IDs (project_id, page_id) in all service logs
-- Log validation failures with field names and rejected values
-- Log state transitions (phase changes) at INFO level
-- Add timing logs for operations >1 second
+Handles caching, force refresh, and graceful error handling so that content
+generation is never blocked.
 """
 
-import time
-import traceback
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
+import contextlib
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import select
@@ -25,1389 +20,762 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.logging import get_logger
 from app.integrations.pop import (
     POPClient,
-    POPError,
+    POPMockClient,
     POPTaskStatus,
+    POPTimeoutError,
     get_pop_client,
 )
 from app.models.content_brief import ContentBrief
+from app.models.crawled_page import CrawledPage
 
 logger = get_logger(__name__)
 
-# Constants
-SLOW_OPERATION_THRESHOLD_MS = 1000
-
 
 @dataclass
-class POPContentBriefResult:
-    """Result of a POP content brief fetch operation."""
+class ContentBriefResult:
+    """Result of a content brief fetch operation."""
 
     success: bool
-    keyword: str
-    target_url: str
-    task_id: str | None = None
-    brief_id: str | None = None  # Database record ID after persistence
-    word_count_target: int | None = None
-    word_count_min: int | None = None
-    word_count_max: int | None = None
-    heading_targets: list[dict[str, Any]] = field(default_factory=list)
-    keyword_targets: list[dict[str, Any]] = field(default_factory=list)
-    lsi_terms: list[dict[str, Any]] = field(default_factory=list)
-    entities: list[dict[str, Any]] = field(default_factory=list)
-    related_questions: list[dict[str, Any]] = field(default_factory=list)
-    related_searches: list[dict[str, Any]] = field(default_factory=list)
-    competitors: list[dict[str, Any]] = field(default_factory=list)
-    page_score_target: float | None = None
-    raw_response: dict[str, Any] = field(default_factory=dict)
+    content_brief: ContentBrief | None = None
     error: str | None = None
-    duration_ms: float = 0.0
-    request_id: str | None = None
+    cached: bool = False
 
 
-class POPContentBriefServiceError(Exception):
-    """Base exception for POP content brief service errors."""
+async def fetch_content_brief(
+    db: AsyncSession,
+    crawled_page: CrawledPage,
+    keyword: str,
+    target_url: str,
+    force_refresh: bool = False,
+) -> ContentBriefResult:
+    """Fetch a content brief from POP and store as a ContentBrief record.
 
-    def __init__(
-        self,
-        message: str,
-        project_id: str | None = None,
-        page_id: str | None = None,
-    ) -> None:
-        super().__init__(message)
-        self.project_id = project_id
-        self.page_id = page_id
+    For mock client: calls get_terms() which returns all 3 steps merged.
+    For real client: orchestrates the 3-step flow:
+      1. create_report_task (get-terms) → poll → extract prepareId
+      2. create_report(prepareId) → poll → extract report data
+      3. get_custom_recommendations(reportId) → extract recommendations
 
+    Caching: if a ContentBrief already exists for the page and force_refresh is
+    False, returns the existing record without making an API call.
 
-class POPContentBriefValidationError(POPContentBriefServiceError):
-    """Raised when validation fails."""
+    On POP API error or timeout, returns a failure result with error details
+    but does NOT raise — content generation can proceed without LSI terms.
 
-    def __init__(
-        self,
-        field_name: str,
-        value: str,
-        message: str,
-        project_id: str | None = None,
-        page_id: str | None = None,
-    ) -> None:
-        super().__init__(
-            f"Validation error for {field_name}: {message}", project_id, page_id
-        )
-        self.field_name = field_name
-        self.value = value
+    Args:
+        db: Async database session.
+        crawled_page: The CrawledPage to associate the brief with.
+        keyword: Target keyword for POP get-terms.
+        target_url: URL to analyze.
+        force_refresh: If True, make a new API call even if a brief exists.
 
-
-class POPContentBriefService:
-    """Service for fetching and storing POP content briefs.
-
-    Features:
-    - Fetches content briefs from PageOptimizer Pro API
-    - Creates POP tasks and polls for results
-    - Parses and normalizes brief data
-    - Comprehensive logging per requirements
-
-    Usage:
-        service = POPContentBriefService()
-        result = await service.fetch_brief(
-            project_id="uuid",
-            page_id="uuid",
-            keyword="best hiking boots",
-            target_url="https://example.com/hiking-boots",
-        )
+    Returns:
+        ContentBriefResult with success status, ContentBrief (or None), and
+        error details if applicable.
     """
-
-    def __init__(
-        self,
-        session: AsyncSession | None = None,
-        client: POPClient | None = None,
-    ) -> None:
-        """Initialize POP content brief service.
-
-        Args:
-            session: Optional async SQLAlchemy session for persistence.
-                     If None, persistence operations will not be available.
-            client: POP client instance. If None, uses global instance.
-        """
-        self._session = session
-        self._client = client
-
-        logger.debug(
-            "POPContentBriefService initialized",
-            extra={
-                "client_provided": client is not None,
-                "session_provided": session is not None,
-            },
-        )
-
-    async def _get_client(self) -> POPClient:
-        """Get POP client instance."""
-        if self._client is None:
-            self._client = await get_pop_client()
-        return self._client
-
-    async def save_brief(
-        self,
-        page_id: str,
-        keyword: str,
-        result: POPContentBriefResult,
-        project_id: str | None = None,
-    ) -> ContentBrief:
-        """Save a content brief to the database.
-
-        Creates or updates a content brief for the given page. If a brief already
-        exists for the same page, it will be replaced (upsert behavior).
-
-        Args:
-            page_id: UUID of the crawled page this brief is for
-            keyword: Target keyword for content optimization
-            result: POPContentBriefResult from fetch_brief()
-            project_id: Optional project ID for logging context
-
-        Returns:
-            The created or updated ContentBrief model instance
-
-        Raises:
-            POPContentBriefServiceError: If session is not available or save fails
-        """
-        start_time = time.monotonic()
-
-        # Method entry log with sanitized parameters
-        logger.debug(
-            "save_brief method entry",
-            extra={
-                "page_id": page_id,
-                "project_id": project_id,
-                "keyword": keyword[:50] if keyword else "",
-                "task_id": result.task_id,
-            },
-        )
-
-        if self._session is None:
-            raise POPContentBriefServiceError(
-                "Database session not available - cannot save brief",
-                project_id=project_id,
-                page_id=page_id,
-            )
-
-        try:
-            # Check if a brief already exists for this page
-            stmt = select(ContentBrief).where(ContentBrief.page_id == page_id)
-            db_result = await self._session.execute(stmt)
-            existing = db_result.scalar_one_or_none()
-
-            if existing:
-                # Update existing brief (replace)
-                existing.keyword = keyword
-                existing.pop_task_id = result.task_id
-                existing.word_count_target = result.word_count_target
-                existing.word_count_min = result.word_count_min
-                existing.word_count_max = result.word_count_max
-                existing.heading_targets = result.heading_targets
-                existing.keyword_targets = result.keyword_targets
-                existing.lsi_terms = result.lsi_terms
-                existing.entities = result.entities
-                existing.related_questions = result.related_questions
-                existing.related_searches = result.related_searches
-                existing.competitors = result.competitors
-                existing.page_score_target = result.page_score_target
-                existing.raw_response = result.raw_response
-                existing.updated_at = datetime.now(UTC)
-
-                brief = existing
-
-                logger.info(
-                    "Updated existing content brief",
-                    extra={
-                        "brief_id": brief.id,
-                        "page_id": page_id,
-                        "project_id": project_id,
-                        "keyword": keyword[:50],
-                        "pop_task_id": result.task_id,
-                    },
-                )
-            else:
-                # Create new brief
-                brief = ContentBrief(
-                    page_id=page_id,
-                    keyword=keyword,
-                    pop_task_id=result.task_id,
-                    word_count_target=result.word_count_target,
-                    word_count_min=result.word_count_min,
-                    word_count_max=result.word_count_max,
-                    heading_targets=result.heading_targets,
-                    keyword_targets=result.keyword_targets,
-                    lsi_terms=result.lsi_terms,
-                    entities=result.entities,
-                    related_questions=result.related_questions,
-                    related_searches=result.related_searches,
-                    competitors=result.competitors,
-                    page_score_target=result.page_score_target,
-                    raw_response=result.raw_response,
-                )
-                self._session.add(brief)
-
-                logger.info(
-                    "Created new content brief",
-                    extra={
-                        "page_id": page_id,
-                        "project_id": project_id,
-                        "keyword": keyword[:50],
-                        "pop_task_id": result.task_id,
-                    },
-                )
-
-            await self._session.flush()
-            await self._session.refresh(brief)
-
-            duration_ms = (time.monotonic() - start_time) * 1000
-
-            if duration_ms > SLOW_OPERATION_THRESHOLD_MS:
-                logger.warning(
-                    "Slow content brief save operation",
-                    extra={
-                        "brief_id": brief.id,
-                        "page_id": page_id,
-                        "project_id": project_id,
-                        "task_id": result.task_id,
-                        "duration_ms": round(duration_ms, 2),
-                        "threshold_ms": SLOW_OPERATION_THRESHOLD_MS,
-                    },
-                )
-
-            # Method exit log with result summary
-            logger.debug(
-                "save_brief method exit",
-                extra={
-                    "brief_id": brief.id,
-                    "page_id": page_id,
-                    "project_id": project_id,
-                    "task_id": result.task_id,
-                    "success": True,
-                    "duration_ms": round(duration_ms, 2),
-                },
-            )
-
-            return brief
-
-        except Exception as e:
-            duration_ms = (time.monotonic() - start_time) * 1000
-            logger.error(
-                "Failed to save content brief",
-                extra={
-                    "page_id": page_id,
-                    "project_id": project_id,
-                    "task_id": result.task_id,
-                    "keyword": keyword[:50] if keyword else "",
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                    "duration_ms": round(duration_ms, 2),
-                    "stack_trace": traceback.format_exc(),
-                },
-                exc_info=True,
-            )
-            # Method exit log on error
-            logger.debug(
-                "save_brief method exit",
-                extra={
-                    "brief_id": None,
-                    "page_id": page_id,
-                    "project_id": project_id,
-                    "task_id": result.task_id,
-                    "success": False,
-                    "error": str(e),
-                    "duration_ms": round(duration_ms, 2),
-                },
-            )
-            raise POPContentBriefServiceError(
-                f"Failed to save content brief: {e}",
-                project_id=project_id,
-                page_id=page_id,
-            ) from e
-
-    def _parse_brief_data(
-        self,
-        raw_data: dict[str, Any],
-    ) -> dict[str, Any]:
-        """Parse raw POP API response into structured brief data.
-
-        Extracts structured data from POP API responses following their schema:
-        - wordCount: {current, target} - word count targets
-        - tagCounts: [{tagLabel, min, max, mean, signalCnt}] - heading structure
-        - cleanedContentBrief: {title, pageTitle, subHeadings, p} - keyword targets by section
-        - lsaPhrases: [{phrase, weight, averageCount, targetCount}] - LSI terms
-        - relatedQuestions: [{question, link, snippet, title}] - PAA data
-        - competitors: [{url, title, pageScore}] - competitor data
-
-        Args:
-            raw_data: Raw API response data
-
-        Returns:
-            Dictionary with parsed brief fields
-        """
-        return {
-            "word_count_target": self._extract_word_count_target(raw_data),
-            "word_count_min": self._extract_word_count_min(raw_data),
-            "word_count_max": self._extract_word_count_max(raw_data),
-            "heading_targets": self._extract_heading_targets(raw_data),
-            "keyword_targets": self._extract_keyword_targets(raw_data),
-            "lsi_terms": self._extract_lsi_terms(raw_data),
-            "entities": self._extract_entities(raw_data),
-            "related_questions": self._extract_related_questions(raw_data),
-            "related_searches": self._extract_related_searches(raw_data),
-            "competitors": self._extract_competitors(raw_data),
-            "page_score_target": self._extract_page_score_target(raw_data),
-        }
-
-    def _extract_word_count_target(self, raw_data: dict[str, Any]) -> int | None:
-        """Extract word count target from POP response.
-
-        POP API provides wordCount.target for target word count.
-        Falls back to averaging competitors if not present.
-        """
-        word_count = raw_data.get("wordCount")
-        if isinstance(word_count, dict):
-            target = word_count.get("target")
-            if target is not None:
-                return int(target) if isinstance(target, (int, float)) else None
-        return None
-
-    def _extract_word_count_min(self, raw_data: dict[str, Any]) -> int | None:
-        """Extract minimum word count from POP response.
-
-        POP API does not provide explicit min, so we derive from tagCounts
-        or use 80% of target as a reasonable minimum.
-        """
-        # Check tagCounts for word count entry
-        tag_counts = raw_data.get("tagCounts", [])
-        if isinstance(tag_counts, list):
-            for tag in tag_counts:
-                if isinstance(tag, dict):
-                    label = tag.get("tagLabel", "").lower()
-                    if "word" in label and "count" in label:
-                        min_val = tag.get("min")
-                        if min_val is not None:
-                            return (
-                                int(min_val)
-                                if isinstance(min_val, (int, float))
-                                else None
-                            )
-
-        # Fall back to 80% of target
-        target = self._extract_word_count_target(raw_data)
-        if target is not None:
-            return int(target * 0.8)
-        return None
-
-    def _extract_word_count_max(self, raw_data: dict[str, Any]) -> int | None:
-        """Extract maximum word count from POP response.
-
-        POP API does not provide explicit max, so we derive from tagCounts
-        or use 120% of target as a reasonable maximum.
-        """
-        # Check tagCounts for word count entry
-        tag_counts = raw_data.get("tagCounts", [])
-        if isinstance(tag_counts, list):
-            for tag in tag_counts:
-                if isinstance(tag, dict):
-                    label = tag.get("tagLabel", "").lower()
-                    if "word" in label and "count" in label:
-                        max_val = tag.get("max")
-                        if max_val is not None:
-                            return (
-                                int(max_val)
-                                if isinstance(max_val, (int, float))
-                                else None
-                            )
-
-        # Fall back to 120% of target
-        target = self._extract_word_count_target(raw_data)
-        if target is not None:
-            return int(target * 1.2)
-        return None
-
-    def _extract_heading_targets(
-        self, raw_data: dict[str, Any]
-    ) -> list[dict[str, Any]]:
-        """Extract heading structure targets from tagCounts.
-
-        POP API provides tagCounts array with entries like:
-        - tagLabel: 'H1 tag total', 'H2 tag total', 'H3 tag total', 'H4 tag total'
-        - min: minimum count required
-        - max: maximum count required
-        - mean: average count across competitors
-        - signalCnt: current count on target page
-        """
-        heading_targets: list[dict[str, Any]] = []
-        tag_counts = raw_data.get("tagCounts", [])
-
-        if not isinstance(tag_counts, list):
-            return heading_targets
-
-        # Map tag labels to heading levels
-        heading_labels = {
-            "h1": ["h1 tag", "h1 total", "h1 tag total"],
-            "h2": ["h2 tag", "h2 total", "h2 tag total"],
-            "h3": ["h3 tag", "h3 total", "h3 tag total"],
-            "h4": ["h4 tag", "h4 total", "h4 tag total"],
-        }
-
-        for tag in tag_counts:
-            if not isinstance(tag, dict):
-                continue
-
-            tag_label = str(tag.get("tagLabel", "")).lower()
-
-            for level, patterns in heading_labels.items():
-                if any(pattern in tag_label for pattern in patterns):
-                    min_count = tag.get("min")
-                    max_count = tag.get("max")
-
-                    heading_targets.append(
-                        {
-                            "level": level,
-                            "text": None,  # POP doesn't provide suggested text in tagCounts
-                            "min_count": int(min_count)
-                            if isinstance(min_count, (int, float))
-                            else None,
-                            "max_count": int(max_count)
-                            if isinstance(max_count, (int, float))
-                            else None,
-                            "priority": None,
-                        }
-                    )
-                    break  # Found the level, move to next tag
-
-        return heading_targets
-
-    def _extract_keyword_targets(
-        self, raw_data: dict[str, Any]
-    ) -> list[dict[str, Any]]:
-        """Extract keyword density targets by section from cleanedContentBrief.
-
-        POP API provides cleanedContentBrief with sections:
-        - title: keyword targets for meta title
-        - pageTitle: keyword targets for page title (H1)
-        - subHeadings: keyword targets for H2/H3
-        - p: keyword targets for paragraph content
-
-        Each section has arrays with:
-        - term: {phrase, type, weight}
-        - contentBrief: {current, target}
-        """
-        keyword_targets: list[dict[str, Any]] = []
-        content_brief = raw_data.get("cleanedContentBrief", {})
-
-        if not isinstance(content_brief, dict):
-            return keyword_targets
-
-        # Map section names to our normalized section names
-        section_mapping = {
-            "title": "title",
-            "pageTitle": "h1",
-            "subHeadings": "h2",  # POP treats subHeadings as H2+H3
-            "p": "paragraph",
-        }
-
-        for pop_section, our_section in section_mapping.items():
-            section_data = content_brief.get(pop_section, [])
-            if not isinstance(section_data, list):
-                continue
-
-            for item in section_data:
-                if not isinstance(item, dict):
-                    continue
-
-                term = item.get("term", {})
-                if not isinstance(term, dict):
-                    continue
-
-                phrase = term.get("phrase")
-                if not phrase:
-                    continue
-
-                brief = item.get("contentBrief", {})
-                target_count = brief.get("target") if isinstance(brief, dict) else None
-
-                keyword_targets.append(
-                    {
-                        "keyword": str(phrase),
-                        "section": our_section,
-                        "count_min": None,  # POP doesn't provide explicit min per keyword
-                        "count_max": None,  # POP doesn't provide explicit max per keyword
-                        "density_target": float(target_count)
-                        if isinstance(target_count, (int, float))
-                        else None,
-                    }
-                )
-
-        # Also extract from section totals (titleTotal, pageTitleTotal, subHeadingsTotal, pTotal)
-        total_sections = {
-            "titleTotal": "title",
-            "pageTitleTotal": "h1",
-            "subHeadingsTotal": "h2",
-            "pTotal": "paragraph",
-        }
-
-        for pop_total, our_section in total_sections.items():
-            total_data = content_brief.get(pop_total, {})
-            if not isinstance(total_data, dict):
-                continue
-
-            min_val = total_data.get("min")
-            max_val = total_data.get("max")
-
-            # Only add if we have min/max data and haven't already captured this section
-            if min_val is not None or max_val is not None:
-                keyword_targets.append(
-                    {
-                        "keyword": f"_total_{our_section}",  # Special marker for section totals
-                        "section": our_section,
-                        "count_min": int(min_val)
-                        if isinstance(min_val, (int, float))
-                        else None,
-                        "count_max": int(max_val)
-                        if isinstance(max_val, (int, float))
-                        else None,
-                        "density_target": None,
-                    }
-                )
-
-        return keyword_targets
-
-    def _extract_lsi_terms(self, raw_data: dict[str, Any]) -> list[dict[str, Any]]:
-        """Extract LSI terms from lsaPhrases array.
-
-        POP API provides lsaPhrases with:
-        - phrase: the LSI term
-        - weight: importance weight
-        - averageCount: average count in competitors
-        - targetCount: recommended target count
-        """
-        lsi_terms: list[dict[str, Any]] = []
-        lsa_phrases = raw_data.get("lsaPhrases", [])
-
-        if not isinstance(lsa_phrases, list):
-            return lsi_terms
-
-        for item in lsa_phrases:
-            if not isinstance(item, dict):
-                continue
-
-            phrase = item.get("phrase")
-            if not phrase:
-                continue
-
-            weight = item.get("weight")
-            avg_count = item.get("averageCount")
-            target_count = item.get("targetCount")
-
-            lsi_terms.append(
-                {
-                    "phrase": str(phrase),
-                    "weight": float(weight)
-                    if isinstance(weight, (int, float))
-                    else None,
-                    "average_count": float(avg_count)
-                    if isinstance(avg_count, (int, float))
-                    else None,
-                    "target_count": int(target_count)
-                    if isinstance(target_count, (int, float))
-                    else None,
-                }
-            )
-
-        return lsi_terms
-
-    def _extract_entities(self, raw_data: dict[str, Any]) -> list[dict[str, Any]]:
-        """Extract entities from POP response.
-
-        POP API may provide entities in various forms. Handles gracefully
-        if not present.
-        """
-        entities: list[dict[str, Any]] = []
-        entities_data = raw_data.get("entities", [])
-
-        if not isinstance(entities_data, list):
-            return entities
-
-        for item in entities_data:
-            if not isinstance(item, dict):
-                continue
-
-            name = item.get("name") or item.get("entity")
-            if not name:
-                continue
-
-            salience = item.get("salience")
-            entities.append(
-                {
-                    "name": str(name),
-                    "type": str(item.get("type", "")) if item.get("type") else None,
-                    "salience": float(salience)
-                    if isinstance(salience, (int, float))
-                    else None,
-                }
-            )
-
-        return entities
-
-    def _extract_related_questions(
-        self, raw_data: dict[str, Any]
-    ) -> list[dict[str, Any]]:
-        """Extract related questions (PAA) from relatedQuestions array.
-
-        POP API provides relatedQuestions with:
-        - question: the question text
-        - link: source URL
-        - snippet: answer snippet
-        - title: title of the source
-        - displayed_link: formatted display link
-        """
-        related_questions: list[dict[str, Any]] = []
-        questions_data = raw_data.get("relatedQuestions", [])
-
-        if not isinstance(questions_data, list):
-            return related_questions
-
-        for item in questions_data:
-            if not isinstance(item, dict):
-                continue
-
-            question = item.get("question")
-            if not question:
-                continue
-
-            related_questions.append(
-                {
-                    "question": str(question),
-                    "answer_snippet": str(item.get("snippet", ""))
-                    if item.get("snippet")
-                    else None,
-                    "source_url": str(item.get("link", ""))
-                    if item.get("link")
-                    else None,
-                }
-            )
-
-        return related_questions
-
-    def _extract_related_searches(
-        self, raw_data: dict[str, Any]
-    ) -> list[dict[str, Any]]:
-        """Extract related searches from relatedSearches array.
-
-        POP API provides relatedSearches with:
-        - query: the search query
-        - link: URL
-        - items: array of related items
-        """
-        related_searches: list[dict[str, Any]] = []
-        searches_data = raw_data.get("relatedSearches", [])
-
-        if not isinstance(searches_data, list):
-            return related_searches
-
-        for item in searches_data:
-            if not isinstance(item, dict):
-                continue
-
-            query = item.get("query")
-            if not query:
-                continue
-
-            related_searches.append(
-                {
-                    "query": str(query),
-                    "relevance": None,  # POP doesn't provide relevance score
-                }
-            )
-
-        return related_searches
-
-    def _extract_competitors(self, raw_data: dict[str, Any]) -> list[dict[str, Any]]:
-        """Extract competitor data from competitors array.
-
-        POP API provides competitors with:
-        - url: competitor page URL
-        - title: page title
-        - pageScore: optimization score
-        - plus additional data like h2Texts, h3Texts, schemaTypes, etc.
-        """
-        competitors: list[dict[str, Any]] = []
-        competitors_data = raw_data.get("competitors", [])
-
-        if not isinstance(competitors_data, list):
-            return competitors
-
-        for idx, item in enumerate(competitors_data):
-            if not isinstance(item, dict):
-                continue
-
-            url = item.get("url")
-            if not url:
-                continue
-
-            page_score = item.get("pageScore")
-
-            competitors.append(
-                {
-                    "url": str(url),
-                    "title": str(item.get("title", "")) if item.get("title") else None,
-                    "page_score": float(page_score)
-                    if isinstance(page_score, (int, float))
-                    else None,
-                    "word_count": None,  # POP doesn't provide word count directly per competitor
-                    "position": idx + 1,  # Infer position from array order
-                }
-            )
-
-        return competitors
-
-    def _extract_page_score_target(self, raw_data: dict[str, Any]) -> float | None:
-        """Extract page score target from POP response.
-
-        POP API provides pageScore or pageScoreValue at top level
-        of cleanedContentBrief.
-        """
-        # Try cleanedContentBrief first
-        content_brief = raw_data.get("cleanedContentBrief", {})
-        if isinstance(content_brief, dict):
-            page_score = content_brief.get("pageScore")
-            if isinstance(page_score, (int, float)):
-                return float(page_score)
-
-            page_score_value = content_brief.get("pageScoreValue")
-            if page_score_value is not None:
-                try:
-                    return float(page_score_value)
-                except (ValueError, TypeError):
-                    pass
-
-        # Try top-level
-        page_score = raw_data.get("pageScore")
-        if isinstance(page_score, (int, float)):
-            return float(page_score)
-
-        return None
-
-    async def fetch_brief(
-        self,
-        project_id: str,
-        page_id: str,
-        keyword: str,
-        target_url: str,
-    ) -> POPContentBriefResult:
-        """Fetch a content brief from POP API for a keyword/URL.
-
-        Creates a POP report task, polls for completion, and parses
-        the results into a structured content brief.
-
-        Args:
-            project_id: Project ID for logging context
-            page_id: Page ID for logging context
-            keyword: Target keyword for content optimization
-            target_url: URL of the page to optimize
-
-        Returns:
-            POPContentBriefResult with brief data or error
-        """
-        start_time = time.monotonic()
-
-        # Method entry log with sanitized parameters
-        logger.debug(
-            "fetch_brief method entry",
-            extra={
-                "project_id": project_id,
-                "page_id": page_id,
-                "keyword": keyword[:50] if keyword else "",
-                "target_url": target_url[:100] if target_url else "",
-            },
-        )
-
-        # Validate inputs
-        if not keyword or not keyword.strip():
-            logger.warning(
-                "Content brief validation failed - empty keyword",
-                extra={
-                    "field": "keyword",
-                    "value": "",
-                    "project_id": project_id,
-                    "page_id": page_id,
-                },
-            )
-            raise POPContentBriefValidationError(
-                "keyword",
-                "",
-                "Keyword cannot be empty",
-                project_id=project_id,
-                page_id=page_id,
-            )
-
-        if not target_url or not target_url.strip():
-            logger.warning(
-                "Content brief validation failed - empty target_url",
-                extra={
-                    "field": "target_url",
-                    "value": "",
-                    "project_id": project_id,
-                    "page_id": page_id,
-                },
-            )
-            raise POPContentBriefValidationError(
-                "target_url",
-                "",
-                "Target URL cannot be empty",
-                project_id=project_id,
-                page_id=page_id,
-            )
-
-        keyword = keyword.strip()
-        target_url = target_url.strip()
-
-        try:
-            client = await self._get_client()
-
-            # Phase transition: brief_fetch_started
+    page_id = crawled_page.id
+
+    # Check for existing brief (caching)
+    if not force_refresh:
+        stmt = select(ContentBrief).where(ContentBrief.page_id == page_id)
+        result = await db.execute(stmt)
+        existing = result.scalar_one_or_none()
+
+        if existing is not None:
             logger.info(
-                "brief_fetch_started",
-                extra={
-                    "project_id": project_id,
-                    "page_id": page_id,
-                    "keyword": keyword[:50],
-                    "target_url": target_url[:100],
-                },
+                "Content brief already exists, returning cached",
+                extra={"page_id": page_id, "keyword": keyword[:50]},
+            )
+            return ContentBriefResult(
+                success=True,
+                content_brief=existing,
+                cached=True,
             )
 
-            # Step 1: Create report task
-            logger.info(
-                "Creating POP report task for content brief",
-                extra={
-                    "project_id": project_id,
-                    "page_id": page_id,
-                    "keyword": keyword[:50],
-                },
-            )
+    # Get POP client (real or mock)
+    pop_client = await get_pop_client()
 
-            task_result = await client.create_report_task(
+    logger.info(
+        "Fetching content brief from POP",
+        extra={
+            "page_id": page_id,
+            "keyword": keyword[:50],
+            "target_url": target_url[:100],
+            "client_type": type(pop_client).__name__,
+            "force_refresh": force_refresh,
+        },
+    )
+
+    try:
+        if isinstance(pop_client, POPMockClient):
+            # Mock client returns all 3 steps merged in get_terms()
+            task_result = await pop_client.get_terms(
                 keyword=keyword,
                 url=target_url,
             )
 
-            if not task_result.success or not task_result.task_id:
-                duration_ms = (time.monotonic() - start_time) * 1000
-                logger.error(
-                    "Failed to create POP report task",
-                    extra={
-                        "project_id": project_id,
-                        "page_id": page_id,
-                        "keyword": keyword[:50],
-                        "error": task_result.error,
-                        "duration_ms": round(duration_ms, 2),
-                    },
-                )
-                # Method exit log on task creation failure
-                logger.debug(
-                    "fetch_brief method exit",
-                    extra={
-                        "project_id": project_id,
-                        "page_id": page_id,
-                        "success": False,
-                        "brief_id": None,
-                        "error": task_result.error,
-                        "duration_ms": round(duration_ms, 2),
-                    },
-                )
-                return POPContentBriefResult(
-                    success=False,
-                    keyword=keyword,
-                    target_url=target_url,
-                    error=task_result.error or "Failed to create report task",
-                    duration_ms=duration_ms,
-                    request_id=task_result.request_id,
-                )
-
-            task_id = task_result.task_id
-
-            logger.info(
-                "POP report task created, polling for results",
-                extra={
-                    "project_id": project_id,
-                    "page_id": page_id,
-                    "keyword": keyword[:50],
-                    "task_id": task_id,
-                },
-            )
-
-            # Step 2: Poll for task completion
-            poll_result = await client.poll_for_result(task_id)
-
-            if not poll_result.success:
-                duration_ms = (time.monotonic() - start_time) * 1000
-                logger.error(
-                    "POP task polling failed",
-                    extra={
-                        "project_id": project_id,
-                        "page_id": page_id,
-                        "keyword": keyword[:50],
-                        "task_id": task_id,
-                        "error": poll_result.error,
-                        "duration_ms": round(duration_ms, 2),
-                    },
-                )
-                # Method exit log on polling failure
-                logger.debug(
-                    "fetch_brief method exit",
-                    extra={
-                        "project_id": project_id,
-                        "page_id": page_id,
-                        "task_id": task_id,
-                        "success": False,
-                        "brief_id": None,
-                        "error": poll_result.error,
-                        "duration_ms": round(duration_ms, 2),
-                    },
-                )
-                return POPContentBriefResult(
-                    success=False,
-                    keyword=keyword,
-                    target_url=target_url,
-                    task_id=task_id,
-                    error=poll_result.error or "Task polling failed",
-                    duration_ms=duration_ms,
-                    request_id=poll_result.request_id,
-                )
-
-            if poll_result.status == POPTaskStatus.FAILURE:
-                duration_ms = (time.monotonic() - start_time) * 1000
-                error_msg = poll_result.data.get("error") if poll_result.data else None
-                logger.error(
+            # Check task result status
+            if not task_result.success:
+                error_msg = task_result.error or "POP task failed"
+                logger.warning(
                     "POP task failed",
                     extra={
-                        "project_id": project_id,
                         "page_id": page_id,
                         "keyword": keyword[:50],
-                        "task_id": task_id,
                         "error": error_msg,
-                        "duration_ms": round(duration_ms, 2),
                     },
                 )
-                # Method exit log on task failure
-                logger.debug(
-                    "fetch_brief method exit",
-                    extra={
-                        "project_id": project_id,
-                        "page_id": page_id,
-                        "task_id": task_id,
-                        "success": False,
-                        "brief_id": None,
-                        "error": error_msg,
-                        "duration_ms": round(duration_ms, 2),
-                    },
+                return ContentBriefResult(success=False, error=error_msg)
+
+            if task_result.status == POPTaskStatus.FAILURE:
+                error_msg = task_result.data.get(
+                    "error", "POP task returned failure status"
                 )
-                return POPContentBriefResult(
-                    success=False,
-                    keyword=keyword,
-                    target_url=target_url,
-                    task_id=task_id,
-                    error=error_msg or "Task failed",
-                    raw_response=poll_result.data,
-                    duration_ms=duration_ms,
-                    request_id=poll_result.request_id,
-                )
-
-            # Step 3: Parse the response data
-            raw_data = poll_result.data
-            parsed = self._parse_brief_data(raw_data)
-
-            duration_ms = (time.monotonic() - start_time) * 1000
-
-            # Brief extraction stats at INFO level
-            logger.info(
-                "brief_extraction_stats",
-                extra={
-                    "project_id": project_id,
-                    "page_id": page_id,
-                    "task_id": task_id,
-                    "word_count_target": parsed.get("word_count_target"),
-                    "word_count_min": parsed.get("word_count_min"),
-                    "word_count_max": parsed.get("word_count_max"),
-                    "lsi_term_count": len(parsed.get("lsi_terms", [])),
-                    "competitor_count": len(parsed.get("competitors", [])),
-                    "heading_target_count": len(parsed.get("heading_targets", [])),
-                    "keyword_target_count": len(parsed.get("keyword_targets", [])),
-                    "related_question_count": len(parsed.get("related_questions", [])),
-                    "page_score_target": parsed.get("page_score_target"),
-                },
-            )
-
-            # Phase transition: brief_fetch_completed
-            logger.info(
-                "brief_fetch_completed",
-                extra={
-                    "project_id": project_id,
-                    "page_id": page_id,
-                    "keyword": keyword[:50],
-                    "task_id": task_id,
-                    "success": True,
-                    "duration_ms": round(duration_ms, 2),
-                },
-            )
-
-            if duration_ms > SLOW_OPERATION_THRESHOLD_MS:
                 logger.warning(
-                    "Slow content brief fetch operation",
+                    "POP task returned failure status",
                     extra={
-                        "project_id": project_id,
                         "page_id": page_id,
-                        "task_id": task_id,
                         "keyword": keyword[:50],
-                        "duration_ms": round(duration_ms, 2),
-                        "threshold_ms": SLOW_OPERATION_THRESHOLD_MS,
+                        "error": error_msg,
                     },
                 )
+                return ContentBriefResult(success=False, error=error_msg)
 
-            result = POPContentBriefResult(
-                success=True,
-                keyword=keyword,
-                target_url=target_url,
-                task_id=task_id,
-                word_count_target=parsed.get("word_count_target"),
-                word_count_min=parsed.get("word_count_min"),
-                word_count_max=parsed.get("word_count_max"),
-                heading_targets=parsed.get("heading_targets", []),
-                keyword_targets=parsed.get("keyword_targets", []),
-                lsi_terms=parsed.get("lsi_terms", []),
-                entities=parsed.get("entities", []),
-                related_questions=parsed.get("related_questions", []),
-                related_searches=parsed.get("related_searches", []),
-                competitors=parsed.get("competitors", []),
-                page_score_target=parsed.get("page_score_target"),
-                raw_response=raw_data,
-                duration_ms=duration_ms,
-                request_id=poll_result.request_id,
+            response_data = task_result.data or {}
+            pop_task_id = task_result.task_id
+        else:
+            # Real client: 3-step orchestration
+            response_data, pop_task_id = await _run_real_3step_flow(
+                pop_client, keyword, target_url
             )
 
-            # Method exit log with result summary
-            logger.debug(
-                "fetch_brief method exit",
-                extra={
-                    "project_id": project_id,
-                    "page_id": page_id,
-                    "task_id": task_id,
-                    "success": True,
-                    "brief_id": None,  # Not saved yet at this point
-                    "duration_ms": round(duration_ms, 2),
-                },
-            )
+        # Parse all fields from merged response data
+        lsi_terms = _parse_lsi_terms(response_data)
+        related_searches = _parse_related_searches(response_data)
+        word_count_target = _parse_word_count_target(response_data)
+        competitors = _parse_competitors(response_data)
+        related_questions = _parse_related_questions(response_data)
+        heading_targets = _parse_heading_targets(response_data)
+        keyword_targets = _parse_keyword_targets(response_data)
+        word_count_min, word_count_max = _parse_word_count_range(response_data)
+        page_score_target = _parse_page_score(response_data)
 
-            return result
-
-        except POPContentBriefValidationError:
-            raise
-        except POPError as e:
-            duration_ms = (time.monotonic() - start_time) * 1000
-            logger.error(
-                "POP API error during content brief fetch",
-                extra={
-                    "project_id": project_id,
-                    "page_id": page_id,
-                    "keyword": keyword[:50],
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                    "duration_ms": round(duration_ms, 2),
-                    "stack_trace": traceback.format_exc(),
-                },
-                exc_info=True,
-            )
-            # Method exit log on error
-            logger.debug(
-                "fetch_brief method exit",
-                extra={
-                    "project_id": project_id,
-                    "page_id": page_id,
-                    "success": False,
-                    "brief_id": None,
-                    "error": str(e),
-                    "duration_ms": round(duration_ms, 2),
-                },
-            )
-            return POPContentBriefResult(
-                success=False,
-                keyword=keyword,
-                target_url=target_url,
-                error=str(e),
-                duration_ms=duration_ms,
-                request_id=getattr(e, "request_id", None),
-            )
-        except Exception as e:
-            duration_ms = (time.monotonic() - start_time) * 1000
-            logger.error(
-                "Unexpected error during content brief fetch",
-                extra={
-                    "project_id": project_id,
-                    "page_id": page_id,
-                    "keyword": keyword[:50],
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                    "duration_ms": round(duration_ms, 2),
-                    "stack_trace": traceback.format_exc(),
-                },
-                exc_info=True,
-            )
-            # Method exit log on unexpected error
-            logger.debug(
-                "fetch_brief method exit",
-                extra={
-                    "project_id": project_id,
-                    "page_id": page_id,
-                    "success": False,
-                    "brief_id": None,
-                    "error": str(e),
-                    "duration_ms": round(duration_ms, 2),
-                },
-            )
-            return POPContentBriefResult(
-                success=False,
-                keyword=keyword,
-                target_url=target_url,
-                error=f"Unexpected error: {e}",
-                duration_ms=duration_ms,
-            )
-
-    async def fetch_and_save_brief(
-        self,
-        project_id: str,
-        page_id: str,
-        keyword: str,
-        target_url: str,
-    ) -> POPContentBriefResult:
-        """Fetch a content brief from POP API and save it to the database.
-
-        This is a convenience method that combines fetch_brief() and save_brief()
-        into a single operation. After successful fetch, the brief is automatically
-        persisted to the database. If a brief already exists for the same page,
-        it will be replaced.
-
-        Args:
-            project_id: Project ID for logging context
-            page_id: Page ID (FK to crawled_pages) - required for persistence
-            keyword: Target keyword for content optimization
-            target_url: URL of the page to optimize
-
-        Returns:
-            POPContentBriefResult with brief data and brief_id (if saved) or error
-
-        Raises:
-            POPContentBriefValidationError: If validation fails
-            POPContentBriefServiceError: If persistence fails (session not available)
-        """
-        # Method entry log with sanitized parameters
-        logger.debug(
-            "fetch_and_save_brief method entry",
+        logger.info(
+            "POP 3-step response parsed",
             extra={
-                "project_id": project_id,
                 "page_id": page_id,
-                "keyword": keyword[:50] if keyword else "",
-                "target_url": target_url[:100] if target_url else "",
+                "keyword": keyword[:50],
+                "lsi_term_count": len(lsi_terms),
+                "related_search_count": len(related_searches),
+                "competitor_count": len(competitors),
+                "related_question_count": len(related_questions),
+                "heading_target_count": len(heading_targets),
+                "keyword_target_count": len(keyword_targets),
+                "page_score_target": page_score_target,
+                "pop_task_id": pop_task_id,
             },
         )
 
-        # Step 1: Fetch the brief from POP API
-        result = await self.fetch_brief(
-            project_id=project_id,
+        # Create or replace ContentBrief record
+        content_brief = await _upsert_content_brief(
+            db=db,
             page_id=page_id,
             keyword=keyword,
-            target_url=target_url,
+            lsi_terms=lsi_terms,
+            related_searches=related_searches,
+            word_count_target=word_count_target,
+            raw_response=response_data,
+            pop_task_id=pop_task_id,
+            competitors=competitors,
+            related_questions=related_questions,
+            heading_targets=heading_targets,
+            keyword_targets=keyword_targets,
+            word_count_min=word_count_min,
+            word_count_max=word_count_max,
+            page_score_target=page_score_target,
         )
 
-        # Step 2: If fetch was successful and we have a session, save to database
-        if result.success and self._session is not None:
-            try:
-                brief = await self.save_brief(
-                    page_id=page_id,
-                    keyword=keyword,
-                    result=result,
-                    project_id=project_id,
-                )
+        return ContentBriefResult(
+            success=True,
+            content_brief=content_brief,
+        )
 
-                # Update result with the database record ID
-                result.brief_id = brief.id
+    except POPTimeoutError as e:
+        logger.warning(
+            "POP task timed out",
+            extra={
+                "page_id": page_id,
+                "keyword": keyword[:50],
+                "error": str(e),
+            },
+        )
+        return ContentBriefResult(
+            success=False,
+            error=f"POP task timed out: {e}",
+        )
 
+    except Exception as e:
+        logger.error(
+            "Unexpected error fetching content brief",
+            extra={
+                "page_id": page_id,
+                "keyword": keyword[:50],
+                "error": str(e),
+            },
+            exc_info=True,
+        )
+        return ContentBriefResult(
+            success=False,
+            error=f"Unexpected error: {e}",
+        )
+
+
+async def _run_real_3step_flow(
+    pop_client: POPClient,
+    keyword: str,
+    target_url: str,
+) -> tuple[dict[str, Any], str | None]:
+    """Run the real 3-step POP API flow and merge results.
+
+    Steps:
+    1. get-terms (create_report_task → poll) → lsaPhrases, variations, prepareId
+    2. create-report (prepareId → poll) → competitors, relatedQuestions, etc.
+    3. get-custom-recommendations (reportId) → keyword/heading targets
+
+    Step 3 is optional — if it fails, data from steps 1+2 is still returned.
+
+    Returns:
+        Tuple of (merged_response_data, pop_task_id)
+
+    Raises:
+        POPTimeoutError: If step 1 or 2 times out.
+        Exception: On unexpected errors in step 1 or 2.
+    """
+    # --- Step 1: get-terms ---
+    task_result = await pop_client.create_report_task(
+        keyword=keyword,
+        url=target_url,
+    )
+
+    if not task_result.success or not task_result.task_id:
+        error_msg = task_result.error or "Failed to create POP task"
+        raise Exception(error_msg)  # noqa: TRY002
+
+    poll_result = await pop_client.poll_for_result(task_result.task_id)
+    pop_task_id = task_result.task_id
+
+    if not poll_result.success or poll_result.status == POPTaskStatus.FAILURE:
+        error_msg = poll_result.error or poll_result.data.get(
+            "error", "POP get-terms failed"
+        )
+        raise Exception(error_msg)  # noqa: TRY002
+
+    response_data = dict(poll_result.data or {})
+
+    # Extract data needed for step 2
+    prepare_id = response_data.get("prepareId")
+    lsa_phrases = response_data.get("lsaPhrases", [])
+    variations = response_data.get("variations", [])
+
+    # Preserve step 1 keyword variations (strings) before step 2/3 overwrite them
+    # Steps 2+3 have their own "variations" key with recommendation objects
+    response_data["_keyword_variations"] = list(variations)
+
+    if not prepare_id:
+        logger.warning(
+            "No prepareId in get-terms response, skipping steps 2+3",
+            extra={
+                "keyword": keyword[:50],
+                "response_keys": list(response_data.keys()),
+                "status": response_data.get("status"),
+                "has_lsa": len(lsa_phrases) > 0,
+                "has_variations": len(variations) > 0,
+            },
+        )
+        return response_data, pop_task_id
+
+    # --- Step 2: create-report ---
+    report_task = await pop_client.create_report(
+        prepare_id=prepare_id,
+        variations=variations,
+        lsa_phrases=lsa_phrases,
+    )
+
+    if not report_task.success or not report_task.task_id:
+        logger.warning(
+            "create-report failed, continuing with get-terms data only",
+            extra={"error": report_task.error, "keyword": keyword[:50]},
+        )
+        return response_data, pop_task_id
+
+    # reportId comes in the initial create-report response, NOT in the polled result
+    report_id = (report_task.data or {}).get("reportId")
+
+    report_result = await pop_client.poll_for_result(report_task.task_id)
+
+    if not report_result.success or report_result.status == POPTaskStatus.FAILURE:
+        logger.warning(
+            "create-report poll failed, continuing with get-terms data only",
+            extra={"error": report_result.error, "keyword": keyword[:50]},
+        )
+        return response_data, pop_task_id
+
+    # Merge step 2 data — POP nests report fields under "report" key
+    report_data = report_result.data or {}
+    report_inner = report_data.get("report", {})
+    if isinstance(report_inner, dict) and report_inner:
+        # Flatten: pull competitors, relatedQuestions, tagCounts, wordCount,
+        # pageScore, cleanedContentBrief etc. to top level
+        response_data.update(report_inner)
+        logger.info(
+            "Step 2 report data flattened",
+            extra={
+                "report_keys": list(report_inner.keys())[:20],
+                "keyword": keyword[:50],
+            },
+        )
+    else:
+        # Fallback: merge as-is (some API versions may not nest)
+        response_data.update(report_data)
+
+    # --- Step 3: get-custom-recommendations (optional) ---
+    # Also check polled data and merged response as fallback
+    if not report_id:
+        report_id = report_data.get("reportId") or response_data.get("reportId")
+
+    if not report_id:
+        logger.warning(
+            "No reportId in create-report response, skipping step 3",
+            extra={"keyword": keyword[:50]},
+        )
+        return response_data, pop_task_id
+
+    try:
+        recs_result = await pop_client.get_custom_recommendations(report_id=report_id)
+
+        if recs_result.success:
+            recs_data = recs_result.data or {}
+            # POP nests recommendation fields under "recommendations" key
+            recs_inner = recs_data.get("recommendations", {})
+            if isinstance(recs_inner, dict) and recs_inner:
+                # Flatten: pull exactKeyword, lsi, pageStructure to top level
+                response_data.update(recs_inner)
                 logger.info(
-                    "Content brief fetched and saved successfully",
+                    "Step 3 recommendations flattened",
                     extra={
-                        "project_id": project_id,
-                        "page_id": page_id,
-                        "brief_id": brief.id,
+                        "recs_keys": list(recs_inner.keys())[:20],
+                        "report_id": report_id,
                         "keyword": keyword[:50],
-                        "task_id": result.task_id,
                     },
                 )
-
-                # Method exit log with result summary (success with save)
-                logger.debug(
-                    "fetch_and_save_brief method exit",
-                    extra={
-                        "project_id": project_id,
-                        "page_id": page_id,
-                        "brief_id": brief.id,
-                        "task_id": result.task_id,
-                        "success": True,
-                        "saved": True,
-                    },
+            else:
+                # Fallback: merge as-is
+                response_data.update(recs_data)
+                logger.info(
+                    "Step 3 recommendations merged (no nesting)",
+                    extra={"report_id": report_id, "keyword": keyword[:50]},
                 )
-
-            except POPContentBriefServiceError:
-                # Re-raise persistence errors
-                raise
-            except Exception as e:
-                logger.error(
-                    "Failed to save content brief after successful fetch",
-                    extra={
-                        "project_id": project_id,
-                        "page_id": page_id,
-                        "task_id": result.task_id,
-                        "keyword": keyword[:50],
-                        "error": str(e),
-                        "error_type": type(e).__name__,
-                        "stack_trace": traceback.format_exc(),
-                    },
-                    exc_info=True,
-                )
-                raise POPContentBriefServiceError(
-                    f"Failed to save content brief: {e}",
-                    project_id=project_id,
-                    page_id=page_id,
-                ) from e
-
-        elif result.success and self._session is None:
-            logger.warning(
-                "Content brief fetched but not saved - no database session",
-                extra={
-                    "project_id": project_id,
-                    "page_id": page_id,
-                    "task_id": result.task_id,
-                    "keyword": keyword[:50],
-                },
-            )
-
-            # Method exit log with result summary (success without save)
-            logger.debug(
-                "fetch_and_save_brief method exit",
-                extra={
-                    "project_id": project_id,
-                    "page_id": page_id,
-                    "brief_id": None,
-                    "task_id": result.task_id,
-                    "success": True,
-                    "saved": False,
-                },
-            )
-
         else:
-            # Fetch failed
-            logger.debug(
-                "fetch_and_save_brief method exit",
-                extra={
-                    "project_id": project_id,
-                    "page_id": page_id,
-                    "brief_id": None,
-                    "success": False,
-                    "saved": False,
-                    "error": result.error,
-                },
+            logger.warning(
+                "get-custom-recommendations failed, continuing without recs",
+                extra={"error": recs_result.error, "keyword": keyword[:50]},
             )
-
-        return result
-
-
-# Global singleton instance
-_pop_content_brief_service: POPContentBriefService | None = None
-
-
-def get_pop_content_brief_service() -> POPContentBriefService:
-    """Get the global POP content brief service instance.
-
-    Usage:
-        from app.services.pop_content_brief import get_pop_content_brief_service
-        service = get_pop_content_brief_service()
-        result = await service.fetch_brief(
-            project_id="uuid",
-            page_id="uuid",
-            keyword="hiking boots",
-            target_url="https://example.com/hiking-boots",
+    except Exception as e:
+        logger.warning(
+            "get-custom-recommendations raised exception, continuing without recs",
+            extra={"error": str(e), "keyword": keyword[:50]},
         )
+
+    return response_data, pop_task_id
+
+
+# ---------------------------------------------------------------------------
+# Parse helpers
+# ---------------------------------------------------------------------------
+
+
+def _parse_lsi_terms(response_data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Parse lsaPhrases from POP response into lsi_terms list.
+
+    Each term has: phrase, weight, averageCount, targetCount.
     """
-    global _pop_content_brief_service
-    if _pop_content_brief_service is None:
-        _pop_content_brief_service = POPContentBriefService()
-        logger.info("POPContentBriefService singleton created")
-    return _pop_content_brief_service
+    lsa_phrases = response_data.get("lsaPhrases", [])
+    if not isinstance(lsa_phrases, list):
+        return []
 
-
-async def fetch_content_brief(
-    project_id: str,
-    page_id: str,
-    keyword: str,
-    target_url: str,
-) -> POPContentBriefResult:
-    """Convenience function for fetching a content brief.
-
-    Args:
-        project_id: Project ID for logging context
-        page_id: Page ID for logging context
-        keyword: Target keyword for content optimization
-        target_url: URL of the page to optimize
-
-    Returns:
-        POPContentBriefResult with brief data or error
-    """
-    service = get_pop_content_brief_service()
-    return await service.fetch_brief(
-        project_id=project_id,
-        page_id=page_id,
-        keyword=keyword,
-        target_url=target_url,
-    )
-
-
-async def fetch_and_save_content_brief(
-    session: AsyncSession,
-    project_id: str,
-    page_id: str,
-    keyword: str,
-    target_url: str,
-) -> POPContentBriefResult:
-    """Convenience function for fetching and saving a content brief.
-
-    This function creates a new service instance with the provided session,
-    fetches the content brief from POP API, and saves it to the database.
-    If a brief already exists for the same page, it will be replaced.
-
-    Args:
-        session: Async SQLAlchemy session for database operations
-        project_id: Project ID for logging context
-        page_id: Page ID (FK to crawled_pages) - required for persistence
-        keyword: Target keyword for content optimization
-        target_url: URL of the page to optimize
-
-    Returns:
-        POPContentBriefResult with brief data and brief_id (if saved) or error
-
-    Example:
-        async with get_session() as session:
-            result = await fetch_and_save_content_brief(
-                session=session,
-                project_id="uuid",
-                page_id="uuid",
-                keyword="hiking boots",
-                target_url="https://example.com/hiking-boots",
+    terms: list[dict[str, Any]] = []
+    for item in lsa_phrases:
+        if isinstance(item, dict) and "phrase" in item:
+            terms.append(
+                {
+                    "phrase": item["phrase"],
+                    "weight": item.get("weight", 0),
+                    "averageCount": item.get("averageCount", 0),
+                    "targetCount": item.get("targetCount", 0),
+                }
             )
-            if result.success:
-                print(f"Brief saved with ID: {result.brief_id}")
+    return terms
+
+
+def _parse_related_searches(response_data: dict[str, Any]) -> list[str]:
+    """Parse keyword variations from POP response into related_searches list.
+
+    Step 1 variations (strings) are preserved in _keyword_variations before
+    steps 2/3 overwrite the "variations" key with recommendation objects.
+    Falls back to relatedSearches (objects with "query" key) from step 2.
     """
-    service = POPContentBriefService(session=session)
-    return await service.fetch_and_save_brief(
-        project_id=project_id,
+    # Prefer preserved step 1 keyword variations (list of strings)
+    kw_variations = response_data.get("_keyword_variations", [])
+    if isinstance(kw_variations, list) and kw_variations:
+        return [v for v in kw_variations if isinstance(v, str)]
+
+    # Fallback: relatedSearches from step 2 (list of {query, link} objects)
+    related = response_data.get("relatedSearches", [])
+    if isinstance(related, list):
+        results = []
+        for item in related:
+            if isinstance(item, str):
+                results.append(item)
+            elif isinstance(item, dict) and "query" in item:
+                results.append(item["query"])
+        if results:
+            return results
+
+    # Last fallback: variations if they're still strings
+    variations = response_data.get("variations", [])
+    if isinstance(variations, list):
+        return [v for v in variations if isinstance(v, str)]
+
+    return []
+
+
+def _parse_word_count_target(response_data: dict[str, Any]) -> int | None:
+    """Parse word count target from POP response.
+
+    POP returns wordCount as {target, current} from create-report.
+    Falls back to wordCountTarget (from get-terms, mock data).
+    """
+    # Step 2 format: {target: 2275, current: 0}
+    wc = response_data.get("wordCount")
+    if isinstance(wc, dict):
+        target = wc.get("target")
+        if target is not None:
+            try:
+                return int(target)
+            except (ValueError, TypeError):
+                pass
+
+    # Fallback: wordCountTarget (mock data format)
+    wc_target = response_data.get("wordCountTarget")
+    if wc_target is not None:
+        try:
+            return int(wc_target)
+        except (ValueError, TypeError):
+            return None
+    return None
+
+
+def _parse_competitors(response_data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Parse competitors from create-report response.
+
+    Returns list of {url, title, h2Texts, h3Texts, pageScore, wordCount}.
+    Real API may return null for pageScore and wordCount.
+    """
+    competitors = response_data.get("competitors", [])
+    if not isinstance(competitors, list):
+        return []
+
+    parsed: list[dict[str, Any]] = []
+    for comp in competitors:
+        if not isinstance(comp, dict):
+            continue
+        parsed.append(
+            {
+                "url": comp.get("url", ""),
+                "title": comp.get("title", ""),
+                "h2Texts": comp.get("h2Texts", []),
+                "h3Texts": comp.get("h3Texts", []),
+                "pageScore": comp.get("pageScore") or 0,
+                "wordCount": comp.get("wordCount") or 0,
+            }
+        )
+    return parsed
+
+
+def _parse_related_questions(response_data: dict[str, Any]) -> list[str]:
+    """Parse relatedQuestions from create-report response.
+
+    Real API returns list of {question, type, references} objects.
+    Mock/fallback may return plain strings.
+    """
+    questions = response_data.get("relatedQuestions", [])
+    if not isinstance(questions, list):
+        return []
+
+    results: list[str] = []
+    for q in questions:
+        if isinstance(q, str):
+            results.append(q)
+        elif isinstance(q, dict) and "question" in q:
+            results.append(q["question"])
+    return results
+
+
+def _parse_heading_targets(response_data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Parse heading structure targets from tagCounts + pageStructure recs.
+
+    tagCounts from real API: list of {tagLabel, min, max, mean, comment}
+    pageStructure from recommendations: list of {signal, target, comment}
+
+    Returns list of {tag, target, min, max, source}.
+    """
+    targets: list[dict[str, Any]] = []
+
+    # From pageStructure (recommendations) — preferred source
+    # Note: pageStructure items have mean/min/max but NO "target" key
+    page_structure = response_data.get("pageStructure", [])
+    if isinstance(page_structure, list):
+        for item in page_structure:
+            if isinstance(item, dict) and "signal" in item:
+                target_val = round(item.get("mean") or 0)
+                targets.append(
+                    {
+                        "tag": item["signal"],
+                        "target": target_val,
+                        "min": item.get("min") or 0,
+                        "max": item.get("max") or 0,
+                        "source": "recommendations",
+                    }
+                )
+
+    # Also include tagCounts which have richer min/max/mean data
+    tag_counts = response_data.get("tagCounts", [])
+    if isinstance(tag_counts, list):
+        # Real API format: list of {tagLabel, min, max, mean, comment}
+        for item in tag_counts:
+            if not isinstance(item, dict) or "tagLabel" not in item:
+                continue
+            tag_label = item["tagLabel"]
+            # Don't duplicate if already in pageStructure (case-insensitive)
+            existing_tags = {t["tag"].lower() for t in targets}
+            if tag_label.lower() not in existing_tags:
+                targets.append(
+                    {
+                        "tag": tag_label,
+                        "target": round(item.get("mean") or 0),
+                        "min": item.get("min") or 0,
+                        "max": item.get("max") or 0,
+                        "source": "tagCounts",
+                    }
+                )
+    elif isinstance(tag_counts, dict):
+        # Mock/fallback format: {h1: 1, h2: 5}
+        for tag, count in tag_counts.items():
+            if isinstance(count, (int, float)):
+                existing_tags = {t["tag"].lower() for t in targets}
+                if tag.lower() not in existing_tags:
+                    targets.append(
+                        {
+                            "tag": tag,
+                            "target": int(count),
+                            "source": "tagCounts",
+                        }
+                    )
+
+    return targets
+
+
+def _parse_keyword_targets(response_data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Parse keyword placement targets from exactKeyword + lsi recs.
+
+    Returns list of {signal, target, comment/phrase, type}.
+    """
+    targets: list[dict[str, Any]] = []
+
+    # exactKeyword placements
+    exact = response_data.get("exactKeyword", [])
+    if isinstance(exact, list):
+        for item in exact:
+            if isinstance(item, dict) and "signal" in item:
+                targets.append(
+                    {
+                        "signal": item["signal"],
+                        "target": item.get("target", 0),
+                        "comment": item.get("comment", ""),
+                        "type": "exact",
+                    }
+                )
+
+    # LSI placements (real API has "comment" not "phrase")
+    lsi = response_data.get("lsi", [])
+    if isinstance(lsi, list):
+        for item in lsi:
+            if isinstance(item, dict) and "signal" in item:
+                targets.append(
+                    {
+                        "signal": item["signal"],
+                        "phrase": item.get("phrase") or item.get("comment", ""),
+                        "target": item.get("target", 0),
+                        "type": "lsi",
+                    }
+                )
+
+    return targets
+
+
+def _parse_word_count_range(
+    response_data: dict[str, Any],
+) -> tuple[int | None, int | None]:
+    """Parse word count range from competitor data or wordCount dict.
+
+    Derives min/max from competitors' word counts (most accurate).
+    Falls back to competitorsMin/competitorsMax in wordCount dict (mock format).
+    Last resort: derives ±20% from wordCount.target.
+
+    Returns (word_count_min, word_count_max).
+    """
+    # Best source: compute from competitors' actual word counts
+    competitors = response_data.get("competitors", [])
+    if isinstance(competitors, list) and competitors:
+        word_counts = []
+        for c in competitors:
+            if isinstance(c, dict):
+                wc = c.get("wordCount")
+                if wc is not None:
+                    with contextlib.suppress(ValueError, TypeError):
+                        word_counts.append(int(wc))
+        if word_counts:
+            return min(word_counts), max(word_counts)
+
+    # Fallback: check wordCount dict for explicit min/max (mock format)
+    wc = response_data.get("wordCount")
+    if isinstance(wc, dict):
+        wc_min = wc.get("competitorsMin")
+        wc_max = wc.get("competitorsMax")
+        if wc_min is not None and wc_max is not None:
+            try:
+                return int(wc_min), int(wc_max)
+            except (ValueError, TypeError):
+                pass
+
+        # Last resort: derive ±20% from target
+        target = wc.get("target")
+        if target is not None:
+            try:
+                t = int(target)
+                return int(t * 0.8), int(t * 1.2)
+            except (ValueError, TypeError):
+                pass
+
+    return None, None
+
+
+def _parse_page_score(response_data: dict[str, Any]) -> float | None:
+    """Parse pageScore target from create-report response.
+
+    Top-level pageScore is often null for new pages (pageNotBuiltYet=true).
+    Falls back to computing average from competitors' pageScore values.
+    """
+    # Direct top-level pageScore (if available and not null)
+    score = response_data.get("pageScore")
+    if score is not None:
+        try:
+            return float(score)
+        except (ValueError, TypeError):
+            pass
+
+    # Fallback: average of competitors' page scores
+    competitors = response_data.get("competitors", [])
+    if isinstance(competitors, list) and competitors:
+        scores = []
+        for c in competitors:
+            if isinstance(c, dict):
+                cs = c.get("pageScore")
+                if cs is not None:
+                    with contextlib.suppress(ValueError, TypeError):
+                        scores.append(float(cs))
+        if scores:
+            return round(sum(scores) / len(scores), 1)
+
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Upsert helper
+# ---------------------------------------------------------------------------
+
+
+async def _upsert_content_brief(
+    db: AsyncSession,
+    page_id: str,
+    keyword: str,
+    lsi_terms: list[dict[str, Any]],
+    related_searches: list[str],
+    word_count_target: int | None,
+    raw_response: dict[str, Any],
+    pop_task_id: str | None,
+    competitors: list[dict[str, Any]] | None = None,
+    related_questions: list[str] | None = None,
+    heading_targets: list[dict[str, Any]] | None = None,
+    keyword_targets: list[dict[str, Any]] | None = None,
+    word_count_min: int | None = None,
+    word_count_max: int | None = None,
+    page_score_target: float | None = None,
+) -> ContentBrief:
+    """Create or replace a ContentBrief record for the given page.
+
+    If a ContentBrief already exists for the page_id, it is updated in place
+    (force_refresh scenario). Otherwise a new record is created.
+    """
+    stmt = select(ContentBrief).where(ContentBrief.page_id == page_id)
+    result = await db.execute(stmt)
+    existing = result.scalar_one_or_none()
+
+    if existing is not None:
+        existing.keyword = keyword
+        existing.lsi_terms = lsi_terms
+        existing.related_searches = related_searches
+        existing.word_count_target = word_count_target
+        existing.raw_response = raw_response
+        existing.pop_task_id = pop_task_id
+        existing.competitors = competitors or []
+        existing.related_questions = related_questions or []
+        existing.heading_targets = heading_targets or []
+        existing.keyword_targets = keyword_targets or []
+        existing.word_count_min = word_count_min
+        existing.word_count_max = word_count_max
+        existing.page_score_target = page_score_target
+        await db.commit()
+        await db.refresh(existing)
+
+        logger.info(
+            "Updated existing ContentBrief",
+            extra={"page_id": page_id, "brief_id": existing.id},
+        )
+        return existing
+
+    brief = ContentBrief(
         page_id=page_id,
         keyword=keyword,
-        target_url=target_url,
+        lsi_terms=lsi_terms,
+        related_searches=related_searches,
+        word_count_target=word_count_target,
+        raw_response=raw_response,
+        pop_task_id=pop_task_id,
+        competitors=competitors or [],
+        related_questions=related_questions or [],
+        heading_targets=heading_targets or [],
+        keyword_targets=keyword_targets or [],
+        word_count_min=word_count_min,
+        word_count_max=word_count_max,
+        page_score_target=page_score_target,
     )
+    db.add(brief)
+    await db.commit()
+    await db.refresh(brief)
+
+    logger.info(
+        "Created new ContentBrief",
+        extra={"page_id": page_id, "brief_id": brief.id},
+    )
+    return brief

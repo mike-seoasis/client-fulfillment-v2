@@ -4,14 +4,17 @@ The CrawledPage model represents a single page crawled during client onboarding:
 - normalized_url: The canonical URL after normalization (removes fragments, query params, etc.)
 - category: Page category for classification (e.g., 'homepage', 'product', 'contact')
 - labels: JSONB array of labels/tags for flexible categorization
+- status: Crawl status (pending, crawling, completed, failed)
+- Extracted content: meta_description, body_content, headings, word_count
 - Timestamps for auditing
 """
 
 from datetime import UTC, datetime
+from enum import Enum
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-from sqlalchemy import DateTime, String, Text, text
+from sqlalchemy import DateTime, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -20,6 +23,18 @@ from app.core.database import Base
 if TYPE_CHECKING:
     from app.models.content_brief import ContentBrief
     from app.models.content_score import ContentScore
+    from app.models.internal_link import InternalLink
+    from app.models.page_content import PageContent
+    from app.models.page_keywords import PageKeywords
+
+
+class CrawlStatus(str, Enum):
+    """Status of a page crawl."""
+
+    PENDING = "pending"
+    CRAWLING = "crawling"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 class CrawledPage(Base):
@@ -33,6 +48,14 @@ class CrawledPage(Base):
         category: Page category (e.g., 'homepage', 'product', 'about', 'contact')
         labels: JSONB array of labels for flexible tagging
         title: Page title extracted from HTML
+        source: Page source ('onboarding' or 'cluster')
+        status: Crawl status (pending, crawling, completed, failed)
+        meta_description: Page meta description extracted from HTML
+        body_content: Main content extracted as markdown
+        headings: JSONB with h1, h2, h3 arrays
+        product_count: Number of products detected on page
+        crawl_error: Error message if crawl failed
+        word_count: Number of words in body content
         content_hash: Hash of page content for change detection
         last_crawled_at: When the page was last successfully crawled
         created_at: Timestamp when record was created
@@ -40,6 +63,9 @@ class CrawledPage(Base):
 
     Example labels structure:
         ["primary-nav", "high-traffic", "needs-review"]
+
+    Example headings structure:
+        {"h1": ["Main Title"], "h2": ["Section 1", "Section 2"], "h3": ["Subsection"]}
     """
 
     __tablename__ = "crawled_pages"
@@ -91,6 +117,52 @@ class CrawledPage(Base):
         nullable=True,
     )
 
+    source: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="onboarding",
+        server_default=text("'onboarding'"),
+        index=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=CrawlStatus.PENDING.value,
+        server_default=text("'pending'"),
+        index=True,
+    )
+
+    meta_description: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    body_content: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    headings: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
+
+    product_count: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    crawl_error: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    word_count: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
     last_crawled_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
@@ -111,16 +183,49 @@ class CrawledPage(Base):
         onupdate=lambda: datetime.now(UTC),
     )
 
-    # Relationships to content brief and score models
-    content_briefs: Mapped[list["ContentBrief"]] = relationship(
+    # Relationship to ContentBrief (one-to-one)
+    content_brief: Mapped["ContentBrief | None"] = relationship(
         "ContentBrief",
         back_populates="page",
         cascade="all, delete-orphan",
+        uselist=False,
     )
 
     content_scores: Mapped[list["ContentScore"]] = relationship(
         "ContentScore",
         back_populates="page",
+        cascade="all, delete-orphan",
+    )
+
+    # Relationship to PageContent (one-to-one)
+    page_content: Mapped["PageContent | None"] = relationship(
+        "PageContent",
+        back_populates="page",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+
+    # Relationship to PageKeywords (one-to-one)
+    keywords: Mapped["PageKeywords | None"] = relationship(
+        "PageKeywords",
+        back_populates="page",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+
+    # Internal links where this page is the source (outgoing links)
+    outbound_links: Mapped[list["InternalLink"]] = relationship(
+        "InternalLink",
+        foreign_keys="[InternalLink.source_page_id]",
+        back_populates="source_page",
+        cascade="all, delete-orphan",
+    )
+
+    # Internal links where this page is the target (incoming links)
+    inbound_links: Mapped[list["InternalLink"]] = relationship(
+        "InternalLink",
+        foreign_keys="[InternalLink.target_page_id]",
+        back_populates="target_page",
         cascade="all, delete-orphan",
     )
 

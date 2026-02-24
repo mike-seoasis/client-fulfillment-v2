@@ -1,45 +1,45 @@
-# Multi-stage build for Railway deployment
-# Build stage
-FROM node:20-alpine AS build
+# Multi-stage build for Next.js on Railway
+# Based on https://nextjs.org/docs/app/building-your-application/deploying#docker-image
 
+# --- Dependencies ---
+FROM node:20-alpine AS deps
 WORKDIR /app
-
-# Copy package files
-COPY package.json package-lock.json* ./
-
-# Install dependencies
+COPY package.json package-lock.json* .npmrc* ./
 RUN npm ci
 
-# Copy source code
+# --- Build ---
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Set production environment
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
 
-# Build the application
-# VITE_API_URL will be set at build time via Railway
-ARG VITE_API_URL
-ARG VITE_SENTRY_DSN
-ARG VITE_APP_ENV=production
+RUN mkdir -p public && npm run build
 
-ENV VITE_API_URL=$VITE_API_URL
-ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
-ENV VITE_APP_ENV=$VITE_APP_ENV
+# --- Production ---
+FROM node:20-alpine AS production
+WORKDIR /app
 
-RUN npm run build
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
 
-# Production stage - serve static files
-FROM nginx:alpine AS production
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
 
-# Copy built assets
-COPY --from=build /app/dist /usr/share/nginx/html
+# Copy public assets (may be empty)
+COPY --from=build /app/public ./public
+# Copy standalone server and static files
+COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Copy nginx configuration for SPA routing
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+USER nextjs
 
-# Railway assigns PORT dynamically, BACKEND_URL should be set for API proxy
-# Default BACKEND_URL to the Railway backend service
-ENV BACKEND_URL=https://be-client-fulfillment-v2-production.up.railway.app
+# Railway sets PORT dynamically
+ENV PORT=3000
+EXPOSE 3000
 
-# Use envsubst to inject PORT and BACKEND_URL into nginx config at runtime
-CMD /bin/sh -c "envsubst '\$PORT \$BACKEND_URL' < /etc/nginx/conf.d/default.conf > /etc/nginx/conf.d/default.conf.tmp && mv /etc/nginx/conf.d/default.conf.tmp /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"
+CMD ["node", "server.js"]

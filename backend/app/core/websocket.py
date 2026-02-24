@@ -150,7 +150,9 @@ class WebSocketLogger:
             extra={"connection_id": connection_id},
         )
 
-    def heartbeat_timeout(self, connection_id: str, last_pong_seconds_ago: float) -> None:
+    def heartbeat_timeout(
+        self, connection_id: str, last_pong_seconds_ago: float
+    ) -> None:
         """Log heartbeat timeout."""
         self.logger.warning(
             "WebSocket heartbeat timeout",
@@ -206,9 +208,7 @@ class WebSocketLogger:
             },
         )
 
-    def progress_update_no_subscribers(
-        self, project_id: str, crawl_id: str
-    ) -> None:
+    def progress_update_no_subscribers(self, project_id: str, crawl_id: str) -> None:
         """Log progress update with no subscribers."""
         self.logger.debug(
             "No subscribers for progress update",
@@ -305,10 +305,12 @@ class ConnectionManager:
 
             # Send ping
             try:
-                await conn.websocket.send_json({
-                    "type": "ping",
-                    "timestamp": current_time,
-                })
+                await conn.websocket.send_json(
+                    {
+                        "type": "ping",
+                        "timestamp": current_time,
+                    }
+                )
                 conn.last_ping = current_time
                 ws_logger.heartbeat_sent(conn_id)
             except Exception as e:
@@ -343,17 +345,20 @@ class ConnectionManager:
         ws_logger.connection_opened(connection_id, client_host)
 
         # Send welcome message with reconnection guidance
-        await self._send_message(conn, {
-            "type": "connected",
-            "connection_id": connection_id,
-            "heartbeat_interval": self.HEARTBEAT_INTERVAL,
-            "reconnect_advice": {
-                "should_reconnect": True,
-                "initial_delay_ms": 1000,
-                "max_delay_ms": 30000,
-                "backoff_multiplier": 2.0,
+        await self._send_message(
+            conn,
+            {
+                "type": "connected",
+                "connection_id": connection_id,
+                "heartbeat_interval": self.HEARTBEAT_INTERVAL,
+                "reconnect_advice": {
+                    "should_reconnect": True,
+                    "initial_delay_ms": 1000,
+                    "max_delay_ms": 30000,
+                    "backoff_multiplier": 2.0,
+                },
             },
-        })
+        )
 
         return conn
 

@@ -16,4 +16,4 @@ prdPath = "prd.json"
 enabled = false
 
 [notifications]
-sound = "ralph"
+sound = "off"

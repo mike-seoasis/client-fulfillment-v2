@@ -8,14 +8,19 @@ The Project model represents a client onboarding project with:
 """
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-from sqlalchemy import DateTime, String, text
+from sqlalchemy import Boolean, DateTime, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+if TYPE_CHECKING:
+    from app.models.blog import BlogCampaign
+    from app.models.keyword_cluster import KeywordCluster
+    from app.models.reddit_config import RedditProjectConfig
 
 
 class Project(Base):
@@ -24,7 +29,8 @@ class Project(Base):
     Attributes:
         id: UUID primary key
         name: Project name
-        client_id: Reference to the client (external ID for now)
+        client_id: Reference to the client (external ID for now, optional)
+        site_url: Client website URL (required)
         status: Overall project status (e.g., 'active', 'completed', 'on_hold')
         phase_status: JSONB field storing status of each onboarding phase
         created_at: Timestamp when project was created
@@ -55,8 +61,14 @@ class Project(Base):
         index=True,
     )
 
-    client_id: Mapped[str] = mapped_column(
+    client_id: Mapped[str | None] = mapped_column(
         String(255),
+        nullable=True,
+        index=True,
+    )
+
+    site_url: Mapped[str] = mapped_column(
+        String(2048),
         nullable=False,
         index=True,
     )
@@ -84,6 +96,20 @@ class Project(Base):
         doc="State of the brand configuration wizard (current step, form data, research results)",
     )
 
+    additional_info: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        doc="Additional notes or information about the project provided during creation",
+    )
+
+    reddit_only: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+        doc="If true, project was created for Reddit only and is hidden from the AI SEO dashboard",
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -97,6 +123,26 @@ class Project(Base):
         default=lambda: datetime.now(UTC),
         server_default=text("now()"),
         onupdate=lambda: datetime.now(UTC),
+    )
+
+    # Relationships
+    clusters: Mapped[list["KeywordCluster"]] = relationship(
+        "KeywordCluster",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+
+    blog_campaigns: Mapped[list["BlogCampaign"]] = relationship(
+        "BlogCampaign",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+
+    reddit_config: Mapped["RedditProjectConfig | None"] = relationship(
+        "RedditProjectConfig",
+        back_populates="project",
+        uselist=False,
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:

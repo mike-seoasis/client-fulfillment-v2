@@ -1,0 +1,353 @@
+{
+  "name": "Phase 5: Content Generation Pipeline",
+  "description": "Build the content generation pipeline: POP content brief service (mock + real), Claude content writing with brand voice + LSI terms, AI trope quality checks, content generation API endpoints with background task processing, content generation progress UI, and prompt inspector panel for QA.",
+  "branchName": "v2-rebuild",
+  "userStories": [
+    {
+      "id": "S5-001",
+      "title": "Create PageContent SQLAlchemy model",
+      "description": "As a developer, I need a PageContent model so that generated content for each page can be stored in a single row with all 4 content fields.",
+      "acceptanceCriteria": [
+        "Create backend/app/models/page_content.py with PageContent class extending Base",
+        "Fields: id (UUID PK), crawled_page_id (FK to crawled_pages, unique for one-to-one), page_title (Text), meta_description (Text), top_description (Text), bottom_description (Text), word_count (Integer), status (String, default 'pending'), qa_results (JSONB, nullable), generation_started_at (DateTime, nullable), generation_completed_at (DateTime, nullable), created_at (DateTime), updated_at (DateTime)",
+        "Status values: pending, generating_brief, writing, checking, complete, failed",
+        "Model is importable from backend/app/models/__init__.py"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Reference backend/app/models/crawled_page.py for pattern. Replace the existing GeneratedContent model concept — do NOT modify generated_content.py, create a new model instead. Design decision #1 in design.md.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S5-002",
+      "title": "Create PromptLog SQLAlchemy model",
+      "description": "As a developer, I need a PromptLog model so that all prompts sent to Claude can be persisted for the prompt inspector feature.",
+      "acceptanceCriteria": [
+        "Create backend/app/models/prompt_log.py with PromptLog class extending Base",
+        "Fields: id (UUID PK), page_content_id (FK to page_content), step (String, e.g. 'content_writing'), role (String, 'system' or 'user'), prompt_text (Text), response_text (Text, nullable), model (String, nullable), input_tokens (Integer, nullable), output_tokens (Integer, nullable), duration_ms (Float, nullable), created_at (DateTime)",
+        "Model is importable from backend/app/models/__init__.py"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Reference backend/app/models/page_keywords.py for pattern. Design decision #6 in design.md.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S5-003",
+      "title": "Verify ContentBrief model and add model relationships",
+      "description": "As a developer, I need to verify the ContentBrief model has the right fields and add relationships between all content models and CrawledPage.",
+      "acceptanceCriteria": [
+        "Verify backend/app/models/content_brief.py has: keyword, lsi_terms (JSONB), related_searches (JSONB), raw_response (JSONB), pop_task_id fields",
+        "Add relationship to CrawledPage model: page_content (one-to-one via uselist=False to PageContent)",
+        "Add relationship to CrawledPage model: content_brief (one-to-one via uselist=False, update existing content_briefs relationship if needed)",
+        "Add relationship to PageContent model: prompt_logs (one-to-many to PromptLog)",
+        "Add back_populates on all relationships"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "CrawledPage is at backend/app/models/crawled_page.py. It already has content_briefs as a list relationship — change to singular content_brief with uselist=False. ContentBrief model at backend/app/models/content_brief.py.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S5-004",
+      "title": "Create Alembic migration for content tables",
+      "description": "As a developer, I need database tables created for content_briefs, page_content, and prompt_logs so that data can be persisted.",
+      "acceptanceCriteria": [
+        "Create migration file in backend/alembic/versions/ (numbered 0021 or auto-generated)",
+        "Migration creates content_briefs table (if not exists) matching ContentBrief model",
+        "Migration creates page_content table matching PageContent model with unique constraint on crawled_page_id",
+        "Migration creates prompt_logs table matching PromptLog model with FK to page_content",
+        "Migration runs successfully: cd backend && alembic upgrade head",
+        "Do NOT create content_scores table (deferred to Phase 6)",
+        "Do NOT drop generated_content table if it exists"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Reference backend/alembic/versions/0020_add_page_keywords_approval_fields.py for pattern. Migration plan in design.md.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S5-005",
+      "title": "Create POPMockClient with realistic fixture data",
+      "description": "As a developer, I need a mock POP client so that the full pipeline can be tested without spending API credits.",
+      "acceptanceCriteria": [
+        "Create POPMockClient class (in backend/app/integrations/pop.py or a separate mock file)",
+        "Mock returns 15-25 realistic LSI terms with phrase, weight (0-100), averageCount, and targetCount fields",
+        "Mock returns keyword variations array",
+        "Mock returns a fake prepareId string",
+        "Output is deterministic: same keyword input always produces same fixture data (seeded by keyword hash)",
+        "Mock has same interface as the real POP client methods used by the brief service (create_report_task, poll_for_result pattern or a combined method)",
+        "No actual API calls are made in mock mode"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Reference backend/app/integrations/pop.py for the existing POP client. POP_USE_MOCK=true toggles to mock. Design decision #8. The mock should simulate the get-terms response shape: {lsaPhrases: [{phrase, weight, averageCount, targetCount}], variations: [...], prepareId: '...'}.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S5-006",
+      "title": "Create POP content brief service",
+      "description": "As a developer, I need a service that fetches content briefs from POP (or mock) and stores them as ContentBrief records.",
+      "acceptanceCriteria": [
+        "Create backend/app/services/pop_content_brief.py with fetch_content_brief(db, crawled_page, keyword, target_url, force_refresh=False) function",
+        "Service calls POP get-terms endpoint with keyword, targetUrl, locationName, targetLanguage",
+        "Service polls for task completion using existing poll_for_result()",
+        "Service parses lsaPhrases into ContentBrief.lsi_terms, variations into related_searches, stores raw_response and pop_task_id",
+        "Caching: if ContentBrief already exists for the page and force_refresh=False, return existing without API call",
+        "If force_refresh=True, make new API call and replace existing ContentBrief",
+        "On POP API error or timeout, return failure result with error details (do NOT block content generation)",
+        "Wire POP_USE_MOCK env var: when true, use POPMockClient instead of real client"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference backend/app/services/primary_keyword.py for service pattern. POP client at backend/app/integrations/pop.py has create_report_task() and poll_for_result(). Spec: openspec/changes/phase5-content-generation/specs/pop-content-brief/spec.md. Design decision #2: get-terms only, skip create-report.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S5-007",
+      "title": "Create prompt builder for content writing",
+      "description": "As a developer, I need a prompt builder that constructs structured prompts from ContentBrief, brand config, and page context.",
+      "acceptanceCriteria": [
+        "Create prompt builder function (in backend/app/services/content_writing.py or separate module)",
+        "System prompt: uses ai_prompt_snippet from brand config",
+        "User prompt has labeled sections: ## Task, ## Page Context (URL, current title, current meta, product count, labels), ## SEO Targets (LSI terms with weights, variations, word count target from brief), ## Brand Voice (ai_prompt_snippet content, banned words from vocabulary), ## Output Format (JSON with page_title, meta_description, top_description, bottom_description)",
+        "Fallback mode: when ContentBrief is missing, omit LSI terms and use default 300-400 word target for bottom_description",
+        "page_title spec: SEO-optimized, includes primary keyword, under 60 chars",
+        "meta_description spec: optimized for CTR, includes primary keyword, under 160 chars",
+        "top_description spec: plain text, 1-2 sentences about the collection page, no HTML",
+        "bottom_description spec: HTML with headings and FAQ, targeting POP brief word count or 300-400 words fallback"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Brand config is stored as JSONB on Project model. Access via project.brand_config. The ai_prompt_snippet section is specifically designed for injection into content generation prompts. Design decision #3. Spec: openspec/changes/phase5-content-generation/specs/content-writing/spec.md.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S5-008",
+      "title": "Create content writing service with Claude integration",
+      "description": "As a developer, I need a service that calls Claude Sonnet to generate content and stores results in PageContent.",
+      "acceptanceCriteria": [
+        "Create backend/app/services/content_writing.py with generate_content(db, crawled_page, content_brief, project) function",
+        "Calls Claude using claude-sonnet-4-5-20250929 model via the existing Claude client",
+        "Parses JSON response into PageContent fields (page_title, meta_description, top_description, bottom_description, word_count)",
+        "If Claude returns invalid JSON, retries once with stricter prompt; if still invalid, marks status='failed' with error",
+        "Creates PromptLog records: one for system prompt, one for user prompt, both updated with response_text, input_tokens, output_tokens, duration_ms after completion",
+        "Updates PageContent.status through progression: writing → (on success) checking or complete",
+        "Sets generation_started_at when writing begins, generation_completed_at when done"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Claude client at backend/app/integrations/claude.py has complete(user_prompt, system_prompt, max_tokens, temperature) returning CompletionResult. Currently uses haiku — content writing needs sonnet. Spec: openspec/changes/phase5-content-generation/specs/content-writing/spec.md.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S5-009",
+      "title": "Create AI trope quality checks service",
+      "description": "As a developer, I need a deterministic quality checker that flags common AI writing patterns without API costs.",
+      "acceptanceCriteria": [
+        "Create backend/app/services/content_quality.py with run_quality_checks(content: PageContent, brand_config: dict) function",
+        "Check 1 - Banned words: flag any words from brand config vocabulary.banned_words list, report which field and word",
+        "Check 2 - Em dashes: flag any em dash character (—) in any field, report field and surrounding context",
+        "Check 3 - AI opener patterns: flag phrases like 'In today's', 'Whether you're', 'Look no further', 'In the world of', 'When it comes to', report phrase and field",
+        "Check 4 - Excessive triplet lists: flag if more than 2 'X, Y, and Z' pattern instances, report count and examples",
+        "Check 5 - Excessive rhetorical questions: flag if more than 1 rhetorical question outside FAQ section, report count and examples",
+        "Returns structured result: {passed: bool, issues: [{type, field, description, context}], checked_at: ISO timestamp}",
+        "Result is stored in PageContent.qa_results JSONB field",
+        "Issues are informational only — content is NOT regenerated automatically"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "All checks are pure string analysis, no API calls needed. Design decision #4. Spec: openspec/changes/phase5-content-generation/specs/content-quality-checks/spec.md.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S5-010",
+      "title": "Create content generation pipeline orchestrator",
+      "description": "As a developer, I need a pipeline that orchestrates brief → write → check for each approved page with concurrency control.",
+      "acceptanceCriteria": [
+        "Create pipeline function (in backend/app/services/content_generation.py or similar) that takes a project and processes all approved-keyword pages",
+        "Per-page pipeline: (1) update status to generating_brief → fetch POP brief, (2) update status to writing → call Claude content writing, (3) update status to checking → run quality checks, (4) update status to complete",
+        "Uses asyncio.Semaphore for concurrency control with CONTENT_GENERATION_CONCURRENCY env var (default 1)",
+        "Error isolation: if one page fails, others continue; failed page gets status='failed' with error details",
+        "Only processes pages where PageKeywords.is_approved=True",
+        "Skips pages that already have PageContent with status='complete' (unless force_refresh)",
+        "Pipeline is designed to be called from a FastAPI BackgroundTask"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference backend/app/services/primary_keyword.py for background task pattern. Design decision #5. CONTENT_GENERATION_CONCURRENCY=1 for dev (sequential), =5 for production (parallel).",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S5-011",
+      "title": "Create Pydantic schemas for content generation endpoints",
+      "description": "As a developer, I need request/response schemas for all new content generation API endpoints.",
+      "acceptanceCriteria": [
+        "Create or update schemas in backend/app/schemas/ for content generation",
+        "ContentGenerationTriggerResponse: status='accepted', message",
+        "ContentGenerationStatus: overall_status (idle/generating/complete/failed), pages_total, pages_completed, pages_failed, pages: [{page_id, url, keyword, status, error}]",
+        "PageContentResponse: page_title, meta_description, top_description, bottom_description, word_count, status, qa_results, brief_summary (lsi_terms count, keyword), generation_started_at, generation_completed_at",
+        "PromptLogResponse: id, step, role, prompt_text, response_text, model, input_tokens, output_tokens, duration_ms, created_at",
+        "All schemas use Pydantic v2 model_config with from_attributes=True where needed"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference backend/app/schemas/content_generation.py for existing patterns (may need significant changes). Also reference backend/app/schemas/crawled_page.py for from_attributes pattern.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S5-012",
+      "title": "Create content generation API endpoints",
+      "description": "As a developer, I need API endpoints to trigger generation, poll progress, retrieve content, and fetch prompts.",
+      "acceptanceCriteria": [
+        "POST /api/v1/projects/{id}/generate-content — Returns 202 Accepted, starts background task, validates approved keywords exist (400 if none), prevents duplicate runs (409 if already generating)",
+        "GET /api/v1/projects/{id}/content-generation-status — Returns overall status, per-page status array with page_id/url/keyword/status/error",
+        "GET /api/v1/projects/{id}/pages/{page_id}/content — Returns PageContent with brief summary and qa_results (404 if not generated)",
+        "GET /api/v1/projects/{id}/pages/{page_id}/prompts — Returns PromptLog array ordered by created_at (empty array if none)",
+        "All endpoints use proper Pydantic response models",
+        "All endpoints are added to the router and accessible"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Add to backend/app/api/v1/projects.py or create a new content router file. Reference existing endpoints in projects.py for pattern (background tasks, polling). Spec: openspec/changes/phase5-content-generation/specs/content-generation-api/spec.md.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S5-013",
+      "title": "Write backend tests for POP brief service and content writing",
+      "description": "As a developer, I need tests to verify the POP brief service, content writing, and quality checks work correctly.",
+      "acceptanceCriteria": [
+        "Tests for POP content brief service: mock mode returns fixture data, caching returns existing brief, force_refresh bypasses cache, error handling returns failure result",
+        "Tests for prompt builder: with brief (includes LSI terms), without brief (fallback mode), brand config injection (ai_prompt_snippet, banned words)",
+        "Tests for content writing service: successful generation stores PageContent, invalid JSON triggers retry, PromptLog records created",
+        "Tests for quality checks: each trope rule has positive case (detected) and negative case (passes), structured result format correct",
+        "Tests for API endpoints: trigger returns 202, poll returns status, retrieve content returns data, prompts endpoint returns logs",
+        "All tests pass with: cd backend && python -m pytest tests/ -x"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Reference backend/tests/services/ and backend/tests/api/ for existing test patterns. Use backend/tests/conftest.py fixtures.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S5-014",
+      "title": "Create frontend API client and TanStack Query hooks for content generation",
+      "description": "As a developer, I need API client functions and React Query hooks so the frontend can interact with content generation endpoints.",
+      "acceptanceCriteria": [
+        "Add API client functions in frontend/src/lib/api.ts (or new file): triggerContentGeneration(projectId), pollContentGenerationStatus(projectId), getPageContent(projectId, pageId), getPagePrompts(projectId, pageId)",
+        "Create TanStack Query hooks: useContentGenerationStatus(projectId) with 3s refetch while status is 'generating', usePageContent(projectId, pageId), usePagePrompts(projectId, pageId), useTriggerContentGeneration() mutation",
+        "Hooks follow existing patterns in the codebase (reference keyword generation hooks)"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference frontend/src/lib/api.ts for API client pattern. Reference frontend/src/hooks/ for existing hook patterns. TanStack Query polling: refetchInterval: status === 'generating' ? 3000 : false.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S5-015",
+      "title": "Create ContentGenerationProgress page",
+      "description": "As a user, I need a content generation progress page so I can trigger generation and watch per-page pipeline progress.",
+      "acceptanceCriteria": [
+        "Create frontend/src/app/projects/[id]/onboarding/content/page.tsx",
+        "Initial state: shows count of approved pages, list of page titles/URLs, and 'Generate Content' button",
+        "Generating state: shows table of all pages with columns — page title/URL, keyword, pipeline status indicator (Brief → Write → Check → Done)",
+        "Polls every 3 seconds while status is 'generating', stops on 'complete'",
+        "Complete state: shows summary (X pages complete, Y failed), each completed page has a link/button to view content",
+        "Failed pages show error description and individual retry option",
+        "Page matches project design system (tropical oasis theme, rounded-sm, palm/sand/coral colors)"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference frontend/src/app/projects/[id]/onboarding/keywords/page.tsx for onboarding step pattern. Reference WIREFRAMES.md wireframe 8 for content generation progress layout. Spec: openspec/changes/phase5-content-generation/specs/content-generation-ui/spec.md.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S5-016",
+      "title": "Create PromptInspector side panel component",
+      "description": "As a developer, I need a prompt inspector panel so I can QA the exact prompts being sent to Claude during content generation.",
+      "acceptanceCriteria": [
+        "Create frontend/src/components/PromptInspector.tsx (or similar) as a collapsible side panel",
+        "Shows all PromptLog entries for a selected page, organized by step",
+        "Each entry displays: step label, system prompt (collapsible), user prompt (collapsible), Claude's response (collapsible), token usage (input/output tokens), duration_ms",
+        "Copy-to-clipboard button for full prompt text (system + user) with success toast notification",
+        "Sections toggle between expanded (full text) and collapsed (truncated preview)",
+        "Updates in real-time during generation (polling fetches new PromptLog entries)",
+        "Panel opens when user clicks inspect button on a page row in the progress table"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "This is a temporary dev/QA tool but should still look polished. Use monospace font for prompt text display. Spec: openspec/changes/phase5-content-generation/specs/content-generation-ui/spec.md.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S5-017",
+      "title": "Add content generation step to onboarding navigation",
+      "description": "As a user, I need the content generation page wired into the onboarding flow as step 4.",
+      "acceptanceCriteria": [
+        "Onboarding progress stepper shows 4 steps: Upload → Crawl → Keywords → Content",
+        "Step 4 'Content' is highlighted/active when on the content page",
+        "Navigation from keywords page to content page works (continue button or link after keyword approval)",
+        "Onboarding layout wraps the content page correctly"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference frontend/src/components/onboarding/ for existing stepper/layout pattern. The onboarding flow currently has 3 steps — add a 4th.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S5-018",
+      "title": "End-to-end verification in mock mode",
+      "description": "As a developer, I need to verify the full pipeline works end-to-end with mock POP data.",
+      "acceptanceCriteria": [
+        "Set POP_USE_MOCK=true in .env",
+        "Trigger content generation for a project with approved keywords",
+        "All pages progress through: generating_brief → writing → checking → complete",
+        "PageContent records created with all 4 fields populated",
+        "ContentBrief records created with mock LSI terms",
+        "PromptLog records created for each page's Claude calls",
+        "Quality checks run and qa_results stored in PageContent",
+        "Frontend progress page shows real-time status updates",
+        "Prompt inspector shows correct prompts for each page"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "This is the critical verification — the whole pipeline must work with mock data before we spend any real POP credits.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S5-098",
+      "title": "Update V2_REBUILD_PLAN.md",
+      "description": "As a developer, I need to update the plan status so that progress is tracked.",
+      "acceptanceCriteria": [
+        "Mark Phase 5 checkboxes as [x] complete in V2_REBUILD_PLAN.md",
+        "Update Current Status table: Phase=5, Slice=Content Generation complete, Next=Phase 6",
+        "Add new row to Session Log table with date, completed items, next up"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "This task maintains our planning discipline.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S5-099",
+      "title": "Verify Phase 5 completion",
+      "description": "As a developer, I need to verify all Phase 5 criteria are met before moving on.",
+      "acceptanceCriteria": [
+        "All backend tests pass: cd backend && python -m pytest tests/ -x",
+        "All frontend tests pass: cd frontend && npm test",
+        "Manual verification: content generation works end-to-end in mock mode",
+        "Prompt inspector displays prompts correctly",
+        "Quality checks flag AI tropes appropriately",
+        "Git commit created with message: feat(phase-5): Add content generation pipeline",
+        "No uncommitted changes remain"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Do not proceed to Phase 6 until this passes.",
+      "completionNotes": "Completed by agent"
+    }
+  ],
+  "metadata": {
+    "updatedAt": "2026-02-06T15:45:53.366Z"
+  }
+}

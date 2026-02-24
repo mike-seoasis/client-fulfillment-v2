@@ -30,13 +30,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.api.v1 import router as api_v1_router
+from app.api.v1.reddit import webhook_router
 from app.core.config import get_settings
 from app.core.database import db_manager
 from app.core.logging import get_logger, setup_logging
 from app.core.redis import redis_manager
 from app.core.scheduler import scheduler_manager
 from app.core.websocket import connection_manager
-from app.services.crawl_recovery import run_startup_recovery
+from app.integrations.claude import init_claude
+from app.integrations.crowdreply import close_crowdreply, init_crowdreply
+from app.integrations.perplexity import init_perplexity
+from app.integrations.serpapi import close_serpapi, init_serpapi
 
 # Set up logging before anything else
 setup_logging()
@@ -196,6 +201,39 @@ async def lifespan(app: FastAPI) -> Any:
     else:
         logger.info("Redis not available, caching disabled")
 
+    # Initialize external API clients
+    claude_client = await init_claude()
+    if claude_client.available:
+        logger.info("Claude client initialized", extra={"model": claude_client.model})
+    else:
+        logger.warning("Claude not configured (missing ANTHROPIC_API_KEY)")
+
+    perplexity_client = await init_perplexity()
+    if perplexity_client.available:
+        logger.info(
+            "Perplexity client initialized", extra={"model": perplexity_client.model}
+        )
+    else:
+        logger.warning("Perplexity not configured (missing PERPLEXITY_API_KEY)")
+
+    serpapi_client = await init_serpapi()
+    if serpapi_client.available:
+        logger.info("SerpAPI client initialized")
+    else:
+        logger.warning("SerpAPI not configured (missing SERPAPI_KEY)")
+
+    crowdreply_client = await init_crowdreply()
+    is_mock = hasattr(crowdreply_client, "_task_counter")
+    if is_mock:
+        logger.info("CrowdReply mock client initialized")
+    elif crowdreply_client.available:
+        logger.info(
+            "CrowdReply client initialized",
+            extra={"dry_run": crowdreply_client.dry_run},
+        )
+    else:
+        logger.warning("CrowdReply not configured (missing CROWDREPLY_API_KEY)")
+
     # Start WebSocket heartbeat task
     await connection_manager.start_heartbeat()
     logger.info("WebSocket heartbeat task started")
@@ -208,33 +246,6 @@ async def lifespan(app: FastAPI) -> Any:
             logger.warning("Failed to start scheduler")
     else:
         logger.info("Scheduler not initialized (disabled or error)")
-
-    # Run startup recovery for interrupted crawls
-    try:
-        async with db_manager.session_factory() as session:
-            recovery_summary = await run_startup_recovery(session)
-            if recovery_summary.total_found > 0:
-                logger.info(
-                    "Crawl recovery completed",
-                    extra={
-                        "total_found": recovery_summary.total_found,
-                        "total_recovered": recovery_summary.total_recovered,
-                        "total_failed": recovery_summary.total_failed,
-                        "duration_ms": round(recovery_summary.duration_ms, 2),
-                    },
-                )
-            else:
-                logger.debug("No interrupted crawls found during startup recovery")
-    except Exception as e:
-        # Don't fail startup if recovery fails, but log the error
-        logger.error(
-            "Crawl recovery failed during startup",
-            extra={
-                "error_type": type(e).__name__,
-                "error_message": str(e),
-            },
-            exc_info=True,
-        )
 
     # Set up graceful shutdown handler
     shutdown_event = asyncio.Event()
@@ -265,6 +276,8 @@ async def lifespan(app: FastAPI) -> Any:
     await connection_manager.stop_heartbeat()
     logger.info("WebSocket connections closed")
 
+    await close_crowdreply()
+    await close_serpapi()
     await redis_manager.close()
     await db_manager.close()
     logger.info("Application shutdown complete")
@@ -300,6 +313,7 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["Content-Disposition"],
     )
 
     # Exception handlers for structured error responses
@@ -415,10 +429,223 @@ def create_app() -> FastAPI:
         health = scheduler_manager.check_health()
         return health
 
-    # Import and include API routers
-    from app.api.v1 import router as api_v1_router
+    # Integrations health check
+    @app.get("/health/integrations", tags=["Health"])
+    async def integrations_health() -> dict[str, Any]:
+        """Check status of external integrations (POP, DataForSEO, Claude)."""
+        from app.core.config import get_settings
+        from app.integrations.pop import POPMockClient, get_pop_client
 
-    app.include_router(api_v1_router, prefix="/api/v1")
+        settings = get_settings()
+        pop_client = await get_pop_client()
+        is_mock = isinstance(pop_client, POPMockClient)
+
+        return {
+            "pop": {
+                "mock_mode": settings.pop_use_mock,
+                "is_mock_client": is_mock,
+                "api_key_set": bool(settings.pop_api_key),
+                "available": getattr(pop_client, "available", False)
+                if not is_mock
+                else True,
+                "circuit_breaker": cb.state.value
+                if (cb := getattr(pop_client, "_circuit_breaker", None)) is not None
+                else "n/a",
+            },
+            "dataforseo": {
+                "login_set": bool(settings.dataforseo_api_login),
+                "password_set": bool(settings.dataforseo_api_password),
+            },
+            "claude": {
+                "api_key_set": bool(settings.anthropic_api_key),
+                "model": settings.claude_model,
+            },
+        }
+
+    # POP full 3-step flow test
+    @app.get("/health/pop-test", tags=["Health"])
+    async def pop_full_test() -> dict[str, Any]:
+        """Run the full 3-step POP flow and report each step's result."""
+        from app.integrations.pop import POPMockClient, get_pop_client
+
+        pop_client = await get_pop_client()
+
+        if isinstance(pop_client, POPMockClient):
+            return {"status": "skipped", "reason": "Using mock client"}
+
+        if not pop_client.available:
+            return {
+                "status": "error",
+                "reason": "POP client not available (missing API key)",
+            }
+
+        steps: dict[str, Any] = {}
+
+        # --- Step 1: get-terms ---
+        try:
+            task_result = await pop_client.create_report_task(
+                keyword="pet wellness supplements",
+                url="https://www.example.com/pet-wellness",
+            )
+            if not task_result.success or not task_result.task_id:
+                steps["step1_create"] = {"success": False, "error": task_result.error}
+                return {"steps": steps}
+
+            steps["step1_create"] = {"success": True, "task_id": task_result.task_id}
+
+            poll_result = await pop_client.poll_for_result(task_result.task_id)
+            response_data = dict(poll_result.data or {})
+            prepare_id = response_data.get("prepareId")
+            variations = response_data.get("variations", [])
+            lsa_phrases = response_data.get("lsaPhrases", [])
+
+            steps["step1_poll"] = {
+                "success": poll_result.success,
+                "status": poll_result.status.value if poll_result.status else None,
+                "response_keys": list(response_data.keys()),
+                "prepareId": prepare_id,
+                "prepareId_type": type(prepare_id).__name__,
+                "lsa_count": len(lsa_phrases),
+                "variations_count": len(variations),
+            }
+
+            if not prepare_id:
+                return {"steps": steps, "diagnosis": "No prepareId - steps 2+3 skipped"}
+
+        except Exception as e:
+            steps["step1_error"] = {"type": type(e).__name__, "message": str(e)}
+            return {"steps": steps}
+
+        # --- Step 2: create-report ---
+        try:
+            report_task = await pop_client.create_report(
+                prepare_id=prepare_id,
+                variations=variations,
+                lsa_phrases=lsa_phrases,
+            )
+
+            steps["step2_create"] = {
+                "success": report_task.success,
+                "task_id": report_task.task_id,
+                "error": report_task.error,
+                "data_keys": list((report_task.data or {}).keys()),
+                "reportId": (report_task.data or {}).get("reportId"),
+            }
+
+            if not report_task.success or not report_task.task_id:
+                return {"steps": steps, "diagnosis": "create-report failed"}
+
+            report_poll = await pop_client.poll_for_result(report_task.task_id)
+            report_data = report_poll.data or {}
+
+            steps["step2_poll"] = {
+                "success": report_poll.success,
+                "status": report_poll.status.value if report_poll.status else None,
+                "response_keys": list(report_data.keys()),
+                "has_report_key": "report" in report_data,
+                "report_keys": list(report_data.get("report", {}).keys())
+                if isinstance(report_data.get("report"), dict)
+                else None,
+                "competitors_count": len(
+                    report_data.get("report", {}).get("competitors", [])
+                )
+                if isinstance(report_data.get("report"), dict)
+                else 0,
+            }
+
+        except Exception as e:
+            steps["step2_error"] = {"type": type(e).__name__, "message": str(e)}
+
+        return {"steps": steps}
+
+    # Project content/brief diagnostic
+    @app.get("/health/project-debug/{project_id}", tags=["Health"])
+    async def project_debug(project_id: str) -> dict[str, Any]:
+        """Debug endpoint showing content generation state for a project."""
+        from sqlalchemy import select as sa_select
+
+        from app.models.content_brief import ContentBrief
+        from app.models.crawled_page import CrawledPage
+        from app.models.page_content import PageContent
+        from app.models.page_keywords import PageKeywords
+
+        async with db_manager.session_factory() as db:
+            # Get all pages for project
+            pages_stmt = sa_select(CrawledPage).where(
+                CrawledPage.project_id == project_id
+            )
+            pages_result = await db.execute(pages_stmt)
+            pages = list(pages_result.scalars().all())
+
+            page_data: list[dict[str, Any]] = []
+            for page in pages:
+                # Get keywords
+                kw_stmt = sa_select(PageKeywords).where(
+                    PageKeywords.crawled_page_id == page.id
+                )
+                kw_result = await db.execute(kw_stmt)
+                kw = kw_result.scalar_one_or_none()
+
+                # Get content
+                content_stmt = sa_select(PageContent).where(
+                    PageContent.crawled_page_id == page.id
+                )
+                content_result = await db.execute(content_stmt)
+                content = content_result.scalar_one_or_none()
+
+                # Get brief
+                brief_stmt = sa_select(ContentBrief).where(
+                    ContentBrief.page_id == page.id
+                )
+                brief_result = await db.execute(brief_stmt)
+                brief = brief_result.scalar_one_or_none()
+
+                # Extract raw response keys + prepareId from first brief only
+                raw_keys = None
+                prepare_id_value = None
+                if brief and brief.raw_response and not page_data:
+                    raw_keys = list(brief.raw_response.keys())
+                    prepare_id_value = brief.raw_response.get("prepareId")
+
+                page_data.append(
+                    {
+                        "page_id": page.id,
+                        "url": page.normalized_url[:60],
+                        "keyword": kw.primary_keyword if kw else None,
+                        "keyword_approved": kw.is_approved if kw else False,
+                        "content_status": content.status if content else None,
+                        "has_brief": brief is not None,
+                        "brief_lsi_count": len(brief.lsi_terms)
+                        if brief and brief.lsi_terms
+                        else 0,
+                        "brief_competitors": len(brief.competitors)
+                        if brief and brief.competitors
+                        else 0,
+                        "brief_pop_task_id": brief.pop_task_id[:20]
+                        if brief and brief.pop_task_id
+                        else None,
+                        **(
+                            {
+                                "raw_response_keys": raw_keys,
+                                "prepareId": prepare_id_value,
+                            }
+                            if raw_keys is not None
+                            else {}
+                        ),
+                    }
+                )
+
+            return {
+                "project_id": project_id,
+                "total_pages": len(pages),
+                "pages": page_data,
+            }
+
+    # Include API routers
+    app.include_router(api_v1_router)
+
+    # Mount webhook router directly on app (no auth required - external callbacks)
+    app.include_router(webhook_router)
 
     return app
 

@@ -1,4 +1,4 @@
-# Railway Configuration for Client Fulfillment App V2
+# Railway Configuration for Grove Backend
 # Production-ready deployment configuration
 #
 # This configuration works for both staging and production environments.
@@ -14,28 +14,15 @@
 # See RAILWAY_ENV.md for complete environment variable documentation.
 
 [build]
-# Use Python 3.11 runtime with Nixpacks
-builder = "NIXPACKS"
-
-[build.nixpacksPlan]
-# Python version for Railway
-nixPkgs = ["python311"]
+# Use Dockerfile for build
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
 
 [deploy]
 # Health check configuration
 # Railway pings this endpoint to verify deployment health
 healthcheckPath = "/health"
 healthcheckTimeout = 120
-
-# Start command: run deploy script (migrations + validation) then start server
-# Deploy script handles:
-# - Environment variable validation with masked logging
-# - Database connection verification
-# - Migration execution with step-by-step logging
-# - Post-migration data integrity validation
-# - Rollback trigger logging on failure
-# Start command with unbuffered output
-startCommand = "python -u -m app.deploy && uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1"
 
 # Restart policy for resilience
 restartPolicyType = "ON_FAILURE"

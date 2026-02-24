@@ -1,502 +1,219 @@
-"""Pydantic schemas for Content Generation phase API endpoints.
+"""Pydantic schemas for content generation and review API endpoints.
 
-Schemas for content generation operations:
-- ContentGenerationRequest: Generate content for a single page
-- ContentGenerationResponse: Generated content with metadata
-- ContentGenerationBatchRequest: Generate content for multiple pages
-- ContentGenerationBatchResponse: Batch results with statistics
-
-Error Logging Requirements:
-- Log all incoming requests with method, path, request_id
-- Log request body at DEBUG level (sanitize sensitive fields)
-- Log response status and timing for every request
-- Return structured error responses: {"error": str, "code": str, "request_id": str}
-- Log 4xx errors at WARNING, 5xx at ERROR
-- Include user context if available
-- Log rate limit hits at WARNING level
-
-Railway Deployment Requirements:
-- CORS must allow frontend domain (configure via FRONTEND_URL env var)
-- Return proper error responses (Railway shows these in logs)
-- Include request_id in all responses for debugging
-- Health check endpoint at /health or /api/v1/health
+Schemas for the content generation pipeline:
+- ContentGenerationTriggerResponse: Accepted response when pipeline is triggered
+- ContentGenerationStatus: Overall pipeline status with per-page breakdown
+- PageContentResponse: Generated content for a single page (from ORM)
+- PromptLogResponse: Single prompt/response exchange record (from ORM)
+- BriefSummary: Lightweight summary of the content brief used during generation
+- ContentBriefData: Full brief data for review (keyword, LSI terms, heading/keyword targets)
+- ContentUpdateRequest: Partial update request for editing content fields
+- BulkApproveResponse: Response for bulk approval endpoint
 """
 
+from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 # =============================================================================
-# GENERATED CONTENT MODEL
+# CONTENT UPDATE REQUEST
 # =============================================================================
 
 
-class GeneratedContentOutput(BaseModel):
-    """Generated content fields from content generation."""
+class ContentUpdateRequest(BaseModel):
+    """Request schema for partial content updates during review/editing."""
 
-    h1: str = Field(
-        ...,
-        min_length=1,
-        max_length=200,
-        description="H1 heading for the page",
-        examples=["Premium Leather Wallets"],
+    page_title: str | None = Field(None, description="Updated SEO page title")
+    meta_description: str | None = Field(None, description="Updated meta description")
+    top_description: str | None = Field(
+        None, description="Updated above-the-fold content (plain text)"
     )
-    title_tag: str = Field(
-        ...,
-        min_length=1,
-        max_length=100,
-        description="Title tag for SEO (under 60 chars recommended)",
-        examples=["Premium Leather Wallets | Acme Co"],
-    )
-    meta_description: str = Field(
-        ...,
-        min_length=1,
-        max_length=200,
-        description="Meta description for SEO (150-160 chars recommended)",
-        examples=[
-            "Discover our collection of premium leather wallets. "
-            "Handcrafted with full-grain leather for lasting quality. Shop now."
-        ],
-    )
-    body_content: str = Field(
-        ...,
-        description="Main body content (HTML)",
-    )
-    word_count: int = Field(
-        ...,
-        ge=0,
-        description="Word count of body content",
+    bottom_description: str | None = Field(
+        None, description="Updated below-the-fold content (HTML)"
     )
 
 
 # =============================================================================
-# CONTENT GENERATION REQUEST
+# BULK APPROVE RESPONSE
 # =============================================================================
 
 
-class ContentGenerationRequest(BaseModel):
-    """Request schema for content generation."""
+class BulkApproveResponse(BaseModel):
+    """Response schema for bulk content approval endpoint."""
 
-    keyword: str = Field(
-        ...,
-        min_length=1,
-        max_length=500,
-        description="Primary keyword for content generation",
-        examples=["leather wallets", "coffee storage containers"],
-    )
-    url: str = Field(
-        ...,
-        min_length=1,
-        max_length=500,
-        description="Target page URL path",
-        examples=["/collections/leather-wallets"],
-    )
-    brand_name: str = Field(
-        ...,
-        min_length=1,
-        max_length=200,
-        description="Brand name for title tag and content",
-        examples=["Acme Co", "Premium Goods"],
-    )
-    content_type: str = Field(
-        "collection",
-        description="Type of content to generate: collection, product, blog, landing",
-        pattern="^(collection|product|blog|landing)$",
-    )
-    tone: str = Field(
-        "professional",
-        max_length=100,
-        description="Desired tone for the content",
-        examples=["professional", "friendly", "casual", "luxury"],
-    )
-    target_word_count: int = Field(
-        400,
-        ge=100,
-        le=2000,
-        description="Target word count for body content",
-    )
-    context: dict[str, Any] | None = Field(
-        None,
-        description="Additional context for content generation (research briefs, brand voice, etc.)",
-    )
-    page_id: str | None = Field(
-        None,
-        description="Optional page ID for tracking",
-    )
-
-    @field_validator("keyword")
-    @classmethod
-    def validate_keyword(cls, v: str) -> str:
-        """Validate and normalize keyword."""
-        v = v.strip()
-        if not v:
-            raise ValueError("Keyword cannot be empty")
-        return v
-
-    @field_validator("brand_name")
-    @classmethod
-    def validate_brand_name(cls, v: str) -> str:
-        """Validate and normalize brand name."""
-        v = v.strip()
-        if not v:
-            raise ValueError("Brand name cannot be empty")
-        return v
-
-
-# =============================================================================
-# CONTENT GENERATION RESPONSE
-# =============================================================================
-
-
-class ContentGenerationResponse(BaseModel):
-    """Response schema for content generation."""
-
-    success: bool = Field(
-        ...,
-        description="Whether content was generated successfully",
-    )
-    keyword: str = Field(
-        ...,
-        description="The keyword this content is for",
-    )
-    content_type: str = Field(
-        ...,
-        description="Type of content generated",
-    )
-
-    # Generated content
-    content: GeneratedContentOutput | None = Field(
-        None,
-        description="Generated content (null if failed)",
-    )
-
-    # Error handling
-    error: str | None = Field(
-        None,
-        description="Error message if failed",
-    )
-
-    # Performance and metadata
-    duration_ms: float = Field(
-        ...,
-        description="Processing time in milliseconds",
-    )
-    input_tokens: int | None = Field(
-        None,
-        description="LLM input tokens used",
-    )
-    output_tokens: int | None = Field(
-        None,
-        description="LLM output tokens used",
-    )
-    request_id: str | None = Field(
-        None,
-        description="Request ID for debugging",
+    approved_count: int = Field(
+        ..., ge=0, description="Number of pages approved in this request"
     )
 
 
 # =============================================================================
-# BATCH CONTENT GENERATION
+# TRIGGER RESPONSE
 # =============================================================================
 
 
-class ContentGenerationBatchItemRequest(BaseModel):
-    """Single item in batch content generation request."""
+class ContentGenerationTriggerResponse(BaseModel):
+    """Response returned when content generation pipeline is triggered."""
 
-    keyword: str = Field(
+    status: str = Field(
+        "accepted",
+        description="Request status (always 'accepted' on success)",
+    )
+    message: str = Field(
         ...,
-        min_length=1,
-        max_length=500,
-        description="Primary keyword",
+        description="Human-readable message about what was triggered",
     )
-    url: str = Field(
+
+
+# =============================================================================
+# PIPELINE STATUS
+# =============================================================================
+
+
+class PageGenerationStatusItem(BaseModel):
+    """Per-page status within the content generation pipeline."""
+
+    page_id: str = Field(..., description="CrawledPage UUID")
+    url: str = Field(..., description="Normalized page URL")
+    keyword: str = Field(..., description="Primary keyword for this page")
+    source: str = Field(..., description="Page source: 'onboarding' or 'cluster'")
+    status: str = Field(
         ...,
-        min_length=1,
-        max_length=500,
-        description="Target page URL path",
+        description="Page generation status (pending, generating_brief, writing, checking, complete, failed)",
     )
-    content_type: str = Field(
-        "collection",
-        description="Type of content to generate",
-        pattern="^(collection|product|blog|landing)$",
-    )
-    target_word_count: int = Field(
-        400,
-        ge=100,
-        le=2000,
-        description="Target word count",
-    )
-    context: dict[str, Any] | None = Field(
-        None,
-        description="Additional context for this item",
-    )
-    page_id: str | None = Field(
-        None,
-        description="Optional page ID",
-    )
-
-
-class ContentGenerationBatchRequest(BaseModel):
-    """Request schema for batch content generation."""
-
-    brand_name: str = Field(
-        ...,
-        min_length=1,
-        max_length=200,
-        description="Brand name (shared for all items)",
-    )
-    tone: str = Field(
-        "professional",
-        max_length=100,
-        description="Desired tone (shared for all items)",
-    )
-    items: list[ContentGenerationBatchItemRequest] = Field(
-        ...,
-        min_length=1,
-        max_length=50,
-        description="Items to generate content for",
-    )
-    max_concurrent: int = Field(
-        5,
-        ge=1,
-        le=10,
-        description="Maximum concurrent content generations",
-    )
-
-    @field_validator("items")
-    @classmethod
-    def validate_items(
-        cls, v: list[ContentGenerationBatchItemRequest]
-    ) -> list[ContentGenerationBatchItemRequest]:
-        """Validate items list."""
-        if not v:
-            raise ValueError("At least one item is required")
-        return v
-
-
-class ContentGenerationBatchItemResponse(BaseModel):
-    """Response for a single item in batch content generation."""
-
-    keyword: str = Field(..., description="The keyword")
-    url: str = Field(..., description="The URL path")
-    content_type: str = Field(..., description="Content type generated")
-    success: bool = Field(..., description="Whether content was generated")
-    h1: str | None = Field(None, description="Generated H1 if successful")
-    word_count: int | None = Field(None, description="Body content word count")
     error: str | None = Field(None, description="Error message if failed")
+    qa_passed: bool | None = Field(
+        None, description="Whether QA checks passed (null if not yet checked)"
+    )
+    qa_issue_count: int = Field(0, description="Number of QA issues found")
+    is_approved: bool = Field(False, description="Whether content has been approved")
 
 
-class ContentGenerationBatchResponse(BaseModel):
-    """Response schema for batch content generation."""
+class ContentGenerationStatus(BaseModel):
+    """Overall content generation pipeline status for a project."""
 
-    success: bool = Field(
+    overall_status: str = Field(
         ...,
-        description="Whether batch completed (some may have failed)",
+        description="Pipeline status: idle, generating, complete, or failed",
     )
-    results: list[ContentGenerationBatchItemResponse] = Field(
+    pages_total: int = Field(..., ge=0, description="Total pages to generate")
+    pages_completed: int = Field(..., ge=0, description="Pages completed successfully")
+    pages_failed: int = Field(..., ge=0, description="Pages that failed generation")
+    pages_approved: int = Field(0, ge=0, description="Pages approved for publishing")
+    pages: list[PageGenerationStatusItem] = Field(
         default_factory=list,
-        description="Results for each item",
+        description="Per-page status breakdown",
     )
-    total_items: int = Field(0, description="Total items in request")
-    successful_items: int = Field(0, description="Items with generated content")
-    failed_items: int = Field(0, description="Items that failed")
-    error: str | None = Field(None, description="Error if batch failed")
-    duration_ms: float = Field(..., description="Total processing time")
-    request_id: str | None = Field(None, description="Request ID for debugging")
 
 
 # =============================================================================
-# REGENERATION ENDPOINTS
+# BRIEF SUMMARY (nested in PageContentResponse)
 # =============================================================================
 
 
-class RegenerateRequest(BaseModel):
-    """Request schema for regenerating content for a failed page."""
+class BriefSummary(BaseModel):
+    """Lightweight summary of the content brief used during generation."""
 
-    page_id: str = Field(
-        ...,
-        min_length=1,
-        description="ID of the page to regenerate content for",
+    keyword: str = Field(..., description="Target keyword from the brief")
+    lsi_terms_count: int = Field(
+        ..., ge=0, description="Number of LSI terms in the brief"
     )
-    brand_name: str = Field(
-        ...,
-        min_length=1,
-        max_length=200,
-        description="Brand name for title tag and content",
-        examples=["Acme Co", "Premium Goods"],
+    competitors_count: int = Field(
+        0, ge=0, description="Number of competitors analyzed"
     )
-    tone: str = Field(
-        "professional",
-        max_length=100,
-        description="Desired tone for the content",
-        examples=["professional", "friendly", "casual", "luxury"],
+    related_questions_count: int = Field(
+        0, ge=0, description="Number of related questions (PAA)"
     )
-    target_word_count: int = Field(
-        400,
-        ge=100,
-        le=2000,
-        description="Target word count for body content",
+    page_score_target: float | None = Field(
+        None, description="Target page optimization score"
     )
-    context: dict[str, Any] | None = Field(
+    word_count_range: str | None = Field(
         None,
-        description="Additional context for content generation",
+        description="Word count range string (e.g., '800-1200')",
     )
 
-    @field_validator("page_id")
-    @classmethod
-    def validate_page_id(cls, v: str) -> str:
-        """Validate and normalize page ID."""
-        v = v.strip()
-        if not v:
-            raise ValueError("Page ID cannot be empty")
-        return v
 
-    @field_validator("brand_name")
-    @classmethod
-    def validate_brand_name(cls, v: str) -> str:
-        """Validate and normalize brand name."""
-        v = v.strip()
-        if not v:
-            raise ValueError("Brand name cannot be empty")
-        return v
+# =============================================================================
+# CONTENT BRIEF DATA (full brief for review)
+# =============================================================================
 
 
-class RegenerateResponse(BaseModel):
-    """Response schema for single page regeneration."""
+class ContentBriefData(BaseModel):
+    """Full content brief data exposed for the review/editing UI."""
 
-    success: bool = Field(
+    keyword: str = Field(..., description="Target keyword from the brief")
+    lsi_terms: list[Any] = Field(
+        default_factory=list, description="LSI terms for content optimization"
+    )
+    heading_targets: list[Any] = Field(
+        default_factory=list, description="Recommended headings with level and priority"
+    )
+    keyword_targets: list[Any] = Field(
+        default_factory=list, description="Keyword usage targets with min/max counts"
+    )
+
+
+# =============================================================================
+# PAGE CONTENT RESPONSE (from ORM)
+# =============================================================================
+
+
+class PageContentResponse(BaseModel):
+    """Response schema for generated page content."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    page_title: str | None = Field(None, description="Generated SEO page title")
+    meta_description: str | None = Field(None, description="Generated meta description")
+    top_description: str | None = Field(
+        None, description="Above-the-fold content (plain text)"
+    )
+    bottom_description: str | None = Field(
+        None, description="Below-the-fold content (HTML)"
+    )
+    word_count: int | None = Field(
+        None, description="Total word count across content fields"
+    )
+    status: str = Field(
         ...,
-        description="Whether regeneration was successful",
+        description="Content status (pending, generating_brief, writing, checking, complete, failed)",
     )
-    page_id: str = Field(
-        ...,
-        description="ID of the page that was regenerated",
+    is_approved: bool = Field(False, description="Whether content has been approved")
+    approved_at: datetime | None = Field(None, description="When content was approved")
+    qa_results: dict[str, Any] | None = Field(None, description="Quality check results")
+    brief_summary: BriefSummary | None = Field(
+        None, description="Summary of the content brief used"
     )
-    keyword: str | None = Field(
-        None,
-        description="The keyword this content is for",
+    brief: ContentBriefData | None = Field(
+        None, description="Full content brief data for review"
     )
-    content_type: str | None = Field(
-        None,
-        description="Type of content generated",
+    generation_started_at: datetime | None = Field(
+        None, description="When content generation started"
     )
-
-    # Generated content
-    content: GeneratedContentOutput | None = Field(
-        None,
-        description="Generated content (null if failed)",
-    )
-
-    # Error handling
-    error: str | None = Field(
-        None,
-        description="Error message if failed",
-    )
-
-    # Performance and metadata
-    duration_ms: float = Field(
-        ...,
-        description="Processing time in milliseconds",
-    )
-    input_tokens: int | None = Field(
-        None,
-        description="LLM input tokens used",
-    )
-    output_tokens: int | None = Field(
-        None,
-        description="LLM output tokens used",
-    )
-    request_id: str | None = Field(
-        None,
-        description="Request ID for debugging",
+    generation_completed_at: datetime | None = Field(
+        None, description="When content generation completed"
     )
 
 
-class RegenerateBatchItemRequest(BaseModel):
-    """Single item in batch regeneration request."""
+# =============================================================================
+# PROMPT LOG RESPONSE (from ORM)
+# =============================================================================
 
-    page_id: str = Field(
-        ...,
-        min_length=1,
-        description="ID of the page to regenerate",
+
+class PromptLogResponse(BaseModel):
+    """Response schema for a prompt/response exchange record."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str = Field(..., description="PromptLog UUID")
+    step: str = Field(..., description="Pipeline step name (e.g. 'content_writing')")
+    role: str = Field(..., description="Message role ('system' or 'user')")
+    prompt_text: str = Field(..., description="The prompt sent to Claude")
+    response_text: str | None = Field(None, description="Claude's response text")
+    model: str | None = Field(None, description="Claude model identifier used")
+    input_tokens: int | None = Field(None, description="Input tokens consumed")
+    output_tokens: int | None = Field(None, description="Output tokens consumed")
+    duration_ms: float | None = Field(
+        None, description="API call duration in milliseconds"
     )
-    target_word_count: int = Field(
-        400,
-        ge=100,
-        le=2000,
-        description="Target word count",
-    )
-    context: dict[str, Any] | None = Field(
-        None,
-        description="Additional context for this item",
-    )
-
-
-class RegenerateBatchRequest(BaseModel):
-    """Request schema for batch regeneration of failed pages."""
-
-    brand_name: str = Field(
-        ...,
-        min_length=1,
-        max_length=200,
-        description="Brand name (shared for all items)",
-    )
-    tone: str = Field(
-        "professional",
-        max_length=100,
-        description="Desired tone (shared for all items)",
-    )
-    items: list[RegenerateBatchItemRequest] = Field(
-        ...,
-        min_length=1,
-        max_length=50,
-        description="Pages to regenerate content for",
-    )
-    max_concurrent: int = Field(
-        5,
-        ge=1,
-        le=10,
-        description="Maximum concurrent regenerations",
-    )
-
-    @field_validator("items")
-    @classmethod
-    def validate_items(
-        cls, v: list[RegenerateBatchItemRequest]
-    ) -> list[RegenerateBatchItemRequest]:
-        """Validate items list."""
-        if not v:
-            raise ValueError("At least one item is required")
-        return v
-
-
-class RegenerateBatchItemResponse(BaseModel):
-    """Response for a single item in batch regeneration."""
-
-    page_id: str = Field(..., description="The page ID")
-    keyword: str | None = Field(None, description="The keyword")
-    url: str | None = Field(None, description="The URL path")
-    content_type: str | None = Field(None, description="Content type generated")
-    success: bool = Field(..., description="Whether regeneration succeeded")
-    h1: str | None = Field(None, description="Generated H1 if successful")
-    word_count: int | None = Field(None, description="Body content word count")
-    error: str | None = Field(None, description="Error message if failed")
-
-
-class RegenerateBatchResponse(BaseModel):
-    """Response schema for batch regeneration."""
-
-    success: bool = Field(
-        ...,
-        description="Whether batch completed (some may have failed)",
-    )
-    results: list[RegenerateBatchItemResponse] = Field(
-        default_factory=list,
-        description="Results for each item",
-    )
-    total_items: int = Field(0, description="Total items in request")
-    successful_items: int = Field(0, description="Items with regenerated content")
-    failed_items: int = Field(0, description="Items that failed")
-    error: str | None = Field(None, description="Error if batch failed")
-    duration_ms: float = Field(..., description="Total processing time")
-    request_id: str | None = Field(None, description="Request ID for debugging")
+    created_at: datetime = Field(..., description="When the log was created")

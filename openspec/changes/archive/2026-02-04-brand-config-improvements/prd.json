@@ -1,0 +1,565 @@
+{
+  "name": "Brand Config Improvements",
+  "description": "Fix bugs, enhance generation prompts for richer content, and replace JSON editing with inline section editors.",
+  "branchName": "feature/brand-config-improvements",
+  "userStories": [
+    {
+      "id": "BC-001",
+      "title": "Fix VoiceCharacteristicsSection crash",
+      "description": "As a user, I need the VoiceCharacteristics section to render without crashing so that I can view my brand voice traits.",
+      "acceptanceCriteria": [
+        "Add defensive rendering for `we_are_not` array in VoiceCharacteristicsSection.tsx",
+        "Handle both string items ['corporate'] and object items [{trait_name: 'corporate'}]",
+        "Extract text content: typeof item === 'string' ? item : item.trait_name || JSON.stringify(item)",
+        "No React 'objects are not valid as a react child' error occurs"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "File: frontend/src/components/brand-sections/VoiceCharacteristicsSection.tsx, line 132-137",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-002",
+      "title": "Fix VoiceDimensionsSection slider",
+      "description": "As a user, I need the voice dimensions sliders to display correct positions so that I can see accurate voice ratings.",
+      "acceptanceCriteria": [
+        "Validate scale.position exists and is a number in VoiceDimensionsSection.tsx",
+        "Default to position 5 (middle) if position is undefined or invalid",
+        "Slider displays at correct percentage: ((position - 1) / 9) * 100",
+        "All four dimension sliders render correctly with valid data"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "File: frontend/src/components/brand-sections/VoiceDimensionsSection.tsx, DimensionScale component",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-003",
+      "title": "Debug and fix regeneration endpoint",
+      "description": "As a user, I need the regenerate button to work so that I can refresh section content.",
+      "acceptanceCriteria": [
+        "Verify regenerate API endpoint is being called with correct section parameter",
+        "Check frontend regenerate mutation sends proper request body",
+        "Ensure backend regenerate_sections method handles single section regeneration",
+        "Regenerate works for Target Audience and Examples Bank sections"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Check frontend mutation in brand-config page and backend app/api/v1/brand_config.py regenerate endpoint",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-004",
+      "title": "Update Perplexity research prompt for e-commerce focus",
+      "description": "As a user, I need research to focus on e-commerce so that generated content is relevant to online businesses.",
+      "acceptanceCriteria": [
+        "Update BRAND_RESEARCH_SYSTEM_PROMPT in perplexity.py",
+        "Add explicit e-commerce/DTC focus: website copy, email marketing, social media",
+        "Remove or deprioritize references to catalogs, direct mail, offline channels",
+        "Emphasize online sales channels, digital marketing, product pages"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "File: backend/app/integrations/perplexity.py, lines 159-253",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-005",
+      "title": "Update target_audience prompt for detailed personas",
+      "description": "As a user, I need detailed target audience personas so that content can be properly targeted.",
+      "acceptanceCriteria": [
+        "Update target_audience prompt in brand_config.py SECTION_PROMPTS",
+        "Require minimum 2 detailed personas",
+        "Ensure all fields populated: age, location, income, values, pain points, buying behavior",
+        "Include communication preferences for each persona"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "File: backend/app/services/brand_config.py, lines 152-199",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-006",
+      "title": "Update voice_characteristics prompt for correct format",
+      "description": "As a developer, I need we_are_not to be an array of strings so that the frontend renders correctly.",
+      "acceptanceCriteria": [
+        "Update voice_characteristics prompt in brand_config.py",
+        "Explicitly require we_are_not as array of simple strings",
+        "Add example format: ['corporate', 'stuffy', 'salesy']",
+        "Require 5 characteristics minimum for we_are"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "File: backend/app/services/brand_config.py, lines 235-265",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-007",
+      "title": "Update writing_style prompt with em dash rule",
+      "description": "As a user, I need em dashes to always be prohibited so that content follows brand standards.",
+      "acceptanceCriteria": [
+        "Update writing_style prompt in brand_config.py",
+        "Always include 'never use em dashes' in punctuation rules",
+        "Add em_dashes field with value 'never' or explicit prohibition",
+        "Rule applies regardless of brand or context"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "File: backend/app/services/brand_config.py, lines 266-302",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-008",
+      "title": "Update vocabulary prompt for more words",
+      "description": "As a user, I need more power words and banned words so that vocabulary guidance is comprehensive.",
+      "acceptanceCriteria": [
+        "Update vocabulary prompt in brand_config.py",
+        "Require 20+ power words (not 15-20)",
+        "Require 15+ banned words (not 10-15)",
+        "Include em dash in default banned items"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "File: backend/app/services/brand_config.py, lines 303-328",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-009",
+      "title": "Update trust_elements prompt with store rating",
+      "description": "As a user, I need average store rating included so that trust signals are complete.",
+      "acceptanceCriteria": [
+        "Update trust_elements prompt in brand_config.py",
+        "Add average_store_rating to hard_numbers section",
+        "Include review count alongside rating if available",
+        "Make rating field optional but requested"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "File: backend/app/services/brand_config.py, lines 329-371",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-010",
+      "title": "Update competitor_context prompt for more competitors",
+      "description": "As a user, I need more competitors analyzed so that competitive context is thorough.",
+      "acceptanceCriteria": [
+        "Update competitor_context prompt in brand_config.py",
+        "Require 5+ competitors (not 3-5)",
+        "Focus on e-commerce competitors specifically",
+        "Include positioning and differentiation for each"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "File: backend/app/services/brand_config.py, lines 397-423",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-011",
+      "title": "Update examples_bank prompt for more content",
+      "description": "As a user, I need more example content so that the examples bank is useful.",
+      "acceptanceCriteria": [
+        "Update examples_bank prompt in brand_config.py",
+        "Require 10+ headlines (not 5-10)",
+        "Require 3+ product descriptions",
+        "Require 10+ CTAs",
+        "Require 10+ email subject lines"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "File: backend/app/services/brand_config.py, lines 372-396",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-012",
+      "title": "Update ai_prompt_snippet prompt for complete output",
+      "description": "As a user, I need a complete AI prompt so that I can use it for content generation.",
+      "acceptanceCriteria": [
+        "Update ai_prompt_snippet prompt in brand_config.py",
+        "Ensure snippet is 100-200 words",
+        "Include all metadata: voice descriptors, audience summary, differentiators",
+        "Include never_use_words and always_include fields"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "File: backend/app/services/brand_config.py, lines 424-443",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-013",
+      "title": "Create TagInput component",
+      "description": "As a developer, I need a reusable tag input component for editable word lists.",
+      "acceptanceCriteria": [
+        "Create TagInput.tsx in frontend/src/components/brand-sections/editors/",
+        "Support adding new tags via input + enter",
+        "Support removing tags via X button",
+        "Accept value (string[]) and onChange props",
+        "Style with tropical oasis palette"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Used for power_words, banned_words in VocabularyEditor",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-014",
+      "title": "Create EditableTable component",
+      "description": "As a developer, I need a reusable table component for tabular data editing.",
+      "acceptanceCriteria": [
+        "Create EditableTable.tsx in frontend/src/components/brand-sections/editors/",
+        "Support dynamic columns via schema prop",
+        "Support add row, delete row, edit cell",
+        "Accept value (object[]) and onChange props",
+        "Style with tropical oasis palette"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Used for competitors table, word substitutions table",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-015",
+      "title": "Create BulletListEditor component",
+      "description": "As a developer, I need a reusable bullet list editor for array of strings.",
+      "acceptanceCriteria": [
+        "Create BulletListEditor.tsx in frontend/src/components/brand-sections/editors/",
+        "Support adding new items via input + button",
+        "Support reordering via drag or up/down buttons",
+        "Support removing items",
+        "Accept value (string[]) and onChange props"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Used for products, values, differentiators in BrandFoundation",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-016",
+      "title": "Create SliderInput component",
+      "description": "As a developer, I need a reusable slider component for 1-10 scale inputs.",
+      "acceptanceCriteria": [
+        "Create SliderInput.tsx in frontend/src/components/brand-sections/editors/",
+        "Range from 1-10 with tick marks",
+        "Show current value prominently",
+        "Accept value (number), onChange, label, leftLabel, rightLabel props",
+        "Style with palm-500 fill color"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Used for voice dimensions: Formality, Humor, Reverence, Enthusiasm",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-017",
+      "title": "Create BrandFoundationEditor",
+      "description": "As a user, I need inline editing for Brand Foundation section.",
+      "acceptanceCriteria": [
+        "Create BrandFoundationEditor.tsx in frontend/src/components/brand-sections/editors/",
+        "Text inputs for: company_name, tagline, mission_statement",
+        "BulletListEditor for: products, core_values, differentiators",
+        "Accept data and onSave/onCancel props",
+        "Validate required fields before save"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference BrandFoundationSection.tsx for data structure",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-018",
+      "title": "Create TargetAudienceEditor",
+      "description": "As a user, I need inline editing for Target Audience section.",
+      "acceptanceCriteria": [
+        "Create TargetAudienceEditor.tsx in frontend/src/components/brand-sections/editors/",
+        "Persona cards with editable fields for each persona",
+        "Support adding/removing personas",
+        "Fields: demographics (age, gender, location, income), psychographics, communication prefs",
+        "Accept data and onSave/onCancel props"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference TargetAudienceSection.tsx for data structure",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-019",
+      "title": "Create VoiceDimensionsEditor",
+      "description": "As a user, I need inline editing for Voice Dimensions section.",
+      "acceptanceCriteria": [
+        "Create VoiceDimensionsEditor.tsx in frontend/src/components/brand-sections/editors/",
+        "Four SliderInput components for: formality, humor, reverence, enthusiasm",
+        "Text input for voice_summary",
+        "Each slider shows description and example",
+        "Accept data and onSave/onCancel props"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference VoiceDimensionsSection.tsx for data structure",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-020",
+      "title": "Create VoiceCharacteristicsEditor",
+      "description": "As a user, I need inline editing for Voice Characteristics section.",
+      "acceptanceCriteria": [
+        "Create VoiceCharacteristicsEditor.tsx in frontend/src/components/brand-sections/editors/",
+        "Trait cards for we_are with: trait_name, description, do_example, dont_example",
+        "Support add/remove traits",
+        "BulletListEditor for we_are_not (simple strings)",
+        "Accept data and onSave/onCancel props"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference VoiceCharacteristicsSection.tsx for data structure",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-021",
+      "title": "Create WritingStyleEditor",
+      "description": "As a user, I need inline editing for Writing Style section.",
+      "acceptanceCriteria": [
+        "Create WritingStyleEditor.tsx in frontend/src/components/brand-sections/editors/",
+        "Grouped inputs: sentence_structure, capitalization, punctuation, formatting",
+        "Each rule as text input or dropdown where appropriate",
+        "Accept data and onSave/onCancel props"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference WritingStyleSection.tsx for data structure",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-022",
+      "title": "Create VocabularyEditor",
+      "description": "As a user, I need inline editing for Vocabulary section.",
+      "acceptanceCriteria": [
+        "Create VocabularyEditor.tsx in frontend/src/components/brand-sections/editors/",
+        "TagInput for power_words and banned_words",
+        "EditableTable for word_substitutions (from -> to columns)",
+        "BulletListEditor for signature_phrases",
+        "Accept data and onSave/onCancel props"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference VocabularySection.tsx for data structure",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-023",
+      "title": "Create TrustElementsEditor",
+      "description": "As a user, I need inline editing for Trust Elements section.",
+      "acceptanceCriteria": [
+        "Create TrustElementsEditor.tsx in frontend/src/components/brand-sections/editors/",
+        "Inputs for hard_numbers: customer_count, years_in_business, products_sold, average_rating",
+        "BulletListEditor for credentials, guarantees",
+        "EditableTable for customer_quotes (quote, attribution columns)",
+        "Accept data and onSave/onCancel props"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference TrustElementsSection.tsx for data structure",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-024",
+      "title": "Create ExamplesBankEditor",
+      "description": "As a user, I need inline editing for Examples Bank section.",
+      "acceptanceCriteria": [
+        "Create ExamplesBankEditor.tsx in frontend/src/components/brand-sections/editors/",
+        "Textarea for each category: headlines, product_descriptions, email_subjects, ctas",
+        "Support for social_posts object with instagram, facebook fields",
+        "BulletListEditor for off_brand_examples",
+        "Accept data and onSave/onCancel props"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference ExamplesBankSection.tsx for data structure",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-025",
+      "title": "Create CompetitorContextEditor",
+      "description": "As a user, I need inline editing for Competitor Context section.",
+      "acceptanceCriteria": [
+        "Create CompetitorContextEditor.tsx in frontend/src/components/brand-sections/editors/",
+        "EditableTable for direct_competitors (name, positioning, differentiation)",
+        "BulletListEditor for competitive_advantages",
+        "Text inputs for positioning_statements",
+        "Accept data and onSave/onCancel props"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference CompetitorContextSection.tsx for data structure",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-026",
+      "title": "Create AIPromptEditor",
+      "description": "As a user, I need inline editing for AI Prompt section.",
+      "acceptanceCriteria": [
+        "Create AIPromptEditor.tsx in frontend/src/components/brand-sections/editors/",
+        "Large textarea for prompt_snippet",
+        "Text inputs for: voice_in_three_words, we_sound_like, we_never_sound_like",
+        "TagInput for never_use_words",
+        "Accept data and onSave/onCancel props"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference AIPromptSection.tsx for data structure",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-027",
+      "title": "Create SectionEditorSwitch component",
+      "description": "As a developer, I need a router component to select the correct editor by section key.",
+      "acceptanceCriteria": [
+        "Create SectionEditorSwitch.tsx in frontend/src/components/brand-sections/editors/",
+        "Map section keys to editor components",
+        "Pass data, onSave, onCancel props to selected editor",
+        "Export from editors/index.ts"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Section keys: brand_foundation, target_audience, voice_dimensions, voice_characteristics, writing_style, vocabulary, trust_elements, examples_bank, competitor_context, ai_prompt_snippet",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-028",
+      "title": "Update brand-config page to use section editors",
+      "description": "As a user, I need the edit button to show inline editors instead of JSON.",
+      "acceptanceCriteria": [
+        "Update frontend/src/app/projects/[id]/brand-config/page.tsx",
+        "Replace SectionEditor (JSON) with SectionEditorSwitch",
+        "Pass section data and callbacks to SectionEditorSwitch",
+        "Maintain existing save/cancel flow"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Current edit mode is around lines 142-150",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-029",
+      "title": "Add keyboard shortcut support",
+      "description": "As a user, I need keyboard shortcuts for faster editing.",
+      "acceptanceCriteria": [
+        "Cmd/Ctrl+S triggers save in any editor",
+        "Escape triggers cancel in any editor",
+        "Shortcuts work across all 10 section editors",
+        "No conflicts with browser shortcuts"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "May use existing SectionEditor keyboard handling as reference",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-030",
+      "title": "Add validation and error display",
+      "description": "As a user, I need to see validation errors before saving.",
+      "acceptanceCriteria": [
+        "Each editor validates required fields",
+        "Errors displayed inline next to invalid fields",
+        "Save button disabled when validation fails",
+        "Error messages are user-friendly"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Focus on critical fields only - don't over-validate",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-031",
+      "title": "Test brand config generation with new prompts",
+      "description": "As a developer, I need to verify new prompts produce richer content.",
+      "acceptanceCriteria": [
+        "Create new test project",
+        "Run brand config generation",
+        "Verify target_audience has 2+ personas",
+        "Verify vocabulary has 20+ power words, 15+ banned words",
+        "Verify competitor_context has 5+ competitors"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Manual testing - use curl or UI",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-032",
+      "title": "Test VoiceCharacteristics with both data formats",
+      "description": "As a developer, I need to verify the crash fix works.",
+      "acceptanceCriteria": [
+        "Test with we_are_not as ['string1', 'string2']",
+        "Test with we_are_not as [{trait_name: 'x'}, {trait_name: 'y'}]",
+        "Test with we_are_not as mixed format",
+        "No errors in browser console"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "May need to manually edit brand config data to test",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-033",
+      "title": "Test VoiceDimensions slider with various values",
+      "description": "As a developer, I need to verify slider positioning is correct.",
+      "acceptanceCriteria": [
+        "Test with position: 1 - slider at 0%",
+        "Test with position: 10 - slider at 100%",
+        "Test with position: undefined - slider at 50% (default 5)",
+        "Test with position: 'invalid' - slider at 50% (default 5)"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "May need to manually edit brand config data to test",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-034",
+      "title": "Test regeneration for all sections",
+      "description": "As a developer, I need to verify regeneration works for every section.",
+      "acceptanceCriteria": [
+        "Test regenerate for Target Audience - content refreshes",
+        "Test regenerate for Examples Bank - content refreshes",
+        "Test regenerate for each of the 10 sections",
+        "Existing content is replaced, other sections unchanged"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Use UI regenerate button for each section",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-098",
+      "title": "Update V2_REBUILD_PLAN.md",
+      "description": "As a developer, I need to update the plan status so that progress is tracked.",
+      "acceptanceCriteria": [
+        "Add brand-config-improvements to completed items",
+        "Update Current Status table",
+        "Add Session Log entry with date and completed items"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "This task maintains our planning discipline.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "BC-099",
+      "title": "Verify implementation completion",
+      "description": "As a developer, I need to verify all changes are complete before archiving.",
+      "acceptanceCriteria": [
+        "All 10 section editors render correctly",
+        "All 10 sections can be edited and saved",
+        "Regeneration works for all sections",
+        "No crashes on any section",
+        "Git commit created with implementation"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Do not archive until this passes.",
+      "completionNotes": "Completed by agent"
+    }
+  ],
+  "metadata": {
+    "updatedAt": "2026-02-04T16:56:11.833Z"
+  }
+}

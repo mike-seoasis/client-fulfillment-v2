@@ -70,6 +70,73 @@ Be pragmatic. Be reliable. Self-anneal.
 
 ---
 
+## V2 Rebuild: Slice-Based Development
+
+This project is being rebuilt using vertical slices. Each slice is a complete feature from database to UI.
+
+### Session Start Protocol
+
+At the start of EVERY session:
+1. Read `V2_REBUILD_PLAN.md` — Check current status, where we are
+2. Read relevant section of `FEATURE_SPEC.md` — Feature details for current slice
+3. Read relevant section of `WIREFRAMES.md` — UI reference for current slice
+4. Tell the user: "We're on Phase X, Slice Y. Last session we completed Z. Next up is W."
+
+If user says "Let's continue" — follow this protocol automatically.
+
+### Slice Completion Protocol
+
+When completing ANY slice or significant milestone, you MUST:
+
+1. **Update V2_REBUILD_PLAN.md:**
+   - Mark completed checkboxes with `[x]`
+   - Update the "Current Status" section at the top
+   - Add a row to the Session Log table
+
+2. **Commit with slice reference:**
+   - Format: `feat(slice-X): Description`
+   - Example: `feat(slice-1): Add project list endpoint and dashboard UI`
+
+3. **Verify before moving on:**
+   - All tests passing
+   - Manual verification criteria met
+   - Status file updated
+
+**DO NOT proceed to next slice without completing these steps.**
+
+### OpenSpec + Ralph Integration
+
+Each slice uses OpenSpec for planning and Ralph TUI for execution:
+- `/opsx:new "Slice X: Name"` — Start planning
+- Convert tasks to `prd.json` for Ralph execution
+- Final tasks always include status file updates
+- `/opsx:verify` — Confirm completion before archiving
+
+**IMPORTANT:** When converting tasks to prd.json for Ralph, ALWAYS read `openspec/templates/slice-template.md` first and follow its structure exactly. This ensures:
+- Correct task ID format (S{X}-NNN)
+- Required final tasks are included (status update + verification)
+- Proper prd.json schema for Ralph TUI
+
+### Pre-Flight Checklist (Before Starting Any Slice)
+
+Before writing any code for a new slice, verify:
+- [ ] Previous slice is complete and archived
+- [ ] V2_REBUILD_PLAN.md status is current
+- [ ] You've read the relevant FEATURE_SPEC.md section
+- [ ] You've read the relevant WIREFRAMES.md section
+- [ ] Branch created: `feature/slice-X-[name]`
+
+### Post-Flight Checklist (After Completing Any Slice)
+
+Before moving to the next slice, verify:
+- [ ] All tests passing
+- [ ] Manual verification criteria met
+- [ ] V2_REBUILD_PLAN.md updated (checkboxes, status, session log)
+- [ ] Commit made with `feat(slice-X):` prefix
+- [ ] OpenSpec change archived
+
+---
+
 ## Design Context
 
 ### Users
@@ -79,17 +146,22 @@ Internal operations team onboarding new clients. They need efficiency but also a
 **Warm, helpful, human.** The interface should feel like a knowledgeable colleague rather than cold software. Approachable but polished. Friendly without being casual. Premium without being pretentious.
 
 ### Aesthetic Direction
-- **Visual tone:** Light, airy, sophisticated. Soft neutrals with warm accents. Think feathery, floating, breathing room.
-- **Reference:** Airtable's approachable flexibility, but warmer and more premium
+- **Visual tone:** Light, airy, tropical oasis. Soft sandy neutrals with lush green accents. Think palm fronds, natural materials, breathing room.
+- **Reference:** Airtable's approachable flexibility, but with tropical resort warmth
 - **Anti-reference:** Dense enterprise dashboards, cold corporate blues, cluttered interfaces
 - **Theme:** Light mode only—supports the airy, sophisticated aesthetic
-- **Color palette:** Warm palette—golds, creams, soft corals, warm grays. Avoid cold blues and harsh contrasts.
+- **Color palette:** Tropical oasis palette:
+  - **palm** (primary accent): Sage/forest greens for buttons, highlights, icons
+  - **sand/cream** (backgrounds): Warm sandy neutrals, light and airy
+  - **coral** (secondary accent): Soft terracotta for alerts, warnings, tropical warmth
+  - **lagoon** (tertiary accent): Teal for links, info states, water element
+  - **warm-gray** (text/borders): Natural, earthy neutrals
 
 ### Design Principles
 
 1. **Breathe** — Generous whitespace. Let elements float. Never crowd the interface. Sophistication lives in what you leave out.
 
-2. **Warm the details** — Soft shadows over hard edges. Rounded corners. Warm grays over cool. Every micro-decision should add warmth.
+2. **Warm the details** — Soft shadows over hard edges. Sharp, refined corners (`rounded-sm`). Warm grays over cool. Every micro-decision should add warmth.
 
 3. **Guide gently** — Clear visual hierarchy. Obvious next steps. The interface should feel like a helpful hand, not a demanding form.
 
@@ -101,3 +173,7 @@ Internal operations team onboarding new clients. They need efficiency but also a
 - Accessibility: Standard best practices (reasonable contrast, keyboard navigation, semantic HTML)
 - Typography: Favor readable, friendly typefaces with good weight variety
 - Motion: Subtle, purposeful—enhance understanding, never distract
+- Border radius: Use `rounded-sm` (0.25rem) as the standard for all UI elements (cards, buttons, inputs). Sharp, refined corners feel more premium than soft/bubbly ones.
+- Borders: Use `border-sand-500` (or `border-cream-500`, same values) for card borders to ensure visibility against the background.
+- Buttons: Primary buttons use `bg-palm-500` (green). Secondary use `bg-sand-200`. Danger use `bg-coral-500`.
+- Focus rings: Use `ring-palm-400` for focus states.

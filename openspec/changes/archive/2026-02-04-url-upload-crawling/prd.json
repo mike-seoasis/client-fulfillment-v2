@@ -1,0 +1,772 @@
+{
+  "name": "Phase 3: URL Upload + Crawling",
+  "description": "Build URL upload interface, parallel crawling pipeline, and two-step label taxonomy system for consistent internal linking.",
+  "branchName": "v2-rebuild",
+  "userStories": [
+    {
+      "id": "S3-001",
+      "title": "Add new fields to CrawledPage model",
+      "description": "As a developer, I need to extend the CrawledPage model so that crawl status and extracted data can be stored.",
+      "acceptanceCriteria": [
+        "Add status field: String enum (pending, crawling, completed, failed)",
+        "Add meta_description field: Text, nullable",
+        "Add body_content field: Text, nullable (for markdown content)",
+        "Add headings field: JSONB with h1, h2, h3 arrays",
+        "Add product_count field: Integer, nullable",
+        "Add crawl_error field: Text, nullable",
+        "Add word_count field: Integer, nullable"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Reference existing CrawledPage model at backend/app/models/crawled_page.py",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-002",
+      "title": "Create Alembic migration for CrawledPage fields",
+      "description": "As a developer, I need a database migration so that the new fields are added to the crawled_pages table.",
+      "acceptanceCriteria": [
+        "Migration adds all new columns to crawled_pages table",
+        "Migration is reversible (downgrade works)",
+        "Migration applies successfully: alembic upgrade head",
+        "Default value for status is 'pending'"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Run: cd backend && alembic revision --autogenerate -m 'Add crawl status and extraction fields to CrawledPage'",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-003",
+      "title": "Add crawl_concurrency setting to config",
+      "description": "As a developer, I need a configurable concurrency setting so that parallel crawling can be tuned.",
+      "acceptanceCriteria": [
+        "Add crawl_concurrency to Settings class in backend/app/core/config.py",
+        "Default value is 5",
+        "Reads from CRAWL_CONCURRENCY environment variable",
+        "Type is int with validation"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Follow pattern of other settings like crawl4ai_timeout",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-004",
+      "title": "Create Pydantic schemas for CrawledPage",
+      "description": "As a developer, I need Pydantic schemas so that API requests/responses are validated.",
+      "acceptanceCriteria": [
+        "Create CrawledPageCreate schema with url field",
+        "Create CrawledPageResponse schema with all fields including labels",
+        "Create CrawlStatusResponse schema with progress and pages array",
+        "Create UrlsUploadRequest schema with urls: list[str]",
+        "Create PageLabelsUpdate schema with labels: list[str]",
+        "Schemas in backend/app/schemas/crawled_page.py"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Reference existing schemas in backend/app/schemas/",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-005",
+      "title": "Create CrawlingService with parallel crawl",
+      "description": "As a developer, I need a crawling service so that pages can be crawled in parallel with concurrency limits.",
+      "acceptanceCriteria": [
+        "Create CrawlingService class in backend/app/services/crawling.py",
+        "Implement crawl_urls method that accepts list of URLs",
+        "Use asyncio.Semaphore with settings.crawl_concurrency limit",
+        "Use asyncio.gather to run crawls in parallel",
+        "Update page status through lifecycle: pending -> crawling -> completed/failed",
+        "Call Crawl4AIClient for actual crawling"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference Crawl4AIClient at backend/app/integrations/crawl4ai.py",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-006",
+      "title": "Implement content extraction from crawled HTML",
+      "description": "As a developer, I need content extraction so that structured data is stored from crawled pages.",
+      "acceptanceCriteria": [
+        "Extract title from <title> tag using BeautifulSoup",
+        "Extract meta_description from <meta name='description'>",
+        "Extract headings as JSONB {h1: [...], h2: [...], h3: [...]}",
+        "Store markdown content in body_content (from Crawl4AI)",
+        "Truncate body_content to 50KB if larger",
+        "Calculate and store word_count"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "BeautifulSoup (bs4) should be added to dependencies if not present",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-007",
+      "title": "Implement product count extraction for Shopify",
+      "description": "As a developer, I need product count extraction so that collection pages show product counts.",
+      "acceptanceCriteria": [
+        "Attempt to parse Shopify collection JSON from page",
+        "Fall back to counting product card elements if no JSON",
+        "Store product_count as integer or null if not detectable",
+        "Handle non-collection pages gracefully (null)"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Look for window.ShopifyAnalytics or product-card class elements",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-008",
+      "title": "Write unit tests for CrawlingService",
+      "description": "As a developer, I need tests so that crawling behavior is verified.",
+      "acceptanceCriteria": [
+        "Test parallel crawling respects concurrency limit",
+        "Test status transitions (pending -> crawling -> completed)",
+        "Test failed crawl sets status and error message",
+        "Test content extraction extracts all fields correctly",
+        "Tests in backend/tests/services/test_crawling.py"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Mock Crawl4AIClient for unit tests",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-009",
+      "title": "Create LabelTaxonomyService",
+      "description": "As a developer, I need a label taxonomy service so that consistent labels can be generated and assigned.",
+      "acceptanceCriteria": [
+        "Create LabelTaxonomyService class in backend/app/services/label_taxonomy.py",
+        "Implement generate_taxonomy method that analyzes all pages",
+        "Implement assign_labels method that labels each page",
+        "Store taxonomy in Project.phase_status.onboarding.taxonomy",
+        "Store labels in CrawledPage.labels array"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Use Claude integration at backend/app/integrations/claude.py",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-010",
+      "title": "Implement taxonomy generation prompt",
+      "description": "As a developer, I need a Claude prompt so that a unified taxonomy is generated from all pages.",
+      "acceptanceCriteria": [
+        "Prompt receives all page titles and content summaries",
+        "Prompt generates 10-30 lowercase labels",
+        "Labels use hyphens for multi-word concepts (e.g., 'trail-running')",
+        "Response is parsed and stored as labels array",
+        "Timestamp stored as generated_at"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Prompt should explain the e-commerce context and internal linking purpose",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-011",
+      "title": "Implement label assignment prompt",
+      "description": "As a developer, I need a Claude prompt so that labels from taxonomy are assigned to each page.",
+      "acceptanceCriteria": [
+        "Prompt receives taxonomy and single page data",
+        "Prompt assigns 2-5 labels from taxonomy only",
+        "Labels stored in CrawledPage.labels as string array",
+        "All assigned labels must exist in taxonomy"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Can batch multiple pages in one call for efficiency",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-012",
+      "title": "Implement label validation",
+      "description": "As a developer, I need label validation so that only valid labels are accepted.",
+      "acceptanceCriteria": [
+        "Validate labels are from project taxonomy",
+        "Validate 2-5 labels per page",
+        "Return clear error messages for invalid labels",
+        "Validation used in both assignment and user edits"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-013",
+      "title": "Write unit tests for LabelTaxonomyService",
+      "description": "As a developer, I need tests so that taxonomy behavior is verified.",
+      "acceptanceCriteria": [
+        "Test taxonomy generation stores in phase_status",
+        "Test label assignment validates against taxonomy",
+        "Test invalid labels are rejected",
+        "Test label count validation (2-5)",
+        "Tests in backend/tests/services/test_label_taxonomy.py"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Mock Claude integration for unit tests",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-014",
+      "title": "Create POST /projects/{id}/urls endpoint",
+      "description": "As a developer, I need an endpoint so that URLs can be submitted for crawling.",
+      "acceptanceCriteria": [
+        "Accepts UrlsUploadRequest with urls array",
+        "Creates CrawledPage record for each URL with status 'pending'",
+        "Skips duplicate URLs (already exist for project)",
+        "Starts background task for crawling",
+        "Returns task_id and pages_created count",
+        "Endpoint at /api/v1/projects/{project_id}/urls"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Use FastAPI BackgroundTasks for async crawling",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-015",
+      "title": "Create GET /projects/{id}/crawl-status endpoint",
+      "description": "As a developer, I need an endpoint so that crawl progress can be polled.",
+      "acceptanceCriteria": [
+        "Returns overall status (crawling, labeling, complete)",
+        "Returns progress object with total, completed, failed, pending counts",
+        "Returns pages array with id, url, status, and extracted data summary",
+        "Endpoint at /api/v1/projects/{project_id}/crawl-status"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Frontend will poll this every 2 seconds",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-016",
+      "title": "Create GET /projects/{id}/pages endpoint",
+      "description": "As a developer, I need an endpoint so that all crawled pages can be listed.",
+      "acceptanceCriteria": [
+        "Returns list of CrawledPageResponse objects",
+        "Includes all fields including labels",
+        "Supports optional status filter query param",
+        "Endpoint at /api/v1/projects/{project_id}/pages"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-017",
+      "title": "Create GET /projects/{id}/taxonomy endpoint",
+      "description": "As a developer, I need an endpoint so that the label taxonomy can be retrieved.",
+      "acceptanceCriteria": [
+        "Returns labels array from phase_status.onboarding.taxonomy",
+        "Returns generated_at timestamp",
+        "Returns 404 if taxonomy not yet generated",
+        "Endpoint at /api/v1/projects/{project_id}/taxonomy"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-018",
+      "title": "Create PUT /projects/{id}/pages/{page_id}/labels endpoint",
+      "description": "As a developer, I need an endpoint so that page labels can be updated.",
+      "acceptanceCriteria": [
+        "Accepts PageLabelsUpdate with labels array",
+        "Validates all labels are in project taxonomy",
+        "Validates 2-5 labels provided",
+        "Returns 400 with clear error if validation fails",
+        "Updates CrawledPage.labels on success",
+        "Endpoint at /api/v1/projects/{project_id}/pages/{page_id}/labels"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-019",
+      "title": "Create POST /projects/{id}/pages/{page_id}/retry endpoint",
+      "description": "As a developer, I need an endpoint so that failed crawls can be retried.",
+      "acceptanceCriteria": [
+        "Resets page status to 'pending'",
+        "Clears crawl_error field",
+        "Starts new background task to crawl just this page",
+        "Returns updated page status",
+        "Endpoint at /api/v1/projects/{project_id}/pages/{page_id}/retry"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-020",
+      "title": "Write API integration tests",
+      "description": "As a developer, I need integration tests so that API behavior is verified end-to-end.",
+      "acceptanceCriteria": [
+        "Test URL upload creates pages and starts crawl",
+        "Test crawl-status returns correct progress",
+        "Test pages endpoint returns all pages with data",
+        "Test taxonomy endpoint returns labels",
+        "Test label update validates and saves",
+        "Test retry resets failed page",
+        "Tests in backend/tests/api/test_crawling.py"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Use test database and mock external services",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-021",
+      "title": "Create URL upload page route",
+      "description": "As a developer, I need a page route so that users can access URL upload.",
+      "acceptanceCriteria": [
+        "Create /projects/[id]/onboarding/upload/page.tsx",
+        "Page loads project data and shows upload interface",
+        "Breadcrumb navigation back to project",
+        "Step indicator showing Upload as current step"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference existing project pages in frontend/src/app/projects/",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-022",
+      "title": "Build UrlUploader component with textarea",
+      "description": "As a user, I need a textarea so that I can paste URLs to crawl.",
+      "acceptanceCriteria": [
+        "Textarea accepts URLs one per line",
+        "Placeholder text explains format",
+        "Parses URLs on change/blur",
+        "Component in frontend/src/components/onboarding/UrlUploader.tsx"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Follow existing component patterns and tropical oasis design system",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-023",
+      "title": "Add CSV file upload with drag-and-drop",
+      "description": "As a user, I need CSV upload so that I can upload URLs from a file.",
+      "acceptanceCriteria": [
+        "Drag-and-drop zone for CSV files",
+        "Click to browse file picker",
+        "Parses CSV and extracts URLs from 'url' column or first column",
+        "Shows error for invalid file types",
+        "Combines with textarea URLs"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Use papaparse or similar for CSV parsing",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-024",
+      "title": "Implement URL parsing and validation",
+      "description": "As a developer, I need URL validation so that only valid URLs are submitted.",
+      "acceptanceCriteria": [
+        "Validate URL format (must have http/https protocol)",
+        "Normalize URLs (lowercase domain, consistent trailing slash)",
+        "Deduplicate URLs",
+        "Filter empty lines",
+        "Mark invalid URLs in preview"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-025",
+      "title": "Build URL preview list",
+      "description": "As a user, I need a preview list so that I can review URLs before crawling.",
+      "acceptanceCriteria": [
+        "Shows all parsed URLs in a list",
+        "Each URL shows validation status (valid/invalid indicator)",
+        "Remove button on each URL",
+        "Shows total count 'X URLs to process'",
+        "Empty state when no URLs"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-026",
+      "title": "Add domain warning",
+      "description": "As a user, I need a warning so that I know if URLs are from different domains.",
+      "acceptanceCriteria": [
+        "Compare URLs against project site_url domain",
+        "Show warning banner if any URLs have different domain",
+        "Warning does not block submission",
+        "Warning text: 'Some URLs are from a different domain'"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-027",
+      "title": "Implement Start Crawl action",
+      "description": "As a user, I need a button so that I can start crawling.",
+      "acceptanceCriteria": [
+        "Start Crawl button enabled when valid URLs exist",
+        "Button disabled when no valid URLs",
+        "Clicking POSTs to /api/v1/projects/{id}/urls",
+        "On success, navigates to crawl progress page",
+        "Shows loading state during submission"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-028",
+      "title": "Write component tests for UrlUploader",
+      "description": "As a developer, I need tests so that URL upload behavior is verified.",
+      "acceptanceCriteria": [
+        "Test URL parsing from textarea",
+        "Test CSV file parsing",
+        "Test validation marks invalid URLs",
+        "Test deduplication works",
+        "Test remove button removes URL",
+        "Tests in frontend/src/components/onboarding/__tests__/"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Use Vitest and React Testing Library",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-029",
+      "title": "Create crawl progress page route",
+      "description": "As a developer, I need a page route so that users can view crawl progress.",
+      "acceptanceCriteria": [
+        "Create /projects/[id]/onboarding/crawl/page.tsx",
+        "Page loads crawl status and shows progress",
+        "Breadcrumb navigation",
+        "Step indicator showing Crawl as current step"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-030",
+      "title": "Build CrawlProgress component with progress bar",
+      "description": "As a user, I need a progress bar so that I can see overall crawl progress.",
+      "acceptanceCriteria": [
+        "Progress bar shows X of Y pages complete",
+        "Percentage displayed",
+        "Animated progress bar",
+        "Component in frontend/src/components/onboarding/CrawlProgress.tsx"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Follow tropical oasis design with palm-500 for progress color",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-031",
+      "title": "Build page list with per-page status",
+      "description": "As a user, I need a page list so that I can see status of each URL.",
+      "acceptanceCriteria": [
+        "List shows all pages being crawled",
+        "Pending: neutral icon, 'Pending' text",
+        "Crawling: spinner, 'Crawling...' text",
+        "Completed: checkmark, shows extracted data",
+        "Failed: error icon, shows error message"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-032",
+      "title": "Add extracted data summary display",
+      "description": "As a user, I need to see extracted data so that I can verify crawl results.",
+      "acceptanceCriteria": [
+        "Show page title for completed pages",
+        "Show word count (e.g., '245 words')",
+        "Show heading counts (e.g., 'H2s: 3')",
+        "Show product count if available (e.g., '24 products')"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-033",
+      "title": "Implement polling for crawl status",
+      "description": "As a developer, I need polling so that progress updates automatically.",
+      "acceptanceCriteria": [
+        "Poll /api/v1/projects/{id}/crawl-status every 2 seconds",
+        "Update UI with new status data",
+        "Stop polling when all pages are completed or failed",
+        "Use React Query or similar for polling"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "TanStack Query has refetchInterval option",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-034",
+      "title": "Add retry button for failed pages",
+      "description": "As a user, I need a retry button so that I can retry failed crawls.",
+      "acceptanceCriteria": [
+        "Retry button shown on failed pages",
+        "Clicking calls POST /api/v1/projects/{id}/pages/{page_id}/retry",
+        "Page status changes to pending and re-crawls",
+        "Button shows loading state during retry"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-035",
+      "title": "Write component tests for CrawlProgress",
+      "description": "As a developer, I need tests so that crawl progress behavior is verified.",
+      "acceptanceCriteria": [
+        "Test progress bar updates correctly",
+        "Test page status icons render correctly",
+        "Test polling starts and stops appropriately",
+        "Test retry button calls API",
+        "Tests in frontend/src/components/onboarding/__tests__/"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-036",
+      "title": "Add taxonomy status display",
+      "description": "As a user, I need to see taxonomy status so that I know when labeling starts.",
+      "acceptanceCriteria": [
+        "Show 'Generating label taxonomy...' with spinner after crawl completes",
+        "Show generated taxonomy labels when complete",
+        "Show label count (e.g., '15 labels generated')"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-037",
+      "title": "Build label tag display",
+      "description": "As a user, I need to see page labels so that I can review assignments.",
+      "acceptanceCriteria": [
+        "Labels shown as tags/chips on each page row",
+        "Tags styled with tropical oasis colors",
+        "Edit button to modify labels"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Use palm-100 background with palm-700 text for label tags",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-038",
+      "title": "Create label edit dropdown",
+      "description": "As a user, I need a dropdown so that I can edit page labels.",
+      "acceptanceCriteria": [
+        "Multi-select dropdown shows all taxonomy labels",
+        "Checkboxes for selecting/deselecting labels",
+        "Shows current selections checked",
+        "Validates 2-5 labels selected"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-039",
+      "title": "Implement label save",
+      "description": "As a developer, I need label saving so that edits are persisted.",
+      "acceptanceCriteria": [
+        "Changes saved via PUT /api/v1/projects/{id}/pages/{page_id}/labels",
+        "Show validation error if <2 or >5 labels",
+        "Show success feedback on save",
+        "Update UI with new labels"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-040",
+      "title": "Add Continue to Keywords button",
+      "description": "As a user, I need navigation so that I can proceed to the next step.",
+      "acceptanceCriteria": [
+        "Button appears when labeling is complete",
+        "Button disabled during crawling/labeling",
+        "Navigates to keywords step (Phase 4 placeholder for now)"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "For now, can navigate to project detail or show 'Coming soon' message",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-041",
+      "title": "Write component tests for label editing",
+      "description": "As a developer, I need tests so that label editing behavior is verified.",
+      "acceptanceCriteria": [
+        "Test labels display correctly",
+        "Test dropdown shows taxonomy options",
+        "Test validation prevents <2 or >5 labels",
+        "Test save calls API with correct data"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-042",
+      "title": "Update project detail Onboarding section",
+      "description": "As a user, I need to see onboarding progress on the project page.",
+      "acceptanceCriteria": [
+        "Show crawl progress when pages exist (e.g., '8 of 12 pages complete')",
+        "Show step indicators with completion status",
+        "Update button text: 'Start Onboarding' vs 'Continue Onboarding'",
+        "Navigate to correct step based on progress"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Modify existing Onboarding section in project detail page",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-043",
+      "title": "Add onboarding quick stats",
+      "description": "As a user, I need quick stats so that I can see onboarding status at a glance.",
+      "acceptanceCriteria": [
+        "Show page count",
+        "Show failed count in warning style if any",
+        "Show label status ('Labels assigned' or 'Labels pending')"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-044",
+      "title": "Wire background task for taxonomy generation",
+      "description": "As a developer, I need automatic taxonomy generation so that it runs after crawling.",
+      "acceptanceCriteria": [
+        "After all pages complete/failed, trigger taxonomy generation",
+        "Update project phase_status.onboarding.status to 'labeling'",
+        "After taxonomy generated, run label assignment",
+        "Update status to 'labels_complete' when done"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Chain background tasks or use a single task that handles both",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-045",
+      "title": "Update project phase_status through workflow",
+      "description": "As a developer, I need status tracking so that progress is persisted.",
+      "acceptanceCriteria": [
+        "Set status to 'crawling' when crawl starts",
+        "Track crawl progress in phase_status.onboarding.crawl",
+        "Set status to 'labeling' when taxonomy starts",
+        "Set status to 'labels_complete' when done",
+        "Store taxonomy in phase_status.onboarding.taxonomy"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-046",
+      "title": "Add error handling throughout",
+      "description": "As a developer, I need proper error handling so that users see helpful messages.",
+      "acceptanceCriteria": [
+        "API errors show user-friendly messages",
+        "Network errors handled gracefully",
+        "Loading states prevent double-submissions",
+        "Toast notifications for success/error feedback"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-047",
+      "title": "Manual end-to-end testing",
+      "description": "As a developer, I need to verify the full flow works correctly.",
+      "acceptanceCriteria": [
+        "Upload URLs via paste and CSV both work",
+        "Crawling shows progress and completes",
+        "Failed pages show errors and can be retried",
+        "Taxonomy generates with reasonable labels",
+        "Labels can be edited and saved",
+        "Project detail shows correct status"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Test with real URLs from a Shopify store",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-098",
+      "title": "Update V2_REBUILD_PLAN.md",
+      "description": "As a developer, I need to update the plan status so that progress is tracked.",
+      "acceptanceCriteria": [
+        "Mark Phase 3 checkboxes as [x] complete in V2_REBUILD_PLAN.md",
+        "Update Current Status table: Phase=4, Last Session=today, Next Action=Phase 4",
+        "Add new row to Session Log table with date, completed items, next up"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "This task maintains our planning discipline.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S3-099",
+      "title": "Verify Phase 3 completion",
+      "description": "As a developer, I need to verify all Phase 3 criteria are met before moving on.",
+      "acceptanceCriteria": [
+        "All tests pass: cd backend && pytest && cd ../frontend && npm test",
+        "Manual verification: Can upload URLs and see crawled data with labels",
+        "Git commit created with message: feat(phase-3): URL upload and crawling pipeline",
+        "No uncommitted changes remain"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Do not proceed to Phase 4 until this passes.",
+      "completionNotes": "Completed by agent"
+    }
+  ],
+  "metadata": {
+    "updatedAt": "2026-02-04T20:54:37.309Z"
+  }
+}

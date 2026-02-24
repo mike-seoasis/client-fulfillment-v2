@@ -64,6 +64,7 @@ class ContentBrief(Base):
         UUID(as_uuid=False),
         ForeignKey("crawled_pages.id", ondelete="CASCADE"),
         nullable=False,
+        unique=True,
         index=True,
     )
 
@@ -173,7 +174,7 @@ class ContentBrief(Base):
     # Relationship to CrawledPage
     page: Mapped["CrawledPage"] = relationship(
         "CrawledPage",
-        back_populates="content_briefs",
+        back_populates="content_brief",
     )
 
     def __repr__(self) -> str:

@@ -39,6 +39,7 @@ API ENDPOINTS:
 """
 
 import asyncio
+import hashlib
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -47,160 +48,11 @@ from typing import Any
 
 import httpx
 
+from app.core.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from app.core.config import get_settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
-
-
-class CircuitState(Enum):
-    """Circuit breaker states."""
-
-    CLOSED = "closed"  # Normal operation
-    OPEN = "open"  # Failing, reject all requests
-    HALF_OPEN = "half_open"  # Testing if service recovered
-
-
-@dataclass
-class CircuitBreakerConfig:
-    """Circuit breaker configuration."""
-
-    failure_threshold: int
-    recovery_timeout: float
-
-
-class CircuitBreaker:
-    """Circuit breaker implementation for POP operations.
-
-    Prevents cascading failures by stopping requests to a failing service.
-    After recovery_timeout, allows a test request through (half-open state).
-    If test succeeds, circuit closes. If fails, circuit opens again.
-    """
-
-    def __init__(self, config: CircuitBreakerConfig) -> None:
-        self._config = config
-        self._state = CircuitState.CLOSED
-        self._failure_count = 0
-        self._last_failure_time: float | None = None
-        self._lock = asyncio.Lock()
-
-    @property
-    def state(self) -> CircuitState:
-        """Get current circuit state."""
-        return self._state
-
-    @property
-    def is_closed(self) -> bool:
-        """Check if circuit is closed (normal operation)."""
-        return self._state == CircuitState.CLOSED
-
-    @property
-    def is_open(self) -> bool:
-        """Check if circuit is open (rejecting requests)."""
-        return self._state == CircuitState.OPEN
-
-    async def _check_recovery(self) -> bool:
-        """Check if enough time has passed to attempt recovery."""
-        if self._last_failure_time is None:
-            return False
-        elapsed = time.monotonic() - self._last_failure_time
-        return elapsed >= self._config.recovery_timeout
-
-    async def can_execute(self) -> bool:
-        """Check if operation can be executed based on circuit state."""
-        async with self._lock:
-            if self._state == CircuitState.CLOSED:
-                return True
-
-            if self._state == CircuitState.OPEN:
-                if await self._check_recovery():
-                    # Transition to half-open for testing
-                    previous_state = self._state.value
-                    self._state = CircuitState.HALF_OPEN
-                    logger.warning(
-                        "POP circuit breaker state changed",
-                        extra={
-                            "previous_state": previous_state,
-                            "new_state": self._state.value,
-                            "failure_count": self._failure_count,
-                        },
-                    )
-                    logger.info("POP circuit breaker attempting recovery")
-                    return True
-                return False
-
-            # HALF_OPEN state - allow single test request
-            return True
-
-    async def record_success(self) -> None:
-        """Record successful operation."""
-        async with self._lock:
-            if self._state == CircuitState.HALF_OPEN:
-                # Recovery successful, close circuit
-                previous_state = self._state.value
-                self._state = CircuitState.CLOSED
-                self._failure_count = 0
-                self._last_failure_time = None
-                logger.warning(
-                    "POP circuit breaker state changed",
-                    extra={
-                        "previous_state": previous_state,
-                        "new_state": self._state.value,
-                        "failure_count": self._failure_count,
-                    },
-                )
-                logger.info("POP circuit breaker closed - API calls restored")
-            elif self._state == CircuitState.CLOSED:
-                # Reset failure count on success
-                self._failure_count = 0
-
-    async def record_failure(self) -> None:
-        """Record failed operation."""
-        async with self._lock:
-            self._failure_count += 1
-            self._last_failure_time = time.monotonic()
-
-            if self._state == CircuitState.HALF_OPEN:
-                # Recovery failed, open circuit again
-                previous_state = self._state.value
-                self._state = CircuitState.OPEN
-                logger.warning(
-                    "POP circuit breaker state changed",
-                    extra={
-                        "previous_state": previous_state,
-                        "new_state": self._state.value,
-                        "failure_count": self._failure_count,
-                    },
-                )
-                logger.error(
-                    "POP circuit breaker opened - API calls disabled",
-                    extra={
-                        "failure_count": self._failure_count,
-                        "recovery_timeout_seconds": self._config.recovery_timeout,
-                    },
-                )
-            elif (
-                self._state == CircuitState.CLOSED
-                and self._failure_count >= self._config.failure_threshold
-            ):
-                # Too many failures, open circuit
-                previous_state = self._state.value
-                self._state = CircuitState.OPEN
-                logger.warning(
-                    "POP circuit breaker state changed",
-                    extra={
-                        "previous_state": previous_state,
-                        "new_state": self._state.value,
-                        "failure_count": self._failure_count,
-                    },
-                )
-                logger.error(
-                    "POP circuit breaker opened - API calls disabled",
-                    extra={
-                        "failure_count": self._failure_count,
-                        "recovery_timeout_seconds": self._config.recovery_timeout,
-                    },
-                )
 
 
 class POPError(Exception):
@@ -369,7 +221,8 @@ class POPClient:
             CircuitBreakerConfig(
                 failure_threshold=settings.pop_circuit_failure_threshold,
                 recovery_timeout=settings.pop_circuit_recovery_timeout,
-            )
+            ),
+            name="pop",
         )
 
         # HTTP client (created lazily)
@@ -617,7 +470,13 @@ class POPClient:
 
                 if response.status_code >= 400:
                     # Client error - don't retry
-                    error_body = response.json() if response.content else None
+                    error_body = None
+                    if response.content:
+                        try:
+                            error_body = response.json()
+                        except (ValueError, TypeError):
+                            # Non-JSON response (e.g., HTML error page)
+                            error_body = {"raw": response.text[:500]}
                     error_msg = str(error_body) if error_body else "Client error"
                     logger.warning(
                         f"POP API call failed: {method} {endpoint}",
@@ -775,10 +634,219 @@ class POPClient:
             request_id=request_id,
         )
 
+    async def create_report(
+        self,
+        prepare_id: str,
+        variations: list[str],
+        lsa_phrases: list[dict[str, Any]],
+        page_not_built_yet: bool = True,
+    ) -> POPTaskResult:
+        """Create a POP report using data from get-terms.
+
+        POSTs to /api/expose/create-report/ with the prepareId, variations,
+        and lsaPhrases from a prior get-terms call. Returns a task_id that
+        must be polled via poll_for_result().
+
+        Args:
+            prepare_id: The prepareId from get-terms response.
+            variations: Keyword variations from get-terms.
+            lsa_phrases: LSA phrases from get-terms.
+            page_not_built_yet: True if the page doesn't exist yet.
+
+        Returns:
+            POPTaskResult with task_id if successful.
+        """
+        start_time = time.monotonic()
+
+        if not self._available:
+            return POPTaskResult(
+                success=False,
+                error="POP not configured (missing API key)",
+            )
+
+        logger.info(
+            "Creating POP report",
+            extra={
+                "prepare_id": prepare_id,
+                "variations_count": len(variations),
+                "lsa_phrases_count": len(lsa_phrases),
+            },
+        )
+
+        payload = {
+            "prepareId": prepare_id,
+            "variations": variations,
+            "lsaPhrases": lsa_phrases,
+            "pageNotBuiltYet": page_not_built_yet,
+            "googleNlpCalculation": 0,
+            "eeatCalculation": 0,
+        }
+
+        try:
+            response_data, request_id = await self._make_request(
+                "/api/expose/create-report/",
+                payload,
+                method="POST",
+            )
+
+            duration_ms = (time.monotonic() - start_time) * 1000
+
+            # Check for API-level failure
+            api_status = response_data.get("status", "").upper()
+            if api_status == "FAILURE":
+                error_msg = (
+                    response_data.get("msg")
+                    or response_data.get("message")
+                    or "API returned FAILURE status"
+                )
+                logger.warning(
+                    "POP create-report returned failure",
+                    extra={"error": error_msg, "request_id": request_id},
+                )
+                return POPTaskResult(
+                    success=False,
+                    error=error_msg,
+                    data=response_data,
+                    duration_ms=duration_ms,
+                    request_id=request_id,
+                )
+
+            # Extract task_id
+            task_id = response_data.get("task_id") or response_data.get("taskId")
+            if not task_id:
+                task_id = response_data.get("id") or response_data.get("data", {}).get(
+                    "task_id"
+                )
+
+            if task_id:
+                logger.info(
+                    "POP report task created",
+                    extra={
+                        "task_id": task_id,
+                        "prepare_id": prepare_id,
+                        "duration_ms": round(duration_ms, 2),
+                    },
+                )
+                return POPTaskResult(
+                    success=True,
+                    task_id=str(task_id),
+                    status=POPTaskStatus.PENDING,
+                    data=response_data,
+                    duration_ms=duration_ms,
+                    request_id=request_id,
+                )
+            else:
+                return POPTaskResult(
+                    success=False,
+                    error="No task_id in create-report response",
+                    data=response_data,
+                    duration_ms=duration_ms,
+                    request_id=request_id,
+                )
+
+        except POPError as e:
+            duration_ms = (time.monotonic() - start_time) * 1000
+            logger.error(
+                "Failed to create POP report",
+                extra={
+                    "prepare_id": prepare_id,
+                    "error": str(e),
+                    "duration_ms": round(duration_ms, 2),
+                },
+            )
+            return POPTaskResult(
+                success=False,
+                error=str(e),
+                duration_ms=duration_ms,
+                request_id=e.request_id,
+            )
+
+    async def get_custom_recommendations(
+        self,
+        report_id: str,
+        strategy: str = "target",
+        approach: str = "regular",
+    ) -> POPTaskResult:
+        """Get custom keyword/heading recommendations for a report.
+
+        POSTs to /api/expose/get-custom-recommendations/ which returns
+        data synchronously (no polling needed).
+
+        Args:
+            report_id: The reportId from create-report response.
+            strategy: Recommendation strategy (default: "target").
+            approach: Recommendation approach (default: "regular").
+
+        Returns:
+            POPTaskResult with recommendation data.
+        """
+        start_time = time.monotonic()
+
+        if not self._available:
+            return POPTaskResult(
+                success=False,
+                error="POP not configured (missing API key)",
+            )
+
+        logger.info(
+            "Getting POP custom recommendations",
+            extra={"report_id": report_id, "strategy": strategy, "approach": approach},
+        )
+
+        payload = {
+            "reportId": report_id,
+            "strategy": strategy,
+            "approach": approach,
+        }
+
+        try:
+            response_data, request_id = await self._make_request(
+                "/api/expose/get-custom-recommendations/",
+                payload,
+                method="POST",
+            )
+
+            duration_ms = (time.monotonic() - start_time) * 1000
+
+            logger.info(
+                "POP custom recommendations received",
+                extra={
+                    "report_id": report_id,
+                    "duration_ms": round(duration_ms, 2),
+                    "request_id": request_id,
+                },
+            )
+
+            return POPTaskResult(
+                success=True,
+                data=response_data,
+                duration_ms=duration_ms,
+                request_id=request_id,
+            )
+
+        except POPError as e:
+            duration_ms = (time.monotonic() - start_time) * 1000
+            logger.error(
+                "Failed to get POP custom recommendations",
+                extra={
+                    "report_id": report_id,
+                    "error": str(e),
+                    "duration_ms": round(duration_ms, 2),
+                },
+            )
+            return POPTaskResult(
+                success=False,
+                error=str(e),
+                duration_ms=duration_ms,
+                request_id=e.request_id,
+            )
+
     async def create_report_task(
         self,
         keyword: str,
         url: str,
+        location_name: str = "United States",
+        target_language: str = "english",
     ) -> POPTaskResult:
         """Create a POP report task for content scoring.
 
@@ -788,6 +856,8 @@ class POPClient:
         Args:
             keyword: Target keyword for content optimization
             url: URL of the page to analyze
+            location_name: Google search location (default: "United States")
+            target_language: Target language for analysis (default: "english")
 
         Returns:
             POPTaskResult with task_id if successful
@@ -811,20 +881,51 @@ class POPClient:
             extra={
                 "keyword": keyword[:50],
                 "url": url[:100],
+                "location": location_name,
+                "language": target_language,
             },
         )
 
+        # POP API uses /api/expose/get-terms/ endpoint with specific parameter names
         payload = {
             "keyword": keyword,
-            "url": url,
+            "targetUrl": url,
+            "locationName": location_name,
+            "targetLanguage": target_language,
         }
 
         try:
             response_data, request_id = await self._make_request(
-                "/api/report",
+                "/api/expose/get-terms/",
                 payload,
                 method="POST",
             )
+
+            duration_ms = (time.monotonic() - start_time) * 1000
+
+            # Check for API-level failure (POP returns status: "FAILURE" for errors)
+            api_status = response_data.get("status", "").upper()
+            if api_status == "FAILURE":
+                error_msg = (
+                    response_data.get("msg")
+                    or response_data.get("message")
+                    or "API returned FAILURE status"
+                )
+                logger.warning(
+                    "POP API returned failure status",
+                    extra={
+                        "error": error_msg,
+                        "response": response_data,
+                        "request_id": request_id,
+                    },
+                )
+                return POPTaskResult(
+                    success=False,
+                    error=error_msg,
+                    data=response_data,
+                    duration_ms=duration_ms,
+                    request_id=request_id,
+                )
 
             # Extract task_id from response
             task_id = response_data.get("task_id") or response_data.get("taskId")
@@ -834,8 +935,6 @@ class POPClient:
                 task_id = response_data.get("id") or response_data.get("data", {}).get(
                     "task_id"
                 )
-
-            duration_ms = (time.monotonic() - start_time) * 1000
 
             if task_id:
                 logger.info(
@@ -1083,6 +1182,8 @@ class POPClient:
                         "elapsed_seconds": round(elapsed, 2),
                         "poll_attempt": poll_count,
                         "total_polls": poll_count,
+                        "response_keys": list((result.data or {}).keys())[:20],
+                        "has_prepareId": "prepareId" in (result.data or {}),
                     },
                 )
                 return result
@@ -1117,23 +1218,534 @@ class POPClient:
             await asyncio.sleep(poll_interval)
 
 
-# Global POP client instance
-_pop_client: POPClient | None = None
+# ---------------------------------------------------------------------------
+# LSI term corpus for mock data generation
+# ---------------------------------------------------------------------------
+
+# Generic SEO-related terms that get mixed with keyword-derived terms.
+# Grouped by broad topic to allow keyword-aware selection.
+_GENERIC_LSI_TERMS: list[str] = [
+    "best practices",
+    "buying guide",
+    "comparison",
+    "cost",
+    "customer reviews",
+    "deals",
+    "expert tips",
+    "features",
+    "frequently asked questions",
+    "how to choose",
+    "maintenance",
+    "materials",
+    "online shopping",
+    "price range",
+    "product reviews",
+    "quality",
+    "ratings",
+    "recommendations",
+    "shipping options",
+    "size guide",
+    "top rated",
+    "types",
+    "value for money",
+    "warranty",
+    "what to look for",
+]
 
 
-async def init_pop() -> POPClient:
+class POPMockClient:
+    """Mock POP client that returns deterministic fixture data.
+
+    Uses keyword hash as seed so the same keyword always produces the
+    same fixture data. No actual API calls are made.
+
+    The mock implements the same interface as POPClient (create_report_task
+    and poll_for_result) so the brief service can use either transparently.
+    """
+
+    def __init__(self) -> None:
+        self._available = True
+
+    @property
+    def available(self) -> bool:
+        return self._available
+
+    async def close(self) -> None:
+        """No-op for mock client."""
+
+    def _seed_from_keyword(self, keyword: str) -> int:
+        """Derive a deterministic integer seed from a keyword."""
+        return int(hashlib.sha256(keyword.lower().strip().encode()).hexdigest(), 16)
+
+    def _generate_lsa_phrases(self, keyword: str, seed: int) -> list[dict[str, Any]]:
+        """Generate 15-25 realistic LSI terms seeded by keyword hash."""
+        import random
+
+        rng = random.Random(seed)
+
+        # Split keyword into tokens for building related phrases
+        tokens = keyword.lower().split()
+
+        # Build keyword-derived terms by combining tokens with modifiers
+        modifiers = [
+            "best",
+            "top",
+            "affordable",
+            "premium",
+            "lightweight",
+            "durable",
+            "comfortable",
+            "waterproof",
+            "popular",
+            "new",
+        ]
+        keyword_derived: list[str] = []
+        for mod in modifiers:
+            phrase = f"{mod} {keyword.lower()}"
+            keyword_derived.append(phrase)
+        # Also add partial-keyword combos
+        if len(tokens) >= 2:
+            keyword_derived.append(f"{tokens[0]} {tokens[-1]}")
+            keyword_derived.append(f"{tokens[-1]} {tokens[0]}")
+            for t in tokens:
+                keyword_derived.append(f"best {t}")
+
+        # Merge keyword-derived + generic, deduplicate
+        all_terms = keyword_derived + _GENERIC_LSI_TERMS
+        rng.shuffle(all_terms)
+
+        # Pick 15-25 unique terms
+        count = rng.randint(15, 25)
+        selected = list(dict.fromkeys(all_terms))[:count]
+
+        phrases: list[dict[str, Any]] = []
+        for phrase_text in selected:
+            weight = rng.randint(10, 100)
+            avg_count = round(rng.uniform(0.5, 8.0), 1)
+            target_count = max(1, round(avg_count * rng.uniform(0.8, 1.3)))
+            phrases.append(
+                {
+                    "phrase": phrase_text,
+                    "weight": weight,
+                    "averageCount": avg_count,
+                    "targetCount": target_count,
+                }
+            )
+
+        # Sort by weight descending (mimics real API)
+        phrases.sort(key=lambda p: p["weight"], reverse=True)
+        return phrases
+
+    def _generate_variations(self, keyword: str, seed: int) -> list[str]:
+        """Generate keyword variations seeded by keyword hash."""
+        import random
+
+        rng = random.Random(seed + 1)  # offset seed for independent stream
+
+        tokens = keyword.lower().split()
+        variations: list[str] = [keyword.lower()]
+
+        # Rearrangements
+        if len(tokens) >= 2:
+            variations.append(" ".join(reversed(tokens)))
+            variations.append(f"{tokens[-1]} for {tokens[0]}")
+
+        # Plurals / singulars
+        for t in tokens:
+            if t.endswith("s"):
+                variations.append(keyword.lower().replace(t, t[:-1]))
+            else:
+                variations.append(keyword.lower().replace(t, t + "s"))
+
+        # Question forms
+        variations.append(f"what are the best {keyword.lower()}")
+        variations.append(f"how to choose {keyword.lower()}")
+
+        # Deduplicate, shuffle deterministically, take 5-10
+        unique = list(dict.fromkeys(variations))
+        rng.shuffle(unique)
+        count = rng.randint(5, min(10, len(unique)))
+        return unique[:count]
+
+    def _generate_prepare_id(self, keyword: str) -> str:
+        """Generate a fake prepareId string."""
+        # Use first 12 hex chars of keyword hash as a realistic-looking ID
+        hex_str = hashlib.sha256(keyword.lower().strip().encode()).hexdigest()
+        return f"mock-{hex_str[:12]}"
+
+    def _generate_competitors(self, keyword: str, seed: int) -> list[dict[str, Any]]:
+        """Generate mock competitor data seeded by keyword hash."""
+        import random
+
+        rng = random.Random(seed + 10)
+        tokens = keyword.lower().split()
+        slug = "-".join(tokens)
+
+        domains = [
+            "competitor1.com",
+            "bigretailer.com",
+            "expertsite.org",
+            "topreviews.com",
+            "bestpicks.net",
+        ]
+        rng.shuffle(domains)
+
+        competitors: list[dict[str, Any]] = []
+        for _i, domain in enumerate(domains[:3]):
+            page_score = round(rng.uniform(55.0, 95.0), 1)
+            word_count = rng.randint(600, 2000)
+            h2_count = rng.randint(3, 8)
+            h3_count = rng.randint(2, 6)
+            competitors.append(
+                {
+                    "url": f"https://{domain}/{slug}",
+                    "h2Texts": [
+                        f"H2 heading {j + 1} about {keyword}" for j in range(h2_count)
+                    ],
+                    "h3Texts": [f"H3 subtopic {j + 1}" for j in range(h3_count)],
+                    "pageScore": page_score,
+                    "wordCount": word_count,
+                }
+            )
+        return competitors
+
+    def _generate_related_questions(self, keyword: str, seed: int) -> list[str]:
+        """Generate mock People Also Ask questions."""
+        import random
+
+        rng = random.Random(seed + 20)
+        templates = [
+            f"What are the best {keyword}?",
+            f"How to choose {keyword}?",
+            f"Are {keyword} worth it?",
+            f"What is the difference between types of {keyword}?",
+            f"Where to buy {keyword} online?",
+            f"How much do {keyword} cost?",
+            f"What are the top-rated {keyword}?",
+            f"How to care for {keyword}?",
+        ]
+        rng.shuffle(templates)
+        count = rng.randint(5, min(8, len(templates)))
+        return templates[:count]
+
+    def _generate_tag_counts(self, seed: int) -> dict[str, int]:
+        """Generate mock heading tag count targets."""
+        import random
+
+        rng = random.Random(seed + 30)
+        return {
+            "h1": 1,
+            "h2": rng.randint(3, 6),
+            "h3": rng.randint(4, 10),
+            "h4": rng.randint(0, 3),
+        }
+
+    def _generate_report_data(self, keyword: str, seed: int) -> dict[str, Any]:
+        """Generate full create-report mock response data."""
+        import random
+
+        rng = random.Random(seed + 40)
+        hex_str = hashlib.sha256(keyword.lower().strip().encode()).hexdigest()
+        report_id = f"mock-report-{hex_str[:12]}"
+
+        competitors = self._generate_competitors(keyword, seed)
+        related_questions = self._generate_related_questions(keyword, seed)
+        tag_counts = self._generate_tag_counts(seed)
+
+        # Word count range from competitors
+        comp_wcs = [c["wordCount"] for c in competitors]
+        avg_wc = round(sum(comp_wcs) / len(comp_wcs)) if comp_wcs else 800
+
+        # Page score target (slightly above average of competitors)
+        comp_scores = [c["pageScore"] for c in competitors]
+        avg_score = sum(comp_scores) / len(comp_scores) if comp_scores else 70.0
+        page_score = round(min(avg_score + rng.uniform(5.0, 15.0), 100.0), 1)
+
+        # cleanedContentBrief — per-term targets
+        lsa_phrases = self._generate_lsa_phrases(keyword, seed)
+        cleaned_brief: list[dict[str, Any]] = []
+        for phrase_item in lsa_phrases[:15]:
+            tc = phrase_item.get("targetCount", 1)
+            cleaned_brief.append(
+                {
+                    "phrase": phrase_item["phrase"],
+                    "targetMin": max(1, tc - 1),
+                    "targetMax": tc + 1,
+                }
+            )
+
+        return {
+            "reportId": report_id,
+            "competitors": competitors,
+            "relatedQuestions": related_questions,
+            "relatedSearches": self._generate_variations(keyword, seed),
+            "wordCount": {
+                "avg": avg_wc,
+                "competitorsMin": min(comp_wcs) if comp_wcs else 500,
+                "competitorsMax": max(comp_wcs) if comp_wcs else 1500,
+            },
+            "pageScore": page_score,
+            "tagCounts": tag_counts,
+            "cleanedContentBrief": cleaned_brief,
+        }
+
+    def _generate_recommendations_data(self, keyword: str, seed: int) -> dict[str, Any]:
+        """Generate mock get-custom-recommendations response data."""
+        import random
+
+        rng = random.Random(seed + 50)
+
+        exact_keyword_recs: list[dict[str, Any]] = [
+            {
+                "signal": "Meta Title",
+                "target": 1,
+                "comment": f'Include "{keyword}" in meta title',
+            },
+            {
+                "signal": "H1",
+                "target": 1,
+                "comment": f'Include "{keyword}" in H1 heading',
+            },
+            {
+                "signal": "URL",
+                "target": 1,
+                "comment": f'Include "{keyword}" slug in URL',
+            },
+        ]
+
+        tokens = keyword.lower().split()
+        lsi_signals: list[dict[str, Any]] = [
+            {"signal": "Meta Title", "phrase": f"best {keyword}", "target": 1},
+            {
+                "signal": "H3",
+                "phrase": tokens[0] if tokens else keyword,
+                "target": rng.randint(1, 3),
+            },
+            {
+                "signal": "Paragraph Text",
+                "phrase": keyword,
+                "target": rng.randint(3, 8),
+            },
+            {"signal": "Bold", "phrase": keyword, "target": rng.randint(1, 2)},
+            {
+                "signal": "Italic",
+                "phrase": tokens[-1] if tokens else keyword,
+                "target": 1,
+            },
+        ]
+
+        tag_counts = self._generate_tag_counts(seed)
+        page_structure: list[dict[str, Any]] = [
+            {"signal": "H1", "target": 1},
+            {"signal": "H2", "target": tag_counts["h2"]},
+            {"signal": "H3", "target": tag_counts["h3"]},
+            {"signal": "H4", "target": tag_counts.get("h4", 0)},
+            {"signal": "Paragraph Text", "target": rng.randint(8, 20)},
+        ]
+
+        return {
+            "exactKeyword": exact_keyword_recs,
+            "lsi": lsi_signals,
+            "pageStructure": page_structure,
+        }
+
+    async def create_report(
+        self,
+        prepare_id: str,  # noqa: ARG002
+        variations: list[str],  # noqa: ARG002
+        lsa_phrases: list[dict[str, Any]],  # noqa: ARG002
+        page_not_built_yet: bool = True,  # noqa: ARG002
+    ) -> POPTaskResult:
+        """Mock create_report — returns fixture data immediately."""
+        # Derive keyword from prepare_id for deterministic data
+        logger.info(
+            "POPMockClient: mock create_report called",
+            extra={"prepare_id": prepare_id},
+        )
+        return POPTaskResult(
+            success=True,
+            data={},
+            duration_ms=0.0,
+        )
+
+    async def get_custom_recommendations(
+        self,
+        report_id: str,  # noqa: ARG002
+        strategy: str = "target",  # noqa: ARG002
+        approach: str = "regular",  # noqa: ARG002
+    ) -> POPTaskResult:
+        """Mock get_custom_recommendations — returns fixture data immediately."""
+        logger.info(
+            "POPMockClient: mock get_custom_recommendations called",
+            extra={"report_id": report_id},
+        )
+        return POPTaskResult(
+            success=True,
+            data={},
+            duration_ms=0.0,
+        )
+
+    async def create_report_task(
+        self,
+        keyword: str,
+        url: str,
+        location_name: str = "United States",  # noqa: ARG002
+        target_language: str = "english",  # noqa: ARG002
+    ) -> POPTaskResult:
+        """Mock create_report_task — returns a fake task ID immediately."""
+        seed = self._seed_from_keyword(keyword)
+        task_id = f"mock-task-{hashlib.sha256(keyword.lower().strip().encode()).hexdigest()[:8]}"
+
+        logger.info(
+            "POPMockClient: created mock report task",
+            extra={
+                "keyword": keyword[:50],
+                "url": url[:100],
+                "task_id": task_id,
+            },
+        )
+
+        return POPTaskResult(
+            success=True,
+            task_id=task_id,
+            status=POPTaskStatus.PENDING,
+            data={"task_id": task_id},
+            duration_ms=0.0,
+            request_id=f"mock-{seed % 100000:05d}",
+        )
+
+    async def poll_for_result(
+        self,
+        task_id: str,
+        poll_interval: float | None = None,  # noqa: ARG002
+        timeout: float | None = None,  # noqa: ARG002
+    ) -> POPTaskResult:
+        """Mock poll_for_result — returns fixture data immediately."""
+        logger.info(
+            "POPMockClient: returning mock result for task",
+            extra={"task_id": task_id},
+        )
+
+        return POPTaskResult(
+            success=True,
+            task_id=task_id,
+            status=POPTaskStatus.SUCCESS,
+            data={},
+            duration_ms=0.0,
+        )
+
+    async def get_terms(
+        self,
+        keyword: str,
+        url: str,  # noqa: ARG002
+        location_name: str = "United States",  # noqa: ARG002
+        target_language: str = "english",  # noqa: ARG002
+    ) -> POPTaskResult:
+        """Combined convenience method: creates task + returns all 3-step mock results.
+
+        This is the primary method the brief service should use. Returns
+        complete fixture data from all 3 POP API steps in one call.
+
+        Args:
+            keyword: Target keyword for content optimization
+            url: URL of the page to analyze
+            location_name: Google search location
+            target_language: Target language
+
+        Returns:
+            POPTaskResult with mock data from get-terms + create-report + recommendations
+        """
+        seed = self._seed_from_keyword(keyword)
+        task_id = f"mock-task-{hashlib.sha256(keyword.lower().strip().encode()).hexdigest()[:8]}"
+
+        lsa_phrases = self._generate_lsa_phrases(keyword, seed)
+        variations = self._generate_variations(keyword, seed)
+        prepare_id = self._generate_prepare_id(keyword)
+
+        # Mock a realistic word count target (600-1200 range based on keyword)
+        rng = __import__("random").Random(seed)
+        word_count_target = rng.choice([600, 700, 800, 900, 1000, 1100, 1200])
+
+        # Generate step 2 (create-report) data
+        report_data = self._generate_report_data(keyword, seed)
+
+        # Generate step 3 (recommendations) data
+        recs_data = self._generate_recommendations_data(keyword, seed)
+
+        # Merge all data into single response
+        response_data: dict[str, Any] = {
+            # Step 1: get-terms
+            "lsaPhrases": lsa_phrases,
+            "variations": variations,
+            "prepareId": prepare_id,
+            "wordCountTarget": word_count_target,
+            "status": "success",
+            "task_id": task_id,
+            # Step 2: create-report
+            "reportId": report_data["reportId"],
+            "competitors": report_data["competitors"],
+            "relatedQuestions": report_data["relatedQuestions"],
+            "relatedSearches": report_data["relatedSearches"],
+            "wordCount": report_data["wordCount"],
+            "pageScore": report_data["pageScore"],
+            "tagCounts": report_data["tagCounts"],
+            "cleanedContentBrief": report_data["cleanedContentBrief"],
+            # Step 3: recommendations
+            "exactKeyword": recs_data["exactKeyword"],
+            "lsi": recs_data["lsi"],
+            "pageStructure": recs_data["pageStructure"],
+        }
+
+        logger.info(
+            "POPMockClient: returning mock 3-step data",
+            extra={
+                "keyword": keyword[:50],
+                "lsi_term_count": len(lsa_phrases),
+                "variation_count": len(variations),
+                "competitor_count": len(report_data["competitors"]),
+                "related_questions_count": len(report_data["relatedQuestions"]),
+                "prepare_id": prepare_id,
+                "task_id": task_id,
+            },
+        )
+
+        return POPTaskResult(
+            success=True,
+            task_id=task_id,
+            status=POPTaskStatus.SUCCESS,
+            data=response_data,
+            duration_ms=0.0,
+            request_id=f"mock-{seed % 100000:05d}",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Global POP client instance (real or mock)
+# ---------------------------------------------------------------------------
+
+_pop_client: POPClient | POPMockClient | None = None
+
+
+async def init_pop() -> POPClient | POPMockClient:
     """Initialize the global POP client.
 
+    Uses POPMockClient when POP_USE_MOCK=true, otherwise real POPClient.
+
     Returns:
-        Initialized POPClient instance
+        Initialized POPClient or POPMockClient instance
     """
     global _pop_client
     if _pop_client is None:
-        _pop_client = POPClient()
-        if _pop_client.available:
-            logger.info("POP client initialized")
+        settings = get_settings()
+        if settings.pop_use_mock:
+            _pop_client = POPMockClient()
+            logger.info("POP mock client initialized (POP_USE_MOCK=true)")
         else:
-            logger.info("POP not configured (missing API key)")
+            _pop_client = POPClient()
+            if _pop_client.available:
+                logger.info("POP client initialized")
+            else:
+                logger.info("POP not configured (missing API key)")
     return _pop_client
 
 
@@ -1145,14 +1757,16 @@ async def close_pop() -> None:
         _pop_client = None
 
 
-async def get_pop_client() -> POPClient:
+async def get_pop_client() -> POPClient | POPMockClient:
     """Dependency for getting POP client.
+
+    Returns POPMockClient when POP_USE_MOCK=true, otherwise real POPClient.
 
     Usage:
         @app.get("/content-score")
         async def score_content(
             url: str,
-            client: POPClient = Depends(get_pop_client)
+            client: POPClient | POPMockClient = Depends(get_pop_client)
         ):
             result = await client.score_content(url)
             ...

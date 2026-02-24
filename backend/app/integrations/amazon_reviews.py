@@ -621,7 +621,9 @@ class AmazonReviewsClient:
                 return []
 
             # Build the prompt
-            url_for_prompt = website_url if website_url else f"{brand_name} official website"
+            url_for_prompt = (
+                website_url if website_url else f"{brand_name} official website"
+            )
             prompt = FALLBACK_PERSONA_PROMPT.format(
                 brand_name=brand_name,
                 website_url=url_for_prompt,

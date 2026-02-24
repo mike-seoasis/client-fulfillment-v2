@@ -4,6 +4,32 @@ Schemas define the shape of data for API requests and responses.
 They handle validation, serialization, and documentation.
 """
 
+from app.schemas.blog import (
+    BlogBulkApproveResponse,
+    BlogCampaignCreate,
+    BlogCampaignListItem,
+    BlogCampaignResponse,
+    BlogContentGenerationStatus,
+    BlogContentTriggerResponse,
+    BlogContentUpdateRequest,
+    BlogExportItem,
+    BlogLinkMapItem,
+    BlogLinkMapResponse,
+    BlogLinkPlanTriggerResponse,
+    BlogLinkStatusResponse,
+    BlogPostGenerationStatusItem,
+    BlogPostResponse,
+    BlogPostUpdate,
+)
+from app.schemas.brand_config import (
+    VALID_SECTION_NAMES,
+    BrandConfigResponse,
+    RegenerateRequest,
+    SectionUpdate,
+)
+from app.schemas.brand_config_generation import (
+    GenerationStatusResponse,
+)
 from app.schemas.categorize import (
     BatchPageRequest,
     CategorizeAllRequest,
@@ -20,6 +46,13 @@ from app.schemas.categorize import (
     UpdateCategoryRequest,
     UpdateCategoryResponse,
 )
+from app.schemas.cluster import (
+    ClusterCreate,
+    ClusterListResponse,
+    ClusterPageResponse,
+    ClusterPageUpdate,
+    ClusterResponse,
+)
 from app.schemas.content_brief import (
     CompetitorSchema,
     ContentBriefBatchItemResponse,
@@ -35,6 +68,14 @@ from app.schemas.content_brief import (
     LSITermSchema,
     RelatedQuestionSchema,
     RelatedSearchSchema,
+)
+from app.schemas.content_generation import (
+    BriefSummary,
+    ContentGenerationStatus,
+    ContentGenerationTriggerResponse,
+    PageContentResponse,
+    PageGenerationStatusItem,
+    PromptLogResponse,
 )
 from app.schemas.content_score import (
     ContentScoreBatchItemResponse,
@@ -62,6 +103,31 @@ from app.schemas.crawl import (
     CrawlProgressResponse,
     CrawlStartRequest,
     CrawlStopResponse,
+)
+from app.schemas.crawled_page import (
+    CrawledPageCreate,
+    CrawlStatusResponse,
+    PageLabelsUpdate,
+    PageSummary,
+    ProgressCounts,
+    TaxonomyLabel,
+    TaxonomyResponse,
+    UrlsUploadRequest,
+    UrlUploadResponse,
+)
+from app.schemas.crawled_page import (
+    CrawledPageResponse as CrawledPageFullResponse,
+)
+from app.schemas.internal_link import (
+    AddLinkRequest,
+    AnchorSuggestionsResponse,
+    EditLinkRequest,
+    InternalLinkResponse,
+    LinkMapPageSummary,
+    LinkMapResponse,
+    LinkPlanRequest,
+    LinkPlanStatusResponse,
+    PageLinksResponse,
 )
 from app.schemas.keyword_research import (
     KeywordIdeaRequest,
@@ -105,6 +171,23 @@ from app.schemas.project import (
     ProjectListResponse,
     ProjectResponse,
     ProjectUpdate,
+)
+from app.schemas.project_file import (
+    ProjectFileList,
+    ProjectFileResponse,
+)
+from app.schemas.reddit import (
+    BulkCommentActionRequest,
+    CommentApproveRequest,
+    CommentRejectRequest,
+    CrowdReplyTaskResponse,
+    RedditAccountCreate,
+    RedditAccountResponse,
+    RedditAccountUpdate,
+    RedditCommentResponse,
+    RedditPostResponse,
+    RedditProjectConfigCreate,
+    RedditProjectConfigResponse,
 )
 
 __all__ = [
@@ -158,6 +241,12 @@ __all__ = [
     "CrawledPageListResponse",
     "CrawlProgressResponse",
     "CrawlStopResponse",
+    # Cluster schemas
+    "ClusterCreate",
+    "ClusterPageResponse",
+    "ClusterResponse",
+    "ClusterListResponse",
+    "ClusterPageUpdate",
     # Categorize schemas
     "CategorizeRequest",
     "BatchPageRequest",
@@ -203,4 +292,70 @@ __all__ = [
     "KeywordResearchFullRequest",
     "KeywordResearchFullResponse",
     "KeywordResearchStatsResponse",
+    # Project File schemas
+    "ProjectFileResponse",
+    "ProjectFileList",
+    # Brand Config schemas
+    "BrandConfigResponse",
+    "RegenerateRequest",
+    "SectionUpdate",
+    "VALID_SECTION_NAMES",
+    # Brand Config Generation schemas
+    "GenerationStatusResponse",
+    # Content Generation schemas
+    "ContentGenerationTriggerResponse",
+    "ContentGenerationStatus",
+    "PageGenerationStatusItem",
+    "BriefSummary",
+    "PageContentResponse",
+    "PromptLogResponse",
+    # Internal Link schemas
+    "LinkPlanRequest",
+    "LinkPlanStatusResponse",
+    "InternalLinkResponse",
+    "PageLinksResponse",
+    "LinkMapPageSummary",
+    "LinkMapResponse",
+    "AddLinkRequest",
+    "EditLinkRequest",
+    "AnchorSuggestionsResponse",
+    # Blog schemas
+    "BlogCampaignCreate",
+    "BlogPostResponse",
+    "BlogCampaignResponse",
+    "BlogCampaignListItem",
+    "BlogPostUpdate",
+    "BlogContentUpdateRequest",
+    "BlogPostGenerationStatusItem",
+    "BlogContentGenerationStatus",
+    "BlogContentTriggerResponse",
+    "BlogBulkApproveResponse",
+    "BlogExportItem",
+    "BlogLinkPlanTriggerResponse",
+    "BlogLinkStatusResponse",
+    "BlogLinkMapItem",
+    "BlogLinkMapResponse",
+    # Reddit schemas
+    "RedditAccountCreate",
+    "RedditAccountUpdate",
+    "RedditAccountResponse",
+    "RedditProjectConfigCreate",
+    "RedditProjectConfigResponse",
+    "RedditPostResponse",
+    "RedditCommentResponse",
+    "CommentApproveRequest",
+    "CommentRejectRequest",
+    "BulkCommentActionRequest",
+    "CrowdReplyTaskResponse",
+    # CrawledPage schemas
+    "CrawledPageCreate",
+    "CrawledPageFullResponse",
+    "CrawlStatusResponse",
+    "PageSummary",
+    "ProgressCounts",
+    "TaxonomyLabel",
+    "TaxonomyResponse",
+    "UrlsUploadRequest",
+    "UrlUploadResponse",
+    "PageLabelsUpdate",
 ]

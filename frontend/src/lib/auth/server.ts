@@ -1,0 +1,18 @@
+import { createNeonAuth } from "@neondatabase/auth/next/server";
+
+// Lazy initialization — env vars aren't available during Docker build.
+// All consumers must call getAuth() at request time, not at module level.
+let _auth: ReturnType<typeof createNeonAuth> | null = null;
+
+export function getAuth() {
+  if (!_auth) {
+    _auth = createNeonAuth({
+      baseUrl: process.env.NEON_AUTH_BASE_URL!,
+      cookies: {
+        secret: process.env.NEON_AUTH_COOKIE_SECRET!,
+        sessionDataTtl: 60, // Reduce from default 300s to 60s to minimize stale session window
+      },
+    });
+  }
+  return _auth;
+}

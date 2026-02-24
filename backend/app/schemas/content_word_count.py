@@ -169,6 +169,8 @@ class ContentWordCountBatchResponse(BaseModel):
     valid_count: int = Field(0, description="Items with valid word count")
     invalid_count: int = Field(0, description="Items with invalid word count")
     error_count: int = Field(0, description="Items with errors")
-    average_word_count: float = Field(0.0, description="Average word count across items")
+    average_word_count: float = Field(
+        0.0, description="Average word count across items"
+    )
     error: str | None = Field(None, description="Error if batch failed")
     duration_ms: float = Field(..., description="Total processing time")

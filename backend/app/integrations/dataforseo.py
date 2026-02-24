@@ -38,11 +38,11 @@ import base64
 import time
 import uuid
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any
 
 import httpx
 
+from app.core.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from app.core.config import get_settings
 from app.core.logging import dataforseo_logger, get_logger
 
@@ -56,128 +56,6 @@ MAX_KEYWORDS_PER_REQUEST = 1000
 
 # Maximum tasks per batch request
 MAX_TASKS_PER_REQUEST = 100
-
-
-class CircuitState(Enum):
-    """Circuit breaker states."""
-
-    CLOSED = "closed"  # Normal operation
-    OPEN = "open"  # Failing, reject all requests
-    HALF_OPEN = "half_open"  # Testing if service recovered
-
-
-@dataclass
-class CircuitBreakerConfig:
-    """Circuit breaker configuration."""
-
-    failure_threshold: int
-    recovery_timeout: float
-
-
-class CircuitBreaker:
-    """Circuit breaker implementation for DataForSEO operations.
-
-    Prevents cascading failures by stopping requests to a failing service.
-    After recovery_timeout, allows a test request through (half-open state).
-    If test succeeds, circuit closes. If fails, circuit opens again.
-    """
-
-    def __init__(self, config: CircuitBreakerConfig) -> None:
-        self._config = config
-        self._state = CircuitState.CLOSED
-        self._failure_count = 0
-        self._last_failure_time: float | None = None
-        self._lock = asyncio.Lock()
-
-    @property
-    def state(self) -> CircuitState:
-        """Get current circuit state."""
-        return self._state
-
-    @property
-    def is_closed(self) -> bool:
-        """Check if circuit is closed (normal operation)."""
-        return self._state == CircuitState.CLOSED
-
-    @property
-    def is_open(self) -> bool:
-        """Check if circuit is open (rejecting requests)."""
-        return self._state == CircuitState.OPEN
-
-    async def _check_recovery(self) -> bool:
-        """Check if enough time has passed to attempt recovery."""
-        if self._last_failure_time is None:
-            return False
-        elapsed = time.monotonic() - self._last_failure_time
-        return elapsed >= self._config.recovery_timeout
-
-    async def can_execute(self) -> bool:
-        """Check if operation can be executed based on circuit state."""
-        async with self._lock:
-            if self._state == CircuitState.CLOSED:
-                return True
-
-            if self._state == CircuitState.OPEN:
-                if await self._check_recovery():
-                    # Transition to half-open for testing
-                    previous_state = self._state.value
-                    self._state = CircuitState.HALF_OPEN
-                    dataforseo_logger.circuit_state_change(
-                        previous_state, self._state.value, self._failure_count
-                    )
-                    dataforseo_logger.circuit_recovery_attempt()
-                    return True
-                return False
-
-            # HALF_OPEN state - allow single test request
-            return True
-
-    async def record_success(self) -> None:
-        """Record successful operation."""
-        async with self._lock:
-            if self._state == CircuitState.HALF_OPEN:
-                # Recovery successful, close circuit
-                previous_state = self._state.value
-                self._state = CircuitState.CLOSED
-                self._failure_count = 0
-                self._last_failure_time = None
-                dataforseo_logger.circuit_state_change(
-                    previous_state, self._state.value, self._failure_count
-                )
-                dataforseo_logger.circuit_closed()
-            elif self._state == CircuitState.CLOSED:
-                # Reset failure count on success
-                self._failure_count = 0
-
-    async def record_failure(self) -> None:
-        """Record failed operation."""
-        async with self._lock:
-            self._failure_count += 1
-            self._last_failure_time = time.monotonic()
-
-            if self._state == CircuitState.HALF_OPEN:
-                # Recovery failed, open circuit again
-                previous_state = self._state.value
-                self._state = CircuitState.OPEN
-                dataforseo_logger.circuit_state_change(
-                    previous_state, self._state.value, self._failure_count
-                )
-                dataforseo_logger.circuit_open(
-                    self._failure_count, self._config.recovery_timeout
-                )
-            elif (
-                self._state == CircuitState.CLOSED
-                and self._failure_count >= self._config.failure_threshold
-            ):
-                # Too many failures, open circuit
-                previous_state = self._state.value
-                self._state = CircuitState.OPEN
-                dataforseo_logger.circuit_state_change(
-                    previous_state, self._state.value, self._failure_count
-                )
-                dataforseo_logger.circuit_open(
-                    self._failure_count, self._config.recovery_timeout
-                )
 
 
 @dataclass
@@ -324,6 +202,17 @@ class DataForSEOClient:
         """
         settings = get_settings()
 
+        # Debug logging for settings
+        logger.info(
+            "DataForSEO settings check",
+            extra={
+                "settings_login": settings.dataforseo_api_login,
+                "settings_password_set": bool(settings.dataforseo_api_password),
+                "api_login_param": api_login,
+                "api_password_param": bool(api_password),
+            },
+        )
+
         self._api_login = api_login or settings.dataforseo_api_login
         self._api_password = api_password or settings.dataforseo_api_password
         self._timeout = timeout or settings.dataforseo_timeout
@@ -341,7 +230,8 @@ class DataForSEOClient:
             CircuitBreakerConfig(
                 failure_threshold=settings.dataforseo_circuit_failure_threshold,
                 recovery_timeout=settings.dataforseo_circuit_recovery_timeout,
-            )
+            ),
+            name="dataforseo",
         )
 
         # HTTP client (created lazily)
@@ -726,8 +616,10 @@ class DataForSEOClient:
                     kw = item.get("keyword", "")
                     search_volume = item.get("search_volume")
                     cpc_data = item.get("cpc")
-                    competition = item.get("competition")
-                    competition_level = item.get("competition_level")
+                    # DataForSEO returns competition as string ("HIGH"/"MEDIUM"/"LOW")
+                    # and competition_index as numeric (0-100)
+                    competition_index = item.get("competition_index")
+                    competition_level = item.get("competition")  # String like "HIGH"
                     monthly_searches = item.get("monthly_searches")
 
                     keyword_results.append(
@@ -735,8 +627,8 @@ class DataForSEOClient:
                             keyword=kw,
                             search_volume=search_volume,
                             cpc=float(cpc_data) if cpc_data is not None else None,
-                            competition=float(competition)
-                            if competition is not None
+                            competition=float(competition_index)
+                            if competition_index is not None
                             else None,
                             competition_level=competition_level,
                             monthly_searches=monthly_searches,
@@ -1020,108 +912,6 @@ class DataForSEOClient:
                 duration_ms=total_duration_ms,
             )
 
-    async def get_serp_cached(
-        self,
-        keyword: str,
-        location_code: int | None = None,
-        language_code: str | None = None,
-        depth: int = 10,
-        search_engine: str = "google",
-    ) -> SerpSearchResult:
-        """Get SERP data with Redis caching (24h TTL).
-
-        This method checks the Redis cache first before making an API call.
-        If cached data is found, it returns immediately without API costs.
-        On cache miss, it fetches from the API and caches the result.
-
-        Args:
-            keyword: Keyword to search
-            location_code: Location code (e.g., 2840 for US). Defaults to settings.
-            language_code: Language code (e.g., 'en'). Defaults to settings.
-            depth: Number of results to fetch (max 100). Defaults to 10.
-            search_engine: Search engine ('google', 'bing'). Defaults to 'google'.
-
-        Returns:
-            SerpSearchResult with SERP data, cost, and metadata
-        """
-        # Import here to avoid circular imports
-        from app.services.serp_cache import get_serp_cache_service
-
-        location_code = location_code or self._default_location_code
-        language_code = language_code or self._default_language_code
-
-        cache = get_serp_cache_service()
-        start_time = time.monotonic()
-
-        # Try cache first
-        cache_result = await cache.get(
-            keyword, location_code, language_code, search_engine
-        )
-
-        if cache_result.cache_hit and cache_result.data:
-            logger.debug(
-                "SERP cache hit - returning cached result",
-                extra={
-                    "keyword": keyword[:50],
-                    "location_code": location_code,
-                    "search_engine": search_engine,
-                    "cache_duration_ms": round(cache_result.duration_ms, 2),
-                },
-            )
-            # Convert cached data back to SerpSearchResult
-            return cache_result.data.to_serp_result()
-
-        logger.debug(
-            "SERP cache miss - fetching from API",
-            extra={
-                "keyword": keyword[:50],
-                "location_code": location_code,
-                "search_engine": search_engine,
-            },
-        )
-
-        # Cache miss - fetch from API
-        result = await self.get_serp(
-            keyword=keyword,
-            location_code=location_code,
-            language_code=language_code,
-            depth=depth,
-            search_engine=search_engine,
-        )
-
-        # Cache successful results
-        if result.success and result.results:
-            cached = await cache.set(
-                result, location_code, language_code, search_engine
-            )
-            if cached:
-                logger.debug(
-                    "SERP result cached successfully",
-                    extra={
-                        "keyword": keyword[:50],
-                        "results_count": len(result.results),
-                    },
-                )
-            else:
-                logger.debug(
-                    "SERP result caching failed (Redis may be unavailable)",
-                    extra={"keyword": keyword[:50]},
-                )
-
-        total_duration_ms = (time.monotonic() - start_time) * 1000
-        logger.info(
-            "SERP lookup complete",
-            extra={
-                "keyword": keyword[:50],
-                "cache_hit": False,
-                "results_count": len(result.results) if result.success else 0,
-                "duration_ms": round(total_duration_ms, 2),
-                "api_cost": result.cost,
-            },
-        )
-
-        return result
-
     async def get_keyword_suggestions(
         self,
         keyword: str,
@@ -1191,8 +981,10 @@ class DataForSEOClient:
                     kw = item.get("keyword", "")
                     search_volume = item.get("search_volume")
                     cpc_data = item.get("cpc")
-                    competition = item.get("competition")
-                    competition_level = item.get("competition_level")
+                    # DataForSEO returns competition as string ("HIGH"/"MEDIUM"/"LOW")
+                    # and competition_index as numeric (0-100)
+                    competition_index = item.get("competition_index")
+                    competition_level = item.get("competition")  # String like "HIGH"
                     monthly_searches = item.get("monthly_searches")
 
                     keyword_results.append(
@@ -1200,8 +992,8 @@ class DataForSEOClient:
                             keyword=kw,
                             search_volume=search_volume,
                             cpc=float(cpc_data) if cpc_data is not None else None,
-                            competition=float(competition)
-                            if competition is not None
+                            competition=float(competition_index)
+                            if competition_index is not None
                             else None,
                             competition_level=competition_level,
                             monthly_searches=monthly_searches,

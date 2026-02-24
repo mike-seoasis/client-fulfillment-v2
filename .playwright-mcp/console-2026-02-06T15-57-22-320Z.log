@@ -1,0 +1,8 @@
+[ 1615877ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/api/v1/projects/a255faf0-3e9f-4c85-94e3-d546e47f5cbe/taxonomy:0
+[ 1793888ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/api/v1/projects/a255faf0-3e9f-4c85-94e3-d546e47f5cbe:0
+[ 1793894ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/api/v1/projects/a255faf0-3e9f-4c85-94e3-d546e47f5cbe/brand-config/status:0
+[ 1815362ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/api/v1/projects/240ad091-549b-4346-b2a4-03a40a08ab08/taxonomy:0
+[ 1878860ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3000/projects/240ad091-549b-4346-b2a4-03a40a08ab08/onboarding/content/fcf2b4ef-c4e8-44f9-98a2-01ce75c65e39?_rsc=1ql3b:0
+[ 1878915ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3000/projects/240ad091-549b-4346-b2a4-03a40a08ab08/onboarding/content/fcf2b4ef-c4e8-44f9-98a2-01ce75c65e39:0
+[ 1966883ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3000/projects/240ad091-549b-4346-b2a4-03a40a08ab08/onboarding/content/fcf2b4ef-c4e8-44f9-98a2-01ce75c65e39?_rsc=1ql3b:0
+[ 1966935ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3000/projects/240ad091-549b-4346-b2a4-03a40a08ab08/onboarding/content/fcf2b4ef-c4e8-44f9-98a2-01ce75c65e39:0

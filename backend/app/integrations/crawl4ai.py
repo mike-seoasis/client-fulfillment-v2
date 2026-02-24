@@ -27,137 +27,15 @@ RAILWAY DEPLOYMENT REQUIREMENTS:
 import asyncio
 import time
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any
 
 import httpx
 
+from app.core.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from app.core.config import get_settings
 from app.core.logging import crawl4ai_logger, get_logger
 
 logger = get_logger(__name__)
-
-
-class CircuitState(Enum):
-    """Circuit breaker states."""
-
-    CLOSED = "closed"  # Normal operation
-    OPEN = "open"  # Failing, reject all requests
-    HALF_OPEN = "half_open"  # Testing if service recovered
-
-
-@dataclass
-class CircuitBreakerConfig:
-    """Circuit breaker configuration."""
-
-    failure_threshold: int
-    recovery_timeout: float
-
-
-class CircuitBreaker:
-    """Circuit breaker implementation for Crawl4AI operations.
-
-    Prevents cascading failures by stopping requests to a failing service.
-    After recovery_timeout, allows a test request through (half-open state).
-    If test succeeds, circuit closes. If fails, circuit opens again.
-    """
-
-    def __init__(self, config: CircuitBreakerConfig) -> None:
-        self._config = config
-        self._state = CircuitState.CLOSED
-        self._failure_count = 0
-        self._last_failure_time: float | None = None
-        self._lock = asyncio.Lock()
-
-    @property
-    def state(self) -> CircuitState:
-        """Get current circuit state."""
-        return self._state
-
-    @property
-    def is_closed(self) -> bool:
-        """Check if circuit is closed (normal operation)."""
-        return self._state == CircuitState.CLOSED
-
-    @property
-    def is_open(self) -> bool:
-        """Check if circuit is open (rejecting requests)."""
-        return self._state == CircuitState.OPEN
-
-    async def _check_recovery(self) -> bool:
-        """Check if enough time has passed to attempt recovery."""
-        if self._last_failure_time is None:
-            return False
-        elapsed = time.monotonic() - self._last_failure_time
-        return elapsed >= self._config.recovery_timeout
-
-    async def can_execute(self) -> bool:
-        """Check if operation can be executed based on circuit state."""
-        async with self._lock:
-            if self._state == CircuitState.CLOSED:
-                return True
-
-            if self._state == CircuitState.OPEN:
-                if await self._check_recovery():
-                    # Transition to half-open for testing
-                    previous_state = self._state.value
-                    self._state = CircuitState.HALF_OPEN
-                    crawl4ai_logger.circuit_state_change(
-                        previous_state, self._state.value, self._failure_count
-                    )
-                    crawl4ai_logger.circuit_recovery_attempt()
-                    return True
-                return False
-
-            # HALF_OPEN state - allow single test request
-            return True
-
-    async def record_success(self) -> None:
-        """Record successful operation."""
-        async with self._lock:
-            if self._state == CircuitState.HALF_OPEN:
-                # Recovery successful, close circuit
-                previous_state = self._state.value
-                self._state = CircuitState.CLOSED
-                self._failure_count = 0
-                self._last_failure_time = None
-                crawl4ai_logger.circuit_state_change(
-                    previous_state, self._state.value, self._failure_count
-                )
-                crawl4ai_logger.circuit_closed()
-            elif self._state == CircuitState.CLOSED:
-                # Reset failure count on success
-                self._failure_count = 0
-
-    async def record_failure(self) -> None:
-        """Record failed operation."""
-        async with self._lock:
-            self._failure_count += 1
-            self._last_failure_time = time.monotonic()
-
-            if self._state == CircuitState.HALF_OPEN:
-                # Recovery failed, open circuit again
-                previous_state = self._state.value
-                self._state = CircuitState.OPEN
-                crawl4ai_logger.circuit_state_change(
-                    previous_state, self._state.value, self._failure_count
-                )
-                crawl4ai_logger.circuit_open(
-                    self._failure_count, self._config.recovery_timeout
-                )
-            elif (
-                self._state == CircuitState.CLOSED
-                and self._failure_count >= self._config.failure_threshold
-            ):
-                # Too many failures, open circuit
-                previous_state = self._state.value
-                self._state = CircuitState.OPEN
-                crawl4ai_logger.circuit_state_change(
-                    previous_state, self._state.value, self._failure_count
-                )
-                crawl4ai_logger.circuit_open(
-                    self._failure_count, self._config.recovery_timeout
-                )
 
 
 @dataclass
@@ -185,6 +63,11 @@ class CrawlOptions:
     word_count_threshold: int = 10
     excluded_tags: list[str] | None = None
     include_raw_html: bool = False
+    css_selector: str | None = None  # CSS selector to limit content area
+
+    # Content filtering - auto-extract main body content
+    use_pruning_filter: bool = True  # Use PruningContentFilter for fit_markdown
+    pruning_threshold: float = 0.45  # How aggressively to prune (0-1)
 
     # Browser behavior
     wait_for: str | None = None  # CSS selector to wait for
@@ -206,36 +89,116 @@ class CrawlOptions:
     # Session management
     session_id: str | None = None
 
+    # Default excluded tags to strip boilerplate
+    _default_excluded_tags: list[str] = field(
+        default_factory=lambda: ["nav", "header", "footer", "aside", "script", "style"]
+    )
+
+    def to_crawler_config(self) -> dict[str, Any]:
+        """Convert options to Crawl4AI REST API crawler_config format."""
+        params: dict[str, Any] = {
+            "word_count_threshold": self.word_count_threshold,
+        }
+
+        # Merge default and custom excluded tags
+        tags = list(self._default_excluded_tags)
+        if self.excluded_tags:
+            tags = list(set(tags + self.excluded_tags))
+        params["excluded_tags"] = tags
+
+        if self.css_selector:
+            params["css_selector"] = self.css_selector
+        if self.include_raw_html:
+            params["include_raw_html"] = self.include_raw_html
+        if self.bypass_cache:
+            params["cache_mode"] = "bypass"
+        elif self.cache_mode:
+            params["cache_mode"] = self.cache_mode
+        if self.wait_for:
+            params["wait_for"] = self.wait_for
+        if self.delay_before_return_html > 0:
+            params["delay_before_return_html"] = self.delay_before_return_html
+        if self.js_code:
+            params["js_code"] = self.js_code
+        if self.screenshot:
+            params["screenshot"] = self.screenshot
+            if self.screenshot_wait_for:
+                params["screenshot_wait_for"] = self.screenshot_wait_for
+        if self.magic:
+            params["magic"] = self.magic
+        if self.simulate_user:
+            params["simulate_user"] = self.simulate_user
+        if self.session_id:
+            params["session_id"] = self.session_id
+
+        # Add PruningContentFilter for automatic main content extraction
+        if self.use_pruning_filter:
+            params["markdown_generator"] = {
+                "type": "DefaultMarkdownGenerator",
+                "params": {
+                    "content_filter": {
+                        "type": "PruningContentFilter",
+                        "params": {
+                            "threshold": self.pruning_threshold,
+                            "threshold_type": "fixed",
+                            "min_word_threshold": 20,
+                        },
+                    }
+                },
+            }
+
+        return {
+            "type": "CrawlerRunConfig",
+            "params": params,
+        }
+
     def to_dict(self) -> dict[str, Any]:
-        """Convert options to API request format."""
-        result: dict[str, Any] = {
+        """Convert options to flat dict for logging."""
+        return {
             "word_count_threshold": self.word_count_threshold,
             "include_raw_html": self.include_raw_html,
             "bypass_cache": self.bypass_cache,
+            "css_selector": self.css_selector,
+            "use_pruning_filter": self.use_pruning_filter,
         }
 
-        if self.excluded_tags:
-            result["excluded_tags"] = self.excluded_tags
-        if self.wait_for:
-            result["wait_for"] = self.wait_for
-        if self.delay_before_return_html > 0:
-            result["delay_before_return_html"] = self.delay_before_return_html
-        if self.js_code:
-            result["js_code"] = self.js_code
-        if self.cache_mode:
-            result["cache_mode"] = self.cache_mode
-        if self.screenshot:
-            result["screenshot"] = self.screenshot
-            if self.screenshot_wait_for:
-                result["screenshot_wait_for"] = self.screenshot_wait_for
-        if self.magic:
-            result["magic"] = self.magic
-        if self.simulate_user:
-            result["simulate_user"] = self.simulate_user
-        if self.session_id:
-            result["session_id"] = self.session_id
 
-        return result
+def _extract_markdown(markdown_data: str | dict[str, Any] | None) -> str | None:
+    """Extract markdown string from potentially nested response format.
+
+    Crawl4AI API may return markdown as:
+    - A string (old format)
+    - A dict with 'raw_markdown', 'fit_markdown', etc. (new format)
+    - None
+
+    Prefers fit_markdown (filtered main content) over raw_markdown (full page).
+    """
+    if markdown_data is None:
+        return None
+
+    if isinstance(markdown_data, str):
+        return markdown_data
+
+    if isinstance(markdown_data, dict):
+        # Prefer fit_markdown (main body content) over raw_markdown (full page)
+        for key in (
+            "fit_markdown",
+            "raw_markdown",
+            "markdown_with_citations",
+            "content",
+        ):
+            if key in markdown_data and isinstance(markdown_data[key], str):
+                chosen: str = markdown_data[key]
+                if chosen.strip():
+                    return chosen
+        # If it's a dict but we can't find a string, log and return None
+        logger.warning(
+            "Unexpected markdown format in Crawl4AI response",
+            extra={"markdown_keys": list(markdown_data.keys())},
+        )
+        return None
+
+    return None
 
 
 class Crawl4AIError(Exception):
@@ -323,7 +286,8 @@ class Crawl4AIClient:
             CircuitBreakerConfig(
                 failure_threshold=settings.crawl4ai_circuit_failure_threshold,
                 recovery_timeout=settings.crawl4ai_circuit_recovery_timeout,
-            )
+            ),
+            name="crawl4ai",
         )
 
         # HTTP client (created lazily)
@@ -499,7 +463,11 @@ class Crawl4AIClient:
                 if response.status_code >= 400:
                     # Client error - don't retry
                     error_body = response.json() if response.content else None
-                    error_msg = error_body.get("error", str(error_body)) if error_body else "Client error"
+                    error_msg = (
+                        error_body.get("error", str(error_body))
+                        if error_body
+                        else "Client error"
+                    )
                     crawl4ai_logger.api_call_error(
                         method,
                         endpoint,
@@ -608,6 +576,67 @@ class Crawl4AIClient:
         except Crawl4AIError:
             return False
 
+    async def _simple_crawl(self, url: str) -> CrawlResult:
+        """Simple httpx-based crawl fallback when Crawl4AI API is not configured.
+
+        Args:
+            url: URL to crawl
+
+        Returns:
+            CrawlResult with HTML content (no markdown conversion)
+        """
+        start_time = time.monotonic()
+        logger.info(f"Using simple httpx crawl for {url} (Crawl4AI not configured)")
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(self._timeout),
+                follow_redirects=True,
+            ) as client:
+                response = await client.get(
+                    url,
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    },
+                )
+                duration_ms = (time.monotonic() - start_time) * 1000
+
+                if response.status_code >= 400:
+                    return CrawlResult(
+                        success=False,
+                        url=url,
+                        error=f"HTTP {response.status_code}",
+                        status_code=response.status_code,
+                        duration_ms=duration_ms,
+                    )
+
+                html = response.text
+                return CrawlResult(
+                    success=True,
+                    url=url,
+                    html=html,
+                    markdown=None,  # Simple crawl doesn't convert to markdown
+                    status_code=response.status_code,
+                    duration_ms=duration_ms,
+                )
+
+        except httpx.TimeoutException:
+            duration_ms = (time.monotonic() - start_time) * 1000
+            return CrawlResult(
+                success=False,
+                url=url,
+                error=f"Request timed out after {self._timeout}s",
+                duration_ms=duration_ms,
+            )
+        except httpx.RequestError as e:
+            duration_ms = (time.monotonic() - start_time) * 1000
+            return CrawlResult(
+                success=False,
+                url=url,
+                error=str(e),
+                duration_ms=duration_ms,
+            )
+
     async def crawl(
         self,
         url: str,
@@ -622,15 +651,19 @@ class Crawl4AIClient:
         Returns:
             CrawlResult with extracted content
         """
+        # Use simple httpx fallback if Crawl4AI API is not configured
+        if not self._available:
+            return await self._simple_crawl(url)
+
         start_time = time.monotonic()
         options = options or CrawlOptions()
 
         crawl4ai_logger.crawl_start(url, options.to_dict())
 
         try:
-            request_body = {
-                "urls": url,  # Single URL
-                **options.to_dict(),
+            request_body: dict[str, Any] = {
+                "urls": [url],
+                "crawler_config": options.to_crawler_config(),
             }
 
             response = await self._request(
@@ -639,8 +672,8 @@ class Crawl4AIClient:
 
             duration_ms = (time.monotonic() - start_time) * 1000
 
-            # Extract result from response
-            result_data = response.get("result", response)
+            # Extract result from response (API returns "results" plural)
+            result_data = response.get("results") or response.get("result") or response
 
             # Handle both single result and list of results
             if isinstance(result_data, list) and len(result_data) > 0:
@@ -650,7 +683,7 @@ class Crawl4AIClient:
                 success=result_data.get("success", True),
                 url=url,
                 html=result_data.get("html"),
-                markdown=result_data.get("markdown"),
+                markdown=_extract_markdown(result_data.get("markdown")),
                 cleaned_html=result_data.get("cleaned_html"),
                 links=result_data.get("links", []),
                 images=result_data.get("images", []),
@@ -699,13 +732,16 @@ class Crawl4AIClient:
         )
 
         try:
-            request_body = {
+            request_body: dict[str, Any] = {
                 "urls": urls,
-                **options.to_dict(),
+                "crawler_config": options.to_crawler_config(),
             }
 
             response = await self._request(
-                "POST", "/crawl", json=request_body, target_url=f"batch ({len(urls)} URLs)"
+                "POST",
+                "/crawl",
+                json=request_body,
+                target_url=f"batch ({len(urls)} URLs)",
             )
 
             duration_ms = (time.monotonic() - start_time) * 1000
@@ -717,13 +753,15 @@ class Crawl4AIClient:
 
             results: list[CrawlResult] = []
             for i, result_data in enumerate(results_data):
-                result_url = result_data.get("url", urls[i] if i < len(urls) else "unknown")
+                result_url = result_data.get(
+                    "url", urls[i] if i < len(urls) else "unknown"
+                )
                 results.append(
                     CrawlResult(
                         success=result_data.get("success", True),
                         url=result_url,
                         html=result_data.get("html"),
-                        markdown=result_data.get("markdown"),
+                        markdown=_extract_markdown(result_data.get("markdown")),
                         cleaned_html=result_data.get("cleaned_html"),
                         links=result_data.get("links", []),
                         images=result_data.get("images", []),

@@ -1,0 +1,362 @@
+{
+  "name": "Slice 14a: Reddit Data Foundation",
+  "description": "Create the data foundation for Reddit marketing integration: 5 database models (reddit_accounts, reddit_project_configs, reddit_posts, reddit_comments, crowdreply_tasks), Alembic migration, Pydantic v2 schemas, account pool CRUD API, project Reddit config API, config settings, frontend account management page, project Reddit config page, header navigation, and project detail Reddit card.",
+  "branchName": "v2-rebuild",
+  "userStories": [
+    {
+      "id": "S14A-001",
+      "title": "Create RedditAccount model",
+      "description": "As a developer, I need a RedditAccount model so that shared Reddit accounts can be tracked with warmup stages, niche tags, and cooldown management.",
+      "acceptanceCriteria": [
+        "Create backend/app/models/reddit_account.py with RedditAccount class extending Base",
+        "Create WarmupStage enum: observation, light_engagement, regular_activity, operational",
+        "Create AccountStatus enum: active, warming_up, cooldown, suspended, banned",
+        "Fields: id (UUID PK with gen_random_uuid()), username (String 100, unique, not null, indexed), status (String 50, default 'active', indexed), warmup_stage (String 50, default 'observation'), niche_tags (JSONB, default [], not null), karma_post (Integer, default 0), karma_comment (Integer, default 0), account_age_days (Integer, nullable), cooldown_until (DateTime with timezone, nullable), last_used_at (DateTime with timezone, nullable), notes (Text, nullable), metadata (JSONB, nullable), created_at (DateTime with timezone), updated_at (DateTime with timezone)",
+        "Use Mapped[] types, server_default=text() for defaults, lambda factories for timestamps — match blog.py pattern exactly"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Reference backend/app/models/blog.py for exact pattern (UUID PK with str(uuid4()) default + gen_random_uuid() server_default, DateTime with UTC lambdas, JSONB columns). No FK to projects — accounts are shared across all projects."
+    },
+    {
+      "id": "S14A-002",
+      "title": "Create RedditProjectConfig model",
+      "description": "As a developer, I need a RedditProjectConfig model so that per-project Reddit settings (keywords, subreddits, competitors, voice instructions) can be stored.",
+      "acceptanceCriteria": [
+        "Create backend/app/models/reddit_config.py with RedditProjectConfig class extending Base",
+        "Fields: id (UUID PK), project_id (UUID FK to projects.id, unique, ondelete CASCADE, indexed), search_keywords (JSONB, default []), target_subreddits (JSONB, default []), banned_subreddits (JSONB, default []), competitors (JSONB, default []), comment_instructions (Text, nullable), niche_tags (JSONB, default []), discovery_settings (JSONB, nullable), is_active (Boolean, default true), created_at, updated_at",
+        "project_id must be unique (1:1 relationship with Project)",
+        "Add relationship: project back_populates='reddit_config'"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "The unique constraint on project_id enforces the 1:1 relationship. Follow blog.py pattern for all column definitions."
+    },
+    {
+      "id": "S14A-003",
+      "title": "Create RedditPost model",
+      "description": "As a developer, I need a RedditPost model so that discovered Reddit threads can be stored with intent classification and relevance scores.",
+      "acceptanceCriteria": [
+        "Create backend/app/models/reddit_post.py with RedditPost class extending Base",
+        "Create PostFilterStatus enum: pending, relevant, irrelevant, skipped",
+        "Create PostIntent enum: research, pain_point, competitor, question, general",
+        "Fields: id (UUID PK), project_id (UUID FK CASCADE, indexed), reddit_post_id (String 50, nullable), subreddit (String 100, not null, indexed), title (Text, not null), url (String 2048, not null), snippet (Text, nullable), keyword (String 500, nullable), intent (String 50, nullable), intent_categories (JSONB, nullable), relevance_score (Float, nullable), matched_keywords (JSONB, nullable), ai_evaluation (JSONB, nullable), filter_status (String 50, default 'pending', indexed), serp_position (Integer, nullable), discovered_at (DateTime tz, not null), created_at, updated_at",
+        "UniqueConstraint('project_id', 'url', name='uq_reddit_posts_project_url') in __table_args__",
+        "Add relationship: comments (one-to-many to RedditComment, cascade all delete-orphan)"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "The unique constraint prevents duplicate posts per project. discovered_at tracks when SERP returned the result (different from created_at which is when our DB row was created)."
+    },
+    {
+      "id": "S14A-004",
+      "title": "Create RedditComment model",
+      "description": "As a developer, I need a RedditComment model so that AI-generated comments can be stored with approval workflow, approach tracking, and posting status.",
+      "acceptanceCriteria": [
+        "Create backend/app/models/reddit_comment.py with RedditComment class extending Base",
+        "Create CommentStatus enum: draft, approved, rejected, submitting, posted, failed, mod_removed",
+        "Fields: id (UUID PK), post_id (UUID FK to reddit_posts.id, CASCADE, indexed), project_id (UUID FK to projects.id, CASCADE, indexed), account_id (UUID FK to reddit_accounts.id, SET NULL, nullable, indexed), body (Text, not null), original_body (Text, not null), is_promotional (Boolean, not null, default true), approach_type (String 100, nullable), status (String 50, default 'draft', indexed), reject_reason (Text, nullable), crowdreply_task_id (String 255, nullable), posted_url (String 2048, nullable), posted_at (DateTime tz, nullable), generation_metadata (JSONB, nullable), created_at, updated_at",
+        "Add relationships: post (many-to-one back_populates), crowdreply_tasks (one-to-many)"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "body holds the current (possibly edited) text. original_body is the AI-generated text that never changes. account_id uses SET NULL on delete so comment history is preserved even if account is removed."
+    },
+    {
+      "id": "S14A-005",
+      "title": "Create CrowdReplyTask model",
+      "description": "As a developer, I need a CrowdReplyTask model so that CrowdReply API submissions can be tracked with status, pricing, and webhook responses.",
+      "acceptanceCriteria": [
+        "Create backend/app/models/crowdreply_task.py with CrowdReplyTask class extending Base",
+        "Create CrowdReplyTaskType enum: comment, post, reply, upvote",
+        "Create CrowdReplyTaskStatus enum: pending, submitted, assigned, published, mod_removed, cancelled, failed",
+        "Fields: id (UUID PK), comment_id (UUID FK to reddit_comments.id, SET NULL, nullable, indexed), external_task_id (String 255, nullable, indexed), task_type (String 50, not null), status (String 50, default 'pending', indexed), target_url (String 2048, not null), content (Text, not null), crowdreply_project_id (String 255, nullable), request_payload (JSONB, nullable), response_payload (JSONB, nullable), upvotes_requested (Integer, nullable), price (Float, nullable), submitted_at (DateTime tz, nullable), published_at (DateTime tz, nullable), created_at, updated_at"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "comment_id uses SET NULL because we want to keep CrowdReply task records even if the comment is deleted (for billing/audit). external_task_id is CrowdReply's _id field from their API."
+    },
+    {
+      "id": "S14A-006",
+      "title": "Register models and add Project relationship",
+      "description": "As a developer, I need all Reddit models registered in the models package and the Project model updated with the reddit_config relationship.",
+      "acceptanceCriteria": [
+        "Add imports for RedditAccount, RedditProjectConfig, RedditPost, RedditComment, CrowdReplyTask to backend/app/models/__init__.py",
+        "Add all 5 model names to __all__ list",
+        "Add to backend/app/models/project.py: reddit_config relationship (Mapped['RedditProjectConfig | None'], relationship with back_populates='project', uselist=False, cascade='all, delete-orphan')",
+        "Add TYPE_CHECKING import for RedditProjectConfig in project.py"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Follow the same pattern as blog_campaigns relationship on Project. uselist=False enforces the 1:1 nature on the ORM side (complementing the unique constraint on the DB side)."
+    },
+    {
+      "id": "S14A-007",
+      "title": "Create Alembic migration for Reddit tables",
+      "description": "As a developer, I need an Alembic migration that creates all 5 Reddit tables so the schema is ready for the API layer.",
+      "acceptanceCriteria": [
+        "Run alembic revision --autogenerate -m 'create_reddit_tables' to generate migration",
+        "Verify migration creates all 5 tables: reddit_accounts, reddit_project_configs, reddit_posts, reddit_comments, crowdreply_tasks",
+        "Verify all indexes are created (username, project_id, subreddit, filter_status, status columns)",
+        "Verify UniqueConstraint uq_reddit_posts_project_url is present",
+        "Verify unique constraint on reddit_project_configs.project_id",
+        "Verify FK ondelete behaviors: CASCADE for project_id refs, SET NULL for account_id and comment_id",
+        "Run alembic upgrade head successfully",
+        "Run alembic downgrade -1 successfully (drops all tables)"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Latest migration is 0026_create_blog_tables.py (plus a widening migration da1ea5f253b0). The new migration should be numbered 0027. After autogeneration, review the migration file to verify all columns, constraints, and indexes are correct before running."
+    },
+    {
+      "id": "S14A-008",
+      "title": "Create Pydantic v2 schemas for all Reddit entities",
+      "description": "As a developer, I need Pydantic v2 request and response schemas so the API can validate input and serialize output for all Reddit entities.",
+      "acceptanceCriteria": [
+        "Create backend/app/schemas/reddit.py with all schemas",
+        "RedditAccountCreate: username (str, max_length=100), niche_tags (list[str], default []), warmup_stage (str, default 'observation'), notes (str | None)",
+        "RedditAccountUpdate: all fields optional (str | None pattern)",
+        "RedditAccountResponse: all DB fields, model_config = ConfigDict(from_attributes=True)",
+        "RedditProjectConfigCreate: search_keywords, target_subreddits, banned_subreddits, competitors (all list[str] default []), comment_instructions (str | None), niche_tags (list[str] default []), discovery_settings (dict | None)",
+        "RedditProjectConfigResponse: all DB fields with ConfigDict(from_attributes=True)",
+        "RedditPostResponse: all DB fields with ConfigDict(from_attributes=True)",
+        "RedditCommentResponse: all DB fields plus optional nested post (RedditPostResponse | None = None), ConfigDict(from_attributes=True)",
+        "CommentApproveRequest: body (str | None = None)",
+        "CommentRejectRequest: reason (str | None = None)",
+        "BulkCommentActionRequest: comment_ids (list[str])",
+        "CrowdReplyTaskResponse: all DB fields with ConfigDict(from_attributes=True)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Follow backend/app/schemas/blog.py pattern exactly. Use datetime type for all timestamp fields. Use str for UUID fields (not UUID type) since models use UUID(as_uuid=False)."
+    },
+    {
+      "id": "S14A-009",
+      "title": "Add Reddit config vars to application Settings",
+      "description": "As a developer, I need SERP API and CrowdReply config vars in the Settings class so credentials and URLs can be configured via environment variables.",
+      "acceptanceCriteria": [
+        "Add to backend/app/core/config.py Settings class: serpapi_key (str, default ''), crowdreply_api_key (str, default ''), crowdreply_project_id (str, default ''), crowdreply_webhook_secret (str, default ''), crowdreply_base_url (str, default 'https://crowdreply.io/api')",
+        "Use Field() with description for each setting",
+        "Group under a '# Reddit / CrowdReply' comment section"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Follow existing pattern in config.py (e.g., the DataForSEO or POP sections). No circuit breaker settings needed yet — those come when we build the integration clients in slices 14b and 14e."
+    },
+    {
+      "id": "S14A-010",
+      "title": "Create Reddit API router with account CRUD endpoints",
+      "description": "As a developer, I need API endpoints for Reddit account management so accounts can be created, listed, updated, and deleted.",
+      "acceptanceCriteria": [
+        "Create backend/app/api/v1/reddit.py with two APIRouter instances: reddit_router (prefix='/reddit', tags=['Reddit']) and reddit_project_router (prefix='/projects', tags=['Reddit'])",
+        "GET /api/v1/reddit/accounts — list accounts with optional query params: niche (str), status (str), warmup_stage (str). Niche filter uses JSONB @> operator",
+        "POST /api/v1/reddit/accounts — create account, return 201. Return 409 if username already exists",
+        "PATCH /api/v1/reddit/accounts/{account_id} — update account fields, return 200 or 404",
+        "DELETE /api/v1/reddit/accounts/{account_id} — delete account, return 204 or 404",
+        "All endpoints use Depends(get_session) for DB access"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reference backend/app/api/v1/blogs.py for pattern (router setup, Depends injection, HTTPException for errors). For JSONB niche filter use: RedditAccount.niche_tags.op('@>')(cast([niche], JSONB)). Register both routers in backend/app/api/v1/__init__.py."
+    },
+    {
+      "id": "S14A-011",
+      "title": "Create project Reddit config API endpoints",
+      "description": "As a developer, I need API endpoints for per-project Reddit configuration so projects can be set up for Reddit marketing.",
+      "acceptanceCriteria": [
+        "GET /api/v1/projects/{project_id}/reddit/config — return config or 404",
+        "POST /api/v1/projects/{project_id}/reddit/config — upsert: create if none exists (201), update if exists (200). Verify project_id exists first (404 if not)",
+        "Upsert implementation: query for existing config by project_id, if found update fields, if not create new",
+        "Response uses RedditProjectConfigResponse schema"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "The upsert pattern avoids requiring the frontend to know whether a config exists. POST always works — create or update. This is on the reddit_project_router with prefix='/projects'."
+    },
+    {
+      "id": "S14A-012",
+      "title": "Register Reddit routers in API v1 package",
+      "description": "As a developer, I need both Reddit routers registered in the API v1 package so endpoints are accessible.",
+      "acceptanceCriteria": [
+        "Import reddit_router and reddit_project_router from backend/app/api/v1/reddit.py in backend/app/api/v1/__init__.py",
+        "Add router.include_router(reddit_router) and router.include_router(reddit_project_router)",
+        "Verify endpoints appear in FastAPI auto-docs at /docs"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Follow same pattern as blogs_router import/include."
+    },
+    {
+      "id": "S14A-013",
+      "title": "Write backend tests for Reddit models and API",
+      "description": "As a developer, I need tests to verify the Reddit models and API endpoints work correctly.",
+      "acceptanceCriteria": [
+        "Create backend/tests/test_reddit_models.py — test enum values, default field values, and unique constraint on reddit_accounts.username",
+        "Create backend/tests/test_reddit_api.py — integration tests: create account, list accounts, filter by niche, update account, delete account, duplicate username returns 409, create project config, get config, upsert config, 404 on missing project",
+        "All tests pass with pytest backend/tests/test_reddit_models.py backend/tests/test_reddit_api.py"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Follow existing test patterns. Use the test DB session fixture. For API tests, use the httpx AsyncClient test fixture. Check backend/tests/ for existing test file patterns."
+    },
+    {
+      "id": "S14A-014",
+      "title": "Add Reddit API functions to frontend API client",
+      "description": "As a developer, I need frontend API functions so React components can interact with the Reddit API endpoints.",
+      "acceptanceCriteria": [
+        "Add to frontend/src/lib/api.ts: fetchRedditAccounts(params?: {niche?: string, status?: string, warmup_stage?: string}), createRedditAccount(data), updateRedditAccount(id, data), deleteRedditAccount(id)",
+        "Add: fetchRedditConfig(projectId), upsertRedditConfig(projectId, data)",
+        "Add TypeScript interfaces: RedditAccount, RedditProjectConfig, RedditAccountCreate, RedditAccountUpdate, RedditProjectConfigCreate",
+        "All functions follow existing pattern (use the api() helper, handle errors)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reference the blog API functions in the same file for pattern. Add a '// Reddit' section comment for organization."
+    },
+    {
+      "id": "S14A-015",
+      "title": "Create Reddit TanStack Query hooks",
+      "description": "As a developer, I need TanStack Query hooks so React components can fetch and mutate Reddit data with caching and optimistic updates.",
+      "acceptanceCriteria": [
+        "Create frontend/src/hooks/useReddit.ts",
+        "useRedditAccounts(params?) — useQuery with ['reddit-accounts', params] key",
+        "useCreateRedditAccount() — useMutation that invalidates ['reddit-accounts']",
+        "useUpdateRedditAccount() — useMutation that invalidates ['reddit-accounts']",
+        "useDeleteRedditAccount() — useMutation with optimistic delete (remove from cache before server confirms), invalidates ['reddit-accounts']",
+        "useRedditConfig(projectId) — useQuery with ['reddit-config', projectId] key, enabled only when projectId is truthy",
+        "useUpsertRedditConfig(projectId) — useMutation that invalidates ['reddit-config', projectId]"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Reference frontend/src/hooks/useBlogs.ts for exact pattern (useQuery/useMutation setup, queryClient.invalidateQueries, optimistic updates with onMutate/onError/onSettled)."
+    },
+    {
+      "id": "S14A-016",
+      "title": "Update Header with navigation links",
+      "description": "As a user, I need navigation links in the header so I can switch between Projects and Reddit sections.",
+      "acceptanceCriteria": [
+        "Add 'use client' and import usePathname from next/navigation in Header.tsx",
+        "Add 'Projects' link (href='/') and 'Reddit' link (href='/reddit') between the logo and user menu",
+        "Projects link is active (palm-500 underline or similar) when pathname is '/' or starts with '/projects'",
+        "Reddit link is active when pathname starts with '/reddit'",
+        "Links use text-warm-gray-700 default, text-warm-gray-900 + border-b-2 border-palm-500 when active",
+        "Navigation links are centered or aligned left with the logo"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Header is at frontend/src/components/Header.tsx. Currently has no nav links. Keep the logo on the left, add nav links in the center/left area, keep user menu on the right. The Header already has 'use client' directive."
+    },
+    {
+      "id": "S14A-017",
+      "title": "Create Reddit section layout",
+      "description": "As a developer, I need a layout wrapper for the Reddit section so Reddit pages share consistent structure.",
+      "acceptanceCriteria": [
+        "Create frontend/src/app/reddit/layout.tsx — simple pass-through layout that renders {children}",
+        "No additional chrome needed — pages use the global Header + max-w-7xl layout from root layout"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "This is intentionally minimal. It exists so we can add Reddit-specific sub-navigation later without modifying individual pages."
+    },
+    {
+      "id": "S14A-018",
+      "title": "Create Reddit accounts management page",
+      "description": "As a user, I need an account management page so I can view, add, edit, and delete Reddit accounts in the shared pool.",
+      "acceptanceCriteria": [
+        "Create frontend/src/app/reddit/accounts/page.tsx",
+        "Page title 'Reddit > Accounts' with breadcrumb-style header",
+        "Table with columns: Username, Status (badge), Warmup Stage, Niche Tags (chips), Karma (post + comment), Cooldown (relative time or dash), Last Used (relative time or dash)",
+        "Filter bar with dropdowns: Niche, Warmup Stage, Status",
+        "'+Add Account' button opens a modal with fields: Username (required text input), Niche Tags (tag input — comma-separated), Notes (optional textarea)",
+        "Modal submit calls createRedditAccount mutation, closes on success",
+        "Delete button on each row with two-step confirmation (same pattern as project delete)",
+        "Empty state: friendly message + 'Add Account' CTA when no accounts exist",
+        "Loading skeleton while data loads",
+        "Uses tropical oasis design system: cream backgrounds, palm-500 accents, sand-500 borders, rounded-sm corners"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Follow the design system documented in CLAUDE.md. Use the existing Button, EmptyState components from frontend/src/components/ui. For tag input, a simple comma-separated input that creates chips is sufficient (similar pattern used in blog keyword input)."
+    },
+    {
+      "id": "S14A-019",
+      "title": "Create project Reddit config page",
+      "description": "As a user, I need a project-specific Reddit settings page so I can configure search keywords, subreddits, competitors, and comment voice for each project.",
+      "acceptanceCriteria": [
+        "Create frontend/src/app/projects/[id]/reddit/page.tsx",
+        "Back link to project detail page (← Back to {project name})",
+        "Page title 'Reddit Settings for {project name}' with active/inactive toggle",
+        "Form fields: Search Keywords (tag input), Target Subreddits (tag input, values displayed with r/ prefix), Banned Subreddits (tag input), Competitors (tag input), Comment Instructions (textarea, 4 rows), Niche Tags (tag input), Discovery Settings section with time range dropdown (24h/7d/30d) and max posts number input",
+        "Save Settings button that calls upsertRedditConfig mutation",
+        "Form pre-populates with existing config when one exists (useRedditConfig hook)",
+        "Success feedback after save (toast or inline message)",
+        "Uses tropical oasis design system"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Tag input pattern: a text input where typing and pressing Enter/comma adds a chip. Chips can be removed with X button. Store as array of strings. Reference the blog keyword approval page for similar input patterns. The active toggle should be a simple on/off switch in the header area."
+    },
+    {
+      "id": "S14A-020",
+      "title": "Add Reddit Marketing card to project detail page",
+      "description": "As a user, I need to see Reddit status on the project detail page so I can quickly access Reddit settings and see if Reddit is configured.",
+      "acceptanceCriteria": [
+        "Add a Reddit Marketing section card to frontend/src/app/projects/[id]/page.tsx below the Blogs section",
+        "Card uses same structure as Onboarding/Clusters/Blogs cards (icon + title + subtitle + description + action button)",
+        "When no reddit config exists: show 'Not configured' status and 'Configure Reddit' button linking to /projects/[id]/reddit",
+        "When config exists: show 'Configured' status and 'Manage Reddit Settings' link to /projects/[id]/reddit",
+        "Use a chat/comment icon (speech bubble SVG) as the section icon in palm-500",
+        "Fetch config status using useRedditConfig hook"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Follow the exact card pattern from the existing Blogs section (card with icon, title, subtitle badge, description, action button). The hook call should use enabled: !!projectId && !isLoading && !error to avoid unnecessary fetches."
+    },
+    {
+      "id": "S14A-021",
+      "title": "Write frontend component tests",
+      "description": "As a developer, I need frontend tests to verify the Reddit UI components work correctly.",
+      "acceptanceCriteria": [
+        "Test accounts page: renders table, filter controls work, add account modal opens/closes, delete confirmation works, empty state renders",
+        "Test project Reddit config page: form renders all fields, loads existing config, save calls API",
+        "Test Header nav: both links render, active states toggle based on pathname",
+        "All tests pass with npm test"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Follow existing test patterns in frontend/src/. Use vitest + testing-library. Mock the API calls and TanStack Query hooks."
+    },
+    {
+      "id": "S14A-098",
+      "title": "Update V2_REBUILD_PLAN.md",
+      "description": "As a developer, I need to update the plan status so that progress is tracked.",
+      "acceptanceCriteria": [
+        "Mark Phase 14a checkboxes as [x] complete in V2_REBUILD_PLAN.md",
+        "Update Current Status table: Phase='14 - Reddit Marketing (14a Data Foundation complete)', Last Session=today's date, Next Action='Phase 14b: Post Discovery Pipeline'",
+        "Add new row to Session Log table with date, completed items, next up"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "This task maintains our planning discipline. Update the session log with a concise summary of what was built."
+    },
+    {
+      "id": "S14A-099",
+      "title": "Verify slice completion",
+      "description": "As a developer, I need to verify all slice criteria are met before moving on.",
+      "acceptanceCriteria": [
+        "All backend tests pass: pytest backend/tests/",
+        "All frontend tests pass: npm test",
+        "npm run build succeeds with no errors",
+        "Manual verification: can create a Reddit account via /reddit/accounts, can configure Reddit settings for a project via /projects/[id]/reddit, project detail shows Reddit card, header nav links work with correct active states",
+        "alembic upgrade head works cleanly on a fresh database",
+        "No uncommitted changes remain"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Do not proceed to slice 14b until this passes. Do NOT create a git commit — the user will handle that."
+    }
+  ],
+  "metadata": {
+    "updatedAt": "2026-02-16T00:00:00.000Z"
+  }
+}

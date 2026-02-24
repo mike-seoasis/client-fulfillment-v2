@@ -1,0 +1,725 @@
+{
+  "name": "Phase 9: Internal Linking",
+  "description": "Hybrid link planning engine with silo-based (cluster) and label-based (onboarding) target selection, anchor text diversity tracking, BeautifulSoup + LLM fallback injection, validation layer, API endpoints, and link map UI.",
+  "branchName": "v2-rebuild",
+  "userStories": [
+    {
+      "id": "S9-001",
+      "title": "Create InternalLink database model",
+      "description": "As a developer, I need an InternalLink model so that page-to-page links can be persisted as an edge table.",
+      "acceptanceCriteria": [
+        "Create backend/app/models/internal_link.py with InternalLink class",
+        "Fields: id (UUID PK), source_page_id (UUID FK to crawled_pages NOT NULL), target_page_id (UUID FK to crawled_pages NOT NULL), project_id (UUID FK to projects NOT NULL), cluster_id (UUID FK to keyword_clusters nullable), scope (String(20) NOT NULL: 'onboarding' or 'cluster'), anchor_text (Text NOT NULL), anchor_type (String(20) NOT NULL: 'exact_match', 'partial_match', 'natural'), position_in_content (Integer nullable), is_mandatory (Boolean default false), placement_method (String(20) NOT NULL: 'rule_based' or 'llm_fallback'), status (String(20) NOT NULL default 'planned': 'planned', 'injected', 'verified', 'removed'), created_at (DateTime timezone), updated_at (DateTime timezone)",
+        "Indexes on: source_page_id, target_page_id, (project_id, scope), cluster_id",
+        "Relationships: source_page and target_page to CrawledPage, project to Project, cluster to KeywordCluster (nullable)",
+        "Follow existing model patterns from backend/app/models/crawled_page.py (UUID as_uuid=False, text server_defaults, DateTime timezone=True)"
+      ],
+      "priority": 1,
+      "passes": true,
+      "dependsOn": [],
+      "notes": "Reference backend/app/models/crawled_page.py and backend/app/models/keyword_cluster.py for UUID, datetime, JSONB, and FK patterns. The scope field distinguishes onboarding links (cluster_id=null) from cluster links.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-002",
+      "title": "Create LinkPlanSnapshot database model",
+      "description": "As a developer, I need a LinkPlanSnapshot model so that link plans can be audited and rolled back.",
+      "acceptanceCriteria": [
+        "Add LinkPlanSnapshot class to backend/app/models/internal_link.py (same file as InternalLink)",
+        "Fields: id (UUID PK), project_id (UUID FK to projects NOT NULL), cluster_id (UUID FK to keyword_clusters nullable), scope (String(20) NOT NULL), plan_data (JSONB NOT NULL — stores full plan including pre-injection bottom_description content per page), total_links (Integer NOT NULL), created_at (DateTime timezone)",
+        "Index on (project_id, scope)",
+        "Relationship: project to Project"
+      ],
+      "priority": 1,
+      "passes": true,
+      "dependsOn": [],
+      "notes": "plan_data JSONB should include: {pages: [{page_id, pre_injection_content, links: [{target_id, anchor_text, anchor_type}]}], metadata: {scope, cluster_id, total_pages}}. This enables rollback by restoring pre-injection content.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-003",
+      "title": "Add relationships to CrawledPage and register models",
+      "description": "As a developer, I need the new models integrated with existing models so they are available throughout the app.",
+      "acceptanceCriteria": [
+        "Add outbound_links relationship to CrawledPage: list of InternalLink where source_page_id matches (foreign_keys=[InternalLink.source_page_id])",
+        "Add inbound_links relationship to CrawledPage: list of InternalLink where target_page_id matches (foreign_keys=[InternalLink.target_page_id])",
+        "Import InternalLink and LinkPlanSnapshot in backend/app/models/__init__.py",
+        "All models importable from app.models"
+      ],
+      "priority": 1,
+      "passes": true,
+      "dependsOn": [
+        "S9-001",
+        "S9-002"
+      ],
+      "notes": "CrawledPage is in backend/app/models/crawled_page.py. Use foreign_keys parameter on relationship() to disambiguate since InternalLink has two FKs to crawled_pages. Reference SQLAlchemy docs for multi-FK relationship patterns.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-004",
+      "title": "Create Alembic migration for internal links tables",
+      "description": "As a developer, I need a database migration so that the new tables are created.",
+      "acceptanceCriteria": [
+        "Create Alembic migration 0024_add_internal_links_and_snapshots.py",
+        "Migration creates internal_links table with all columns and indexes from S9-001",
+        "Migration creates link_plan_snapshots table with all columns and indexes from S9-002",
+        "Migration is reversible (downgrade drops both tables)",
+        "Migration runs successfully: cd backend && alembic upgrade head"
+      ],
+      "priority": 1,
+      "passes": true,
+      "dependsOn": [
+        "S9-001",
+        "S9-002",
+        "S9-003"
+      ],
+      "notes": "Run: cd backend && alembic revision --autogenerate -m 'add internal links and snapshots'. Latest existing migration is 0023. Verify the generated migration has correct indexes.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-005",
+      "title": "Create Pydantic v2 schemas for internal links",
+      "description": "As a developer, I need request/response schemas so that the API has proper validation and serialization.",
+      "acceptanceCriteria": [
+        "Create backend/app/schemas/internal_link.py with Pydantic v2 BaseModel classes",
+        "LinkPlanRequest: scope (Literal['onboarding', 'cluster']), cluster_id (str | None = None)",
+        "LinkPlanStatusResponse: status (str: 'idle'|'planning'|'complete'|'failed'), current_step (int | None), step_label (str | None), pages_processed (int), total_pages (int), total_links (int | None), error (str | None)",
+        "InternalLinkResponse: id, source_page_id, target_page_id, target_url, target_title, target_keyword, anchor_text, anchor_type, position_in_content, is_mandatory, placement_method, status",
+        "PageLinksResponse: outbound_links (list[InternalLinkResponse]), inbound_links (list), anchor_diversity (dict), diversity_score (str)",
+        "LinkMapPageSummary: page_id, url, title, is_priority, role (str | None for onboarding), labels (list | None for onboarding), outbound_count, inbound_count, methods (dict), validation_status",
+        "LinkMapResponse: scope, total_links, total_pages, avg_links_per_page, validation_pass_rate, method_breakdown, anchor_diversity, pages (list[LinkMapPageSummary]), hierarchy (dict | None for clusters)",
+        "AddLinkRequest: source_page_id (str), target_page_id (str), anchor_text (str, max_length=100), anchor_type (Literal['exact_match', 'partial_match', 'natural'])",
+        "EditLinkRequest: anchor_text (str, max_length=100), anchor_type (Literal['exact_match', 'partial_match', 'natural'])",
+        "AnchorSuggestionsResponse: primary_keyword (str), pop_variations (list[str]), usage_counts (dict[str, int])",
+        "All schemas use model_config = ConfigDict(from_attributes=True) where needed"
+      ],
+      "priority": 1,
+      "passes": true,
+      "dependsOn": [
+        "S9-001"
+      ],
+      "notes": "Reference backend/app/schemas/cluster.py and backend/app/schemas/content_writer.py for existing Pydantic v2 patterns. The existing InternalLinkItem in content_writer.py is for passing links TO content generation — these new schemas are for the link management API.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-006",
+      "title": "Implement link graph construction (cluster + onboarding)",
+      "description": "As a developer, I need graph construction so that the planner knows which pages can link to which.",
+      "acceptanceCriteria": [
+        "Create backend/app/services/link_planning.py with SiloLinkPlanner class",
+        "Implement build_cluster_graph(cluster_id, db) -> dict: queries ClusterPage records, builds adjacency with parent/child hierarchy. Returns {pages: [{page_id, crawled_page_id, keyword, role, url}], edges: [{source, target, type: 'parent_child'|'sibling'}]}",
+        "Implement build_onboarding_graph(project_id, db) -> dict: queries CrawledPage where source='onboarding' and PageContent.status='complete', computes pairwise label overlap. Returns {pages: [{page_id, keyword, url, labels, is_priority}], edges: [{source, target, weight: overlap_count}]} only where overlap >= 2",
+        "Only include pages with PageContent.status='complete' and PageKeywords.is_approved=True",
+        "Handle edge cases: cluster with 0-1 pages returns empty graph, onboarding with no overlapping labels returns graph with pages but no edges"
+      ],
+      "priority": 2,
+      "passes": true,
+      "dependsOn": [
+        "S9-004"
+      ],
+      "notes": "For onboarding graph, CrawledPage.labels is a JSONB array of strings like ['running', 'women', 'trail']. Overlap = len(set(a.labels) & set(b.labels)). The 2-label threshold is a constant (LABEL_OVERLAP_THRESHOLD = 2). Reference backend/app/models/crawled_page.py for label field and backend/app/models/keyword_cluster.py for ClusterPage.role field.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-007",
+      "title": "Implement budget calculation and target selection",
+      "description": "As a developer, I need target selection so that each page gets the right links to the right targets.",
+      "acceptanceCriteria": [
+        "Implement calculate_budget(word_count: int) -> int: clamp(word_count // 250, 3, 5)",
+        "Implement select_targets_cluster(graph, budgets) -> dict[page_id, list[target]]: For parent: select children by composite_score. For children: slot 1 = parent (mandatory), remaining = siblings by composite_score then least-linked-to",
+        "Implement select_targets_onboarding(graph, budgets) -> dict[page_id, list[target]]: Score each eligible target: label_overlap + (2 if priority else 0) - (0.5 * excess_inbound). Select top N within budget. Update inbound counts after each page.",
+        "Cluster children with budget 4 get: 1 mandatory parent + 3 siblings",
+        "Small clusters (fewer targets than budget) partially fill budget without error",
+        "Onboarding pages with no eligible targets (all below threshold) get 0 links without error"
+      ],
+      "priority": 2,
+      "passes": true,
+      "dependsOn": [
+        "S9-006"
+      ],
+      "notes": "Budget uses PageContent word_count (bottom_description). For onboarding diversity_penalty: track a running dict of inbound_counts per target. diversity_penalty = max(0, (inbound_counts[target] - avg_inbound) * 0.5). This prevents any single page from hogging all links.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-008",
+      "title": "Implement anchor text selection with diversity tracking",
+      "description": "As a developer, I need anchor text selection so that links use diverse, SEO-optimized anchors.",
+      "acceptanceCriteria": [
+        "Create AnchorTextSelector class in backend/app/services/link_planning.py",
+        "Implement gather_candidates(target_page_id, db) -> list[dict]: Returns candidates from 3 sources: (1) primary keyword from PageKeywords tagged as 'exact_match', (2) POP keyword_variations from ContentBrief tagged as 'partial_match', (3) 2-3 LLM-generated natural phrases from Claude Haiku tagged as 'natural'",
+        "Implement select_anchor(candidates, source_content, target_page_id, usage_tracker) -> dict: Scores by diversity_bonus (fewer prior uses = higher), context_fit (text appears in source content = +2), distribution targets. Returns {anchor_text, anchor_type, score}",
+        "Global usage_tracker: dict[target_page_id, dict[anchor_text, count]]. Reject if same anchor for same target used >= 3 times.",
+        "LLM natural phrase generation uses Claude Haiku, batched per planning run (not per link)",
+        "Distribution across project approximates: 50-60% partial_match, ~10% exact_match, ~30% natural"
+      ],
+      "priority": 2,
+      "passes": true,
+      "dependsOn": [
+        "S9-006"
+      ],
+      "notes": "ContentBrief model is at backend/app/models/content_brief.py. It stores POP data in a JSONB field — look for keyword_variations or similar. If POP variations aren't available for a page, fall back to primary keyword variations only. Haiku model ID: claude-haiku-4-5-20251001. The natural phrase prompt: 'Generate 2-3 natural anchor text phrases (2-5 words each) for linking to a page about [keyword]. Phrases should read naturally in a sentence.'",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-009",
+      "title": "Implement rule-based link injection (BeautifulSoup)",
+      "description": "As a developer, I need rule-based injection so that ~70% of links can be placed by finding keyword matches in content.",
+      "acceptanceCriteria": [
+        "Create backend/app/services/link_injection.py with LinkInjector class",
+        "Implement inject_rule_based(html: str, anchor_text: str, target_url: str) -> tuple[str, int | None]: Parse HTML with BeautifulSoup, scan <p> tags for case-insensitive anchor text match, wrap first occurrence in <a href> tag. Returns (modified_html, paragraph_index) or (original_html, None) if not found.",
+        "Do NOT inject inside existing <a> tags, <h2>, <h3>, or <li> elements",
+        "Case-insensitive matching but preserve original casing in the anchor tag text",
+        "Enforce density limits: max 2 links per paragraph, min 50 words between links in same paragraph",
+        "If target paragraph is at density limit, try next paragraph with the match"
+      ],
+      "priority": 2,
+      "passes": true,
+      "dependsOn": [
+        "S9-004"
+      ],
+      "notes": "Use BeautifulSoup4 (already installed). Parse with 'html.parser'. When wrapping text, use NavigableString replacement to preserve surrounding HTML. For density check: count existing <a> tags in paragraph, measure word distance between link positions.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-010",
+      "title": "Implement LLM fallback injection",
+      "description": "As a developer, I need LLM fallback so that links without keyword matches can still be naturally placed (~30% of links).",
+      "acceptanceCriteria": [
+        "Implement inject_llm_fallback(html: str, anchor_text: str, target_url: str, target_keyword: str) -> tuple[str, int | None]: Select best paragraph (fewest links + most relevant to target keyword), send to Claude Haiku for rewriting, replace paragraph in HTML.",
+        "Haiku prompt: 'Rewrite this paragraph to naturally include a hyperlink to [URL] with anchor text \"[anchor]\". Keep the meaning identical. Only modify 1-2 sentences. Return ONLY the rewritten paragraph HTML including the <a> tag.'",
+        "Validate LLM response contains exactly one <a> tag with correct href. If malformed, return (original_html, None).",
+        "For mandatory parent links in clusters: target paragraph 1 or 2 specifically (not 'best' paragraph)",
+        "Uses Claude Haiku (claude-haiku-4-5-20251001) with temperature=0.0, max_tokens=500"
+      ],
+      "priority": 2,
+      "passes": true,
+      "dependsOn": [
+        "S9-009"
+      ],
+      "notes": "Paragraph relevance to target keyword: simple word overlap between paragraph text and target_keyword split by spaces. The Claude client is at backend/app/integrations/claude.py — reference existing usage in content_writing.py. Cost is ~$0.0005 per rewrite.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-011",
+      "title": "Implement link stripping for re-planning",
+      "description": "As a developer, I need link stripping so that internal links can be cleanly removed before re-planning.",
+      "acceptanceCriteria": [
+        "Implement strip_internal_links(html: str, site_domain: str | None = None) -> str: Parse HTML, find all <a> tags where href is a relative path or matches site_domain, unwrap them (replace <a> with text content). Preserve external links.",
+        "Relative paths: starts with / (e.g. /collections/shoes)",
+        "Same-domain: href contains the site_domain",
+        "External links (absolute URLs to other domains): left unchanged",
+        "Content structure (headings, paragraphs, lists) preserved after stripping"
+      ],
+      "priority": 2,
+      "passes": true,
+      "dependsOn": [
+        "S9-009"
+      ],
+      "notes": "Use BeautifulSoup .unwrap() method to replace <a> tags with their text content. The site_domain can be derived from Project.site_url.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-012",
+      "title": "Implement link validation rules",
+      "description": "As a developer, I need validation so that all hard rules are enforced after injection.",
+      "acceptanceCriteria": [
+        "Create LinkValidator class in backend/app/services/link_injection.py",
+        "Implement validate_links(links: list[InternalLink], pages_html: dict[str, str], scope: str, cluster_data: dict | None) -> dict: Returns {passed: bool, results: [{page_id, rules: [{rule, passed, message}]}]}",
+        "Rule: budget_check — 3-5 outbound links per page (WARN if outside, not FAIL)",
+        "Rule: silo_integrity — all targets within same scope (onboarding links to onboarding only, cluster links to same cluster only)",
+        "Rule: no_self_links — source != target",
+        "Rule: no_duplicate_links — no page links to same target twice",
+        "Rule: density — max 2 links per paragraph, min 50 words between links",
+        "Rule: anchor_diversity — same anchor for same target max 3x across project",
+        "Rule: first_link (cluster only) — first <a> tag in bottom_description points to parent URL",
+        "Rule: direction (cluster only) — parent only links to children, children link to parent + siblings",
+        "Each InternalLink marked status='verified' if all rules pass, otherwise flagged with failing rule names"
+      ],
+      "priority": 2,
+      "passes": true,
+      "dependsOn": [
+        "S9-009",
+        "S9-010"
+      ],
+      "notes": "For first_link rule: parse bottom_description HTML, find first <a> tag, check its href matches the parent page's URL. For direction rules: use ClusterPage.role to determine allowed targets.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-013",
+      "title": "Implement link planning pipeline orchestrator",
+      "description": "As a developer, I need the pipeline orchestrator so that all steps run in sequence with progress tracking.",
+      "acceptanceCriteria": [
+        "Implement run_link_planning_pipeline(project_id, scope, cluster_id, db) in backend/app/services/link_planning.py",
+        "Step 1: Build link graph (build_cluster_graph or build_onboarding_graph based on scope)",
+        "Step 2: Select targets and anchor text for all pages (calls select_targets + AnchorTextSelector)",
+        "Step 3: Inject links into content (rule-based first, LLM fallback for unplaced, updates PageContent.bottom_description)",
+        "Step 4: Validate all rules (LinkValidator)",
+        "Track progress in a dict accessible for polling: {current_step: 1-4, step_label: str, pages_processed: int, total_pages: int, status: 'planning'|'complete'|'failed'}",
+        "Create InternalLink rows after successful injection (status='injected', then 'verified' after validation)",
+        "On failure at any step: stop, report error, no partial state changes (don't persist incomplete links)",
+        "Use a module-level dict keyed by (project_id, scope, cluster_id) for progress state"
+      ],
+      "priority": 2,
+      "passes": true,
+      "dependsOn": [
+        "S9-006",
+        "S9-007",
+        "S9-008",
+        "S9-009",
+        "S9-010",
+        "S9-012"
+      ],
+      "notes": "Follow the same background task + polling pattern as content_generation.py. The progress dict pattern is used in content_generation.py — reference that for the module-level state tracking approach. Each page's injection should be wrapped in a try/except so one page failing doesn't kill the whole pipeline.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-014",
+      "title": "Implement re-plan flow (snapshot, strip, delete, re-run)",
+      "description": "As a developer, I need re-planning so that users can regenerate links after content edits.",
+      "acceptanceCriteria": [
+        "Before re-planning: create a LinkPlanSnapshot with current plan data (all InternalLink rows + pre-strip bottom_description for each page)",
+        "Strip all internal links from bottom_description for each page in scope (using strip_internal_links)",
+        "Delete all InternalLink rows for the scope (project_id + scope + cluster_id)",
+        "Run full pipeline from scratch (run_link_planning_pipeline)",
+        "Snapshot plan_data includes page contents so original state can be restored if needed"
+      ],
+      "priority": 2,
+      "passes": true,
+      "dependsOn": [
+        "S9-013",
+        "S9-011"
+      ],
+      "notes": "The snapshot is created BEFORE stripping/deleting. This is the rollback point. The re-plan is triggered by the same POST endpoint — it detects existing links and runs the cleanup flow first.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-015",
+      "title": "Write unit tests for link graph construction",
+      "description": "As a developer, I need tests for graph construction to verify both modes work correctly.",
+      "acceptanceCriteria": [
+        "Create backend/tests/test_link_planning.py",
+        "Test build_cluster_graph: cluster with parent + 5 children produces correct edges",
+        "Test build_cluster_graph: cluster with only 1 page returns graph with no edges",
+        "Test build_onboarding_graph: pages with overlapping labels produce edges with correct weights",
+        "Test build_onboarding_graph: pages below threshold (1 shared label) have no edge",
+        "Test build_onboarding_graph: pages with no labels have no edges",
+        "Test both modes: only pages with complete content and approved keywords included"
+      ],
+      "priority": 3,
+      "passes": true,
+      "dependsOn": [
+        "S9-006"
+      ],
+      "notes": "Use pytest-asyncio for async tests. Mock the database session and return test data. Reference backend/tests/test_cluster_keyword_service.py for mocking patterns.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-016",
+      "title": "Write unit tests for target selection and budget",
+      "description": "As a developer, I need tests for target selection to verify link distribution logic.",
+      "acceptanceCriteria": [
+        "Test calculate_budget: 200 words → 3, 1000 words → 4, 2000 words → 5",
+        "Test select_targets_cluster: child gets parent as first target + siblings",
+        "Test select_targets_cluster: parent gets children sorted by composite_score",
+        "Test select_targets_cluster: small cluster (2 pages) partially fills budget",
+        "Test select_targets_onboarding: priority page bonus (+2) wins tiebreakers",
+        "Test select_targets_onboarding: diversity penalty prevents one page getting all links",
+        "Test select_targets_onboarding: page with no eligible targets gets empty list"
+      ],
+      "priority": 3,
+      "passes": true,
+      "dependsOn": [
+        "S9-007"
+      ],
+      "notes": "These are pure function tests — no DB needed. Create test data dicts that mimic graph output.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-017",
+      "title": "Write unit tests for anchor text selection",
+      "description": "As a developer, I need tests for anchor selection to verify diversity tracking works.",
+      "acceptanceCriteria": [
+        "Test gather_candidates returns candidates from all 3 sources (primary keyword, POP variations, LLM natural)",
+        "Test select_anchor prefers unused anchors (diversity bonus)",
+        "Test select_anchor gives context_fit bonus when text appears in source content",
+        "Test usage_tracker blocks anchor after 3 uses for same target",
+        "Test distribution approximates target ratios over a batch"
+      ],
+      "priority": 3,
+      "passes": true,
+      "dependsOn": [
+        "S9-008"
+      ],
+      "notes": "Mock Claude Haiku calls for natural phrase generation. Mock DB queries for POP variations.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-018",
+      "title": "Write unit tests for link injection and stripping",
+      "description": "As a developer, I need tests for injection to verify HTML manipulation is correct.",
+      "acceptanceCriteria": [
+        "Test inject_rule_based: anchor found in paragraph → wraps in <a> tag",
+        "Test inject_rule_based: anchor not found → returns original HTML with None",
+        "Test inject_rule_based: anchor inside existing <a> tag → treated as 'not found'",
+        "Test inject_rule_based: case-insensitive match preserves original casing",
+        "Test inject_rule_based: density limit (2 links/paragraph) → tries next paragraph",
+        "Test inject_llm_fallback: rewrites paragraph with <a> tag (mock Haiku response)",
+        "Test inject_llm_fallback: malformed LLM response → returns original HTML",
+        "Test strip_internal_links: internal links unwrapped, external links preserved",
+        "Test strip_internal_links: heading structure preserved after stripping"
+      ],
+      "priority": 3,
+      "passes": true,
+      "dependsOn": [
+        "S9-009",
+        "S9-010",
+        "S9-011"
+      ],
+      "notes": "Use real HTML snippets as test fixtures. For LLM fallback tests, mock the Claude client response.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-019",
+      "title": "Write unit tests for link validation",
+      "description": "As a developer, I need tests for each validation rule.",
+      "acceptanceCriteria": [
+        "Test budget_check: warns when < 3 or > 5 links, passes for 3-5",
+        "Test silo_integrity: fails when target is in different scope/cluster",
+        "Test no_self_links: fails when source == target",
+        "Test no_duplicate_links: fails when same source → target twice",
+        "Test density: fails when paragraph has > 2 links",
+        "Test anchor_diversity: fails when same anchor for same target used > 3x",
+        "Test first_link (cluster): fails when first <a> doesn't point to parent",
+        "Test direction (cluster): fails when parent links to non-child"
+      ],
+      "priority": 3,
+      "passes": true,
+      "dependsOn": [
+        "S9-012"
+      ],
+      "notes": "Create test InternalLink objects and HTML fixtures. Each rule should be independently testable.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-020",
+      "title": "Write integration test for full planning pipeline",
+      "description": "As a developer, I need an end-to-end test to verify the pipeline works for both modes.",
+      "acceptanceCriteria": [
+        "Test full cluster pipeline: create cluster with parent + 4 children (mock content), run pipeline, verify InternalLink rows created with status='verified', verify parent links are mandatory and first in content",
+        "Test full onboarding pipeline: create 6 onboarding pages with labels (mock content), run pipeline, verify links match label overlap expectations, priority pages get more inbound",
+        "Test re-plan: run pipeline, verify links exist, run again, verify snapshot created, old links replaced",
+        "All tests use test database with proper fixtures"
+      ],
+      "priority": 3,
+      "passes": true,
+      "dependsOn": [
+        "S9-013",
+        "S9-014"
+      ],
+      "notes": "Mock Claude calls (for LLM fallback injection and natural anchor generation). Use real DB. Reference backend/tests/test_cluster_api.py for integration test patterns with test database fixtures.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-021",
+      "title": "Create link management API router with plan and status endpoints",
+      "description": "As a developer, I need API endpoints so the frontend can trigger and poll link planning.",
+      "acceptanceCriteria": [
+        "Create backend/app/api/v1/links.py with APIRouter",
+        "POST /api/v1/projects/{project_id}/links/plan — validates prerequisites (all content complete, all keywords approved), triggers run_link_planning_pipeline as BackgroundTask, returns 202 with LinkPlanStatusResponse",
+        "If scope='cluster': validates cluster_id provided and cluster exists with >= 2 approved pages",
+        "If prerequisites not met: returns 400 with message listing which prerequisites failed and missing page IDs",
+        "If existing links for scope: triggers re-plan flow (snapshot → strip → delete → re-run)",
+        "GET /api/v1/projects/{project_id}/links/plan/status — accepts query params scope and cluster_id, returns current LinkPlanStatusResponse from progress state dict"
+      ],
+      "priority": 2,
+      "passes": true,
+      "dependsOn": [
+        "S9-013",
+        "S9-005"
+      ],
+      "notes": "Follow the same background task + polling pattern as backend/app/api/v1/content_generation.py. The progress state is stored in a module-level dict in link_planning.py. Reference how content_generation.py stores and reads pipeline_status.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-022",
+      "title": "Add link map and page detail API endpoints",
+      "description": "As a developer, I need endpoints so the frontend can display the link map and per-page details.",
+      "acceptanceCriteria": [
+        "GET /api/v1/projects/{project_id}/links — accepts query params scope and cluster_id, returns LinkMapResponse with aggregate stats, method breakdown, anchor diversity percentages, and page summaries. For clusters, includes hierarchy tree structure.",
+        "GET /api/v1/projects/{project_id}/links/page/{page_id} — returns PageLinksResponse with outbound links (ordered by position), inbound links, anchor diversity section with diversity_score",
+        "GET /api/v1/projects/{project_id}/links/suggestions/{target_page_id} — returns AnchorSuggestionsResponse with primary keyword, POP variations, and usage counts",
+        "All endpoints return 404 for invalid IDs, empty results (not errors) when no links exist"
+      ],
+      "priority": 2,
+      "passes": true,
+      "dependsOn": [
+        "S9-021",
+        "S9-005"
+      ],
+      "notes": "For the hierarchy tree in cluster mode: build a nested dict with parent at root and children array. For anchor diversity percentages: count each anchor_type across all links in scope, divide by total.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-023",
+      "title": "Add manual link management endpoints (add, remove, edit)",
+      "description": "As a developer, I need CRUD endpoints so users can manually adjust links.",
+      "acceptanceCriteria": [
+        "POST /api/v1/projects/{project_id}/links — accepts AddLinkRequest, validates silo integrity + no duplicates + no self-links, injects link into content (rule-based or LLM fallback), creates InternalLink with status='verified'. Returns 400 for violations.",
+        "DELETE /api/v1/projects/{project_id}/links/{link_id} — rejects removal of mandatory links (400), strips <a> tag from content (unwrap), sets InternalLink status='removed'. Returns 204.",
+        "PUT /api/v1/projects/{project_id}/links/{link_id} — accepts EditLinkRequest, finds existing <a> tag in content by matching current anchor text, replaces with new anchor text, updates InternalLink row. Returns updated link.",
+        "All endpoints return 404 for invalid link_id or page_id"
+      ],
+      "priority": 2,
+      "passes": true,
+      "dependsOn": [
+        "S9-022"
+      ],
+      "notes": "For the PUT endpoint: finding the <a> tag by anchor text requires scanning bottom_description HTML. Use BeautifulSoup to find <a> tags and match by text content. If multiple matches (unlikely), use the one matching the link's href.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-024",
+      "title": "Register links router and write API tests",
+      "description": "As a developer, I need the router registered and tests for all endpoints.",
+      "acceptanceCriteria": [
+        "Import and include links router in backend/app/api/v1/__init__.py",
+        "All 8 endpoints accessible and returning correct status codes",
+        "Create backend/tests/test_links_api.py with integration tests",
+        "Test POST plan: success with valid data, 400 when prerequisites not met, 400 for invalid scope",
+        "Test GET status: returns correct step during planning, returns complete after",
+        "Test GET link map: returns stats and page summaries for cluster and onboarding scopes",
+        "Test GET page links: returns outbound + inbound lists",
+        "Test POST add link: success, 400 for silo violation, 400 for duplicate",
+        "Test DELETE link: success for discretionary, 400 for mandatory",
+        "Test PUT edit link: anchor text updated in DB and content",
+        "Test GET suggestions: returns keyword + variations + counts"
+      ],
+      "priority": 2,
+      "passes": true,
+      "dependsOn": [
+        "S9-023"
+      ],
+      "notes": "Reference backend/tests/test_cluster_api.py for integration test patterns. Mock the LLM calls in link injection.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-025",
+      "title": "Add TypeScript types and API client for links",
+      "description": "As a developer, I need frontend types and API client so that React components can interact with the links API.",
+      "acceptanceCriteria": [
+        "Add TypeScript interfaces in frontend/src/lib/types.ts: InternalLink, LinkMap, LinkMapPage, PageLinks, PlanStatus, AnchorSuggestions, AddLinkRequest, EditLinkRequest",
+        "Add API client functions in frontend/src/lib/api.ts: planLinks(projectId, scope, clusterId?), getPlanStatus(projectId, scope, clusterId?), getLinkMap(projectId, scope, clusterId?), getPageLinks(projectId, pageId), addLink(projectId, data), removeLink(projectId, linkId), editLink(projectId, linkId, data), getAnchorSuggestions(projectId, targetPageId)",
+        "All functions use existing apiClient pattern with proper error handling"
+      ],
+      "priority": 2,
+      "passes": true,
+      "dependsOn": [
+        "S9-005"
+      ],
+      "notes": "Reference existing types and API client functions in frontend/src/lib/types.ts and frontend/src/lib/api.ts for patterns.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-026",
+      "title": "Create TanStack Query hooks for links",
+      "description": "As a developer, I need React hooks so that components have reactive data fetching for links.",
+      "acceptanceCriteria": [
+        "Create frontend/src/hooks/useLinks.ts",
+        "usePlanLinks(): useMutation that calls planLinks()",
+        "usePlanStatus(projectId, scope, clusterId?, enabled?): useQuery with 2-second polling interval (refetchInterval: 2000) when enabled=true and status is 'planning', stops polling when status is 'complete' or 'failed'",
+        "useLinkMap(projectId, scope, clusterId?): useQuery that fetches link map data",
+        "usePageLinks(projectId, pageId): useQuery that fetches page link detail",
+        "useAddLink(): useMutation that calls addLink(), invalidates link map + page links on success",
+        "useRemoveLink(): useMutation that calls removeLink(), invalidates link map + page links on success",
+        "useEditLink(): useMutation that calls editLink(), invalidates page links on success",
+        "useAnchorSuggestions(projectId, targetPageId): useQuery fetching anchor suggestions"
+      ],
+      "priority": 2,
+      "passes": true,
+      "dependsOn": [
+        "S9-025"
+      ],
+      "notes": "Reference frontend/src/hooks/useClusters.ts and frontend/src/hooks/useContentGeneration.ts for TanStack Query patterns. The polling pattern for plan status is the same as content generation status polling.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-027",
+      "title": "Create link planning trigger page (onboarding + cluster)",
+      "description": "As a user, I need a page to trigger link planning so I can inject internal links into my content.",
+      "acceptanceCriteria": [
+        "Create page at frontend/src/app/projects/[id]/links/page.tsx (onboarding scope)",
+        "Create page at frontend/src/app/projects/[id]/clusters/[clusterId]/links/page.tsx (cluster scope)",
+        "Prerequisites checklist: ✓/✗ for 'All keywords approved', 'All content generated (N/N complete)', 'Quality checks passed'",
+        "'Plan & Inject Links' button disabled when prerequisites not met, enabled when all pass",
+        "Clicking button triggers usePlanLinks mutation",
+        "During planning: show 4-step progress indicator (Building graph → Selecting targets → Injecting links → Validating) with ✓/spinner/○ icons and page progress for steps 2-3",
+        "Progress polls usePlanStatus every 2 seconds",
+        "On completion: auto-redirect to link map page",
+        "Link rules section adapts to scope: cluster shows hierarchy rules, onboarding shows label-based rules",
+        "Back button navigates to project detail",
+        "Follows project design system (tropical oasis palette, rounded-sm, warm grays)"
+      ],
+      "priority": 2,
+      "passes": true,
+      "dependsOn": [
+        "S9-026"
+      ],
+      "notes": "Reference WIREFRAMES.md section 15 for layout. Reference frontend/src/app/projects/[id]/onboarding/generate/page.tsx for a similar progress-polling page pattern. Design: bg-sand-50 cards, palm-500 button, sand-200 for disabled state.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-028",
+      "title": "Create link map overview page (cluster variant)",
+      "description": "As a user, I need to see the cluster link map so I can understand and review the silo's internal linking structure.",
+      "acceptanceCriteria": [
+        "Create page at frontend/src/app/projects/[id]/clusters/[clusterId]/links/map/page.tsx",
+        "Stats sidebar: total links, pages, avg per page, validation pass rate, method breakdown (rule-based vs LLM), anchor diversity percentages",
+        "Tree visualization: parent node at top → child nodes below with ↑N (inbound) and ↓N (outbound) counts. Sibling connection indicators (◄►) between linked children.",
+        "Parent page marked with ★ or 'parent' badge",
+        "Page table below: sortable columns for page title, role, out count, in count, method summary, validation status (✓/⚠/✗)",
+        "Click table row → navigate to page link detail",
+        "'Re-plan Links' button with confirmation dialog: 'This will replace all current links. Previous plan will be saved as a snapshot.'",
+        "Back button to project detail"
+      ],
+      "priority": 2,
+      "passes": true,
+      "dependsOn": [
+        "S9-026"
+      ],
+      "notes": "Reference WIREFRAMES.md section 16a for layout. The tree visualization can be simple CSS/HTML boxes with connecting lines — no need for a charting library. Focus on clarity over visual polish.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-029",
+      "title": "Create link map overview page (onboarding variant)",
+      "description": "As a user, I need to see the onboarding link map so I can understand label-based linking across all crawled pages.",
+      "acceptanceCriteria": [
+        "Create page at frontend/src/app/projects/[id]/links/map/page.tsx",
+        "Stats sidebar: total links, pages, avg per page, validation pass rate, method breakdown, anchor diversity, priority page stats (count, avg inbound vs non-priority avg)",
+        "Label-grouped visualization: pages grouped by primary label, connections between groups showing shared labels",
+        "Priority pages marked with ★",
+        "Page table with filter controls: label dropdown filter, priority-only toggle, search by page name",
+        "Table columns: page title, labels (tag chips), out count, in count, method summary, validation status",
+        "Click table row → navigate to page link detail",
+        "'Re-plan Links' button with confirmation dialog",
+        "Back button to project detail"
+      ],
+      "priority": 2,
+      "passes": true,
+      "dependsOn": [
+        "S9-026"
+      ],
+      "notes": "Reference WIREFRAMES.md section 16b for layout. The label grouping visualization can use simple grouped boxes. The filter controls should be above the table. For the label dropdown, collect unique labels across all pages.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-030",
+      "title": "Create page link detail view",
+      "description": "As a user, I need to see and manage links for a specific page so I can review and adjust individual links.",
+      "acceptanceCriteria": [
+        "Create page at frontend/src/app/projects/[id]/links/page/[pageId]/page.tsx",
+        "Outbound Links section: list ordered by position_in_content. Each shows target title, anchor text, anchor type badge, placement method, paragraph position. Mandatory parent link has 'mandatory' badge and no Remove button. [Edit Anchor] and [Remove] buttons (except mandatory). [+ Add] button.",
+        "Inbound Links section (read-only): list showing source title, anchor text, anchor type",
+        "Anchor Diversity section: unique anchors pointing to this page with usage counts, diversity score (High >80% unique, Medium 50-80%, Low <50%)",
+        "Add Link modal: searchable target page dropdown (scoped to same silo), anchor text input, clickable suggested anchors from POP variations (via useAnchorSuggestions). Validates no duplicate/self-link before submit.",
+        "Edit Anchor modal: target name (read-only), editable anchor text input, suggested variations, anchor type radio buttons. Calls useEditLink on save.",
+        "Remove Link: confirmation, calls useRemoveLink, refreshes list",
+        "Back button to link map page"
+      ],
+      "priority": 2,
+      "passes": true,
+      "dependsOn": [
+        "S9-026"
+      ],
+      "notes": "Reference WIREFRAMES.md section 17 for layout. For the target dropdown in Add Link modal: for onboarding, sort by label overlap with current page (most related first). For clusters, show all pages in same cluster. Use Radix Dialog or similar for modals if already in the project, otherwise simple divs.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-031",
+      "title": "Update project detail page with link status indicators",
+      "description": "As a user, I need to see link status on the project overview so I know which silos have links planned.",
+      "acceptanceCriteria": [
+        "Update onboarding section in frontend/src/app/projects/[id]/page.tsx: add link status indicator showing 'Links: Not planned' | 'Links: N planned' | 'Links: Planning...'",
+        "Update each cluster card: add link status showing same states",
+        "Status derived from GET /api/v1/projects/{project_id}/links (check total_links for each scope)",
+        "Clicking status navigates to the link planning page for that scope",
+        "Status styled consistently with existing onboarding step indicators"
+      ],
+      "priority": 2,
+      "passes": true,
+      "dependsOn": [
+        "S9-026"
+      ],
+      "notes": "Reference the existing onboarding status indicators on the project detail page for styling. The link status should appear after the content generation status in the workflow progression.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-032",
+      "title": "Write frontend component tests",
+      "description": "As a developer, I need frontend tests to verify link UI components.",
+      "acceptanceCriteria": [
+        "Test link planning page: prerequisites rendering (pass/fail states), button disabled/enabled, progress indicator steps, polling behavior mock",
+        "Test link map page: stats sidebar renders correct numbers, table renders page rows, filter controls work (onboarding), re-plan button shows confirmation",
+        "Test page link detail: outbound/inbound lists render, mandatory link has no remove button, Add Link modal opens and validates, Edit Anchor modal opens",
+        "Test project detail integration: link status indicators render correct states",
+        "All tests use Vitest with React Testing Library"
+      ],
+      "priority": 3,
+      "passes": true,
+      "dependsOn": [
+        "S9-027",
+        "S9-028",
+        "S9-029",
+        "S9-030",
+        "S9-031"
+      ],
+      "notes": "Reference frontend/src/app/projects/[id]/__tests__/ for existing component test patterns. Mock the TanStack Query hooks.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-098",
+      "title": "Update V2_REBUILD_PLAN.md",
+      "description": "As a developer, I need to update the plan status so that progress is tracked.",
+      "acceptanceCriteria": [
+        "Mark all Phase 9 checkboxes as [x] complete in V2_REBUILD_PLAN.md",
+        "Update Current Status table: Phase='9 - Internal Linking (Complete)', Slice='Phase 9 complete', Last Session=today's date, Next Action='Phase 10: Blog Planning & Writing'",
+        "Add new row to Session Log table with date, completed items, next up"
+      ],
+      "priority": 3,
+      "passes": true,
+      "dependsOn": [
+        "S9-020",
+        "S9-024",
+        "S9-032"
+      ],
+      "notes": "This task maintains our planning discipline.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S9-099",
+      "title": "Verify Phase 9 completion",
+      "description": "As a developer, I need to verify all Phase 9 criteria are met before moving on.",
+      "acceptanceCriteria": [
+        "All backend tests pass: cd backend && python -m pytest tests/",
+        "All frontend tests pass: cd frontend && npm test",
+        "Manual verification: run full link planning pipeline for a cluster (8 pages) — verify links injected, validation passes, link map displays correctly",
+        "Manual verification: run full link planning pipeline for onboarding pages — verify label-based target selection and priority weighting",
+        "Manual verification: edit anchor text, add manual link, remove link — verify content updates",
+        "Manual verification: re-plan links — verify snapshot created, old links stripped, new plan applied",
+        "Manual verification: export with links — verify Matrixify CSV contains <a> tags in Body HTML",
+        "Git commit created with message: feat: Phase 9 - Internal linking pipeline",
+        "No uncommitted changes remain"
+      ],
+      "priority": 3,
+      "passes": true,
+      "dependsOn": [
+        "S9-098"
+      ],
+      "notes": "Do not proceed to Phase 10 until this passes. The critical tests are: (1) cluster links respect silo/hierarchy rules, (2) onboarding links use label overlap correctly, (3) anchor text diversity is maintained, (4) re-planning works cleanly.",
+      "completionNotes": "Completed by agent"
+    }
+  ],
+  "metadata": {
+    "updatedAt": "2026-02-10T20:05:25.962Z"
+  }
+}

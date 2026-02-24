@@ -63,6 +63,19 @@ from app.integrations.perplexity import (
     init_perplexity,
     perplexity_client,
 )
+from app.integrations.s3 import (
+    S3AuthError,
+    S3CircuitOpenError,
+    S3Client,
+    S3ConnectionError,
+    S3Error,
+    S3NotFoundError,
+    S3TimeoutError,
+    close_s3,
+    get_s3,
+    init_s3,
+    s3_client,
+)
 
 __all__ = [
     # Crawl4AI Client
@@ -126,4 +139,17 @@ __all__ = [
     "KeywordsEverywhereRateLimitError",
     "KeywordsEverywhereAuthError",
     "KeywordsEverywhereCircuitOpenError",
+    # S3 Client
+    "S3Client",
+    "s3_client",
+    "init_s3",
+    "close_s3",
+    "get_s3",
+    # S3 Exceptions
+    "S3Error",
+    "S3TimeoutError",
+    "S3ConnectionError",
+    "S3AuthError",
+    "S3NotFoundError",
+    "S3CircuitOpenError",
 ]

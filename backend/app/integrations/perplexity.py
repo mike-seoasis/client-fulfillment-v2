@@ -29,11 +29,11 @@ RAILWAY DEPLOYMENT REQUIREMENTS:
 import asyncio
 import time
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any
 
 import httpx
 
+from app.core.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from app.core.config import get_settings
 from app.core.logging import get_logger, perplexity_logger
 
@@ -41,128 +41,6 @@ logger = get_logger(__name__)
 
 # Perplexity API base URL
 PERPLEXITY_API_URL = "https://api.perplexity.ai"
-
-
-class CircuitState(Enum):
-    """Circuit breaker states."""
-
-    CLOSED = "closed"  # Normal operation
-    OPEN = "open"  # Failing, reject all requests
-    HALF_OPEN = "half_open"  # Testing if service recovered
-
-
-@dataclass
-class CircuitBreakerConfig:
-    """Circuit breaker configuration."""
-
-    failure_threshold: int
-    recovery_timeout: float
-
-
-class CircuitBreaker:
-    """Circuit breaker implementation for Perplexity operations.
-
-    Prevents cascading failures by stopping requests to a failing service.
-    After recovery_timeout, allows a test request through (half-open state).
-    If test succeeds, circuit closes. If fails, circuit opens again.
-    """
-
-    def __init__(self, config: CircuitBreakerConfig) -> None:
-        self._config = config
-        self._state = CircuitState.CLOSED
-        self._failure_count = 0
-        self._last_failure_time: float | None = None
-        self._lock = asyncio.Lock()
-
-    @property
-    def state(self) -> CircuitState:
-        """Get current circuit state."""
-        return self._state
-
-    @property
-    def is_closed(self) -> bool:
-        """Check if circuit is closed (normal operation)."""
-        return self._state == CircuitState.CLOSED
-
-    @property
-    def is_open(self) -> bool:
-        """Check if circuit is open (rejecting requests)."""
-        return self._state == CircuitState.OPEN
-
-    async def _check_recovery(self) -> bool:
-        """Check if enough time has passed to attempt recovery."""
-        if self._last_failure_time is None:
-            return False
-        elapsed = time.monotonic() - self._last_failure_time
-        return elapsed >= self._config.recovery_timeout
-
-    async def can_execute(self) -> bool:
-        """Check if operation can be executed based on circuit state."""
-        async with self._lock:
-            if self._state == CircuitState.CLOSED:
-                return True
-
-            if self._state == CircuitState.OPEN:
-                if await self._check_recovery():
-                    # Transition to half-open for testing
-                    previous_state = self._state.value
-                    self._state = CircuitState.HALF_OPEN
-                    perplexity_logger.circuit_state_change(
-                        previous_state, self._state.value, self._failure_count
-                    )
-                    perplexity_logger.circuit_recovery_attempt()
-                    return True
-                return False
-
-            # HALF_OPEN state - allow single test request
-            return True
-
-    async def record_success(self) -> None:
-        """Record successful operation."""
-        async with self._lock:
-            if self._state == CircuitState.HALF_OPEN:
-                # Recovery successful, close circuit
-                previous_state = self._state.value
-                self._state = CircuitState.CLOSED
-                self._failure_count = 0
-                self._last_failure_time = None
-                perplexity_logger.circuit_state_change(
-                    previous_state, self._state.value, self._failure_count
-                )
-                perplexity_logger.circuit_closed()
-            elif self._state == CircuitState.CLOSED:
-                # Reset failure count on success
-                self._failure_count = 0
-
-    async def record_failure(self) -> None:
-        """Record failed operation."""
-        async with self._lock:
-            self._failure_count += 1
-            self._last_failure_time = time.monotonic()
-
-            if self._state == CircuitState.HALF_OPEN:
-                # Recovery failed, open circuit again
-                previous_state = self._state.value
-                self._state = CircuitState.OPEN
-                perplexity_logger.circuit_state_change(
-                    previous_state, self._state.value, self._failure_count
-                )
-                perplexity_logger.circuit_open(
-                    self._failure_count, self._config.recovery_timeout
-                )
-            elif (
-                self._state == CircuitState.CLOSED
-                and self._failure_count >= self._config.failure_threshold
-            ):
-                # Too many failures, open circuit
-                previous_state = self._state.value
-                self._state = CircuitState.OPEN
-                perplexity_logger.circuit_state_change(
-                    previous_state, self._state.value, self._failure_count
-                )
-                perplexity_logger.circuit_open(
-                    self._failure_count, self._config.recovery_timeout
-                )
 
 
 @dataclass
@@ -275,63 +153,128 @@ Focus on extracting:
 Provide a well-structured, factual analysis based on what you find on the website and any available information."""
 
 # System prompt for brand research (V3 brand config)
-BRAND_RESEARCH_SYSTEM_PROMPT = """You are a brand research expert. Your task is to thoroughly research a brand from their website and online presence to extract comprehensive brand information.
+# Covers all 9 sections of brand configuration:
+# 1. Brand Foundation, 2. Target Audience, 3. Voice Dimensions, 4. Voice Characteristics,
+# 5. Writing Style, 6. Vocabulary, 7. Trust Elements, 8. Examples Bank, 9. Competitor Context
+BRAND_RESEARCH_SYSTEM_PROMPT = """You are a brand research expert specializing in e-commerce and DTC (direct-to-consumer) brands. Your task is to thoroughly research a brand from their website and online presence to extract comprehensive brand information aligned with a 9-section brand configuration framework.
+
+IMPORTANT CONTEXT: This research will be used to generate copy for e-commerce channels including:
+- Website product pages and collection pages
+- Email marketing (welcome series, abandoned cart, promotional campaigns)
+- Social media content (Instagram, TikTok, Facebook, Pinterest)
+- Paid advertising (Meta ads, Google Shopping, display ads)
+- SMS marketing
+
+Focus your research on how the brand communicates in these digital channels. Deprioritize offline channels like print catalogs, direct mail, or in-store signage.
 
 Research and extract the following information, organized into these sections:
 
-## 1. FOUNDATION
+## 1. BRAND FOUNDATION
 - Company name, founding year, location, industry
-- Business model (B2B, B2C, DTC, etc.)
-- Primary products/services and price positioning
+- Business model (DTC, B2C, Marketplace, hybrid) - note primary e-commerce platforms used
+- Primary products/services and secondary offerings
+- Price positioning (budget, mid-range, premium, luxury)
+- Online sales channels (own website, Amazon, social commerce, etc.)
 - Tagline or slogan (if any)
-- Mission statement and core values
-- Key differentiators (what makes them unique)
+- One-sentence company description (how they describe themselves)
+- Category position (leader, challenger, specialist, disruptor)
+- Mission statement and core values (3-5 principles)
+- Brand promise (what customers can always expect)
+- Primary USP (the #1 differentiator)
+- Supporting differentiators (2-3 additional unique factors)
 - What they explicitly are NOT (positioning they reject)
 
 ## 2. TARGET AUDIENCE
-For each identifiable customer segment, extract:
-- Demographics (age, location, income level, profession)
-- Psychographics (values, aspirations, fears, identity)
-- Pain points and frustrations with current solutions
-- Motivations and buying triggers
-- How they discover and research products
-- Decision factors (price, quality, brand, convenience)
+For each identifiable customer segment (primary, secondary, tertiary), extract:
+- Demographics: age range, gender (if relevant), location, income level, profession, education
+- Psychographics: values, aspirations, fears/pain points, frustrations with current solutions, identity
+- Behavioral insights: how they discover products online, research behavior, decision factors, buying triggers, common objections, cart abandonment reasons
+- Communication preferences: tone they respond to, language they use, content they consume, digital channels they prefer, trust signals they need before purchasing online
+- Persona summary statement (describe as a real person)
 
-## 3. VOICE INDICATORS
-Analyze their existing content to identify:
-- Formality level (casual to formal, scale 1-10)
-- Use of humor (playful to serious, scale 1-10)
-- Tone toward competitors/industry (irreverent to respectful, scale 1-10)
-- Energy/enthusiasm level (enthusiastic to matter-of-fact, scale 1-10)
-- Voice characteristics (e.g., "knowledgeable but approachable")
-- What their voice is definitely NOT
+## 3. VOICE DIMENSIONS
+Analyze their existing content to rate on these four scales (1-10):
+- Formality: 1 (very casual, "Hey!") to 10 (very formal, "Dear Valued Customer")
+- Humor: 1 (funny/playful) to 10 (serious)
+- Reverence: 1 (irreverent/edgy) to 10 (highly respectful)
+- Enthusiasm: 1 (very enthusiastic, "We're SO excited!") to 10 (matter-of-fact, "Now available.")
+For each dimension, provide:
+- Position (1-10 rating)
+- Description (how this manifests in their writing)
+- Example (sample sentence at this level)
+- Overall voice summary (2-3 sentences)
 
-## 4. WRITING PATTERNS
-Note any observable patterns:
-- Sentence length tendencies (short and punchy vs. longer)
-- Use of contractions
-- Punctuation habits (exclamation points, em dashes)
-- Recurring phrases or terminology
-- Industry-specific vocabulary
+## 4. VOICE CHARACTERISTICS
+Define 3-5 characteristics that describe what the brand IS and IS NOT:
+**What they ARE** (with DO and DON'T examples):
+- e.g., "Knowledgeable" - DO: specific expert language, DON'T: generic statements
+- e.g., "Straightforward" - DO: direct communication, DON'T: excessive fluff
+- e.g., "Supportive" - DO: helpful tone, DON'T: impersonal language
+**What they are NOT**:
+- Characteristics the brand explicitly avoids (e.g., hype-driven, condescending, impersonal)
 
-## 5. PROOF & TRUST ELEMENTS
-Extract any verifiable claims:
-- Customer counts or statistics
-- Years in business
-- Review ratings and counts
-- Certifications or awards
-- Media mentions
-- Notable partnerships or endorsements
-- Guarantees and warranties
-- Customer testimonials (exact quotes if available)
+## 5. WRITING STYLE
+Document observable writing patterns across e-commerce content:
+- Sentence structure: average sentence length, paragraph length, contractions usage, active vs passive voice
+- Capitalization: headlines style, product name capitalization, feature name capitalization
+- Punctuation: serial comma usage, em dash frequency, exclamation point frequency, ellipses usage
+- Numbers: when to spell out vs numerals, currency format, percentage format, discount formatting
+- Formatting: bold usage, italics usage, bullet point conventions, header style
+- E-commerce content patterns observed in:
+  - Product page descriptions (how they structure benefits, features, specs)
+  - Collection/category page copy
+  - Email marketing (subject lines, preview text, body copy style)
+  - Social media posts (Instagram captions, TikTok hooks, Facebook ads)
+  - Promotional/sale messaging style
 
-## 6. COMPETITIVE CONTEXT
-If discoverable:
-- Main competitors mentioned or implied
-- How they differentiate from competitors
-- Market position (leader, challenger, specialist)
+## 6. VOCABULARY
+Extract the language patterns they use:
+- Power words (words that align with brand voice and resonate with audience)
+- Word preferences (what they say instead of common alternatives)
+- Banned/avoided words (words that feel off-brand, too generic, or AI-like)
+- Industry terminology (correct terms for their industry)
+- Brand-specific terms (proprietary names, trademarked features)
+- Signature phrases (phrases that capture their voice)
+- Competitor reference style (how they handle competitor mentions, if at all)
 
-Provide thorough, factual findings with citations. If information is not available for a section, explicitly state what could not be determined."""
+## 7. TRUST ELEMENTS
+Extract verifiable proof and trust signals:
+- Hard numbers: customer count, years in business, products sold
+- **IMPORTANT - Store/Product Ratings**: Actively search for the brand's average rating and review count from:
+  - Their own website (look for star ratings, review counts)
+  - Trustpilot rating and review count
+  - Google Reviews/Google Business rating
+  - Amazon seller/product ratings (if they sell on Amazon)
+  - Better Business Bureau rating
+  - Yelp rating (if applicable)
+  - Any other review platforms visible
+  Format as "X.X out of 5 stars" with review count like "2,500+ reviews"
+- Credentials: certifications, industry memberships, awards
+- Media/press: publications featured in, notable mentions
+- Endorsements: influencer/expert endorsements, partnership badges
+- Guarantees: return policy, warranty details, satisfaction guarantee
+- Customer quotes: 3-5 actual testimonials with attribution (verbatim if available)
+- Usage guidelines: how proof should be integrated in copy
+
+## 8. EXAMPLES BANK
+Collect real examples of their brand voice in action across e-commerce channels:
+- Product page headlines and descriptions (2-3 full examples showing brand voice)
+- Email marketing examples: subject lines, preview text, promotional copy
+- Social media posts (Instagram captions, TikTok/Reels hooks, Facebook/Pinterest content)
+- Ad copy examples (Meta ads, Google Shopping descriptions if visible)
+- CTAs used across website, emails, and ads (buttons, links, promotional urgency)
+- Promotional messaging: how they handle sales, discounts, limited-time offers
+- What NOT to write (examples of off-brand copy to avoid, with explanation of why)
+
+## 9. COMPETITOR CONTEXT
+Map the competitive landscape in the e-commerce space:
+- Direct competitors: name, their positioning, brand's differentiation vs each
+- Competitive advantages: what the brand does better (product, price, experience, brand)
+- Competitive weaknesses: where they may lag (for internal awareness)
+- Positioning statements: how to describe the brand vs competition without naming competitors
+- Market position: leader, challenger, specialist, or disruptor in the online/DTC space
+
+Provide thorough, factual findings with citations. Focus on how this brand presents itself in digital/e-commerce channels. If information is not available for a section, explicitly state what could not be determined. Structure your response clearly with headers for each section."""
 
 
 class PerplexityClient:
@@ -378,7 +321,8 @@ class PerplexityClient:
             CircuitBreakerConfig(
                 failure_threshold=settings.perplexity_circuit_failure_threshold,
                 recovery_timeout=settings.perplexity_circuit_recovery_timeout,
-            )
+            ),
+            name="perplexity",
         )
 
         # HTTP client (created lazily)
@@ -833,6 +777,112 @@ Please research the website thoroughly and provide factual information with cita
             return_citations=True,
         )
 
+    async def research_subreddits(
+        self,
+        brand_name: str,
+        brand_info: str,
+    ) -> list[str]:
+        """Suggest target subreddits for Reddit engagement based on brand info.
+
+        Ported from the old Reddit Scraper App's suggest_subreddits() function.
+        Uses Perplexity to find 8-12 consumer-focused subreddits where potential
+        customers ask questions and seek recommendations.
+
+        Args:
+            brand_name: Name of the brand.
+            brand_info: Combined brand info (industry, products, audience, USP).
+
+        Returns:
+            List of subreddit names (without r/ prefix), up to 12.
+        """
+        prompt = f"""Based on this brand:
+
+Brand: {brand_name}
+Info: {brand_info}
+
+Suggest 8-12 relevant subreddits where potential customers would ask questions and seek recommendations.
+
+CRITERIA:
+- Active communities with engaged users
+- Subreddits where people ask for product recommendations
+- Related to the brand's product categories and target audience
+- Mix of broad and niche communities
+
+OUTPUT FORMAT: One subreddit name per line, WITHOUT the "r/" prefix, no numbering, no bullets, no citations.
+
+IMPORTANT:
+- Do NOT include marketing/business subreddits (e.g., entrepreneur, marketing, ecommerce)
+- Focus on consumer communities, not seller communities
+- No citations like [1], [2]"""
+
+        result = await self.complete(
+            user_prompt=prompt,
+            temperature=0.3,
+            return_citations=False,
+        )
+
+        if not result.success or not result.text:
+            logger.warning(
+                "Subreddit research failed",
+                extra={"brand_name": brand_name, "error": result.error},
+            )
+            return []
+
+        logger.info(
+            "Subreddit research raw response",
+            extra={"brand_name": brand_name, "raw_text": result.text[:1000]},
+        )
+
+        # Parse response: split by newlines, clean up each line
+        import re
+
+        subreddits: list[str] = []
+        for line in result.text.strip().split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+
+            # Remove r/ prefix
+            line = re.sub(r"^r/", "", line)
+            # Remove numbering (1., 2), 3:, etc.)
+            line = re.sub(r"^\d+[\.\)\:]?\s*", "", line)
+            # Remove bullets (-, *, •)
+            line = re.sub(r"^[-\*•]\s*", "", line)
+            # Remove citations like [1], [2]
+            line = re.sub(r"\[\d+\]", "", line)
+            # Remove any trailing description after a dash, en-dash, em-dash, or colon
+            line = re.sub(r"\s+[-–—:]\s+.*$", "", line)
+
+            line = line.strip()
+            # Strip surrounding ** bold markers
+            line = re.sub(r"^\*\*(.+?)\*\*$", r"\1", line)
+            line = line.strip()
+
+            # Filter garbage
+            if not line or len(line) < 3:
+                continue
+            if line.lower().startswith(("here", "example", "note", "these")):
+                continue
+            # Subreddit names don't contain spaces
+            if " " in line:
+                continue
+
+            subreddits.append(line)
+
+        # Cap at 12
+        subreddits = subreddits[:12]
+
+        logger.info(
+            "Subreddit research completed",
+            extra={
+                "brand_name": brand_name,
+                "subreddit_count": len(subreddits),
+                "subreddits": subreddits,
+            },
+        )
+
+        return subreddits
+
     async def research_brand(
         self,
         domain: str,
@@ -842,7 +892,7 @@ Please research the website thoroughly and provide factual information with cita
 
         This method performs comprehensive brand research using Perplexity's
         web-connected capabilities, extracting information aligned with the
-        11-part V3 brand configuration schema.
+        9-section V3 brand configuration schema.
 
         Args:
             domain: Website domain to research (e.g., "acme.com" or "https://acme.com")

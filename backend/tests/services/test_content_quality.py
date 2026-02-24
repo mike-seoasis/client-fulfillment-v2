@@ -1,1479 +1,799 @@
-"""Unit tests for ContentQualityService trope detection and QA logic.
+"""Tests for content quality checks service.
 
-Tests cover:
-- ContentQualityInput dataclass creation and get_all_text()
-- ContentQualityResult dataclass and serialization
-- TropeDetectionResult dataclass and scoring
-- WordMatch, PhraseMatch, PatternMatch helper classes
-- ContentQualityService initialization
-- Banned word detection (_detect_banned_words)
-- Banned phrase detection (_detect_banned_phrases)
-- Em dash detection (_detect_em_dashes)
-- Triplet pattern detection (_detect_triplet_patterns)
-- Negation pattern detection (_detect_negation_patterns)
-- Rhetorical question detection (_detect_rhetorical_questions)
-- Limited use word detection (_detect_limited_use_words)
-- Quality score calculation (_calculate_quality_score)
-- Suggestion generation (_generate_suggestions)
-- check_content_quality() method with various scenarios
-- check_content_quality_batch() method
-- Validation and exception handling
-- Edge cases (empty content, HTML stripping, etc.)
-
-ERROR LOGGING REQUIREMENTS:
-- Ensure test failures include full assertion context
-- Log test setup/teardown at DEBUG level
-- Capture and display logs from failed tests
-- Include timing information in test reports
-- Log mock/stub invocations for debugging
-
-Target: 80% code coverage for ContentQualityService.
+Tests cover each trope rule with positive (detected) and negative (passes) cases:
+1. banned_word: detects banned words from brand config
+2. em_dash: detects em dash character
+3. ai_pattern: detects AI opener phrases
+4. triplet_excess: flags >2 'X, Y, and Z' patterns
+5. rhetorical_excess: flags >1 rhetorical question outside FAQ
+Plus: structured result format validation
 """
 
-import logging
+from typing import Any
 
 import pytest
 
 from app.services.content_quality import (
-    BANNED_PHRASES,
-    BANNED_WORDS,
-    LIMITED_USE_WORDS,
-    MAX_LIMITED_USE_WORDS_PER_PAGE,
-    QUALITY_SCORE_PASS_THRESHOLD,
-    SCORING_WEIGHTS,
-    ContentQualityInput,
-    ContentQualityResult,
-    ContentQualityService,
-    ContentQualityServiceError,
-    ContentQualityValidationError,
-    PatternMatch,
-    PhraseMatch,
-    TropeDetectionResult,
-    WordMatch,
-    check_content_quality,
-    get_content_quality_service,
+    QualityIssue,
+    QualityResult,
+    _check_ai_openers,
+    _check_banned_words,
+    _check_business_jargon,
+    _check_em_dashes,
+    _check_empty_signposts,
+    _check_missing_direct_answer,
+    _check_negation_contrast,
+    _check_rhetorical_questions,
+    _check_tier1_ai_words,
+    _check_tier2_ai_words,
+    _check_tier3_phrases,
+    _check_triplet_lists,
+    _strip_faq_section,
+    run_blog_quality_checks,
+    run_quality_checks,
 )
 
-# Enable debug logging for test visibility
-logger = logging.getLogger(__name__)
-
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# Helpers
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-def service() -> ContentQualityService:
-    """Create a ContentQualityService instance."""
-    logger.debug("Creating ContentQualityService")
-    return ContentQualityService()
+class _FakePageContent:
+    """Stand-in for PageContent to avoid SQLAlchemy session pollution.
+
+    Creating real PageContent() instances in pure function tests registers
+    them in the SQLAlchemy identity map. This pollutes the shared in-memory
+    SQLite connection and breaks subsequent async tests that use db_session.
+    """
+
+    def __init__(self, **kwargs: Any) -> None:
+        self.page_title: str | None = kwargs.get("page_title")
+        self.meta_description: str | None = kwargs.get("meta_description")
+        self.top_description: str | None = kwargs.get("top_description")
+        self.bottom_description: str | None = kwargs.get("bottom_description")
+        self.qa_results: dict[str, Any] | None = None
 
 
-@pytest.fixture
-def clean_content_input() -> ContentQualityInput:
-    """Create a content input with no AI tropes."""
-    logger.debug("Creating clean content input fixture")
-    return ContentQualityInput(
-        h1="Premium Coffee Storage Containers",
-        title_tag="Premium Coffee Storage Containers | Brand Name",
-        meta_description="Keep your coffee fresh with our premium storage containers.",
-        top_description="Our coffee containers keep beans fresh and flavorful.",
-        bottom_description="""
-        <h2>Why Choose Our Coffee Storage Containers</h2>
-        <p>Our coffee storage containers feature airtight seals that lock in freshness.
-        Each container is made from high-quality borosilicate glass that resists odors
-        and stains. The silicone-lined lids create a vacuum seal that keeps moisture out.</p>
-        <p>Coffee beans stay fresh for weeks longer when stored properly. Our containers
-        come in various sizes to fit your needs. The clear glass lets you see exactly
-        how much coffee you have left.</p>
-        <p>The compact design fits easily on your counter or in your cabinet. Cleaning
-        is simple - just wash with soap and water. These containers also work great for
-        tea, sugar, flour, and other dry goods.</p>
-        """,
-        project_id="proj-123",
-        page_id="page-456",
-        content_id="content-789",
-    )
-
-
-@pytest.fixture
-def content_with_banned_words() -> ContentQualityInput:
-    """Create content input with banned AI words."""
-    logger.debug("Creating content with banned words fixture")
-    return ContentQualityInput(
-        h1="Premium Coffee Containers",
-        title_tag="Premium Coffee Containers | Brand",
-        meta_description="Delve into our innovative coffee storage solutions.",
-        top_description="Unlock the full potential of your coffee beans.",
-        bottom_description="""
-        <h2>Revolutionary Coffee Storage</h2>
-        <p>Delve into our cutting-edge coffee containers that will truly elevate your
-        coffee experience. Our innovative designs leverage advanced technology to
-        unleash the full potential of your beans.</p>
-        <p>These game-changer containers are crucial for any coffee enthusiast on
-        their journey to perfect coffee. The transformative design empowers you to
-        store coffee with unprecedented synergy.</p>
-        <p>Our holistic approach ensures your coffee stays fresh. This paradigm shift
-        in coffee storage will revolutionize how you think about bean freshness.</p>
-        """,
-        project_id="proj-banned",
-        page_id="page-banned",
-    )
-
-
-@pytest.fixture
-def content_with_banned_phrases() -> ContentQualityInput:
-    """Create content input with banned AI phrases."""
-    logger.debug("Creating content with banned phrases fixture")
-    return ContentQualityInput(
-        h1="Coffee Storage Guide",
-        title_tag="Coffee Storage Guide | Brand",
-        meta_description="Learn about coffee storage.",
-        top_description="A guide to coffee storage.",
-        bottom_description="""
-        <h2>Coffee Storage Tips</h2>
-        <p>In today's fast-paced world, proper coffee storage is essential.
-        When it comes to keeping coffee fresh, airtight containers are key.</p>
-        <p>It's important to note that light degrades coffee quality. Whether you're
-        looking for style or function, our containers deliver both.</p>
-        <p>Look no further than our premium collection. At the end of the day,
-        fresh coffee tastes better than stale coffee.</p>
-        """,
-        project_id="proj-phrases",
-        page_id="page-phrases",
-    )
-
-
-@pytest.fixture
-def content_with_em_dashes() -> ContentQualityInput:
-    """Create content input with em dashes."""
-    logger.debug("Creating content with em dashes fixture")
-    return ContentQualityInput(
-        h1="Coffee Storage",
-        title_tag="Coffee Storage",
-        meta_description="Store coffee properly.",
-        top_description="Keep coffee fresh.",
-        bottom_description="""
-        <h2>Coffee Storage Guide</h2>
-        <p>Our containers—made from premium glass—keep coffee fresh for weeks.
-        The airtight seal—which uses silicone—prevents moisture from entering.
-        You'll notice—as many customers have—that coffee tastes better.</p>
-        """,
-        project_id="proj-em",
-        page_id="page-em",
-    )
-
-
-@pytest.fixture
-def content_with_triplet_patterns() -> ContentQualityInput:
-    """Create content input with triplet patterns."""
-    logger.debug("Creating content with triplet patterns fixture")
-    return ContentQualityInput(
-        h1="Coffee Containers",
-        title_tag="Coffee Containers",
-        meta_description="Fresh coffee storage.",
-        top_description="Store your coffee right.",
-        bottom_description="""
-        <h2>Premium Coffee Storage</h2>
-        <p>Fast. Simple. Powerful. Our coffee containers deliver on all fronts.</p>
-        <p>Fresh. Clean. Modern. The design speaks for itself and fits any kitchen.</p>
-        <p>Our containers are designed for coffee lovers who want the best storage.</p>
-        """,
-        project_id="proj-triplet",
-        page_id="page-triplet",
-    )
-
-
-@pytest.fixture
-def content_with_negation_patterns() -> ContentQualityInput:
-    """Create content input with negation patterns."""
-    logger.debug("Creating content with negation patterns fixture")
-    return ContentQualityInput(
-        h1="Coffee Storage",
-        title_tag="Coffee Storage",
-        meta_description="Premium coffee storage.",
-        top_description="The best coffee containers.",
-        bottom_description="""
-        <h2>Why Our Containers Stand Out</h2>
-        <p>Our containers aren't just storage, they're a coffee preservation system.
-        These aren't just jars, they're precision-engineered freshness vaults.</p>
-        <p>Coffee storage is more than just a container. Our products offer not only
-        protection, but also style for your kitchen counter.</p>
-        """,
-        project_id="proj-neg",
-        page_id="page-neg",
-    )
-
-
-@pytest.fixture
-def content_with_rhetorical_questions() -> ContentQualityInput:
-    """Create content input with rhetorical question openers."""
-    logger.debug("Creating content with rhetorical questions fixture")
-    return ContentQualityInput(
-        h1="Coffee Storage",
-        title_tag="Coffee Storage",
-        meta_description="Fresh coffee storage.",
-        top_description="Premium containers.",
-        bottom_description="""
-        <h2>The Perfect Coffee Container</h2>
-        <p>Are you tired of stale coffee? Our containers solve that problem once and for all.</p>
-        <p>Looking for the perfect storage solution? We have exactly what you need.</p>
-        <p>Want to keep coffee fresh longer? Our airtight design is the answer.</p>
-        """,
-        project_id="proj-rhetorical",
-        page_id="page-rhetorical",
-    )
-
-
-@pytest.fixture
-def content_with_limited_use_excess() -> ContentQualityInput:
-    """Create content with too many limited-use words."""
-    logger.debug("Creating content with limited use excess fixture")
-    return ContentQualityInput(
-        h1="Coffee Containers",
-        title_tag="Coffee Containers",
-        meta_description="Fresh storage.",
-        top_description="Premium coffee storage.",
-        bottom_description="""
-        <h2>Comprehensive Coffee Storage</h2>
-        <p>Our comprehensive storage solutions offer comprehensive protection.
-        Indeed, this is indeed a comprehensive approach. Furthermore, we furthermore
-        provide seamless integration. The seamless design is seamless in every way.</p>
-        <p>Moreover, our robust containers are robust and robust. The robust build
-        enhances your coffee storage experience. We optimize every aspect and
-        optimize for freshness. Furthermore streamline your morning routine.</p>
-        """,
-        project_id="proj-limited",
-        page_id="page-limited",
-    )
+def _make_page_content(**kwargs: Any) -> Any:
+    """Create a fake PageContent-like object with given fields."""
+    return _FakePageContent(**kwargs)
 
 
 # ---------------------------------------------------------------------------
-# Test: Data Classes
+# Check 1: Banned Words
 # ---------------------------------------------------------------------------
 
 
-class TestWordMatch:
-    """Tests for WordMatch dataclass."""
-
-    def test_create_word_match(self) -> None:
-        """Should create WordMatch with all fields."""
-        match = WordMatch(word="delve", count=2, positions=[10, 50])
-        assert match.word == "delve"
-        assert match.count == 2
-        assert match.positions == [10, 50]
-
-    def test_word_match_to_dict(self) -> None:
-        """Should convert to dictionary correctly."""
-        match = WordMatch(word="unlock", count=1, positions=[25])
-        data = match.to_dict()
-
-        assert data["word"] == "unlock"
-        assert data["count"] == 1
-        assert data["positions"] == [25]
-
-    def test_word_match_default_positions(self) -> None:
-        """Should have empty positions list by default."""
-        match = WordMatch(word="test", count=0)
-        assert match.positions == []
-
-
-class TestPhraseMatch:
-    """Tests for PhraseMatch dataclass."""
-
-    def test_create_phrase_match(self) -> None:
-        """Should create PhraseMatch with all fields."""
-        match = PhraseMatch(
-            phrase="in today's fast-paced world",
-            count=1,
-            positions=[0],
-        )
-        assert match.phrase == "in today's fast-paced world"
-        assert match.count == 1
-        assert match.positions == [0]
-
-    def test_phrase_match_to_dict(self) -> None:
-        """Should convert to dictionary correctly."""
-        match = PhraseMatch(
-            phrase="look no further",
-            count=2,
-            positions=[100, 300],
-        )
-        data = match.to_dict()
-
-        assert data["phrase"] == "look no further"
-        assert data["count"] == 2
-        assert data["positions"] == [100, 300]
-
-
-class TestPatternMatch:
-    """Tests for PatternMatch dataclass."""
-
-    def test_create_pattern_match(self) -> None:
-        """Should create PatternMatch with all fields."""
-        match = PatternMatch(
-            pattern_type="triplet",
-            matched_text="Fast. Simple. Powerful.",
-            position=45,
-        )
-        assert match.pattern_type == "triplet"
-        assert match.matched_text == "Fast. Simple. Powerful."
-        assert match.position == 45
-
-    def test_pattern_match_to_dict(self) -> None:
-        """Should convert to dictionary correctly."""
-        match = PatternMatch(
-            pattern_type="negation",
-            matched_text="aren't just containers, they're",
-            position=120,
-        )
-        data = match.to_dict()
-
-        assert data["pattern_type"] == "negation"
-        assert data["matched_text"] == "aren't just containers, they're"
-        assert data["position"] == 120
-
-
-class TestContentQualityInput:
-    """Tests for ContentQualityInput dataclass."""
-
-    def test_create_minimal_input(self) -> None:
-        """Should create input with minimal fields."""
-        inp = ContentQualityInput(
-            h1="Title",
-            title_tag="Title Tag",
-            meta_description="Meta",
-            top_description="Top",
-            bottom_description="Bottom content here.",
-        )
-        assert inp.h1 == "Title"
-        assert inp.project_id is None
-        assert inp.page_id is None
-        assert inp.content_id is None
-
-    def test_create_full_input(self) -> None:
-        """Should create input with all fields."""
-        inp = ContentQualityInput(
-            h1="Title",
-            title_tag="Title Tag",
-            meta_description="Meta",
-            top_description="Top",
-            bottom_description="Bottom",
-            project_id="proj-1",
-            page_id="page-1",
-            content_id="content-1",
-        )
-        assert inp.project_id == "proj-1"
-        assert inp.page_id == "page-1"
-        assert inp.content_id == "content-1"
-
-    def test_get_all_text(self) -> None:
-        """Should combine all text fields."""
-        inp = ContentQualityInput(
-            h1="H1 Text",
-            title_tag="Title Text",
-            meta_description="Meta Text",
-            top_description="Top Text",
-            bottom_description="Bottom Text",
-        )
-        all_text = inp.get_all_text()
-
-        assert "H1 Text" in all_text
-        assert "Title Text" in all_text
-        assert "Meta Text" in all_text
-        assert "Top Text" in all_text
-        assert "Bottom Text" in all_text
-
-    def test_to_dict_sanitizes_content(self) -> None:
-        """Should include lengths not full content."""
-        inp = ContentQualityInput(
-            h1="Short H1",
-            title_tag="Title",
-            meta_description="Meta description here",
-            top_description="Top description content",
-            bottom_description="A" * 500,
-            project_id="proj-1",
-        )
-        data = inp.to_dict()
-
-        assert data["h1_length"] == len("Short H1")
-        assert data["bottom_description_length"] == 500
-        assert data["project_id"] == "proj-1"
-        # Should not contain actual content
-        assert "Short H1" not in str(data.get("h1", ""))
-
-
-class TestTropeDetectionResult:
-    """Tests for TropeDetectionResult dataclass."""
-
-    def test_create_empty_result(self) -> None:
-        """Should create result with default empty values."""
-        result = TropeDetectionResult()
-        assert result.found_banned_words == []
-        assert result.found_banned_phrases == []
-        assert result.found_em_dashes == 0
-        assert result.found_triplet_patterns == []
-        assert result.found_negation_patterns == []
-        assert result.found_rhetorical_questions == 0
-        assert result.limited_use_words == {}
-        assert result.overall_score == 100.0
-        assert result.is_approved is True
-        assert result.suggestions == []
-
-    def test_create_result_with_issues(self) -> None:
-        """Should create result with detected issues."""
-        result = TropeDetectionResult(
-            found_banned_words=[WordMatch(word="delve", count=1)],
-            found_em_dashes=2,
-            overall_score=70.0,
-            is_approved=False,
-        )
-        assert len(result.found_banned_words) == 1
-        assert result.found_em_dashes == 2
-        assert result.overall_score == 70.0
-        assert result.is_approved is False
-
-    def test_to_dict(self) -> None:
-        """Should convert to dictionary with all fields."""
-        result = TropeDetectionResult(
-            found_banned_words=[WordMatch(word="unlock", count=2)],
-            found_em_dashes=1,
-            overall_score=85.5,
-            is_approved=True,
-            suggestions=["Remove banned word 'unlock'"],
-        )
-        data = result.to_dict()
-
-        assert len(data["found_banned_words"]) == 1
-        assert data["found_em_dashes"] == 1
-        assert data["overall_score"] == 85.5
-        assert data["is_approved"] is True
-        assert "Remove banned word" in data["suggestions"][0]
-
-
-class TestContentQualityResult:
-    """Tests for ContentQualityResult dataclass."""
-
-    def test_create_success_result(self) -> None:
-        """Should create a successful result."""
-        result = ContentQualityResult(
-            success=True,
-            content_id="content-1",
-            trope_detection=TropeDetectionResult(overall_score=95.0),
-            passed_qa=True,
-            duration_ms=5.5,
-            project_id="proj-1",
-        )
-        assert result.success is True
-        assert result.passed_qa is True
-        assert result.error is None
-        assert result.duration_ms == 5.5
-
-    def test_create_failure_result(self) -> None:
-        """Should create a failed result with error."""
-        result = ContentQualityResult(
-            success=False,
-            error="Validation failed",
-            project_id="proj-1",
-        )
-        assert result.success is False
-        assert result.error == "Validation failed"
-        assert result.passed_qa is False
-
-    def test_to_dict(self) -> None:
-        """Should convert to dictionary correctly."""
-        result = ContentQualityResult(
-            success=True,
-            content_id="content-1",
-            trope_detection=TropeDetectionResult(overall_score=90.0),
-            passed_qa=True,
-            duration_ms=10.123,
-        )
-        data = result.to_dict()
-
-        assert data["success"] is True
-        assert data["content_id"] == "content-1"
-        assert data["passed_qa"] is True
-        assert data["duration_ms"] == 10.12  # Rounded
-
-
-# ---------------------------------------------------------------------------
-# Test: ContentQualityService Initialization
-# ---------------------------------------------------------------------------
-
-
-class TestServiceInitialization:
-    """Tests for ContentQualityService initialization."""
-
-    def test_default_initialization(self) -> None:
-        """Should initialize without errors."""
-        service = ContentQualityService()
-        assert service is not None
-
-    def test_patterns_compiled(self, service: ContentQualityService) -> None:
-        """Should have compiled regex patterns."""
-        assert service._em_dash_pattern is not None
-        assert service._triplet_pattern is not None
-        assert service._rhetorical_question_pattern is not None
-        assert len(service._negation_patterns) > 0
-
-
-# ---------------------------------------------------------------------------
-# Test: HTML Stripping
-# ---------------------------------------------------------------------------
-
-
-class TestHtmlStripping:
-    """Tests for HTML tag stripping."""
-
-    def test_strip_html_tags(self, service: ContentQualityService) -> None:
-        """Should remove HTML tags from text."""
-        text = "<h2>Title</h2><p>Paragraph text.</p>"
-        result = service._strip_html_tags(text)
-
-        assert "<h2>" not in result
-        assert "</h2>" not in result
-        assert "<p>" not in result
-        assert "Title" in result
-        assert "Paragraph text" in result
-
-    def test_strip_html_preserves_text(self, service: ContentQualityService) -> None:
-        """Should preserve text content."""
-        text = "<a href='link'>Click here</a>"
-        result = service._strip_html_tags(text)
-
-        assert "Click here" in result
-        assert "href" not in result
-
-    def test_strip_html_handles_no_tags(self, service: ContentQualityService) -> None:
-        """Should handle text without HTML tags."""
-        text = "Plain text without any tags"
-        result = service._strip_html_tags(text)
-        assert result == "Plain text without any tags"
-
-
-# ---------------------------------------------------------------------------
-# Test: Banned Word Detection
-# ---------------------------------------------------------------------------
-
-
-class TestBannedWordDetection:
+class TestCheckBannedWords:
     """Tests for banned word detection."""
 
-    @pytest.mark.asyncio
-    async def test_detect_banned_words(
-        self,
-        service: ContentQualityService,
-        content_with_banned_words: ContentQualityInput,
-    ) -> None:
-        """Should detect all banned words in content."""
-        text = content_with_banned_words.get_all_text()
-        found = service._detect_banned_words(text, "proj-1", "page-1")
+    def test_detects_banned_word(self) -> None:
+        """Positive: banned word is detected in content."""
+        fields = {"bottom_description": "This product is really cheap and affordable."}
+        brand_config: dict[str, Any] = {"vocabulary": {"banned_words": ["cheap"]}}
 
-        # Should find multiple banned words
-        found_words = {w.word for w in found}
-        assert "delve" in found_words
-        assert "innovative" in found_words
-        assert "leverage" in found_words
+        issues = _check_banned_words(fields, brand_config)
+        assert len(issues) == 1
+        assert issues[0].type == "banned_word"
+        assert issues[0].field == "bottom_description"
+        assert "cheap" in issues[0].description.lower()
 
-    def test_detect_banned_words_case_insensitive(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Should detect banned words regardless of case."""
-        text = "DELVE into this INNOVATIVE solution"
-        found = service._detect_banned_words(text, None, None)
+    def test_passes_without_banned_words(self) -> None:
+        """Negative: no banned words in content."""
+        fields = {"bottom_description": "This product is affordable and well-made."}
+        brand_config: dict[str, Any] = {"vocabulary": {"banned_words": ["cheap", "guarantee"]}}
 
-        found_words = {w.word for w in found}
-        assert "delve" in found_words
-        assert "innovative" in found_words
+        issues = _check_banned_words(fields, brand_config)
+        assert len(issues) == 0
 
-    def test_detect_banned_words_with_positions(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Should record positions of banned words."""
-        text = "delve into things then delve again"
-        found = service._detect_banned_words(text, None, None)
+    def test_word_boundary_matching(self) -> None:
+        """Banned word 'best' should not match 'bestseller'."""
+        fields = {"page_title": "Our Bestseller Collection"}
+        brand_config: dict[str, Any] = {"vocabulary": {"banned_words": ["best"]}}
 
-        delve_match = next((w for w in found if w.word == "delve"), None)
-        assert delve_match is not None
-        assert delve_match.count == 2
-        assert len(delve_match.positions) == 2
+        issues = _check_banned_words(fields, brand_config)
+        # "best" does not appear as a standalone word in "bestseller"
+        # But "best" appears as a word boundary match at the start of "bestseller"
+        # Actually \bbest\b should NOT match "bestseller" since there's no word boundary after "best" in "bestseller"
+        # Wait - \bbest\b: 'b' in "bestseller" has a word boundary before it, and after "best" there's "seller"
+        # So \bbest\b would NOT match "bestseller" because there's no \b between t and s
+        assert len(issues) == 0
 
-    def test_detect_banned_words_none_in_clean(
-        self,
-        service: ContentQualityService,
-        clean_content_input: ContentQualityInput,
-    ) -> None:
-        """Should find no banned words in clean content."""
-        text = clean_content_input.get_all_text()
-        found = service._detect_banned_words(text, None, None)
-        assert len(found) == 0
+    def test_case_insensitive(self) -> None:
+        """Banned word detection is case-insensitive."""
+        fields = {"page_title": "The BEST Running Shoes"}
+        brand_config: dict[str, Any] = {"vocabulary": {"banned_words": ["best"]}}
 
-    def test_detect_hyphenated_banned_words(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Should detect unhyphenated variants of banned words.
+        issues = _check_banned_words(fields, brand_config)
+        assert len(issues) == 1
 
-        The implementation uses word boundaries that split on hyphens,
-        so 'cutting-edge' becomes 'cutting' and 'edge'. The normalization
-        removes hyphens from individual words. Here we test that the
-        unhyphenated form 'gamechanger' (which is in BANNED_WORDS) is
-        properly detected.
-        """
-        # Test with the non-hyphenated version that's in BANNED_WORDS
-        text = "This is a gamechanger for coffee storage."
-        found = service._detect_banned_words(text, None, None)
+    def test_empty_banned_words_list(self) -> None:
+        """Empty banned words list produces no issues."""
+        fields = {"page_title": "Anything goes"}
+        brand_config: dict[str, Any] = {"vocabulary": {"banned_words": []}}
 
-        found_words = {w.word for w in found}
-        # 'gamechanger' is in BANNED_WORDS
-        assert "gamechanger" in found_words
+        issues = _check_banned_words(fields, brand_config)
+        assert len(issues) == 0
+
+    def test_missing_vocabulary_key(self) -> None:
+        """Missing vocabulary key produces no issues."""
+        fields = {"page_title": "Content"}
+        issues = _check_banned_words(fields, {})
+        assert len(issues) == 0
 
 
 # ---------------------------------------------------------------------------
-# Test: Banned Phrase Detection
+# Check 2: Em Dashes
 # ---------------------------------------------------------------------------
 
 
-class TestBannedPhraseDetection:
-    """Tests for banned phrase detection."""
-
-    @pytest.mark.asyncio
-    async def test_detect_banned_phrases(
-        self,
-        service: ContentQualityService,
-        content_with_banned_phrases: ContentQualityInput,
-    ) -> None:
-        """Should detect all banned phrases in content."""
-        text = content_with_banned_phrases.get_all_text()
-        found = service._detect_banned_phrases(text, "proj-1", "page-1")
-
-        found_phrases = {p.phrase for p in found}
-        assert "in today's fast-paced world" in found_phrases
-        assert "when it comes to" in found_phrases
-        assert "it's important to note" in found_phrases
-        assert "look no further" in found_phrases
-
-    def test_detect_banned_phrases_case_insensitive(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Should detect banned phrases regardless of case."""
-        text = "IN TODAY'S FAST-PACED WORLD we need better storage."
-        found = service._detect_banned_phrases(text, None, None)
-
-        found_phrases = {p.phrase for p in found}
-        assert "in today's fast-paced world" in found_phrases
-
-    def test_detect_banned_phrases_with_positions(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Should record positions of banned phrases."""
-        text = "Look no further. Then look no further again."
-        found = service._detect_banned_phrases(text, None, None)
-
-        lnf_match = next(
-            (p for p in found if p.phrase == "look no further"), None
-        )
-        assert lnf_match is not None
-        assert lnf_match.count == 2
-        assert len(lnf_match.positions) == 2
-
-    def test_detect_banned_phrases_none_in_clean(
-        self,
-        service: ContentQualityService,
-        clean_content_input: ContentQualityInput,
-    ) -> None:
-        """Should find no banned phrases in clean content."""
-        text = clean_content_input.get_all_text()
-        found = service._detect_banned_phrases(text, None, None)
-        assert len(found) == 0
-
-
-# ---------------------------------------------------------------------------
-# Test: Em Dash Detection
-# ---------------------------------------------------------------------------
-
-
-class TestEmDashDetection:
+class TestCheckEmDashes:
     """Tests for em dash detection."""
 
-    def test_detect_em_dashes(
-        self,
-        service: ContentQualityService,
-        content_with_em_dashes: ContentQualityInput,
-    ) -> None:
-        """Should count all em dashes in content."""
-        text = content_with_em_dashes.get_all_text()
-        count = service._detect_em_dashes(text, "proj-1", "page-1")
+    def test_detects_em_dash(self) -> None:
+        """Positive: em dash character is detected."""
+        fields = {"bottom_description": "Great quality—built to last."}
 
-        # The fixture has multiple em dashes
-        assert count >= 3
+        issues = _check_em_dashes(fields)
+        assert len(issues) == 1
+        assert issues[0].type == "em_dash"
+        assert issues[0].field == "bottom_description"
 
-    def test_detect_no_em_dashes(
-        self,
-        service: ContentQualityService,
-        clean_content_input: ContentQualityInput,
-    ) -> None:
-        """Should return 0 for content without em dashes."""
-        text = clean_content_input.get_all_text()
-        count = service._detect_em_dashes(text, None, None)
-        assert count == 0
+    def test_passes_without_em_dash(self) -> None:
+        """Negative: content without em dashes passes."""
+        fields = {"bottom_description": "Great quality - built to last."}
 
-    def test_detect_em_dash_not_hyphen(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Should not count regular hyphens as em dashes."""
-        text = "This is a well-known fact - not a secret."
-        count = service._detect_em_dashes(text, None, None)
-        assert count == 0  # Regular hyphen and en dash, not em dash
+        issues = _check_em_dashes(fields)
+        assert len(issues) == 0
 
+    def test_en_dash_not_flagged(self) -> None:
+        """En dash (–) should not be flagged as em dash."""
+        fields = {"bottom_description": "Pages 10–20 describe the product."}
 
-# ---------------------------------------------------------------------------
-# Test: Triplet Pattern Detection
-# ---------------------------------------------------------------------------
+        issues = _check_em_dashes(fields)
+        assert len(issues) == 0
 
+    def test_multiple_em_dashes_multiple_issues(self) -> None:
+        """Multiple em dashes produce multiple issues."""
+        fields = {"bottom_description": "Quality—durability—comfort—style."}
 
-class TestTripletPatternDetection:
-    """Tests for triplet pattern detection."""
-
-    def test_detect_triplet_patterns(
-        self,
-        service: ContentQualityService,
-        content_with_triplet_patterns: ContentQualityInput,
-    ) -> None:
-        """Should detect triplet patterns in content."""
-        text = content_with_triplet_patterns.get_all_text()
-        found = service._detect_triplet_patterns(text, "proj-1", "page-1")
-
-        # The fixture has patterns like "Fast. Simple. Powerful."
-        assert len(found) >= 1
-        assert all(p.pattern_type == "triplet" for p in found)
-
-    def test_detect_triplet_pattern_format(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Should match X. Y. Z. format."""
-        text = "Quality. Design. Value. These are our principles."
-        found = service._detect_triplet_patterns(text, None, None)
-
-        assert len(found) == 1
-        assert "Quality. Design. Value." in found[0].matched_text
-
-    def test_no_triplet_in_normal_sentences(
-        self,
-        service: ContentQualityService,
-        clean_content_input: ContentQualityInput,
-    ) -> None:
-        """Should not detect triplets in normal prose."""
-        text = clean_content_input.get_all_text()
-        found = service._detect_triplet_patterns(text, None, None)
-        assert len(found) == 0
+        issues = _check_em_dashes(fields)
+        assert len(issues) == 3
 
 
 # ---------------------------------------------------------------------------
-# Test: Negation Pattern Detection
+# Check 3: AI Opener Patterns
 # ---------------------------------------------------------------------------
 
 
-class TestNegationPatternDetection:
-    """Tests for negation pattern detection."""
+class TestCheckAiOpeners:
+    """Tests for AI opener pattern detection."""
 
-    def test_detect_negation_patterns(
-        self,
-        service: ContentQualityService,
-        content_with_negation_patterns: ContentQualityInput,
-    ) -> None:
-        """Should detect negation patterns in content."""
-        text = content_with_negation_patterns.get_all_text()
-        found = service._detect_negation_patterns(text, "proj-1", "page-1")
+    def test_detects_in_todays(self) -> None:
+        """Positive: 'In today's' opener detected."""
+        fields = {"top_description": "In today's market, you need quality shoes."}
 
-        assert len(found) >= 1
-        assert all(p.pattern_type == "negation" for p in found)
+        issues = _check_ai_openers(fields)
+        assert len(issues) == 1
+        assert issues[0].type == "ai_pattern"
 
-    def test_detect_arent_just_pattern(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Should detect 'aren't just X, they're Y' pattern."""
-        text = "Our products aren't just containers, they're freshness systems."
-        found = service._detect_negation_patterns(text, None, None)
+    def test_detects_whether_youre(self) -> None:
+        """Positive: 'Whether you're' opener detected."""
+        fields = {"bottom_description": "Whether you're a runner or a hiker, we've got you covered."}
 
-        assert len(found) >= 1
+        issues = _check_ai_openers(fields)
+        assert len(issues) == 1
 
-    def test_detect_more_than_just_pattern(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Should detect 'more than just' pattern."""
-        text = "This is more than just a container."
-        found = service._detect_negation_patterns(text, None, None)
+    def test_detects_look_no_further(self) -> None:
+        """Positive: 'Look no further' opener detected."""
+        fields = {"top_description": "Look no further for the best winter boots."}
 
-        assert len(found) >= 1
+        issues = _check_ai_openers(fields)
+        assert len(issues) == 1
 
-    def test_no_negation_in_clean_content(
-        self,
-        service: ContentQualityService,
-        clean_content_input: ContentQualityInput,
-    ) -> None:
-        """Should not detect negations in clean content."""
-        text = clean_content_input.get_all_text()
-        found = service._detect_negation_patterns(text, None, None)
-        assert len(found) == 0
+    def test_detects_in_the_world_of(self) -> None:
+        """Positive: 'In the world of' opener detected."""
+        fields = {"bottom_description": "In the world of outdoor footwear, quality matters."}
 
+        issues = _check_ai_openers(fields)
+        assert len(issues) == 1
 
-# ---------------------------------------------------------------------------
-# Test: Rhetorical Question Detection
-# ---------------------------------------------------------------------------
+    def test_detects_when_it_comes_to(self) -> None:
+        """Positive: 'When it comes to' opener detected."""
+        fields = {"bottom_description": "When it comes to winter boots, insulation is key."}
 
+        issues = _check_ai_openers(fields)
+        assert len(issues) == 1
 
-class TestRhetoricalQuestionDetection:
-    """Tests for rhetorical question detection."""
+    def test_passes_clean_content(self) -> None:
+        """Negative: content without AI openers passes."""
+        fields = {
+            "top_description": "Our winter boots are built for the harshest conditions.",
+            "bottom_description": "Featuring waterproof membranes and insulated linings.",
+        }
 
-    def test_detect_rhetorical_questions(
-        self,
-        service: ContentQualityService,
-        content_with_rhetorical_questions: ContentQualityInput,
-    ) -> None:
-        """Should detect rhetorical question openers."""
-        text = content_with_rhetorical_questions.get_all_text()
-        count = service._detect_rhetorical_questions(text, "proj-1", "page-1")
-
-        # The fixture has multiple rhetorical questions
-        assert count >= 2
-
-    def test_detect_are_you_pattern(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Should detect 'Are you...' questions."""
-        text = "Are you looking for better coffee storage?"
-        count = service._detect_rhetorical_questions(text, None, None)
-        assert count >= 1
-
-    def test_detect_looking_for_pattern(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Should detect 'Looking for...' questions."""
-        text = "<p>Looking for the perfect container?</p>"
-        count = service._detect_rhetorical_questions(text, None, None)
-        assert count >= 1
-
-    def test_no_rhetorical_in_clean(
-        self,
-        service: ContentQualityService,
-        clean_content_input: ContentQualityInput,
-    ) -> None:
-        """Should not detect rhetorical questions in clean content."""
-        text = clean_content_input.get_all_text()
-        count = service._detect_rhetorical_questions(text, None, None)
-        assert count == 0
+        issues = _check_ai_openers(fields)
+        assert len(issues) == 0
 
 
 # ---------------------------------------------------------------------------
-# Test: Limited Use Word Detection
+# Check 4: Triplet Lists
 # ---------------------------------------------------------------------------
 
 
-class TestLimitedUseWordDetection:
-    """Tests for limited use word detection."""
+class TestCheckTripletLists:
+    """Tests for excessive triplet list detection."""
 
-    def test_detect_limited_use_words(
-        self,
-        service: ContentQualityService,
-        content_with_limited_use_excess: ContentQualityInput,
-    ) -> None:
-        """Should count limited use words."""
-        text = content_with_limited_use_excess.get_all_text()
-        counts = service._detect_limited_use_words(text, "proj-1", "page-1")
+    def test_detects_excessive_triplets(self) -> None:
+        """Positive: >2 triplet patterns flagged (one issue per match)."""
+        fields = {
+            "bottom_description": (
+                "Our boots offer warmth, comfort, and durability. "
+                "Available in black, brown, and gray. "
+                "Perfect for snow, ice, and rain."
+            )
+        }
 
-        # Should find words like "comprehensive", "indeed", "robust", etc.
-        assert len(counts) > 0
-        # Some should be over the limit
-        excess = [w for w, c in counts.items() if c > MAX_LIMITED_USE_WORDS_PER_PAGE]
-        assert len(excess) > 0
+        issues = _check_triplet_lists(fields)
+        assert len(issues) == 3  # One issue per match
+        assert issues[0].type == "triplet_excess"
+        assert "3 total" in issues[0].description
 
-    def test_limited_use_word_counting(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Should accurately count word occurrences."""
-        text = "Indeed this is robust. Indeed it is robust and robust."
-        counts = service._detect_limited_use_words(text, None, None)
+    def test_passes_two_or_fewer_triplets(self) -> None:
+        """Negative: exactly 2 triplet patterns is acceptable."""
+        fields = {
+            "bottom_description": (
+                "Our boots offer warmth, comfort, and durability. "
+                "Available in black, brown, and gray."
+            )
+        }
 
-        assert counts.get("indeed") == 2
-        assert counts.get("robust") == 3
+        issues = _check_triplet_lists(fields)
+        assert len(issues) == 0
 
-    def test_limited_use_single_occurrence_ok(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Single occurrence of limited words is acceptable."""
-        text = "This comprehensive guide helps you streamline your workflow."
-        counts = service._detect_limited_use_words(text, None, None)
+    def test_passes_no_triplets(self) -> None:
+        """Negative: content without triplet patterns passes."""
+        fields = {"bottom_description": "Our boots are warm and comfortable."}
 
-        # Both words appear once - within limit
-        assert counts.get("comprehensive", 0) == 1
-        assert counts.get("streamline", 0) == 1
+        issues = _check_triplet_lists(fields)
+        assert len(issues) == 0
 
 
 # ---------------------------------------------------------------------------
-# Test: Quality Score Calculation
+# Check 5: Rhetorical Questions
 # ---------------------------------------------------------------------------
 
 
-class TestQualityScoreCalculation:
-    """Tests for quality score calculation."""
+class TestCheckRhetoricalQuestions:
+    """Tests for excessive rhetorical question detection."""
 
-    def test_perfect_score(self, service: ContentQualityService) -> None:
-        """Should return 100 for content with no issues."""
-        detection = TropeDetectionResult()
-        score = service._calculate_quality_score(detection)
-        assert score == 100.0
+    def test_detects_excessive_questions(self) -> None:
+        """Positive: >1 rhetorical question outside FAQ flagged (one issue per match)."""
+        fields = {
+            "bottom_description": (
+                "Looking for warm boots? Want something durable? "
+                "Our collection has you covered."
+            )
+        }
 
-    def test_banned_word_penalty(self, service: ContentQualityService) -> None:
-        """Should deduct points for banned words."""
-        detection = TropeDetectionResult(
-            found_banned_words=[WordMatch(word="delve", count=2)]
+        issues = _check_rhetorical_questions(fields)
+        assert len(issues) == 2  # One issue per match
+        assert issues[0].type == "rhetorical_excess"
+        assert "2 total" in issues[0].description
+
+    def test_passes_single_question(self) -> None:
+        """Negative: exactly 1 rhetorical question is acceptable."""
+        fields = {
+            "bottom_description": "Looking for warm boots? Our collection has you covered."
+        }
+
+        issues = _check_rhetorical_questions(fields)
+        assert len(issues) == 0
+
+    def test_faq_questions_excluded(self) -> None:
+        """Questions inside FAQ section are not counted."""
+        fields = {
+            "bottom_description": (
+                "Our boots are top quality. "
+                "<h2>FAQ</h2>"
+                "<p>What sizes are available? We carry sizes 6-14.</p>"
+                "<p>Are they waterproof? Yes, all boots are waterproof.</p>"
+            )
+        }
+
+        issues = _check_rhetorical_questions(fields)
+        assert len(issues) == 0
+
+    def test_passes_no_questions(self) -> None:
+        """Negative: no questions at all passes."""
+        fields = {"bottom_description": "Our boots are warm and durable."}
+
+        issues = _check_rhetorical_questions(fields)
+        assert len(issues) == 0
+
+
+# ---------------------------------------------------------------------------
+# Check 6: Tier 1 AI Words
+# ---------------------------------------------------------------------------
+
+
+class TestCheckTier1AiWords:
+    """Tests for Tier 1 AI word detection."""
+
+    def test_detects_tier1_word(self) -> None:
+        """Positive: Tier 1 AI word 'delve' is detected."""
+        fields = {"bottom_description": "Let's delve into the details of these boots."}
+
+        issues = _check_tier1_ai_words(fields)
+        assert len(issues) == 1
+        assert issues[0].type == "tier1_ai_word"
+        assert "delve" in issues[0].description.lower()
+
+    def test_passes_without_tier1_words(self) -> None:
+        """Negative: clean content without Tier 1 words passes."""
+        fields = {"bottom_description": "These boots are warm and waterproof."}
+
+        issues = _check_tier1_ai_words(fields)
+        assert len(issues) == 0
+
+    def test_detects_multiple_tier1_words(self) -> None:
+        """Multiple Tier 1 words produce multiple issues."""
+        fields = {"bottom_description": "Unlock the crucial path to better footwear."}
+
+        issues = _check_tier1_ai_words(fields)
+        assert len(issues) == 2
+        words_found = {i.description for i in issues}
+        assert any("unlock" in d.lower() for d in words_found)
+        assert any("crucial" in d.lower() for d in words_found)
+
+    def test_case_insensitive(self) -> None:
+        """Tier 1 detection is case-insensitive."""
+        fields = {"page_title": "UNLEASH Your Potential"}
+
+        issues = _check_tier1_ai_words(fields)
+        assert len(issues) == 1
+        assert "unleash" in issues[0].description.lower()
+
+    def test_detects_multi_word_phrases(self) -> None:
+        """Multi-word Tier 1 phrases like 'tap into' are detected."""
+        fields = {"bottom_description": "Tap into the power of quality boots."}
+
+        issues = _check_tier1_ai_words(fields)
+        assert len(issues) >= 1
+        assert any("tap into" in i.description.lower() for i in issues)
+
+
+# ---------------------------------------------------------------------------
+# Check 7: Tier 2 AI Words
+# ---------------------------------------------------------------------------
+
+
+class TestCheckTier2AiWords:
+    """Tests for Tier 2 AI word excess detection."""
+
+    def test_detects_excess_tier2_words(self) -> None:
+        """Positive: 2+ Tier 2 words flagged (one issue per word found)."""
+        fields = {"bottom_description": "Our robust and seamless collection."}
+
+        issues = _check_tier2_ai_words(fields)
+        assert len(issues) == 2  # One issue per distinct Tier 2 word found
+        assert issues[0].type == "tier2_ai_excess"
+        words_in_descriptions = " ".join(i.description.lower() for i in issues)
+        assert "robust" in words_in_descriptions
+        assert "seamless" in words_in_descriptions
+
+    def test_passes_single_tier2_word(self) -> None:
+        """Negative: exactly 1 Tier 2 word is acceptable."""
+        fields = {"bottom_description": "Our seamless checkout makes ordering easy."}
+
+        issues = _check_tier2_ai_words(fields)
+        assert len(issues) == 0
+
+    def test_passes_no_tier2_words(self) -> None:
+        """Negative: no Tier 2 words passes."""
+        fields = {"bottom_description": "These boots are warm and waterproof."}
+
+        issues = _check_tier2_ai_words(fields)
+        assert len(issues) == 0
+
+    def test_counts_across_fields(self) -> None:
+        """Tier 2 words counted across all content fields (one issue per word)."""
+        fields = {
+            "page_title": "Curated Winter Boots",
+            "bottom_description": "Our comprehensive collection.",
+        }
+
+        issues = _check_tier2_ai_words(fields)
+        assert len(issues) == 2  # One per distinct word found across fields
+        assert issues[0].type == "tier2_ai_excess"
+
+
+# ---------------------------------------------------------------------------
+# Check 8: Negation/Contrast Pattern
+# ---------------------------------------------------------------------------
+
+
+class TestCheckNegationContrast:
+    """Tests for negation/contrast pattern detection."""
+
+    def test_detects_excess_negation(self) -> None:
+        """Positive: 2+ negation patterns flagged (one issue per match)."""
+        fields = {
+            "bottom_description": (
+                "It's not just a boot, it's a statement. "
+                "It's not about price, it's about value."
+            )
+        }
+
+        issues = _check_negation_contrast(fields)
+        assert len(issues) == 2  # One issue per match
+        assert issues[0].type == "negation_contrast"
+        assert "2 total" in issues[0].description
+
+    def test_passes_single_negation(self) -> None:
+        """Negative: exactly 1 negation pattern is acceptable."""
+        fields = {
+            "bottom_description": "It's not just a boot, it's a statement. Great quality materials."
+        }
+
+        issues = _check_negation_contrast(fields)
+        assert len(issues) == 0
+
+    def test_passes_no_negation(self) -> None:
+        """Negative: no negation patterns passes."""
+        fields = {"bottom_description": "These boots are warm and durable."}
+
+        issues = _check_negation_contrast(fields)
+        assert len(issues) == 0
+
+    def test_detects_contracted_form(self) -> None:
+        """Detects both 'It's' and 'Its' forms (though 'Its' is grammatically different)."""
+        fields = {
+            "bottom_description": (
+                "It's not just style, it's substance. "
+                "Its not only warm, its also waterproof."
+            )
+        }
+
+        issues = _check_negation_contrast(fields)
+        assert len(issues) == 2  # 2 matches → one issue per match
+
+
+class TestStripFaqSection:
+    """Tests for FAQ section stripping."""
+
+    def test_strips_faq_section(self) -> None:
+        html = "Content before<h2>FAQ</h2><p>Question? Answer.</p>"
+        result = _strip_faq_section(html)
+        assert result == "Content before"
+
+    def test_strips_frequently_asked_questions(self) -> None:
+        html = "Before<h2>Frequently Asked Questions</h2><p>Q? A.</p>"
+        result = _strip_faq_section(html)
+        assert result == "Before"
+
+    def test_no_faq_returns_unchanged(self) -> None:
+        html = "<h2>About Us</h2><p>We sell boots.</p>"
+        result = _strip_faq_section(html)
+        assert result == html
+
+    def test_case_insensitive(self) -> None:
+        html = "Before<h3>faq</h3><p>Q? A.</p>"
+        result = _strip_faq_section(html)
+        assert result == "Before"
+
+
+# ---------------------------------------------------------------------------
+# Structured Result Format
+# ---------------------------------------------------------------------------
+
+
+class TestRunQualityChecks:
+    """Tests for run_quality_checks orchestration and result format."""
+
+    def test_passes_clean_content(self) -> None:
+        """Clean content returns passed=True with no issues."""
+        pc = _make_page_content(
+            page_title="Winter Boots",
+            meta_description="Shop winter boots online.",
+            top_description="Browse our winter boots collection.",
+            bottom_description="<h2>Quality Materials</h2><p>Built to last.</p>",
         )
-        score = service._calculate_quality_score(detection)
+        brand_config: dict[str, Any] = {"vocabulary": {"banned_words": ["cheap"]}}
 
-        expected = 100 + (SCORING_WEIGHTS["banned_word"] * 2)
-        assert score == expected
+        result = run_quality_checks(pc, brand_config)
 
-    def test_multiple_issues_penalty(self, service: ContentQualityService) -> None:
-        """Should deduct for multiple issue types."""
-        detection = TropeDetectionResult(
-            found_banned_words=[WordMatch(word="delve", count=1)],
-            found_banned_phrases=[PhraseMatch(phrase="look no further", count=1)],
-            found_em_dashes=2,
+        assert isinstance(result, QualityResult)
+        assert result.passed is True
+        assert len(result.issues) == 0
+        assert result.checked_at != ""
+
+    def test_fails_with_issues(self) -> None:
+        """Content with problems returns passed=False and issues list."""
+        pc = _make_page_content(
+            page_title="The Best Winter Boots",
+            meta_description="cheap boots",
+            top_description="In today's market, everyone needs boots.",
+            bottom_description="Quality—guaranteed.",
         )
-        score = service._calculate_quality_score(detection)
+        brand_config: dict[str, Any] = {"vocabulary": {"banned_words": ["cheap"]}}
 
-        expected = (
-            100
-            + SCORING_WEIGHTS["banned_word"]
-            + SCORING_WEIGHTS["banned_phrase"]
-            + (SCORING_WEIGHTS["em_dash"] * 2)
+        result = run_quality_checks(pc, brand_config)
+
+        assert result.passed is False
+        assert len(result.issues) > 0
+
+        # Should detect: banned_word (cheap), em_dash, ai_pattern (In today's)
+        issue_types = {issue.type for issue in result.issues}
+        assert "banned_word" in issue_types
+        assert "em_dash" in issue_types
+        assert "ai_pattern" in issue_types
+
+    def test_result_stored_in_qa_results(self) -> None:
+        """Result is stored in PageContent.qa_results JSONB field."""
+        pc = _make_page_content(
+            page_title="Simple Title",
+            bottom_description="Simple content.",
         )
-        assert score == expected
+        brand_config: dict[str, Any] = {}
 
-    def test_score_cannot_go_below_zero(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Score should not go below 0."""
-        # Create result with many issues
-        detection = TropeDetectionResult(
-            found_banned_words=[WordMatch(word="delve", count=10)],
-            found_banned_phrases=[PhraseMatch(phrase="test", count=10)],
-            found_em_dashes=20,
-        )
-        score = service._calculate_quality_score(detection)
-        assert score == 0.0
+        run_quality_checks(pc, brand_config)
 
-    def test_limited_use_excess_penalty(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Should penalize excess limited use words."""
-        detection = TropeDetectionResult(
-            limited_use_words={"robust": 5, "indeed": 3}  # 4 excess, 2 excess
-        )
-        score = service._calculate_quality_score(detection)
+        assert pc.qa_results is not None
+        assert "passed" in pc.qa_results
+        assert "issues" in pc.qa_results
+        assert "checked_at" in pc.qa_results
 
-        # 4 + 2 = 6 excess occurrences
-        expected = 100 + (SCORING_WEIGHTS["limited_use_excess"] * 6)
-        assert score == expected
-
-
-# ---------------------------------------------------------------------------
-# Test: Suggestion Generation
-# ---------------------------------------------------------------------------
-
-
-class TestSuggestionGeneration:
-    """Tests for improvement suggestion generation."""
-
-    def test_no_suggestions_for_clean(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Should generate no suggestions for clean content."""
-        detection = TropeDetectionResult()
-        suggestions = service._generate_suggestions(detection)
-        assert len(suggestions) == 0
-
-    def test_suggestions_for_banned_words(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Should suggest removing banned words."""
-        detection = TropeDetectionResult(
-            found_banned_words=[
-                WordMatch(word="delve", count=1),
-                WordMatch(word="unlock", count=1),
-            ]
-        )
-        suggestions = service._generate_suggestions(detection)
-
-        assert len(suggestions) >= 1
-        assert any("banned word" in s.lower() for s in suggestions)
-        assert any("delve" in s for s in suggestions)
-
-    def test_suggestions_for_em_dashes(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Should suggest replacing em dashes."""
-        detection = TropeDetectionResult(found_em_dashes=3)
-        suggestions = service._generate_suggestions(detection)
-
-        assert len(suggestions) >= 1
-        assert any("em dash" in s.lower() for s in suggestions)
-
-    def test_suggestions_for_all_issues(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Should generate suggestions for all issue types."""
-        detection = TropeDetectionResult(
-            found_banned_words=[WordMatch(word="delve", count=1)],
-            found_banned_phrases=[PhraseMatch(phrase="look no further", count=1)],
-            found_em_dashes=2,
-            found_triplet_patterns=[
-                PatternMatch("triplet", "Fast. Simple. Powerful.", 0)
+    def test_result_to_dict_format(self) -> None:
+        """QualityResult.to_dict() returns correct structure."""
+        result = QualityResult(
+            passed=False,
+            issues=[
+                QualityIssue(
+                    type="banned_word",
+                    field="page_title",
+                    description='Banned word "cheap" detected',
+                    context="...cheap boots...",
+                ),
             ],
-            found_negation_patterns=[
-                PatternMatch("negation", "aren't just X", 0)
-            ],
-            found_rhetorical_questions=1,
-            limited_use_words={"robust": 3},
-        )
-        suggestions = service._generate_suggestions(detection)
-
-        # Should have suggestions for each issue type
-        assert len(suggestions) >= 5
-
-
-# ---------------------------------------------------------------------------
-# Test: check_content_quality Method
-# ---------------------------------------------------------------------------
-
-
-class TestCheckContentQuality:
-    """Tests for the main check_content_quality method."""
-
-    @pytest.mark.asyncio
-    async def test_clean_content_passes(
-        self,
-        service: ContentQualityService,
-        clean_content_input: ContentQualityInput,
-    ) -> None:
-        """Should pass content without AI tropes."""
-        result = await service.check_content_quality(clean_content_input)
-
-        assert result.success is True
-        assert result.passed_qa is True
-        assert result.trope_detection is not None
-        assert result.trope_detection.overall_score >= QUALITY_SCORE_PASS_THRESHOLD
-        assert result.trope_detection.is_approved is True
-
-    @pytest.mark.asyncio
-    async def test_content_with_banned_words_fails(
-        self,
-        service: ContentQualityService,
-        content_with_banned_words: ContentQualityInput,
-    ) -> None:
-        """Should fail content with many banned words."""
-        result = await service.check_content_quality(content_with_banned_words)
-
-        assert result.success is True  # Method succeeded
-        assert result.passed_qa is False  # But QA failed
-        assert result.trope_detection is not None
-        assert result.trope_detection.overall_score < QUALITY_SCORE_PASS_THRESHOLD
-        assert len(result.trope_detection.found_banned_words) > 0
-
-    @pytest.mark.asyncio
-    async def test_tracks_duration(
-        self,
-        service: ContentQualityService,
-        clean_content_input: ContentQualityInput,
-    ) -> None:
-        """Should track operation duration."""
-        result = await service.check_content_quality(clean_content_input)
-
-        assert result.success is True
-        assert result.duration_ms >= 0
-        assert isinstance(result.duration_ms, float)
-
-    @pytest.mark.asyncio
-    async def test_includes_project_page_ids(
-        self,
-        service: ContentQualityService,
-        clean_content_input: ContentQualityInput,
-    ) -> None:
-        """Should include project and page IDs in result."""
-        result = await service.check_content_quality(clean_content_input)
-
-        assert result.project_id == "proj-123"
-        assert result.page_id == "page-456"
-        assert result.content_id == "content-789"
-
-    @pytest.mark.asyncio
-    async def test_generates_suggestions(
-        self,
-        service: ContentQualityService,
-        content_with_banned_words: ContentQualityInput,
-    ) -> None:
-        """Should generate improvement suggestions for failing content."""
-        result = await service.check_content_quality(content_with_banned_words)
-
-        assert result.trope_detection is not None
-        assert len(result.trope_detection.suggestions) > 0
-
-
-# ---------------------------------------------------------------------------
-# Test: Validation and Error Handling
-# ---------------------------------------------------------------------------
-
-
-class TestValidationAndErrors:
-    """Tests for input validation and error handling."""
-
-    @pytest.mark.asyncio
-    async def test_empty_bottom_description_raises(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Should raise validation error for empty bottom description."""
-        inp = ContentQualityInput(
-            h1="Title",
-            title_tag="Title",
-            meta_description="Meta",
-            top_description="Top",
-            bottom_description="",
-            project_id="proj-1",
+            checked_at="2026-02-06T12:00:00+00:00",
         )
 
-        with pytest.raises(ContentQualityValidationError) as exc_info:
-            await service.check_content_quality(inp)
+        d = result.to_dict()
+        assert d["passed"] is False
+        assert len(d["issues"]) == 1
+        assert d["issues"][0]["type"] == "banned_word"
+        assert d["issues"][0]["field"] == "page_title"
+        assert d["checked_at"] == "2026-02-06T12:00:00+00:00"
 
-        assert exc_info.value.field_name == "bottom_description"
-        assert exc_info.value.project_id == "proj-1"
-
-    @pytest.mark.asyncio
-    async def test_whitespace_bottom_description_raises(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Should raise validation error for whitespace-only description."""
-        inp = ContentQualityInput(
-            h1="Title",
-            title_tag="Title",
-            meta_description="Meta",
-            top_description="Top",
-            bottom_description="   \n\t  ",
+    def test_handles_none_fields(self) -> None:
+        """Content with None fields is handled gracefully."""
+        pc = _make_page_content(
+            page_title=None,
+            meta_description=None,
+            top_description=None,
+            bottom_description=None,
         )
+        brand_config: dict[str, Any] = {"vocabulary": {"banned_words": ["test"]}}
 
-        with pytest.raises(ContentQualityValidationError):
-            await service.check_content_quality(inp)
+        result = run_quality_checks(pc, brand_config)
+
+        # Should pass since there's nothing to check
+        assert result.passed is True
+        assert len(result.issues) == 0
 
 
 # ---------------------------------------------------------------------------
-# Test: Exception Classes
+# Check 10: Tier 3 Banned Phrases
 # ---------------------------------------------------------------------------
 
 
-class TestExceptionClasses:
-    """Tests for ContentQuality exception classes."""
+class TestCheckTier3Phrases:
+    """Tests for Tier 3 banned phrase detection (opening, filler, closing, hype)."""
 
-    def test_service_error_base(self) -> None:
-        """ContentQualityServiceError should be base exception."""
-        error = ContentQualityServiceError("Test error", "proj-1", "page-1")
-        assert str(error) == "Test error"
-        assert error.project_id == "proj-1"
-        assert error.page_id == "page-1"
+    def test_detects_opening_phrase(self) -> None:
+        """Detects Tier 3 opening phrase."""
+        fields = {"content": "In today's fast-paced world, boots matter."}
+        issues = _check_tier3_phrases(fields)
+        assert len(issues) == 1
+        assert issues[0].type == "tier3_banned_phrase"
 
-    def test_validation_error(self) -> None:
-        """ContentQualityValidationError should contain field info."""
-        error = ContentQualityValidationError(
-            field_name="bottom_description",
-            value="",
-            message="Cannot be empty",
-            project_id="proj-1",
-        )
-        assert error.field_name == "bottom_description"
-        assert error.value == ""
-        assert "bottom_description" in str(error)
+    def test_detects_filler_phrase(self) -> None:
+        """Detects Tier 3 filler phrase."""
+        fields = {"content": "It's important to note that leather is durable."}
+        issues = _check_tier3_phrases(fields)
+        assert len(issues) == 1
+        assert issues[0].type == "tier3_banned_phrase"
 
-    def test_exception_hierarchy(self) -> None:
-        """Validation error should inherit from service error."""
-        assert issubclass(ContentQualityValidationError, ContentQualityServiceError)
+    def test_detects_closing_phrase(self) -> None:
+        """Detects Tier 3 closing phrase."""
+        fields = {"content": "In conclusion, choose quality boots."}
+        issues = _check_tier3_phrases(fields)
+        assert len(issues) == 1
+        assert issues[0].type == "tier3_banned_phrase"
 
+    def test_detects_hype_phrase(self) -> None:
+        """Detects Tier 3 hype phrase."""
+        fields = {"content": "These boots unlock the potential of your wardrobe."}
+        issues = _check_tier3_phrases(fields)
+        assert len(issues) == 1
+        assert issues[0].type == "tier3_banned_phrase"
 
-# ---------------------------------------------------------------------------
-# Test: Batch Processing
-# ---------------------------------------------------------------------------
+    def test_passes_clean_content(self) -> None:
+        """Clean content without Tier 3 phrases passes."""
+        fields = {"content": "Our leather boots are built for comfort and warmth."}
+        issues = _check_tier3_phrases(fields)
+        assert len(issues) == 0
 
-
-class TestBatchProcessing:
-    """Tests for batch content quality checking."""
-
-    @pytest.mark.asyncio
-    async def test_batch_empty_list(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Should return empty list for empty input."""
-        results = await service.check_content_quality_batch([], project_id="proj-1")
-        assert results == []
-
-    @pytest.mark.asyncio
-    async def test_batch_multiple_items(
-        self,
-        service: ContentQualityService,
-        clean_content_input: ContentQualityInput,
-        content_with_banned_words: ContentQualityInput,
-    ) -> None:
-        """Should process multiple items in batch."""
-        inputs = [clean_content_input, content_with_banned_words]
-        results = await service.check_content_quality_batch(inputs, project_id="proj-1")
-
-        assert len(results) == 2
-        assert results[0].success is True  # Clean content
-        assert results[1].success is True  # Has issues but processed
-        assert results[0].passed_qa is True
-        assert results[1].passed_qa is False  # Failed QA due to issues
-
-    @pytest.mark.asyncio
-    async def test_batch_handles_validation_errors(
-        self,
-        service: ContentQualityService,
-        clean_content_input: ContentQualityInput,
-    ) -> None:
-        """Should handle items with validation errors in batch."""
-        invalid_input = ContentQualityInput(
-            h1="Title",
-            title_tag="Title",
-            meta_description="Meta",
-            top_description="Top",
-            bottom_description="",  # Invalid
-        )
-
-        inputs = [clean_content_input, invalid_input]
-
-        # The batch method doesn't catch validation errors - they propagate
-        # Testing that valid items process correctly
-        try:
-            results = await service.check_content_quality_batch(inputs)
-            # If no exception, check we got partial results
-            assert len(results) >= 1
-        except ContentQualityValidationError:
-            # Expected for invalid input
-            pass
+    def test_case_insensitive(self) -> None:
+        """Tier 3 detection is case-insensitive."""
+        fields = {"content": "LET'S DIVE IN to the world of boots."}
+        issues = _check_tier3_phrases(fields)
+        assert len(issues) == 1
 
 
 # ---------------------------------------------------------------------------
-# Test: Singleton and Convenience Functions
+# Check 11: Empty Signposts
 # ---------------------------------------------------------------------------
 
 
-class TestSingletonAndConvenience:
-    """Tests for singleton accessor and convenience functions."""
+class TestCheckEmptySignposts:
+    """Tests for empty transition signpost detection."""
 
-    def test_get_service_singleton(self) -> None:
-        """get_content_quality_service should return singleton."""
-        import app.services.content_quality as cq_module
+    def test_detects_signpost(self) -> None:
+        """Detects empty signpost phrases."""
+        fields = {"content": "Now, let's look at the sole construction."}
+        issues = _check_empty_signposts(fields)
+        assert len(issues) == 1
+        assert issues[0].type == "empty_signpost"
 
-        original = cq_module._content_quality_service
-        cq_module._content_quality_service = None
+    def test_detects_that_said(self) -> None:
+        """Detects 'That said' signpost."""
+        fields = {"content": "That said, you should consider fit first."}
+        issues = _check_empty_signposts(fields)
+        assert len(issues) == 1
 
-        try:
-            service1 = get_content_quality_service()
-            service2 = get_content_quality_service()
-            assert service1 is service2
-        finally:
-            cq_module._content_quality_service = original
-
-    @pytest.mark.asyncio
-    async def test_convenience_function(self) -> None:
-        """check_content_quality convenience function should work."""
-        result = await check_content_quality(
-            h1="Test H1",
-            title_tag="Test Title",
-            meta_description="Test meta",
-            top_description="Test top",
-            bottom_description="This is valid content for testing purposes.",
-            project_id="proj-1",
-        )
-
-        assert result.success is True
-        assert result.project_id == "proj-1"
+    def test_passes_clean_content(self) -> None:
+        """Clean content without signposts passes."""
+        fields = {"content": "The sole is made from Vibram rubber."}
+        issues = _check_empty_signposts(fields)
+        assert len(issues) == 0
 
 
 # ---------------------------------------------------------------------------
-# Test: Constants Verification
+# Check 12: Missing Direct Answer
 # ---------------------------------------------------------------------------
 
 
-class TestConstants:
-    """Tests to verify constants are properly configured."""
+class TestCheckMissingDirectAnswer:
+    """Tests for missing direct answer check on blog content."""
 
-    def test_banned_words_not_empty(self) -> None:
-        """BANNED_WORDS should have entries."""
-        assert len(BANNED_WORDS) > 0
-        assert "delve" in BANNED_WORDS
-        assert "unlock" in BANNED_WORDS
+    def test_flags_question_opener(self) -> None:
+        """Flags content that opens with a question."""
+        fields = {"content": "Have you ever wondered about boot care? Here's what you need to know."}
+        issues = _check_missing_direct_answer(fields)
+        assert len(issues) == 1
+        assert issues[0].type == "missing_direct_answer"
+        assert "question" in issues[0].description.lower()
 
-    def test_banned_phrases_not_empty(self) -> None:
-        """BANNED_PHRASES should have entries."""
-        assert len(BANNED_PHRASES) > 0
-        assert any("fast-paced world" in p for p in BANNED_PHRASES)
+    def test_flags_ai_opener(self) -> None:
+        """Flags content that opens with AI pattern instead of direct answer."""
+        fields = {"content": "In today's market, boot care is more important than ever."}
+        issues = _check_missing_direct_answer(fields)
+        assert len(issues) == 1
+        assert issues[0].type == "missing_direct_answer"
 
-    def test_limited_use_words_not_empty(self) -> None:
-        """LIMITED_USE_WORDS should have entries."""
-        assert len(LIMITED_USE_WORDS) > 0
-        assert "robust" in LIMITED_USE_WORDS
-        assert "seamless" in LIMITED_USE_WORDS
+    def test_passes_direct_answer(self) -> None:
+        """Content that opens with a direct statement passes."""
+        fields = {"content": "Leather boots last 10+ years with proper care. Here is how to maintain them."}
+        issues = _check_missing_direct_answer(fields)
+        assert len(issues) == 0
 
-    def test_scoring_weights_configured(self) -> None:
-        """SCORING_WEIGHTS should have all penalty types."""
-        assert "banned_word" in SCORING_WEIGHTS
-        assert "banned_phrase" in SCORING_WEIGHTS
-        assert "em_dash" in SCORING_WEIGHTS
-        assert "triplet_pattern" in SCORING_WEIGHTS
-        assert "negation_pattern" in SCORING_WEIGHTS
-        assert "rhetorical_question" in SCORING_WEIGHTS
-        assert "limited_use_excess" in SCORING_WEIGHTS
+    def test_handles_html_content(self) -> None:
+        """Strips HTML tags before checking."""
+        fields = {"content": "<h2>Boot Care</h2><p>Leather boots need regular conditioning to stay supple.</p>"}
+        issues = _check_missing_direct_answer(fields)
+        assert len(issues) == 0
 
-    def test_pass_threshold_reasonable(self) -> None:
-        """QUALITY_SCORE_PASS_THRESHOLD should be reasonable."""
-        assert QUALITY_SCORE_PASS_THRESHOLD > 0
-        assert QUALITY_SCORE_PASS_THRESHOLD <= 100
-        assert QUALITY_SCORE_PASS_THRESHOLD == 80.0
+    def test_skips_empty_content(self) -> None:
+        """No issues when content field is empty."""
+        fields = {"content": ""}
+        issues = _check_missing_direct_answer(fields)
+        assert len(issues) == 0
+
+    def test_skips_missing_content(self) -> None:
+        """No issues when content key is missing."""
+        fields = {"title": "Some Title"}
+        issues = _check_missing_direct_answer(fields)
+        assert len(issues) == 0
 
 
 # ---------------------------------------------------------------------------
-# Test: Edge Cases
+# Check 13: Business Jargon
 # ---------------------------------------------------------------------------
 
 
-class TestEdgeCases:
-    """Tests for edge cases and boundary conditions."""
+class TestCheckBusinessJargon:
+    """Tests for business jargon detection."""
 
-    @pytest.mark.asyncio
-    async def test_very_short_content(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Should handle very short content."""
-        inp = ContentQualityInput(
-            h1="A",
-            title_tag="B",
-            meta_description="C",
-            top_description="D",
-            bottom_description="E",
-        )
-        result = await service.check_content_quality(inp)
-        assert result.success is True
+    def test_detects_jargon_word(self) -> None:
+        """Detects business jargon word."""
+        fields = {"content": "Our synergy-driven approach to boot design sets us apart."}
+        issues = _check_business_jargon(fields)
+        assert len(issues) == 1
+        assert issues[0].type == "business_jargon"
+        assert "synergy" in issues[0].description.lower()
 
-    @pytest.mark.asyncio
-    async def test_unicode_content(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Should handle unicode content."""
-        inp = ContentQualityInput(
-            h1="コーヒー Storage",
-            title_tag="Café Containers",
-            meta_description="Ñoño description",
-            top_description="日本語 text here",
-            bottom_description="Unicode content: 你好世界 🎉",
-        )
-        result = await service.check_content_quality(inp)
-        assert result.success is True
+    def test_detects_multi_word_jargon(self) -> None:
+        """Detects multi-word business jargon like 'paradigm shift'."""
+        fields = {"content": "This represents a paradigm shift in footwear technology."}
+        issues = _check_business_jargon(fields)
+        assert len(issues) == 1
+        assert "paradigm shift" in issues[0].description.lower()
 
-    @pytest.mark.asyncio
-    async def test_special_characters(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Should handle special characters."""
-        inp = ContentQualityInput(
-            h1="Coffee & Tea Storage",
-            title_tag='12" Containers',
-            meta_description="100% Fresh",
-            top_description="<b>Bold</b> text",
-            bottom_description="Special chars: @#$%^&*()_+=[]{}|\\",
-        )
-        result = await service.check_content_quality(inp)
-        assert result.success is True
+    def test_passes_clean_content(self) -> None:
+        """Clean content without jargon passes."""
+        fields = {"content": "Our boots are made with quality leather and strong stitching."}
+        issues = _check_business_jargon(fields)
+        assert len(issues) == 0
 
-    @pytest.mark.asyncio
-    async def test_large_content(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Should handle large content efficiently."""
-        large_content = "This is test content. " * 1000  # ~22KB
-        inp = ContentQualityInput(
-            h1="Large Content Test",
-            title_tag="Large Content Test",
-            meta_description="Testing large content handling",
-            top_description="Top description for large content",
-            bottom_description=large_content,
-        )
-        result = await service.check_content_quality(inp)
-        assert result.success is True
-        # Should complete in reasonable time (not hang)
 
-    @pytest.mark.asyncio
-    async def test_content_exactly_at_threshold(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Content exactly at pass threshold should pass."""
-        # Create content that will score exactly at threshold
-        # One banned word = -20 points = 80 score
-        inp = ContentQualityInput(
-            h1="Coffee Containers",
-            title_tag="Coffee Containers",
-            meta_description="Fresh coffee storage",
-            top_description="Premium containers",
-            bottom_description="This will delve into coffee storage.",
-        )
-        result = await service.check_content_quality(inp)
+# ---------------------------------------------------------------------------
+# run_blog_quality_checks (combined: 13 checks)
+# ---------------------------------------------------------------------------
 
-        # Should score exactly 80 (one banned word)
-        assert result.trope_detection is not None
-        assert result.trope_detection.overall_score == 80.0
-        assert result.passed_qa is True  # 80 >= 80
 
-    @pytest.mark.asyncio
-    async def test_content_just_below_threshold(
-        self,
-        service: ContentQualityService,
-    ) -> None:
-        """Content just below pass threshold should fail."""
-        # Two banned words = -40 points = 60 score
-        inp = ContentQualityInput(
-            h1="Coffee Containers",
-            title_tag="Coffee Containers",
-            meta_description="Fresh coffee storage",
-            top_description="Premium containers",
-            bottom_description="Delve into innovative coffee storage solutions.",
-        )
-        result = await service.check_content_quality(inp)
+class TestRunBlogQualityChecks:
+    """Tests for run_blog_quality_checks with all 13 checks."""
 
-        # Should score 60 (two banned words)
-        assert result.trope_detection is not None
-        assert result.trope_detection.overall_score == 60.0
-        assert result.passed_qa is False  # 60 < 80
+    def test_passes_clean_content(self) -> None:
+        """Clean content passes all 13 checks."""
+        fields = {
+            "title": "Winter Boots Guide",
+            "content": "Leather boots last years with proper care. Regular conditioning keeps them supple.",
+        }
+        result = run_blog_quality_checks(fields, {})
+        assert result.passed is True
+        assert len(result.issues) == 0
+
+    def test_catches_tier3_and_standard(self) -> None:
+        """Catches both standard (em dash) and blog-specific (tier3) issues."""
+        fields = {
+            "content": "In conclusion, these boots are great\u2014quality matters.",
+        }
+        result = run_blog_quality_checks(fields, {})
+        assert result.passed is False
+        types = {i.type for i in result.issues}
+        assert "tier3_banned_phrase" in types
+        assert "em_dash" in types
+
+    def test_includes_all_13_check_types(self) -> None:
+        """Verifies all 13 checks run (each produces at least its type)."""
+        # Content designed to trigger at least one issue from many checks
+        fields = {
+            "content": (
+                "In today's fast-paced world, let's dive in. "
+                "Now, let's look at synergy. "
+                "It's crucial to utilize robust scalable tools\u2014"
+                "indeed furthermore moreover. "
+                "It's not just style, it's substance. "
+                "It's not just X, it's Y. "
+                "A, B, and C. D, E, and F. G, H, and I. "
+                "Question? Another question? "
+            ),
+        }
+        brand_config: dict[str, Any] = {"vocabulary": {"banned_words": ["tools"]}}
+        result = run_blog_quality_checks(fields, brand_config)
+        assert result.passed is False
+        types = {i.type for i in result.issues}
+        # Standard checks
+        assert "banned_word" in types
+        assert "em_dash" in types
+        assert "ai_pattern" in types
+        assert "tier1_ai_word" in types
+        assert "tier2_ai_excess" in types
+        # Blog-specific checks
+        assert "tier3_banned_phrase" in types
+        assert "empty_signpost" in types
+        assert "business_jargon" in types

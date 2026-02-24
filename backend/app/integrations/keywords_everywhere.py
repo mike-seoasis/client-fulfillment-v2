@@ -29,11 +29,11 @@ RAILWAY DEPLOYMENT REQUIREMENTS:
 import asyncio
 import time
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any
 
 import httpx
 
+from app.core.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from app.core.config import get_settings
 from app.core.logging import get_logger, keywords_everywhere_logger
 
@@ -44,128 +44,6 @@ KEYWORDS_EVERYWHERE_API_URL = "https://api.keywordseverywhere.com"
 
 # Maximum keywords per request (API limit)
 MAX_KEYWORDS_PER_REQUEST = 100
-
-
-class CircuitState(Enum):
-    """Circuit breaker states."""
-
-    CLOSED = "closed"  # Normal operation
-    OPEN = "open"  # Failing, reject all requests
-    HALF_OPEN = "half_open"  # Testing if service recovered
-
-
-@dataclass
-class CircuitBreakerConfig:
-    """Circuit breaker configuration."""
-
-    failure_threshold: int
-    recovery_timeout: float
-
-
-class CircuitBreaker:
-    """Circuit breaker implementation for Keywords Everywhere operations.
-
-    Prevents cascading failures by stopping requests to a failing service.
-    After recovery_timeout, allows a test request through (half-open state).
-    If test succeeds, circuit closes. If fails, circuit opens again.
-    """
-
-    def __init__(self, config: CircuitBreakerConfig) -> None:
-        self._config = config
-        self._state = CircuitState.CLOSED
-        self._failure_count = 0
-        self._last_failure_time: float | None = None
-        self._lock = asyncio.Lock()
-
-    @property
-    def state(self) -> CircuitState:
-        """Get current circuit state."""
-        return self._state
-
-    @property
-    def is_closed(self) -> bool:
-        """Check if circuit is closed (normal operation)."""
-        return self._state == CircuitState.CLOSED
-
-    @property
-    def is_open(self) -> bool:
-        """Check if circuit is open (rejecting requests)."""
-        return self._state == CircuitState.OPEN
-
-    async def _check_recovery(self) -> bool:
-        """Check if enough time has passed to attempt recovery."""
-        if self._last_failure_time is None:
-            return False
-        elapsed = time.monotonic() - self._last_failure_time
-        return elapsed >= self._config.recovery_timeout
-
-    async def can_execute(self) -> bool:
-        """Check if operation can be executed based on circuit state."""
-        async with self._lock:
-            if self._state == CircuitState.CLOSED:
-                return True
-
-            if self._state == CircuitState.OPEN:
-                if await self._check_recovery():
-                    # Transition to half-open for testing
-                    previous_state = self._state.value
-                    self._state = CircuitState.HALF_OPEN
-                    keywords_everywhere_logger.circuit_state_change(
-                        previous_state, self._state.value, self._failure_count
-                    )
-                    keywords_everywhere_logger.circuit_recovery_attempt()
-                    return True
-                return False
-
-            # HALF_OPEN state - allow single test request
-            return True
-
-    async def record_success(self) -> None:
-        """Record successful operation."""
-        async with self._lock:
-            if self._state == CircuitState.HALF_OPEN:
-                # Recovery successful, close circuit
-                previous_state = self._state.value
-                self._state = CircuitState.CLOSED
-                self._failure_count = 0
-                self._last_failure_time = None
-                keywords_everywhere_logger.circuit_state_change(
-                    previous_state, self._state.value, self._failure_count
-                )
-                keywords_everywhere_logger.circuit_closed()
-            elif self._state == CircuitState.CLOSED:
-                # Reset failure count on success
-                self._failure_count = 0
-
-    async def record_failure(self) -> None:
-        """Record failed operation."""
-        async with self._lock:
-            self._failure_count += 1
-            self._last_failure_time = time.monotonic()
-
-            if self._state == CircuitState.HALF_OPEN:
-                # Recovery failed, open circuit again
-                previous_state = self._state.value
-                self._state = CircuitState.OPEN
-                keywords_everywhere_logger.circuit_state_change(
-                    previous_state, self._state.value, self._failure_count
-                )
-                keywords_everywhere_logger.circuit_open(
-                    self._failure_count, self._config.recovery_timeout
-                )
-            elif (
-                self._state == CircuitState.CLOSED
-                and self._failure_count >= self._config.failure_threshold
-            ):
-                # Too many failures, open circuit
-                previous_state = self._state.value
-                self._state = CircuitState.OPEN
-                keywords_everywhere_logger.circuit_state_change(
-                    previous_state, self._state.value, self._failure_count
-                )
-                keywords_everywhere_logger.circuit_open(
-                    self._failure_count, self._config.recovery_timeout
-                )
 
 
 @dataclass
@@ -286,8 +164,12 @@ class KeywordsEverywhereClient:
         self._timeout = timeout or settings.keywords_everywhere_timeout
         self._max_retries = max_retries or settings.keywords_everywhere_max_retries
         self._retry_delay = retry_delay or settings.keywords_everywhere_retry_delay
-        self._default_country = default_country or settings.keywords_everywhere_default_country
-        self._default_currency = default_currency or settings.keywords_everywhere_default_currency
+        self._default_country = (
+            default_country or settings.keywords_everywhere_default_country
+        )
+        self._default_currency = (
+            default_currency or settings.keywords_everywhere_default_currency
+        )
         self._default_data_source = (
             default_data_source or settings.keywords_everywhere_default_data_source
         )
@@ -297,7 +179,8 @@ class KeywordsEverywhereClient:
             CircuitBreakerConfig(
                 failure_threshold=settings.keywords_everywhere_circuit_failure_threshold,
                 recovery_timeout=settings.keywords_everywhere_circuit_recovery_timeout,
-            )
+            ),
+            name="keywords_everywhere",
         )
 
         # HTTP client (created lazily)
@@ -569,7 +452,11 @@ class KeywordsEverywhereClient:
                     kw = item.get("keyword", "")
                     vol = item.get("vol")
                     cpc_data = item.get("cpc", {})
-                    cpc = cpc_data.get("value") if isinstance(cpc_data, dict) else cpc_data
+                    cpc = (
+                        cpc_data.get("value")
+                        if isinstance(cpc_data, dict)
+                        else cpc_data
+                    )
                     competition = item.get("competition")
                     trend = item.get("trend")
 
@@ -578,7 +465,9 @@ class KeywordsEverywhereClient:
                             keyword=kw,
                             volume=vol,
                             cpc=float(cpc) if cpc is not None else None,
-                            competition=float(competition) if competition is not None else None,
+                            competition=float(competition)
+                            if competition is not None
+                            else None,
                             trend=trend if isinstance(trend, list) else None,
                         )
                     )
@@ -595,18 +484,26 @@ class KeywordsEverywhereClient:
                     request_id=request_id,
                 )
                 keywords_everywhere_logger.response_body(
-                    endpoint, len(keyword_results), duration_ms, credits_used=credits_used
+                    endpoint,
+                    len(keyword_results),
+                    duration_ms,
+                    credits_used=credits_used,
                 )
 
                 # Log credit usage if available
                 if credits_used is not None:
                     credits_remaining = response_data.get("credits_remaining")
-                    keywords_everywhere_logger.credit_usage(credits_used, credits_remaining)
+                    keywords_everywhere_logger.credit_usage(
+                        credits_used, credits_remaining
+                    )
 
                 await self._circuit_breaker.record_success()
 
                 keywords_everywhere_logger.keyword_lookup_complete(
-                    len(keywords), total_duration_ms, success=True, results_count=len(keyword_results)
+                    len(keywords),
+                    total_duration_ms,
+                    success=True,
+                    results_count=len(keyword_results),
                 )
 
                 return KeywordDataResult(
@@ -754,20 +651,21 @@ class KeywordsEverywhereClient:
         total_credits = 0
         errors: list[str] = []
 
-        async def process_batch(batch_index: int, batch: list[str]) -> tuple[int, KeywordDataResult]:
+        async def process_batch(
+            batch_index: int, batch: list[str]
+        ) -> tuple[int, KeywordDataResult]:
             """Process a single batch with semaphore control."""
             async with semaphore:
                 keywords_everywhere_logger.batch_start(
                     batch_index, len(batch), total_batches, len(keywords)
                 )
-                result = await self.get_keyword_data(batch, country, currency, data_source)
+                result = await self.get_keyword_data(
+                    batch, country, currency, data_source
+                )
                 return batch_index, result
 
         # Create tasks for all batches
-        tasks = [
-            process_batch(i, batch)
-            for i, batch in enumerate(batches)
-        ]
+        tasks = [process_batch(i, batch) for i, batch in enumerate(batches)]
 
         # Execute all tasks
         results = await asyncio.gather(*tasks)

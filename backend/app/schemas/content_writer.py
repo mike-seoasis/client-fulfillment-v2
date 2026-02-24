@@ -285,7 +285,9 @@ class ContentWriterBatchRequest(BaseModel):
 
     @field_validator("items")
     @classmethod
-    def validate_items(cls, v: list[ContentWriterBatchItemRequest]) -> list[ContentWriterBatchItemRequest]:
+    def validate_items(
+        cls, v: list[ContentWriterBatchItemRequest]
+    ) -> list[ContentWriterBatchItemRequest]:
         """Validate items list."""
         if not v:
             raise ValueError("At least one item is required")

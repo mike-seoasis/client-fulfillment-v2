@@ -1,1014 +1,2162 @@
-"""BrandConfigService for V2 brand config synthesis using Claude.
+"""Brand configuration service for managing brand config generation.
 
-Synthesizes brand configuration from documents and URLs using Claude LLM,
-generating a V2 schema with colors, typography, logo, voice/tone, and social media.
-
-Features:
-- Document parsing (PDF, DOCX, TXT) for brand extraction
-- LLM-based synthesis via Claude
-- Structured V2 schema output
-- Comprehensive error logging per requirements
-
-ERROR LOGGING REQUIREMENTS:
-- Log method entry/exit at DEBUG level with parameters (sanitized)
-- Log all exceptions with full stack trace and context
-- Include entity IDs (project_id, brand_config_id) in all service logs
-- Log validation failures with field names and rejected values
-- Log state transitions (phase changes) at INFO level
-- Add timing logs for operations >1 second
+Orchestrates the brand configuration generation process, including:
+- Starting generation as a background task
+- Tracking generation status in project.brand_wizard_state
+- Reporting current progress
+- Research phase: parallel data gathering from Perplexity, Crawl4AI, and documents
+- Synthesis phase: parallel-batched generation of 9 brand config sections + ai_prompt_snippet via Claude
+- Post-synthesis: subreddit research via Perplexity (if Reddit config exists)
 """
 
-import base64
+import asyncio
 import json
-import time
-import traceback
-from dataclasses import dataclass, field
+import logging
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from enum import Enum
 from typing import Any
 
+from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
-from app.core.logging import get_logger
-from app.integrations.claude import ClaudeClient, get_claude
-from app.repositories.brand_config import BrandConfigRepository
-from app.schemas.brand_config import (
-    BrandConfigSynthesisRequest,
-    BrandConfigSynthesisResponse,
-    V2SchemaModel,
-)
-from app.utils.document_parser import DocumentParser, get_document_parser
+from app.integrations.claude import ClaudeClient, CompletionResult
+from app.integrations.crawl4ai import Crawl4AIClient, CrawlResult
+from app.integrations.perplexity import BrandResearchResult, PerplexityClient
+from app.models.brand_config import BrandConfig
+from app.models.project import Project
+from app.models.project_file import ProjectFile
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
-# Constants
-SLOW_OPERATION_THRESHOLD_MS = 1000
-MAX_CONTENT_LENGTH = 15000  # Max chars to send to Claude
-MAX_CONTENT_PREVIEW_LENGTH = 200
+# Default timeout for each section generation (in seconds)
+SECTION_TIMEOUT_SECONDS = 60
 
+# Max retries per section (on top of Claude client's own retries)
+MAX_SECTION_RETRIES = 2
 
-# =============================================================================
-# LLM PROMPT TEMPLATES FOR BRAND SYNTHESIS
-# =============================================================================
+# Truncation limits for research context fed into section prompts.
+# API limits: 200K context window, 450K input/min, 90K output/min.
+# Worst-case total ≈ 102K tokens (51% of 200K) — comfortable headroom.
+CRAWL_CONTENT_MAX_CHARS = 100_000
+DOC_TEXT_MAX_CHARS = 100_000
 
-BRAND_SYNTHESIS_SYSTEM_PROMPT = """You are a brand strategist expert specializing in extracting brand identity elements from documents and web content.
-
-Your task is to analyze provided content and synthesize a comprehensive brand configuration schema.
-
-## Output Requirements
-
-You MUST respond with valid JSON only (no markdown, no explanation). The JSON must follow this exact structure:
-
-{
-  "colors": {
-    "primary": "#HEXCODE",
-    "secondary": "#HEXCODE",
-    "accent": "#HEXCODE",
-    "background": "#FFFFFF",
-    "text": "#333333"
-  },
-  "typography": {
-    "heading_font": "Font Name",
-    "body_font": "Font Name",
-    "base_size": 16,
-    "heading_weight": "bold",
-    "body_weight": "regular"
-  },
-  "logo": {
-    "url": "URL if found",
-    "alt_text": "Description of logo"
-  },
-  "voice": {
-    "tone": "professional|friendly|playful|authoritative|warm|casual",
-    "personality": ["trait1", "trait2", "trait3"],
-    "writing_style": "conversational|formal|technical|inspirational",
-    "target_audience": "Description of target audience",
-    "value_proposition": "Core value proposition",
-    "tagline": "Brand tagline if found"
-  },
-  "social": {
-    "twitter": "@handle",
-    "linkedin": "company/name",
-    "instagram": "@handle",
-    "facebook": "page name",
-    "youtube": "channel",
-    "tiktok": "@handle"
-  },
-  "version": "2.0"
+# Per-section configuration: (max_tokens, timeout_seconds)
+# Sections with complex/deeply-nested schemas need more tokens to avoid truncation.
+# Later sections accumulate large prompts, so they need longer timeouts.
+SECTION_CONFIG: dict[str, tuple[int, int]] = {
+    "brand_foundation": (16384, 300),
+    "target_audience": (16384, 300),
+    "voice_dimensions": (16384, 300),
+    "voice_characteristics": (16384, 300),
+    "writing_style": (16384, 300),
+    "vocabulary": (16384, 300),
+    "trust_elements": (16384, 300),
+    "competitor_context": (16384, 300),
+    "ai_prompt_snippet": (8192, 180),  # embeds in downstream prompts, keep smaller
 }
 
-## Guidelines
+# Which prior sections to include as context for each section.
+# Limits prompt size — later sections only get the context they actually need,
+# rather than ALL prior sections (which can balloon to 40K+ chars).
+SECTION_CONTEXT_DEPS: dict[str, list[str] | None] = {
+    "brand_foundation": None,  # just research
+    "target_audience": ["brand_foundation"],
+    "voice_dimensions": ["brand_foundation", "target_audience"],
+    "voice_characteristics": ["voice_dimensions"],
+    "writing_style": ["voice_characteristics"],
+    "vocabulary": ["voice_characteristics", "writing_style"],
+    "trust_elements": ["brand_foundation", "target_audience"],
+    "competitor_context": ["brand_foundation", "target_audience"],
+    "ai_prompt_snippet": None,  # ALL sections (it's a summary)
+}
 
-1. **Colors**: Extract actual colors if mentioned; otherwise infer from brand tone (warm brands = warm colors, tech = blues, etc.)
-2. **Typography**: Use specific font names if mentioned; otherwise suggest appropriate fonts based on brand personality
-3. **Voice**: Analyze tone, language patterns, and messaging to determine brand voice
-4. **Social**: Include only handles that are explicitly mentioned
-5. **Inference**: When information is missing, make reasonable inferences based on industry and brand positioning
-6. **Hex Colors**: Always use 6-character hex codes with # prefix (e.g., #FF5733)
-7. **Null Values**: Use null for fields with no information (don't guess social handles)
-
-Respond with JSON only."""
-
-BRAND_SYNTHESIS_USER_PROMPT_TEMPLATE = """Analyze the following brand content and synthesize a V2 brand configuration schema.
-
-Brand Name: {brand_name}
-Domain: {domain}
-
-## Source Content:
-
-{content}
-
-{additional_context}
-
-Extract brand identity elements and return a JSON object with colors, typography, logo, voice, and social media configuration.
-
-Respond with JSON only:"""
-
-
-# =============================================================================
-# SERVICE EXCEPTIONS
-# =============================================================================
-
-
-class BrandConfigServiceError(Exception):
-    """Base exception for BrandConfigService errors."""
-
-    def __init__(
-        self,
-        message: str,
-        project_id: str | None = None,
-        brand_config_id: str | None = None,
-    ) -> None:
-        super().__init__(message)
-        self.project_id = project_id
-        self.brand_config_id = brand_config_id
+# Execution batches for parallel synthesis. Sections in the same batch run
+# concurrently via asyncio.gather. Order derived from SECTION_CONTEXT_DEPS:
+# a section can run once ALL its dependency sections have been generated.
+SYNTHESIS_BATCHES: list[list[str]] = [
+    ["brand_foundation"],  # no deps
+    ["target_audience"],  # brand_foundation
+    [
+        "voice_dimensions",
+        "trust_elements",
+        "competitor_context",
+    ],  # brand_foundation + target_audience
+    ["voice_characteristics"],  # voice_dimensions
+    ["writing_style"],  # voice_characteristics
+    ["vocabulary"],  # voice_characteristics + writing_style
+    ["ai_prompt_snippet"],  # ALL sections
+]
 
 
-class BrandConfigValidationError(BrandConfigServiceError):
-    """Raised when input validation fails."""
+def fix_json_control_chars(json_text: str) -> str:
+    """Fix unescaped control characters in JSON strings.
 
-    def __init__(
-        self,
-        field: str,
-        value: Any,
-        message: str,
-        project_id: str | None = None,
-    ) -> None:
-        super().__init__(
-            f"Validation failed for '{field}': {message}",
-            project_id=project_id,
-        )
-        self.field = field
-        self.value = value
-        self.message = message
+    LLMs sometimes return JSON with literal newlines inside string values
+    instead of escaped \\n. This function finds string values and escapes
+    control characters properly.
+
+    Args:
+        json_text: Raw JSON text that may have unescaped control chars
+
+    Returns:
+        JSON text with control characters escaped in string values
+    """
+    # Process the JSON character by character to find string values
+    # and escape control characters within them
+    result = []
+    in_string = False
+    escape_next = False
+
+    for char in json_text:
+        if escape_next:
+            result.append(char)
+            escape_next = False
+            continue
+
+        if char == "\\" and in_string:
+            result.append(char)
+            escape_next = True
+            continue
+
+        if char == '"' and not escape_next:
+            in_string = not in_string
+            result.append(char)
+            continue
+
+        if in_string:
+            # Escape control characters inside strings
+            if char == "\n":
+                result.append("\\n")
+            elif char == "\r":
+                result.append("\\r")
+            elif char == "\t":
+                result.append("\\t")
+            elif ord(char) < 32:  # Other control characters
+                result.append(f"\\u{ord(char):04x}")
+            else:
+                result.append(char)
+        else:
+            result.append(char)
+
+    return "".join(result)
 
 
-class BrandConfigNotFoundError(BrandConfigServiceError):
-    """Raised when brand config is not found."""
+class GenerationStatusValue(str, Enum):
+    """Possible status values for brand config generation."""
 
-    def __init__(self, brand_config_id: str, project_id: str | None = None) -> None:
-        super().__init__(
-            f"Brand config not found: {brand_config_id}",
-            project_id=project_id,
-            brand_config_id=brand_config_id,
-        )
-
-
-class BrandConfigSynthesisError(BrandConfigServiceError):
-    """Raised when synthesis fails."""
-
-    pass
-
-
-# =============================================================================
-# SERVICE RESULT DATACLASS
-# =============================================================================
+    PENDING = "pending"
+    GENERATING = "generating"
+    COMPLETE = "complete"
+    FAILED = "failed"
 
 
 @dataclass
-class SynthesisResult:
-    """Result of brand config synthesis."""
+class GenerationStatus:
+    """Status of brand config generation for a project.
 
-    success: bool
-    v2_schema: dict[str, Any] = field(default_factory=dict)
+    Attributes:
+        status: Current generation status (pending, generating, complete, failed)
+        current_step: Name of the current step being processed
+        steps_completed: Number of steps completed
+        steps_total: Total number of steps
+        error: Error message if generation failed
+        started_at: Timestamp when generation started
+        completed_at: Timestamp when generation completed
+    """
+
+    status: GenerationStatusValue
+    current_step: str | None = None
+    steps_completed: int = 0
+    steps_total: int = 0
     error: str | None = None
-    duration_ms: float = 0.0
-    input_tokens: int | None = None
-    output_tokens: int | None = None
-    request_id: str | None = None
-    sources_used: list[str] = field(default_factory=list)
+    started_at: str | None = None
+    completed_at: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for JSONB storage."""
+        return {
+            "status": self.status.value,
+            "current_step": self.current_step,
+            "steps_completed": self.steps_completed,
+            "steps_total": self.steps_total,
+            "error": self.error,
+            "started_at": self.started_at,
+            "completed_at": self.completed_at,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "GenerationStatus":
+        """Create from dictionary (JSONB data)."""
+        return cls(
+            status=GenerationStatusValue(data.get("status", "pending")),
+            current_step=data.get("current_step"),
+            steps_completed=data.get("steps_completed", 0),
+            steps_total=data.get("steps_total", 0),
+            error=data.get("error"),
+            started_at=data.get("started_at"),
+            completed_at=data.get("completed_at"),
+        )
 
 
-# =============================================================================
-# BRAND CONFIG SERVICE
-# =============================================================================
+# Generation steps for brand config (8 sections + ai_prompt_snippet summary)
+GENERATION_STEPS = [
+    "brand_foundation",
+    "target_audience",
+    "voice_dimensions",
+    "voice_characteristics",
+    "writing_style",
+    "vocabulary",
+    "trust_elements",
+    "competitor_context",
+    "ai_prompt_snippet",
+    "subreddit_research",
+]
+
+
+# Section-specific system prompts for brand config generation
+SECTION_PROMPTS: dict[str, str] = {
+    "brand_foundation": """You are a brand strategist creating the Brand Foundation section of a brand guidelines document.
+
+Based on the research context provided, extract and synthesize:
+- Company Overview (name, founded, location, industry, business model)
+- What They Sell (primary products/services, secondary offerings, price point, sales channels)
+- Brand Positioning (tagline/slogan, one-sentence description, category position)
+- Mission & Values (mission statement, core values, brand promise)
+- Differentiators (primary USP, supporting differentiators, what they're NOT)
+
+Output ONLY valid JSON in this exact format:
+{
+  "company_overview": {
+    "company_name": "string",
+    "founded": "string or null",
+    "location": "string or null",
+    "industry": "string",
+    "business_model": "string"
+  },
+  "what_they_sell": {
+    "primary_products_services": "string",
+    "secondary_offerings": "string or null",
+    "price_point": "string (Budget/Mid-range/Premium/Luxury)",
+    "sales_channels": "string"
+  },
+  "brand_positioning": {
+    "tagline": "string or null",
+    "one_sentence_description": "string",
+    "category_position": "string (Leader/Challenger/Specialist/Disruptor)"
+  },
+  "mission_and_values": {
+    "mission_statement": "string",
+    "core_values": ["string", "string", "string"],
+    "brand_promise": "string"
+  },
+  "differentiators": {
+    "primary_usp": "string",
+    "supporting_differentiators": ["string", "string"],
+    "what_they_are_not": "string"
+  }
+}
+
+Be specific and concrete based on the research. If information is not available, make reasonable inferences based on industry norms.""",
+    "target_audience": """You are a brand strategist creating the Target Audience section of a brand guidelines document.
+
+Based on the research context and brand foundation provided, create DETAILED TARGET AUDIENCE PERSONAS.
+
+REQUIREMENTS:
+- You MUST create a minimum of 2 fully detailed personas
+- Each persona MUST have ALL fields populated - no nulls or empty values
+- Be specific and concrete based on the research - avoid generic placeholder text
+- The first persona in the array is the PRIMARY persona
+
+Output ONLY valid JSON in this exact format:
+{
+  "audience_overview": {
+    "primary_persona": "string (name of first/primary persona)",
+    "secondary_persona": "string (name of second persona)",
+    "tertiary_persona": "string or null (name of third persona if exists)"
+  },
+  "personas": [
+    {
+      "name": "string (descriptive name, e.g., 'The Conscious Curator')",
+      "percentage": "string (e.g., '55%')",
+      "demographics": {
+        "age_range": "string (specific range, e.g., '32-45')",
+        "gender": "string (or 'All genders' if not relevant)",
+        "location": "string (specific regions/characteristics)",
+        "income_level": "string (specific range, e.g., '$75,000-$120,000')",
+        "profession": "string (specific roles/industries)",
+        "education": "string (specific level)"
+      },
+      "psychographics": {
+        "values": ["string", "string", "string"],
+        "aspirations": ["string (what they're trying to achieve)"],
+        "fears": ["string (specific challenges and pain points)"],
+        "frustrations": ["string (what frustrates them about current options)"],
+        "identity": "string (how they see themselves)"
+      },
+      "behavioral": {
+        "discovery_channels": ["string", "string", "string"],
+        "research_behavior": "string (how they evaluate options)",
+        "decision_factors": ["string", "string", "string"],
+        "buying_triggers": ["string (what prompts purchase)"],
+        "purchase_frequency": "string (how often they buy)"
+      },
+      "communication": {
+        "tone_preference": "string (formal/casual, technical/accessible)",
+        "language_style": "string (vocabulary, formality level)",
+        "content_consumed": ["string", "string", "string"],
+        "preferred_channels": ["string", "string"],
+        "trust_signals": ["string", "string", "string"]
+      },
+      "summary": "string (one paragraph describing them as a real person)"
+    },
+    {
+      "name": "string (second persona name)",
+      "percentage": "string",
+      "demographics": {
+        "age_range": "string",
+        "gender": "string",
+        "location": "string",
+        "income_level": "string",
+        "profession": "string",
+        "education": "string"
+      },
+      "psychographics": {
+        "values": ["string", "string", "string"],
+        "aspirations": ["string"],
+        "fears": ["string"],
+        "frustrations": ["string"],
+        "identity": "string"
+      },
+      "behavioral": {
+        "discovery_channels": ["string", "string", "string"],
+        "research_behavior": "string",
+        "decision_factors": ["string", "string", "string"],
+        "buying_triggers": ["string"],
+        "purchase_frequency": "string"
+      },
+      "communication": {
+        "tone_preference": "string",
+        "language_style": "string",
+        "content_consumed": ["string", "string", "string"],
+        "preferred_channels": ["string", "string"],
+        "trust_signals": ["string", "string", "string"]
+      },
+      "summary": "string"
+    }
+  ]
+}
+
+IMPORTANT:
+- personas array MUST contain at least 2 fully detailed personas
+- The first persona is the PRIMARY persona
+- ALL fields in the schema must be populated with specific, research-based content
+- Create personas that are distinct from each other (different motivations, behaviors, needs)
+- Percentages should add up to approximately 100%""",
+    "voice_dimensions": """You are a brand strategist creating the Voice Dimensions section of a brand guidelines document.
+
+Based on the research context and previous sections, rate the brand voice on the Nielsen Norman Group 4 dimensions (1-10 scale):
+
+1. Formality (1 = Very Casual, 10 = Very Formal)
+2. Humor (1 = Very Funny/Playful, 10 = Very Serious)
+3. Reverence (1 = Irreverent/Edgy, 10 = Highly Respectful)
+4. Enthusiasm (1 = Very Enthusiastic, 10 = Matter-of-Fact)
+
+Output ONLY valid JSON in this exact format:
+{
+  "formality": {
+    "position": 5,
+    "description": "string explaining how this manifests",
+    "example": "string with sample sentence"
+  },
+  "humor": {
+    "position": 5,
+    "description": "string explaining when/how humor is appropriate",
+    "example": "string with sample sentence"
+  },
+  "reverence": {
+    "position": 5,
+    "description": "string explaining how brand treats competitors/industry/customers",
+    "example": "string with sample sentence"
+  },
+  "enthusiasm": {
+    "position": 5,
+    "description": "string explaining energy level in communications",
+    "example": "string with sample sentence"
+  },
+  "voice_summary": "string (2-3 sentences summarizing overall voice)"
+}
+
+Base scores on actual brand positioning and audience expectations.""",
+    "voice_characteristics": """You are a brand strategist creating the Voice Characteristics section of a brand guidelines document.
+
+Based on the research context and voice dimensions, define key voice characteristics with examples:
+
+For each characteristic, provide:
+- The characteristic name
+- A brief description
+- A "DO" example (on-brand writing)
+- A "DON'T" example (off-brand writing)
+
+Also define what the brand voice is NOT as a list of anti-characteristics.
+
+Output ONLY valid JSON in this exact format:
+{
+  "we_are": [
+    {
+      "trait_name": "string (e.g., 'Knowledgeable')",
+      "description": "string",
+      "do_example": "string",
+      "dont_example": "string"
+    }
+  ],
+  "we_are_not": ["corporate", "stuffy", "salesy", "pushy", "generic"]
+}
+
+REQUIREMENTS:
+- we_are: Provide at least 5 characteristics with full details (trait_name, description, do_example, dont_example)
+- we_are_not: Provide an array of 5+ simple strings (NOT objects). Each string is a single word or short phrase describing what the brand voice avoids.
+- Be specific with examples in we_are - show real on-brand vs off-brand writing""",
+    "writing_style": """You are a brand strategist creating the Writing Style Rules section of a brand guidelines document.
+
+Based on the research context and voice established, define concrete writing style rules:
+
+Output ONLY valid JSON in this exact format:
+{
+  "sentence_structure": {
+    "average_sentence_length": "string (e.g., '12-18 words')",
+    "paragraph_length": "string (e.g., '2-4 sentences')",
+    "use_contractions": "string (Yes/No/When)",
+    "active_vs_passive": "string"
+  },
+  "capitalization": {
+    "headlines": "string (Title Case/Sentence case)",
+    "product_names": "string",
+    "feature_names": "string"
+  },
+  "punctuation": {
+    "serial_comma": "string (Yes/No)",
+    "em_dashes": "Never use em dashes (—). Use commas, parentheses, or separate sentences instead.",
+    "exclamation_points": "string",
+    "ellipses": "string"
+  },
+  "numbers": {
+    "spell_out": "string",
+    "currency": "string",
+    "percentages": "string"
+  },
+  "formatting": {
+    "bold": "string",
+    "italics": "string",
+    "bullet_points": "string",
+    "headers": "string"
+  }
+}
+
+REQUIREMENTS:
+- The em_dashes rule is MANDATORY and must always be "Never use em dashes (—). Use commas, parentheses, or separate sentences instead." - this is a non-negotiable brand standard that applies regardless of brand voice or context
+- All other rules should align with the established voice and audience expectations.""",
+    "vocabulary": """You are a brand strategist creating the Vocabulary Guide section of a brand guidelines document.
+
+Based on the research context and voice established, define the brand's vocabulary:
+
+Output ONLY valid JSON in this exact format:
+{
+  "power_words": ["string", "string", "string"],
+  "words_we_prefer": [
+    {"instead_of": "string", "we_say": "string"}
+  ],
+  "banned_words": ["—", "string", "string"],
+  "industry_terms": [
+    {"term": "string", "usage": "string"}
+  ],
+  "brand_specific_terms": [
+    {"term": "string", "definition": "string", "usage": "string"}
+  ],
+  "signature_phrases": {
+    "confidence_without_arrogance": ["string", "string"],
+    "direct_and_helpful": ["string", "string"]
+  }
+}
+
+REQUIREMENTS:
+- power_words: Provide at least 20 words that align with brand voice and resonate with the target audience. These are high-impact words that should be used frequently in brand communications.
+- banned_words: Provide at least 15 words to avoid. This MUST include "—" (em dash) as the first item. Also include generic/AI-sounding/off-brand words (e.g., "utilize", "leverage", "synergy", "cutting-edge", "game-changer", "robust", "seamless", "delve").
+- words_we_prefer: Provide at least 5 word substitutions showing brand-specific language preferences.
+- industry_terms: Include industry-specific terminology used correctly with clear usage guidance.
+- brand_specific_terms: Include any proprietary terms, product names, or branded language.""",
+    "trust_elements": """You are a brand strategist creating the Trust Elements section of a brand guidelines document.
+
+Based on the research context, compile proof and trust elements:
+
+Output ONLY valid JSON in this exact format:
+{
+  "hard_numbers": {
+    "customer_count": "string or null",
+    "years_in_business": "string or null",
+    "products_sold": "string or null",
+    "average_store_rating": "string or null (e.g., '4.8 out of 5 stars')",
+    "review_count": "string or null (e.g., '2,500+ reviews')"
+  },
+  "credentials": {
+    "certifications": ["string"],
+    "industry_memberships": ["string"],
+    "awards": ["string"]
+  },
+  "media_and_press": {
+    "publications_featured_in": ["string"],
+    "notable_mentions": ["string"]
+  },
+  "endorsements": {
+    "influencer_endorsements": ["string"],
+    "partnership_badges": ["string"]
+  },
+  "guarantees": {
+    "return_policy": "string",
+    "warranty": "string",
+    "satisfaction_guarantee": "string"
+  },
+  "customer_quotes": [
+    {"quote": "string", "attribution": "string"}
+  ],
+  "proof_integration_guidelines": {
+    "headlines": "string",
+    "body_copy": "string",
+    "ctas": "string",
+    "what_not_to_do": ["string"]
+  }
+}
+
+REQUIREMENTS:
+- average_store_rating: Actively search for the brand's overall store/product rating (e.g., from their website, Amazon, Google reviews, Trustpilot, etc.). Format as "X.X out of 5 stars" or similar. This is a key trust signal for e-commerce.
+- review_count: When a rating is found, also capture the total number of reviews to add credibility (e.g., "2,500+ reviews"). Rating without count is less impactful.
+- Extract real data from research when available. Use null ONLY for hard_numbers fields where specific numbers genuinely cannot be inferred.
+- For credentials, media_and_press, endorsements, and guarantees: DO NOT return empty arrays or nulls. If exact data isn't in the research, make reasonable inferences based on the brand's industry, positioning, and typical practices for similar brands. For example:
+  - A supplement brand likely has GMP certification, FDA-registered facility, third-party testing
+  - An e-commerce brand likely has a return policy and satisfaction guarantee
+  - Inferred items should be realistic for the brand's category and positioning
+- customer_quotes: Only include REAL customer quotes found in the research (reviews, testimonials from the website, etc.). Do NOT fabricate or infer quotes. If no real quotes are found, return an empty array — the user will add their own.
+- guarantees: Always populate with reasonable defaults for the brand's industry if not found in research.
+- proof_integration_guidelines: Always provide detailed, actionable guidance for every field.""",
+    "competitor_context": """You are a brand strategist creating the Competitor Context section of a brand guidelines document for an e-commerce/DTC brand.
+
+Based on the research context, map the competitive landscape focusing on ONLINE/E-COMMERCE competitors:
+
+Output ONLY valid JSON in this exact format:
+{
+  "direct_competitors": [
+    {
+      "name": "string (competitor brand name)",
+      "category": "string (e.g., 'DTC', 'Amazon native', 'Traditional retailer with e-commerce', 'Marketplace seller')",
+      "positioning": "string (how they position themselves in the market - their value prop, brand promise, target audience)",
+      "pricing_tier": "string (e.g., 'Premium', 'Mid-market', 'Budget', 'Value')",
+      "strengths": ["string (what they do well)", "string"],
+      "weaknesses": ["string (where they fall short)", "string"],
+      "our_difference": "string (specific ways we differentiate from this competitor - be concrete and actionable)"
+    },
+    {
+      "name": "Competitor 2",
+      "category": "string",
+      "positioning": "string",
+      "pricing_tier": "string",
+      "strengths": ["string", "string"],
+      "weaknesses": ["string", "string"],
+      "our_difference": "string"
+    },
+    {
+      "name": "Competitor 3",
+      "category": "string",
+      "positioning": "string",
+      "pricing_tier": "string",
+      "strengths": ["string", "string"],
+      "weaknesses": ["string", "string"],
+      "our_difference": "string"
+    },
+    {
+      "name": "Competitor 4",
+      "category": "string",
+      "positioning": "string",
+      "pricing_tier": "string",
+      "strengths": ["string", "string"],
+      "weaknesses": ["string", "string"],
+      "our_difference": "string"
+    },
+    {
+      "name": "Competitor 5",
+      "category": "string",
+      "positioning": "string",
+      "pricing_tier": "string",
+      "strengths": ["string", "string"],
+      "weaknesses": ["string", "string"],
+      "our_difference": "string"
+    }
+  ],
+  "competitive_advantages": ["string", "string", "string", "string"],
+  "competitive_weaknesses": ["string", "string"],
+  "positioning_statements": {
+    "vs_premium_brands": "string",
+    "vs_budget_brands": "string",
+    "vs_amazon_sellers": "string",
+    "general_differentiation": "string"
+  },
+  "competitor_reference_rules": [
+    "string (e.g., 'Never mention competitors by name in marketing copy')"
+  ]
+}
+
+REQUIREMENTS:
+- direct_competitors: Provide AT LEAST 5 e-commerce competitors (more is better for comprehensive analysis)
+- Focus on ONLINE competitors: DTC brands, Amazon sellers, e-commerce retailers, marketplace competitors
+- Do NOT include brick-and-mortar-only competitors unless they have significant e-commerce presence
+- For EACH competitor, provide:
+  - Detailed positioning (their value prop, who they target, how they present themselves)
+  - Specific strengths AND weaknesses (be honest and analytical)
+  - Concrete differentiation (how the brand can win against this specific competitor)
+- competitive_advantages: Provide at least 4 unique advantages
+- Be honest about competitive_weaknesses - this helps the brand address gaps
+- Positioning statements should be usable in copy without naming competitors.""",
+    "ai_prompt_snippet": """You are a brand strategist creating a COMPREHENSIVE AI Prompt for brand content generation.
+
+This prompt will be used to generate ALL written content for this brand - product descriptions, emails, ads, social posts, website copy, and more. It must be THOROUGH and PRODUCTION-READY. A content writer using ONLY this prompt should be able to create perfectly on-brand content without any other reference materials.
+
+Based on ALL the brand sections provided, create an exhaustive prompt that leaves nothing to interpretation.
+
+Output ONLY valid JSON in this exact format:
+{
+  "full_prompt": "string (400-600 words - the complete, production-ready prompt - see requirements below)",
+  "quick_reference": {
+    "voice_in_three_words": ["string", "string", "string"],
+    "we_sound_like": "string (comparison to a recognizable brand/personality for instant clarity)",
+    "we_never_sound_like": "string (anti-comparison)",
+    "elevator_pitch": "string (2-3 sentences: what the brand does, for whom, and why it matters)"
+  },
+  "audience_profile": {
+    "primary_persona": "string (name and 1-sentence description)",
+    "demographics": "string (age, income, location, lifestyle)",
+    "psychographics": "string (values, motivations, pain points, aspirations)",
+    "how_they_talk": "string (communication style, vocabulary level, references they'd understand)",
+    "what_they_care_about": ["string", "string", "string", "string", "string"]
+  },
+  "voice_guidelines": {
+    "personality_traits": ["string", "string", "string", "string", "string"],
+    "tone_spectrum": {
+      "formal_to_casual": "string (e.g., '70% casual, 30% professional')",
+      "serious_to_playful": "string",
+      "reserved_to_enthusiastic": "string"
+    },
+    "sentence_style": "string (length, structure, rhythm)",
+    "vocabulary_level": "string (e.g., 'accessible but not dumbed down, 8th grade reading level')"
+  },
+  "writing_rules": {
+    "always_do": ["string", "string", "string", "string", "string", "string", "string", "string"],
+    "never_do": ["string", "string", "string", "string", "string", "string", "string", "string"],
+    "banned_words": ["—", "string", "string", "string", "string", "string", "string", "string", "string", "string", "string", "string", "string", "string", "string"],
+    "preferred_alternatives": [
+      {"instead_of": "string", "use": "string"},
+      {"instead_of": "string", "use": "string"},
+      {"instead_of": "string", "use": "string"}
+    ]
+  },
+  "content_patterns": {
+    "headline_formula": "string (e.g., 'Benefit + Specificity + Emotion')",
+    "cta_style": "string (how CTAs should feel - urgent, inviting, confident, etc.)",
+    "proof_points_to_include": ["string", "string", "string", "string"],
+    "emotional_triggers": ["string", "string", "string"]
+  },
+  "brand_specifics": {
+    "key_messages": ["string", "string", "string"],
+    "unique_value_props": ["string", "string", "string", "string", "string"],
+    "competitive_angles": ["string", "string", "string"],
+    "trust_signals_to_mention": ["string", "string", "string", "string"]
+  }
+}
+
+REQUIREMENTS FOR full_prompt (THIS IS THE MOST IMPORTANT FIELD):
+The full_prompt must be 400-600 words and structured as a complete, ready-to-use system prompt. It should include:
+
+1. BRAND IDENTITY (50-75 words): Who is this brand? What do they sell? What's their mission? What makes them different?
+
+2. TARGET AUDIENCE (50-75 words): Detailed description of who we're writing for - their demographics, psychographics, pain points, and aspirations. How do they talk? What do they care about?
+
+3. VOICE & TONE (75-100 words): Detailed personality description. Are we formal or casual? Playful or serious? Expert or approachable? Use specific comparisons (e.g., "like a knowledgeable friend, not a pushy salesperson"). Include tone spectrum guidance.
+
+4. WRITING STYLE (75-100 words): Sentence structure preferences, vocabulary level, rhythm and pacing. How long should sentences be? Do we use fragments? Contractions? Questions? What's our paragraph style?
+
+5. RULES & CONSTRAINTS (75-100 words): Specific do's and don'ts. Banned words and phrases (MUST include em dashes). Required elements. Formatting preferences. Things that are absolutely off-brand.
+
+6. PROOF & PERSUASION (50-75 words): What trust signals should be woven in? What emotional triggers work? What proof points matter most? How do we handle claims and benefits?
+
+Write the full_prompt as flowing prose organized under clear headers, not as bullet points. It should read like expert guidance from a brand strategist.
+
+For all other fields:
+- voice_in_three_words: Exactly 3 distinctive, memorable descriptors
+- banned_words: At least 15 words/phrases. MUST start with "—" (em dash). Include generic AI words (utilize, leverage, synergy, elevate, etc.)
+- always_do/never_do: At least 8 items each, specific and actionable
+- All arrays should have meaningful, specific content - no generic filler
+
+This prompt will be used thousands of times to generate content. Make it count.""",
+}
+
+
+def _extract_json_from_response(response_text: str) -> dict[str, Any]:
+    """Extract and parse JSON from a Claude LLM response.
+
+    Handles markdown code blocks, preamble text, and unescaped control characters.
+
+    Args:
+        response_text: Raw text response from Claude.
+
+    Returns:
+        Parsed JSON dictionary.
+
+    Raises:
+        json.JSONDecodeError: If JSON cannot be extracted or parsed.
+    """
+    json_text = response_text.strip()
+
+    # Handle markdown code blocks
+    if json_text.startswith("```"):
+        lines = json_text.split("\n")
+        lines = lines[1:]  # Remove opening fence
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        json_text = "\n".join(lines)
+
+    # Extract JSON from response that may have preamble text
+    if not json_text.startswith("{"):
+        first_brace = json_text.find("{")
+        if first_brace != -1:
+            last_brace = json_text.rfind("}")
+            if last_brace != -1 and last_brace > first_brace:
+                json_text = json_text[first_brace : last_brace + 1]
+
+    # Fix unescaped control characters in string values
+    json_text = fix_json_control_chars(json_text)
+
+    result: dict[str, Any] = json.loads(json_text)
+    return result
+
+
+async def _generate_section(
+    section_name: str,
+    research_text: str,
+    generated_sections: dict[str, Any],
+    claude: ClaudeClient,
+    project_id: str,
+    brand_directives: str | None = None,
+) -> tuple[str, dict[str, Any] | None, list[str]]:
+    """Generate a single brand config section with retry logic.
+
+    Designed to be called concurrently via asyncio.gather for sections
+    in the same execution batch. Reads from generated_sections but does
+    NOT write to it — the caller collects results after the batch completes.
+
+    Args:
+        section_name: Name of the section to generate.
+        research_text: Pre-built research context string.
+        generated_sections: Previously generated sections (read-only snapshot).
+        claude: ClaudeClient for LLM completion.
+        project_id: UUID string (for logging).
+        brand_directives: Mandatory instructions that override defaults (from project.additional_info).
+
+    Returns:
+        Tuple of (section_name, parsed section data or None, list of error messages).
+    """
+    errors: list[str] = []
+    system_prompt = SECTION_PROMPTS[section_name]
+
+    # Inject brand directives as mandatory instructions into the system prompt
+    if brand_directives:
+        system_prompt += (
+            "\n\n---\n"
+            "MANDATORY BRAND DIRECTIVES (from project owner — override defaults):\n"
+            "The following are top-level requirements set by the project owner. "
+            "You MUST follow these directives exactly. They take priority over "
+            "any conflicting guidance above.\n\n"
+            f"{brand_directives}"
+        )
+
+    # Build user prompt with research context and relevant previous sections
+    user_prompt_parts = ["# Research Context", research_text]
+
+    context_deps = SECTION_CONTEXT_DEPS.get(section_name)
+    if context_deps is None:
+        context_sections = generated_sections
+    else:
+        context_sections = {
+            k: v for k, v in generated_sections.items() if k in context_deps
+        }
+
+    if context_sections:
+        user_prompt_parts.append("\n# Previously Generated Sections")
+        for prev_section, prev_data in context_sections.items():
+            user_prompt_parts.append(
+                f"\n## {prev_section}\n```json\n{json.dumps(prev_data, indent=2)}\n```"
+            )
+
+    user_prompt_parts.append(
+        f"\n\nGenerate the {section_name.replace('_', ' ')} section now."
+    )
+    user_prompt = "\n".join(user_prompt_parts)
+
+    base_max_tokens, base_timeout = SECTION_CONFIG.get(
+        section_name, (2048, SECTION_TIMEOUT_SECONDS)
+    )
+
+    for attempt in range(1, MAX_SECTION_RETRIES + 1):
+        attempt_max_tokens = base_max_tokens
+        attempt_timeout = base_timeout
+        if attempt > 1:
+            attempt_max_tokens = int(base_max_tokens * (1 + 0.5 * (attempt - 1)))
+            attempt_timeout = int(base_timeout * (1 + 0.25 * (attempt - 1)))
+            logger.info(
+                "Retrying section generation",
+                extra={
+                    "project_id": project_id,
+                    "section": section_name,
+                    "attempt": attempt,
+                    "max_tokens": attempt_max_tokens,
+                    "timeout": attempt_timeout,
+                },
+            )
+
+        try:
+            result: CompletionResult = await asyncio.wait_for(
+                claude.complete(
+                    user_prompt=user_prompt,
+                    system_prompt=system_prompt,
+                    max_tokens=attempt_max_tokens,
+                    temperature=0.3,
+                    timeout=float(attempt_timeout),
+                ),
+                timeout=attempt_timeout + 10,
+            )
+        except TimeoutError:
+            error_msg = f"Timeout generating {section_name} (exceeded {attempt_timeout}s, attempt {attempt}/{MAX_SECTION_RETRIES})"
+            logger.warning(
+                error_msg,
+                extra={
+                    "project_id": project_id,
+                    "section": section_name,
+                    "attempt": attempt,
+                },
+            )
+            if attempt < MAX_SECTION_RETRIES:
+                continue
+            errors.append(error_msg)
+            return (section_name, None, errors)
+
+        if not result.success:
+            error_msg = f"Failed to generate {section_name}: {result.error} (attempt {attempt}/{MAX_SECTION_RETRIES})"
+            logger.warning(
+                error_msg,
+                extra={
+                    "project_id": project_id,
+                    "section": section_name,
+                    "attempt": attempt,
+                },
+            )
+            if attempt < MAX_SECTION_RETRIES:
+                continue
+            errors.append(error_msg)
+            return (section_name, None, errors)
+
+        was_truncated = result.stop_reason == "max_tokens"
+        if was_truncated:
+            logger.warning(
+                "Section response truncated (hit max_tokens)",
+                extra={
+                    "project_id": project_id,
+                    "section": section_name,
+                    "max_tokens": attempt_max_tokens,
+                    "output_tokens": result.output_tokens,
+                    "attempt": attempt,
+                },
+            )
+
+        try:
+            section_data = _extract_json_from_response(result.text or "")
+            logger.info(
+                "Section generated successfully",
+                extra={
+                    "project_id": project_id,
+                    "section": section_name,
+                    "attempt": attempt,
+                    "input_tokens": result.input_tokens,
+                    "output_tokens": result.output_tokens,
+                    "duration_ms": result.duration_ms,
+                    "was_truncated": was_truncated,
+                },
+            )
+            return (section_name, section_data, errors)
+
+        except json.JSONDecodeError as e:
+            error_msg = f"Failed to parse {section_name} JSON: {e} (attempt {attempt}/{MAX_SECTION_RETRIES}, truncated={was_truncated})"
+            logger.warning(
+                error_msg,
+                extra={
+                    "project_id": project_id,
+                    "section": section_name,
+                    "response_preview": (result.text or "")[:500],
+                    "attempt": attempt,
+                    "was_truncated": was_truncated,
+                },
+            )
+            if attempt < MAX_SECTION_RETRIES:
+                continue
+            errors.append(error_msg)
+            return (section_name, None, errors)
+
+    # Exhausted all retries without returning
+    if not errors:
+        errors.append(
+            f"Failed to generate {section_name} after {MAX_SECTION_RETRIES} attempts"
+        )
+    return (section_name, None, errors)
+
+
+@dataclass
+class ResearchContext:
+    """Combined research data from all sources for brand config generation.
+
+    Attributes:
+        perplexity_research: Raw text from Perplexity brand research (or None if failed)
+        perplexity_citations: Citations from Perplexity research
+        crawl_content: Markdown content from website crawl (or None if failed)
+        crawl_metadata: Metadata from crawl result
+        document_texts: List of extracted text from uploaded project files
+        brand_directives: Top-level mandatory instructions from project.additional_info
+        errors: List of error messages from failed research sources
+    """
+
+    perplexity_research: str | None = None
+    perplexity_citations: list[str] | None = None
+    crawl_content: str | None = None
+    crawl_metadata: dict[str, Any] | None = None
+    document_texts: list[str] | None = None
+    brand_directives: str | None = None
+    errors: list[str] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for storage or serialization."""
+        return {
+            "perplexity_research": self.perplexity_research,
+            "perplexity_citations": self.perplexity_citations,
+            "crawl_content": self.crawl_content,
+            "crawl_metadata": self.crawl_metadata,
+            "document_texts": self.document_texts,
+            "brand_directives": self.brand_directives,
+            "errors": self.errors,
+        }
+
+    def has_any_data(self) -> bool:
+        """Check if any research data is available."""
+        return bool(
+            self.perplexity_research or self.crawl_content or self.document_texts
+        )
 
 
 class BrandConfigService:
-    """Service for brand config synthesis and management.
+    """Service for orchestrating brand configuration generation.
 
-    Uses Claude LLM to synthesize brand configuration from documents and URLs,
-    generating a V2 schema with colors, typography, logo, voice/tone, and social media.
-
-    Example usage:
-        service = BrandConfigService(session)
-
-        result = await service.synthesize_brand_config(
-            project_id="abc-123",
-            request=BrandConfigSynthesisRequest(
-                brand_name="Acme Corp",
-                domain="acme.com",
-                source_documents=[base64_encoded_pdf],
-                document_filenames=["brand-guide.pdf"],
-            ),
-        )
-
-        print(f"V2 Schema: {result.v2_schema}")
+    Manages the generation lifecycle including starting background tasks,
+    tracking progress, and reporting status. Status is persisted in the
+    project's brand_wizard_state JSONB field.
     """
 
-    def __init__(
-        self,
-        session: AsyncSession,
-        claude_client: ClaudeClient | None = None,
-        document_parser: DocumentParser | None = None,
-    ) -> None:
-        """Initialize the brand config service.
+    @staticmethod
+    async def _get_project(db: AsyncSession, project_id: str) -> Project:
+        """Get a project by ID.
 
         Args:
-            session: Async SQLAlchemy session for database operations
-            claude_client: Claude client for LLM synthesis (uses global if None)
-            document_parser: Document parser for extracting text (uses global if None)
+            db: AsyncSession for database operations.
+            project_id: UUID string of the project.
+
+        Returns:
+            Project instance.
+
+        Raises:
+            HTTPException: 404 if project not found.
         """
-        logger.debug(
-            "BrandConfigService.__init__ called",
+        stmt = select(Project).where(Project.id == project_id)
+        result = await db.execute(stmt)
+        project = result.scalar_one_or_none()
+
+        if project is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Project with id '{project_id}' not found",
+            )
+
+        return project
+
+    @staticmethod
+    async def get_status(db: AsyncSession, project_id: str) -> GenerationStatus:
+        """Get the current generation status for a project.
+
+        Args:
+            db: AsyncSession for database operations.
+            project_id: UUID string of the project.
+
+        Returns:
+            GenerationStatus with current generation state.
+
+        Raises:
+            HTTPException: 404 if project not found.
+        """
+        project = await BrandConfigService._get_project(db, project_id)
+
+        # Extract generation status from brand_wizard_state
+        wizard_state = project.brand_wizard_state or {}
+        generation_data = wizard_state.get("generation", {})
+
+        if not generation_data:
+            # No generation started yet
+            return GenerationStatus(status=GenerationStatusValue.PENDING)
+
+        return GenerationStatus.from_dict(generation_data)
+
+    @staticmethod
+    async def start_generation(db: AsyncSession, project_id: str) -> GenerationStatus:
+        """Start brand config generation for a project.
+
+        Initializes the generation state and kicks off the background task.
+        If generation is already in progress, returns current status.
+
+        Args:
+            db: AsyncSession for database operations.
+            project_id: UUID string of the project.
+
+        Returns:
+            GenerationStatus with initial generation state.
+
+        Raises:
+            HTTPException: 404 if project not found.
+            HTTPException: 409 if generation is already in progress.
+        """
+        project = await BrandConfigService._get_project(db, project_id)
+
+        # Check if generation is already in progress
+        wizard_state = project.brand_wizard_state or {}
+        generation_data = wizard_state.get("generation", {})
+
+        if generation_data.get("status") == GenerationStatusValue.GENERATING.value:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Brand config generation is already in progress",
+            )
+
+        # Initialize generation status
+        initial_status = GenerationStatus(
+            status=GenerationStatusValue.GENERATING,
+            current_step=GENERATION_STEPS[0],
+            steps_completed=0,
+            steps_total=len(GENERATION_STEPS),
+            started_at=datetime.now(UTC).isoformat(),
+        )
+
+        # Update project's brand_wizard_state
+        new_wizard_state = {
+            **wizard_state,
+            "generation": initial_status.to_dict(),
+        }
+        project.brand_wizard_state = new_wizard_state
+        # Flag the JSONB column as modified so SQLAlchemy detects the change
+        flag_modified(project, "brand_wizard_state")
+
+        await db.flush()
+        await db.refresh(project)
+
+        # TODO: Kick off background task for actual generation
+        # This will be implemented in a later story when we wire up
+        # the Perplexity research and Claude generation pipeline
+
+        return initial_status
+
+    @staticmethod
+    async def update_progress(
+        db: AsyncSession,
+        project_id: str,
+        current_step: str,
+        steps_completed: int,
+    ) -> GenerationStatus:
+        """Update generation progress for a project.
+
+        Args:
+            db: AsyncSession for database operations.
+            project_id: UUID string of the project.
+            current_step: Name of the current step.
+            steps_completed: Number of steps completed.
+
+        Returns:
+            Updated GenerationStatus.
+
+        Raises:
+            HTTPException: 404 if project not found.
+        """
+        project = await BrandConfigService._get_project(db, project_id)
+
+        wizard_state = project.brand_wizard_state or {}
+        generation_data = wizard_state.get("generation", {})
+
+        # Update progress
+        generation_data["current_step"] = current_step
+        generation_data["steps_completed"] = steps_completed
+
+        new_wizard_state = {
+            **wizard_state,
+            "generation": generation_data,
+        }
+        project.brand_wizard_state = new_wizard_state
+        # Flag the JSONB column as modified so SQLAlchemy detects the change
+        flag_modified(project, "brand_wizard_state")
+
+        await db.flush()
+        await db.refresh(project)
+
+        return GenerationStatus.from_dict(generation_data)
+
+    @staticmethod
+    async def complete_generation(
+        db: AsyncSession,
+        project_id: str,
+    ) -> GenerationStatus:
+        """Mark generation as complete for a project.
+
+        Args:
+            db: AsyncSession for database operations.
+            project_id: UUID string of the project.
+
+        Returns:
+            Updated GenerationStatus.
+
+        Raises:
+            HTTPException: 404 if project not found.
+        """
+        project = await BrandConfigService._get_project(db, project_id)
+
+        wizard_state = project.brand_wizard_state or {}
+        generation_data = wizard_state.get("generation", {})
+
+        # Mark as complete
+        generation_data["status"] = GenerationStatusValue.COMPLETE.value
+        generation_data["current_step"] = None
+        generation_data["steps_completed"] = len(GENERATION_STEPS)
+        generation_data["completed_at"] = datetime.now(UTC).isoformat()
+
+        new_wizard_state = {
+            **wizard_state,
+            "generation": generation_data,
+        }
+        project.brand_wizard_state = new_wizard_state
+        # Flag the JSONB column as modified so SQLAlchemy detects the change
+        flag_modified(project, "brand_wizard_state")
+
+        logger.info(
+            "complete_generation: updating project status",
             extra={
-                "has_custom_claude_client": claude_client is not None,
-                "has_custom_document_parser": document_parser is not None,
+                "project_id": project_id,
+                "new_status": generation_data["status"],
+                "is_modified": project in db.dirty,
             },
         )
 
-        self._session = session
-        self._repository = BrandConfigRepository(session)
-        self._claude_client = claude_client
-        self._document_parser = document_parser
+        await db.flush()
+        await db.refresh(project)
 
-        logger.debug("BrandConfigService initialized")
+        logger.info(
+            "complete_generation: status updated",
+            extra={
+                "project_id": project_id,
+                "updated_status": project.brand_wizard_state.get("generation", {}).get(
+                    "status"
+                ),
+            },
+        )
 
-    async def _get_claude_client(self) -> ClaudeClient | None:
-        """Get Claude client for LLM synthesis."""
-        if self._claude_client is not None:
-            return self._claude_client
-        try:
-            return await get_claude()
-        except Exception as e:
-            logger.warning(
-                "Failed to get Claude client",
-                extra={"error": str(e)},
-            )
-            return None
+        return GenerationStatus.from_dict(generation_data)
 
-    def _get_document_parser(self) -> DocumentParser:
-        """Get document parser for extracting text from files."""
-        if self._document_parser is not None:
-            return self._document_parser
-        return get_document_parser()
-
-    def _sanitize_content_for_log(self, content: str) -> str:
-        """Sanitize content for logging (truncate if too long)."""
-        if len(content) > MAX_CONTENT_PREVIEW_LENGTH:
-            return content[:MAX_CONTENT_PREVIEW_LENGTH] + "..."
-        return content
-
-    async def _parse_documents(
-        self,
-        source_documents: list[str],
-        document_filenames: list[str],
-        project_id: str | None = None,
-    ) -> tuple[list[str], list[str]]:
-        """Parse base64-encoded documents and extract text.
+    @staticmethod
+    async def fail_generation(
+        db: AsyncSession,
+        project_id: str,
+        error: str,
+    ) -> GenerationStatus:
+        """Mark generation as failed for a project.
 
         Args:
-            source_documents: List of base64-encoded document content
-            document_filenames: List of filenames for format detection
-            project_id: Project ID for logging
+            db: AsyncSession for database operations.
+            project_id: UUID string of the project.
+            error: Error message describing the failure.
 
         Returns:
-            Tuple of (extracted_texts, successfully_parsed_filenames)
+            Updated GenerationStatus.
+
+        Raises:
+            HTTPException: 404 if project not found.
         """
-        extracted_texts: list[str] = []
-        parsed_filenames: list[str] = []
-        parser = self._get_document_parser()
+        project = await BrandConfigService._get_project(db, project_id)
 
-        for i, (doc_b64, filename) in enumerate(
-            zip(source_documents, document_filenames, strict=False)
-        ):
-            if not doc_b64 or not filename:
-                continue
+        wizard_state = project.brand_wizard_state or {}
+        generation_data = wizard_state.get("generation", {})
 
+        # Mark as failed
+        generation_data["status"] = GenerationStatusValue.FAILED.value
+        generation_data["error"] = error
+        generation_data["completed_at"] = datetime.now(UTC).isoformat()
+
+        new_wizard_state = {
+            **wizard_state,
+            "generation": generation_data,
+        }
+        project.brand_wizard_state = new_wizard_state
+        # Flag the JSONB column as modified so SQLAlchemy detects the change
+        flag_modified(project, "brand_wizard_state")
+
+        await db.flush()
+        await db.refresh(project)
+
+        return GenerationStatus.from_dict(generation_data)
+
+    @staticmethod
+    async def _research_phase(
+        db: AsyncSession,
+        project_id: str,
+        perplexity: PerplexityClient,
+        crawl4ai: Crawl4AIClient,
+    ) -> ResearchContext:
+        """Execute the research phase, gathering data from 3 sources in parallel.
+
+        Runs Perplexity brand research, Crawl4AI website crawl, and document
+        retrieval in parallel. Handles failures gracefully - continues with
+        available data if one or more sources fail.
+
+        Args:
+            db: AsyncSession for database operations.
+            project_id: UUID string of the project.
+            perplexity: PerplexityClient instance for web research.
+            crawl4ai: Crawl4AIClient instance for website crawling.
+
+        Returns:
+            ResearchContext with combined research data from all sources.
+
+        Raises:
+            HTTPException: 404 if project not found.
+        """
+        # Get project to access site_url and brand directives
+        project = await BrandConfigService._get_project(db, project_id)
+        site_url = project.site_url
+        brand_name = project.name
+        brand_directives = (project.additional_info or "").strip() or None
+
+        if brand_directives:
+            logger.info(
+                "Brand directives found",
+                extra={
+                    "project_id": project_id,
+                    "directives_length": len(brand_directives),
+                    "preview": brand_directives[:200],
+                },
+            )
+
+        errors: list[str] = []
+
+        # Define async tasks for parallel execution
+        async def research_with_perplexity() -> BrandResearchResult | None:
+            """Run Perplexity brand research."""
+            if not perplexity.available:
+                logger.warning("Perplexity not available, skipping web research")
+                return None
             try:
-                logger.debug(
-                    "Parsing document",
-                    extra={
-                        "document_index": i,
-                        "filename": filename[:50],
-                        "project_id": project_id,
-                    },
-                )
-
-                # Decode base64
-                try:
-                    file_bytes = base64.b64decode(doc_b64)
-                except Exception as decode_error:
-                    logger.warning(
-                        "Failed to decode base64 document",
-                        extra={
-                            "filename": filename[:50],
-                            "error": str(decode_error),
-                            "project_id": project_id,
-                        },
-                    )
-                    continue
-
-                # Parse document
-                result = parser.parse_bytes(file_bytes, filename, project_id)
-
-                if result.success and result.content:
-                    extracted_texts.append(
-                        f"=== Document: {filename} ===\n{result.content}"
-                    )
-                    parsed_filenames.append(filename)
-                    logger.debug(
-                        "Document parsed successfully",
-                        extra={
-                            "filename": filename[:50],
-                            "word_count": result.metadata.word_count if result.metadata else 0,
-                            "project_id": project_id,
-                        },
-                    )
-                else:
-                    logger.warning(
-                        "Document parsing returned no content",
-                        extra={
-                            "filename": filename[:50],
-                            "error": result.error,
-                            "project_id": project_id,
-                        },
-                    )
-
+                return await perplexity.research_brand(site_url, brand_name)
             except Exception as e:
                 logger.warning(
-                    "Failed to parse document",
+                    "Perplexity research failed",
+                    extra={"project_id": project_id, "error": str(e)},
+                )
+                errors.append(f"Perplexity research failed: {e}")
+                return None
+
+        async def crawl_with_crawl4ai() -> CrawlResult | None:
+            """Run Crawl4AI website crawl."""
+            if not crawl4ai.available:
+                logger.warning("Crawl4AI not available, skipping website crawl")
+                return None
+            try:
+                return await crawl4ai.crawl(site_url)
+            except Exception as e:
+                logger.warning(
+                    "Crawl4AI crawl failed",
+                    extra={"project_id": project_id, "error": str(e)},
+                )
+                errors.append(f"Website crawl failed: {e}")
+                return None
+
+        async def get_document_texts() -> list[str]:
+            """Retrieve extracted text from all project files."""
+            try:
+                # Query ALL project files to log full inventory
+                stmt = select(
+                    ProjectFile.id,
+                    ProjectFile.filename,
+                    ProjectFile.content_type,
+                    ProjectFile.extracted_text,
+                ).where(ProjectFile.project_id == project_id)
+                result = await db.execute(stmt)
+                all_files = result.fetchall()
+
+                # Log per-file inventory
+                for file_row in all_files:
+                    file_id, filename, content_type, extracted_text = file_row
+                    has_text = bool(extracted_text)
+                    text_length = len(extracted_text) if extracted_text else 0
+                    logger.info(
+                        "Project files inventory",
+                        extra={
+                            "project_id": project_id,
+                            "file_id": file_id,
+                            "filename": filename,
+                            "content_type": content_type,
+                            "has_extracted_text": has_text,
+                            "text_length": text_length,
+                        },
+                    )
+
+                # Collect texts from files that have extracted content
+                texts: list[str] = []
+                for file_row in all_files:
+                    file_id, filename, content_type, extracted_text = file_row
+                    if extracted_text:
+                        texts.append(extracted_text)
+                        logger.info(
+                            "Including document text in research",
+                            extra={
+                                "project_id": project_id,
+                                "filename": filename,
+                                "text_length": len(extracted_text),
+                                "preview": extracted_text[:300],
+                            },
+                        )
+
+                # Log summary
+                total_chars = sum(len(t) for t in texts)
+                logger.info(
+                    "Document texts summary",
                     extra={
-                        "filename": filename[:50],
-                        "error": str(e),
-                        "error_type": type(e).__name__,
                         "project_id": project_id,
+                        "total_files": len(all_files),
+                        "files_with_text": len(texts),
+                        "total_text_chars": total_chars,
                     },
                 )
+                return texts
+            except Exception as e:
+                logger.warning(
+                    "Failed to retrieve document texts",
+                    extra={"project_id": project_id, "error": str(e)},
+                )
+                errors.append(f"Document retrieval failed: {e}")
+                return []
+
+        # Run all three tasks in parallel
+        logger.info(
+            "Starting research phase",
+            extra={"project_id": project_id, "site_url": site_url},
+        )
+
+        perplexity_result, crawl_result, doc_texts = await asyncio.gather(
+            research_with_perplexity(),
+            crawl_with_crawl4ai(),
+            get_document_texts(),
+        )
+
+        # Process results
+        perplexity_research: str | None = None
+        perplexity_citations: list[str] | None = None
+        if perplexity_result and perplexity_result.success:
+            perplexity_research = perplexity_result.raw_text
+            perplexity_citations = perplexity_result.citations
+            logger.info(
+                "Perplexity research completed",
+                extra={
+                    "project_id": project_id,
+                    "citations_count": len(perplexity_citations or []),
+                },
+            )
+        elif perplexity_result and not perplexity_result.success:
+            errors.append(f"Perplexity research failed: {perplexity_result.error}")
+
+        crawl_content: str | None = None
+        crawl_metadata: dict[str, Any] | None = None
+        if crawl_result and crawl_result.success:
+            crawl_content = crawl_result.markdown
+            crawl_metadata = crawl_result.metadata
+            logger.info(
+                "Website crawl completed",
+                extra={
+                    "project_id": project_id,
+                    "content_length": len(crawl_content or ""),
+                },
+            )
+        elif crawl_result and not crawl_result.success:
+            errors.append(f"Website crawl failed: {crawl_result.error}")
+
+        # Build research context
+        research_context = ResearchContext(
+            perplexity_research=perplexity_research,
+            perplexity_citations=perplexity_citations,
+            crawl_content=crawl_content,
+            crawl_metadata=crawl_metadata,
+            document_texts=doc_texts if doc_texts else None,
+            brand_directives=brand_directives,
+            errors=errors if errors else None,
+        )
+
+        logger.info(
+            "Research phase completed",
+            extra={
+                "project_id": project_id,
+                "has_perplexity": bool(perplexity_research),
+                "has_crawl": bool(crawl_content),
+                "doc_count": len(doc_texts),
+                "has_brand_directives": bool(brand_directives),
+                "error_count": len(errors),
+            },
+        )
+
+        return research_context
+
+    @staticmethod
+    async def _synthesis_phase(
+        project_id: str,
+        research_context: ResearchContext,
+        claude: ClaudeClient,
+        update_status_callback: Any | None = None,
+    ) -> dict[str, Any]:
+        """Execute the synthesis phase, generating brand config sections in parallel batches.
+
+        Sections are grouped into batches based on their dependency graph
+        (SECTION_CONTEXT_DEPS). Sections in the same batch share no dependencies
+        and run concurrently via asyncio.gather:
+
+        Batch 1: brand_foundation (no deps)
+        Batch 2: target_audience (brand_foundation)
+        Batch 3: voice_dimensions + trust_elements + competitor_context (brand_foundation + target_audience)
+        Batch 4: voice_characteristics (voice_dimensions)
+        Batch 5: writing_style (voice_characteristics)
+        Batch 6: vocabulary (voice_characteristics + writing_style)
+        Batch 7: ai_prompt_snippet (ALL sections)
+
+        Args:
+            project_id: UUID string of the project (for logging).
+            research_context: Combined research data from research phase.
+            claude: ClaudeClient instance for LLM completion.
+            update_status_callback: Optional async callback(step_name, step_index) for progress updates.
+
+        Returns:
+            Dictionary with all generated sections, keyed by section name.
+
+        Raises:
+            HTTPException: If Claude is not available or a section fails to generate.
+        """
+        # Import here to avoid circular import
+        from app.integrations.claude import get_claude
+
+        # Debug logging for Claude client state
+        logger.info(
+            "Synthesis phase Claude client check",
+            extra={
+                "project_id": project_id,
+                "claude_available": claude.available,
+                "claude_model": claude.model,
+                "claude_id": id(claude),
+                "has_api_key": bool(claude._api_key),
+            },
+        )
+
+        # If passed client isn't available, try getting fresh from global
+        if not claude.available:
+            logger.warning(
+                "Passed Claude client not available, trying global instance",
+                extra={"project_id": project_id},
+            )
+            claude = await get_claude()
+            logger.info(
+                "Got fresh Claude client from global",
+                extra={
+                    "project_id": project_id,
+                    "fresh_claude_available": claude.available,
+                    "fresh_claude_id": id(claude),
+                },
+            )
+
+        if not claude.available:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Claude LLM is not configured",
+            )
+
+        logger.info(
+            "Starting synthesis phase",
+            extra={"project_id": project_id, "total_sections": len(GENERATION_STEPS)},
+        )
+
+        # Build the research context string for prompts
+        research_text_parts: list[str] = []
+
+        if research_context.perplexity_research:
+            research_text_parts.append(
+                f"## Web Research\n{research_context.perplexity_research}"
+            )
+
+        if research_context.crawl_content:
+            crawl_preview = research_context.crawl_content[:CRAWL_CONTENT_MAX_CHARS]
+            if len(research_context.crawl_content) > CRAWL_CONTENT_MAX_CHARS:
+                crawl_preview += "\n... (content truncated)"
+            research_text_parts.append(f"## Website Content\n{crawl_preview}")
+
+        if research_context.document_texts:
+            docs_combined = "\n---\n".join(research_context.document_texts)
+            if len(docs_combined) > DOC_TEXT_MAX_CHARS:
+                docs_combined = (
+                    docs_combined[:DOC_TEXT_MAX_CHARS] + "\n... (documents truncated)"
+                )
+            research_text_parts.append(f"## Uploaded Documents\n{docs_combined}")
+
+        research_text = "\n\n".join(research_text_parts)
+
+        if not research_text:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No research data available for synthesis",
+            )
+
+        # Generated sections accumulator
+        generated_sections: dict[str, Any] = {}
+        errors: list[str] = []
+        steps_completed = 0
+
+        # Generate sections in parallel batches (sections in the same batch
+        # share no dependencies and can run concurrently via asyncio.gather)
+        for batch in SYNTHESIS_BATCHES:
+            # Filter to synthesis-only sections (skip e.g. subreddit_research)
+            batch_sections = [s for s in batch if s in SECTION_PROMPTS]
+            if not batch_sections:
                 continue
 
-        return extracted_texts, parsed_filenames
-
-    def _merge_v2_schemas(
-        self,
-        synthesized: dict[str, Any],
-        partial: V2SchemaModel | None,
-    ) -> dict[str, Any]:
-        """Merge synthesized schema with partial user-provided schema.
-
-        User-provided values take precedence over synthesized values.
-
-        Args:
-            synthesized: LLM-synthesized schema
-            partial: User-provided partial schema
-
-        Returns:
-            Merged schema
-        """
-        if partial is None:
-            return synthesized
-
-        partial_dict = partial.model_dump(exclude_none=True, exclude_unset=True)
-
-        # Deep merge: partial values override synthesized
-        merged = synthesized.copy()
-
-        for key, value in partial_dict.items():
-            if isinstance(value, dict) and key in merged and isinstance(merged[key], dict):
-                # Merge nested dicts
-                merged[key] = {**merged[key], **value}
-            elif value:  # Only override if value is truthy
-                merged[key] = value
-
-        return merged
-
-    async def synthesize_v2_schema(
-        self,
-        brand_name: str,
-        domain: str | None = None,
-        source_documents: list[str] | None = None,
-        document_filenames: list[str] | None = None,
-        source_urls: list[str] | None = None,
-        additional_context: str | None = None,
-        partial_v2_schema: V2SchemaModel | None = None,
-        project_id: str | None = None,
-    ) -> SynthesisResult:
-        """Synthesize a V2 brand config schema from source materials.
-
-        Uses Claude to analyze documents and URLs, extracting brand identity
-        elements into a structured V2 schema.
-
-        Args:
-            brand_name: Name of the brand
-            domain: Brand domain (optional)
-            source_documents: Base64-encoded documents (optional)
-            document_filenames: Filenames for documents (optional)
-            source_urls: URLs to scrape (optional, not yet implemented)
-            additional_context: Extra instructions/context (optional)
-            partial_v2_schema: User-provided partial schema to merge (optional)
-            project_id: Project ID for logging
-
-        Returns:
-            SynthesisResult with synthesized V2 schema
-        """
-        start_time = time.monotonic()
-
-        logger.debug(
-            "synthesize_v2_schema() called",
-            extra={
-                "project_id": project_id,
-                "brand_name": brand_name[:50] if brand_name else "",
-                "domain": domain,
-                "num_documents": len(source_documents) if source_documents else 0,
-                "num_urls": len(source_urls) if source_urls else 0,
-                "has_additional_context": additional_context is not None,
-                "has_partial_schema": partial_v2_schema is not None,
-            },
-        )
-
-        # Validate inputs
-        if not brand_name or not brand_name.strip():
-            logger.warning(
-                "Validation failed: empty brand_name",
-                extra={
-                    "project_id": project_id,
-                    "field": "brand_name",
-                    "rejected_value": repr(brand_name),
-                },
-            )
-            return SynthesisResult(
-                success=False,
-                error="Brand name cannot be empty",
-            )
-
-        # Collect content from all sources
-        content_parts: list[str] = []
-        sources_used: list[str] = []
-
-        # Parse documents
-        if source_documents and document_filenames:
-            extracted_texts, parsed_filenames = await self._parse_documents(
-                source_documents,
-                document_filenames,
-                project_id,
-            )
-            content_parts.extend(extracted_texts)
-            sources_used.extend(parsed_filenames)
-
-        # TODO: Add URL scraping support
-        if source_urls:
-            logger.debug(
-                "URL scraping not yet implemented, skipping URLs",
-                extra={
-                    "project_id": project_id,
-                    "num_urls": len(source_urls),
-                },
-            )
-
-        # Check if we have any content
-        if not content_parts:
-            logger.warning(
-                "No content extracted from sources",
-                extra={
-                    "project_id": project_id,
-                    "brand_name": brand_name[:50],
-                },
-            )
-            # Create minimal schema if no content but partial schema provided
-            if partial_v2_schema:
-                return SynthesisResult(
-                    success=True,
-                    v2_schema=partial_v2_schema.model_dump(),
-                    duration_ms=(time.monotonic() - start_time) * 1000,
-                    sources_used=[],
-                )
-            return SynthesisResult(
-                success=False,
-                error="No content could be extracted from provided sources",
-            )
-
-        # Combine content
-        combined_content = "\n\n".join(content_parts)
-
-        # Truncate if too long
-        if len(combined_content) > MAX_CONTENT_LENGTH:
-            combined_content = combined_content[:MAX_CONTENT_LENGTH] + "\n\n[Content truncated]"
-            logger.debug(
-                "Content truncated for prompt",
-                extra={
-                    "project_id": project_id,
-                    "original_length": len("\n\n".join(content_parts)),
-                    "truncated_to": MAX_CONTENT_LENGTH,
-                },
-            )
-
-        # Get Claude client
-        claude = await self._get_claude_client()
-        if not claude or not claude.available:
-            logger.warning(
-                "Claude not available for brand synthesis",
-                extra={
-                    "project_id": project_id,
-                    "reason": "client_unavailable",
-                },
-            )
-            return SynthesisResult(
-                success=False,
-                error="Claude LLM not available (missing API key or service unavailable)",
-            )
-
-        # Build prompt
-        additional_context_section = ""
-        if additional_context:
-            additional_context_section = f"\n## Additional Context:\n{additional_context}"
-
-        user_prompt = BRAND_SYNTHESIS_USER_PROMPT_TEMPLATE.format(
-            brand_name=brand_name,
-            domain=domain or "(not specified)",
-            content=combined_content,
-            additional_context=additional_context_section,
-        )
-
-        try:
-            # Log state transition: synthesis starting
             logger.info(
-                "Brand config synthesis starting",
+                "Starting synthesis batch",
                 extra={
                     "project_id": project_id,
-                    "brand_name": brand_name[:50],
-                    "sources_count": len(sources_used),
-                    "content_length": len(combined_content),
+                    "batch": batch_sections,
+                    "parallel": len(batch_sections) > 1,
+                    "steps_completed": steps_completed,
                 },
             )
 
-            # Call Claude
-            result = await claude.complete(
-                system_prompt=BRAND_SYNTHESIS_SYSTEM_PROMPT,
-                user_prompt=user_prompt,
-                temperature=0.3,  # Lower temperature for structured output
-                max_tokens=2000,  # V2 schema is moderately sized
+            # Report progress for the first section in this batch
+            if update_status_callback:
+                await update_status_callback(batch_sections[0], steps_completed)
+
+            # Launch all sections in this batch concurrently
+            batch_results = await asyncio.gather(
+                *[
+                    _generate_section(
+                        section_name=section_name,
+                        research_text=research_text,
+                        generated_sections=generated_sections,
+                        claude=claude,
+                        project_id=project_id,
+                        brand_directives=research_context.brand_directives,
+                    )
+                    for section_name in batch_sections
+                ]
             )
 
-            duration_ms = (time.monotonic() - start_time) * 1000
+            # Collect results — update generated_sections AFTER the batch
+            # so the next batch can read from a consistent snapshot
+            for section_name, section_data, section_errors in batch_results:
+                if section_data is not None:
+                    generated_sections[section_name] = section_data
+                errors.extend(section_errors)
+                steps_completed += 1
 
-            if not result.success or not result.text:
-                logger.warning(
-                    "LLM brand synthesis failed",
-                    extra={
-                        "project_id": project_id,
-                        "brand_name": brand_name[:50],
-                        "error": result.error,
-                        "status_code": result.status_code,
-                        "request_id": result.request_id,
-                        "duration_ms": round(duration_ms, 2),
-                    },
-                )
-                return SynthesisResult(
-                    success=False,
-                    error=result.error or "LLM synthesis failed",
-                    duration_ms=round(duration_ms, 2),
-                    input_tokens=result.input_tokens,
-                    output_tokens=result.output_tokens,
-                    request_id=result.request_id,
-                )
+        # Post-processing: seed vocabulary.competitors from competitor_context
+        _seed_competitors_from_context(generated_sections, project_id)
 
-            # Parse JSON response
-            response_text: str = result.text
+        # Log completion with explicit section inventory
+        expected_sections = [s for s in GENERATION_STEPS if s in SECTION_PROMPTS]
+        present_sections = [s for s in expected_sections if s in generated_sections]
+        missing_sections = [s for s in expected_sections if s not in generated_sections]
 
-            # Handle markdown code blocks
-            if "```json" in response_text:
-                response_text = response_text.split("```json")[1].split("```")[0]
-            elif "```" in response_text:
-                response_text = response_text.split("```")[1].split("```")[0]
-
-            response_text = response_text.strip()
-
-            try:
-                synthesized_schema = json.loads(response_text)
-
-                if not isinstance(synthesized_schema, dict):
-                    logger.warning(
-                        "Validation failed: LLM response is not a dict",
-                        extra={
-                            "project_id": project_id,
-                            "field": "response",
-                            "rejected_value": type(synthesized_schema).__name__,
-                        },
-                    )
-                    return SynthesisResult(
-                        success=False,
-                        error="LLM response is not a valid schema object",
-                        duration_ms=round(duration_ms, 2),
-                        input_tokens=result.input_tokens,
-                        output_tokens=result.output_tokens,
-                        request_id=result.request_id,
-                    )
-
-                # Ensure version is set
-                synthesized_schema["version"] = "2.0"
-
-                # Merge with partial schema if provided
-                final_schema = self._merge_v2_schemas(synthesized_schema, partial_v2_schema)
-
-                # Log state transition: synthesis complete
-                logger.info(
-                    "Brand config synthesis complete",
-                    extra={
-                        "project_id": project_id,
-                        "brand_name": brand_name[:50],
-                        "sources_count": len(sources_used),
-                        "duration_ms": round(duration_ms, 2),
-                        "input_tokens": result.input_tokens,
-                        "output_tokens": result.output_tokens,
-                        "request_id": result.request_id,
-                    },
-                )
-
-                if duration_ms > SLOW_OPERATION_THRESHOLD_MS:
-                    logger.warning(
-                        "Slow brand synthesis operation",
-                        extra={
-                            "project_id": project_id,
-                            "brand_name": brand_name[:50],
-                            "duration_ms": round(duration_ms, 2),
-                            "threshold_ms": SLOW_OPERATION_THRESHOLD_MS,
-                        },
-                    )
-
-                return SynthesisResult(
-                    success=True,
-                    v2_schema=final_schema,
-                    duration_ms=round(duration_ms, 2),
-                    input_tokens=result.input_tokens,
-                    output_tokens=result.output_tokens,
-                    request_id=result.request_id,
-                    sources_used=sources_used,
-                )
-
-            except json.JSONDecodeError as e:
-                logger.warning(
-                    "Validation failed: LLM response is not valid JSON",
-                    extra={
-                        "project_id": project_id,
-                        "field": "response",
-                        "rejected_value": response_text[:200],
-                        "error": str(e),
-                        "error_position": e.pos if hasattr(e, "pos") else None,
-                    },
-                )
-                return SynthesisResult(
-                    success=False,
-                    error=f"Failed to parse LLM response as JSON: {e}",
-                    duration_ms=round(duration_ms, 2),
-                    input_tokens=result.input_tokens,
-                    output_tokens=result.output_tokens,
-                    request_id=result.request_id,
-                )
-
-        except Exception as e:
-            duration_ms = (time.monotonic() - start_time) * 1000
-            logger.error(
-                "Brand synthesis exception",
-                extra={
-                    "project_id": project_id,
-                    "brand_name": brand_name[:50] if brand_name else "",
-                    "error_type": type(e).__name__,
-                    "error_message": str(e),
-                    "duration_ms": round(duration_ms, 2),
-                    "stack_trace": traceback.format_exc(),
-                },
-                exc_info=True,
-            )
-            return SynthesisResult(
-                success=False,
-                error=f"Unexpected error: {str(e)}",
-                duration_ms=round(duration_ms, 2),
-            )
-
-    async def synthesize_and_save(
-        self,
-        project_id: str,
-        request: BrandConfigSynthesisRequest,
-    ) -> BrandConfigSynthesisResponse:
-        """Synthesize brand config and save to database.
-
-        Args:
-            project_id: UUID of the project to associate the config with
-            request: Synthesis request with sources and options
-
-        Returns:
-            BrandConfigSynthesisResponse with result and saved config ID
-        """
-        start_time = time.monotonic()
-
-        logger.debug(
-            "synthesize_and_save() called",
+        logger.info(
+            "Synthesis phase completed",
             extra={
                 "project_id": project_id,
-                "brand_name": request.brand_name[:50] if request.brand_name else "",
+                "sections_generated": len(present_sections),
+                "sections_failed": len(missing_sections),
+                "present": present_sections,
+                "missing": missing_sections,
+                "errors": errors if errors else None,
             },
         )
 
-        # Synthesize V2 schema
-        synthesis_result = await self.synthesize_v2_schema(
-            brand_name=request.brand_name,
-            domain=request.domain,
-            source_documents=request.source_documents,
-            document_filenames=request.document_filenames,
-            source_urls=request.source_urls,
-            additional_context=request.additional_context,
-            partial_v2_schema=request.partial_v2_schema,
-            project_id=project_id,
+        # Add errors to result if any
+        if errors:
+            generated_sections["_errors"] = errors
+
+        return generated_sections
+
+    @staticmethod
+    async def store_brand_config(
+        db: AsyncSession,
+        project_id: str,
+        generated_sections: dict[str, Any],
+        source_file_ids: list[str],
+    ) -> BrandConfig:
+        """Store the generated brand config in BrandConfig.v2_schema.
+
+        Creates a new BrandConfig record if one doesn't exist for the project,
+        or updates the existing one. Also updates generation status to complete
+        or failed based on the result.
+
+        Args:
+            db: AsyncSession for database operations.
+            project_id: UUID string of the project.
+            generated_sections: Dictionary with all generated sections from synthesis.
+            source_file_ids: List of ProjectFile IDs used as source documents.
+
+        Returns:
+            BrandConfig instance with stored v2_schema.
+
+        Raises:
+            HTTPException: 404 if project not found.
+        """
+        # Get project to verify existence and get brand name
+        project = await BrandConfigService._get_project(db, project_id)
+
+        # Check for errors in generated sections
+        errors = generated_sections.pop("_errors", None)
+        has_errors = bool(errors)
+
+        # Determine if we have minimum required sections for success
+        # We need at least brand_foundation for a valid config
+        required_sections = ["brand_foundation"]
+        has_required = all(
+            section in generated_sections for section in required_sections
         )
 
-        if not synthesis_result.success:
-            return BrandConfigSynthesisResponse(
-                success=False,
-                project_id=project_id,
-                brand_name=request.brand_name,
-                domain=request.domain,
-                v2_schema=V2SchemaModel(),
-                error=synthesis_result.error,
-                duration_ms=synthesis_result.duration_ms,
-                input_tokens=synthesis_result.input_tokens,
-                output_tokens=synthesis_result.output_tokens,
-                request_id=synthesis_result.request_id,
+        if not has_required:
+            # Mark as failed - not enough data to create brand config
+            error_msg = "Failed to generate required sections: " + ", ".join(
+                s for s in required_sections if s not in generated_sections
+            )
+            if errors:
+                error_msg += f". Additional errors: {errors}"
+
+            await BrandConfigService.fail_generation(db, project_id, error_msg)
+
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=error_msg,
             )
 
+        # Build v2_schema structure
+        v2_schema: dict[str, Any] = {
+            "version": "2.0",
+            "generated_at": datetime.now(UTC).isoformat(),
+            "source_documents": source_file_ids,
+        }
+
+        # Add all 9 sections + ai_prompt_snippet
+        for section_name in GENERATION_STEPS:
+            if section_name in generated_sections:
+                v2_schema[section_name] = generated_sections[section_name]
+
+        # Include partial errors as metadata if any
+        if errors:
+            v2_schema["_generation_warnings"] = errors
+
+        # Check if BrandConfig already exists for this project
+        stmt = select(BrandConfig).where(BrandConfig.project_id == project_id)
+        result = await db.execute(stmt)
+        brand_config = result.scalar_one_or_none()
+
+        if brand_config:
+            # Update existing record
+            brand_config.v2_schema = v2_schema
+            brand_config.updated_at = datetime.now(UTC)
+            logger.info(
+                "Updated existing BrandConfig",
+                extra={
+                    "project_id": project_id,
+                    "brand_config_id": brand_config.id,
+                    "sections_stored": len(
+                        [s for s in GENERATION_STEPS if s in v2_schema]
+                    ),
+                },
+            )
+        else:
+            # Create new record
+            brand_config = BrandConfig(
+                project_id=project_id,
+                brand_name=project.name,
+                domain=project.site_url,
+                v2_schema=v2_schema,
+            )
+            db.add(brand_config)
+            logger.info(
+                "Created new BrandConfig",
+                extra={
+                    "project_id": project_id,
+                    "sections_stored": len(
+                        [s for s in GENERATION_STEPS if s in v2_schema]
+                    ),
+                },
+            )
+
+        await db.flush()
+        await db.refresh(brand_config)
+
+        # Mark generation as complete (even if there were some non-critical errors)
         try:
-            # Check if brand config already exists for this project + brand name
-            existing_config = await self._repository.get_by_project_and_brand(
-                project_id, request.brand_name
+            logger.info("Calling complete_generation", extra={"project_id": project_id})
+            await BrandConfigService.complete_generation(db, project_id)
+            logger.info(
+                "complete_generation returned", extra={"project_id": project_id}
             )
-
-            if existing_config:
-                # Update existing
-                await self._repository.update(
-                    existing_config.id,
-                    domain=request.domain,
-                    v2_schema=synthesis_result.v2_schema,
-                )
-                brand_config_id = existing_config.id
-                logger.info(
-                    "Brand config updated with synthesized schema",
-                    extra={
-                        "brand_config_id": brand_config_id,
-                        "project_id": project_id,
-                        "brand_name": request.brand_name[:50],
-                    },
-                )
-            else:
-                # Create new
-                new_config = await self._repository.create(
-                    project_id=project_id,
-                    brand_name=request.brand_name,
-                    domain=request.domain,
-                    v2_schema=synthesis_result.v2_schema,
-                )
-                brand_config_id = new_config.id
-                logger.info(
-                    "Brand config created with synthesized schema",
-                    extra={
-                        "brand_config_id": brand_config_id,
-                        "project_id": project_id,
-                        "brand_name": request.brand_name[:50],
-                    },
-                )
-
-            total_duration_ms = (time.monotonic() - start_time) * 1000
-
-            return BrandConfigSynthesisResponse(
-                success=True,
-                brand_config_id=brand_config_id,
-                project_id=project_id,
-                brand_name=request.brand_name,
-                domain=request.domain,
-                v2_schema=V2SchemaModel.model_validate(synthesis_result.v2_schema),
-                duration_ms=round(total_duration_ms, 2),
-                input_tokens=synthesis_result.input_tokens,
-                output_tokens=synthesis_result.output_tokens,
-                request_id=synthesis_result.request_id,
-                sources_used=synthesis_result.sources_used,
-            )
-
         except Exception as e:
-            duration_ms = (time.monotonic() - start_time) * 1000
-            logger.error(
-                "Failed to save synthesized brand config",
-                extra={
-                    "project_id": project_id,
-                    "brand_name": request.brand_name[:50] if request.brand_name else "",
-                    "error_type": type(e).__name__,
-                    "error_message": str(e),
-                    "duration_ms": round(duration_ms, 2),
-                    "stack_trace": traceback.format_exc(),
-                },
-                exc_info=True,
-            )
-            return BrandConfigSynthesisResponse(
-                success=False,
-                project_id=project_id,
-                brand_name=request.brand_name,
-                domain=request.domain,
-                v2_schema=V2SchemaModel.model_validate(synthesis_result.v2_schema),
-                error=f"Failed to save brand config: {str(e)}",
-                duration_ms=round(duration_ms, 2),
-                input_tokens=synthesis_result.input_tokens,
-                output_tokens=synthesis_result.output_tokens,
-                request_id=synthesis_result.request_id,
+            logger.exception(
+                "Error in complete_generation",
+                extra={"project_id": project_id, "error": str(e)},
             )
 
-    # =========================================================================
-    # CRUD OPERATIONS
-    # =========================================================================
+        logger.info(
+            "Brand config stored successfully",
+            extra={
+                "project_id": project_id,
+                "brand_config_id": brand_config.id,
+                "has_warnings": has_errors,
+            },
+        )
 
+        return brand_config
+
+    @staticmethod
+    async def get_source_file_ids(db: AsyncSession, project_id: str) -> list[str]:
+        """Get all file IDs for a project that have extracted text.
+
+        Args:
+            db: AsyncSession for database operations.
+            project_id: UUID string of the project.
+
+        Returns:
+            List of ProjectFile UUIDs that were used as source documents.
+        """
+        stmt = select(ProjectFile.id).where(
+            ProjectFile.project_id == project_id,
+            ProjectFile.extracted_text.isnot(None),
+        )
+        result = await db.execute(stmt)
+        return [row[0] for row in result.fetchall()]
+
+    @staticmethod
     async def get_brand_config(
-        self,
-        brand_config_id: str,
-        project_id: str | None = None,
-    ) -> Any:
-        """Get a brand config by ID.
-
-        Args:
-            brand_config_id: UUID of the brand config
-            project_id: Optional project ID for validation
-
-        Returns:
-            BrandConfig model instance
-
-        Raises:
-            BrandConfigNotFoundError: If brand config not found
-        """
-        logger.debug(
-            "get_brand_config() called",
-            extra={
-                "brand_config_id": brand_config_id,
-                "project_id": project_id,
-            },
-        )
-
-        config = await self._repository.get_by_id(brand_config_id)
-
-        if config is None:
-            raise BrandConfigNotFoundError(brand_config_id, project_id)
-
-        # Validate project ownership if project_id provided
-        if project_id and config.project_id != project_id:
-            logger.warning(
-                "Brand config belongs to different project",
-                extra={
-                    "brand_config_id": brand_config_id,
-                    "requested_project_id": project_id,
-                    "actual_project_id": config.project_id,
-                },
-            )
-            raise BrandConfigNotFoundError(brand_config_id, project_id)
-
-        return config
-
-    async def list_brand_configs(
-        self,
+        db: AsyncSession,
         project_id: str,
-    ) -> tuple[list[Any], int]:
-        """List all brand configs for a project.
+    ) -> BrandConfig:
+        """Get the brand config for a project.
 
         Args:
-            project_id: UUID of the project
+            db: AsyncSession for database operations.
+            project_id: UUID string of the project.
 
         Returns:
-            Tuple of (list of BrandConfig instances, total count)
-        """
-        logger.debug(
-            "list_brand_configs() called",
-            extra={"project_id": project_id},
-        )
-
-        configs = await self._repository.get_by_project_id(project_id)
-        count = len(configs)
-
-        return configs, count
-
-    async def update_brand_config(
-        self,
-        brand_config_id: str,
-        brand_name: str | None = None,
-        domain: str | None = None,
-        v2_schema: dict[str, Any] | None = None,
-        project_id: str | None = None,
-    ) -> Any:
-        """Update a brand config.
-
-        Args:
-            brand_config_id: UUID of the brand config
-            brand_name: New brand name (optional)
-            domain: New domain (optional)
-            v2_schema: New V2 schema (optional)
-            project_id: Optional project ID for validation
-
-        Returns:
-            Updated BrandConfig model instance
+            BrandConfig instance.
 
         Raises:
-            BrandConfigNotFoundError: If brand config not found
+            HTTPException: 404 if project not found or brand config not generated yet.
         """
-        logger.debug(
-            "update_brand_config() called",
+        # Verify project exists
+        await BrandConfigService._get_project(db, project_id)
+
+        # Get brand config
+        stmt = select(BrandConfig).where(BrandConfig.project_id == project_id)
+        result = await db.execute(stmt)
+        brand_config = result.scalar_one_or_none()
+
+        if brand_config is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Brand config not generated yet for project '{project_id}'",
+            )
+
+        return brand_config
+
+    @staticmethod
+    async def update_sections(
+        db: AsyncSession,
+        project_id: str,
+        sections: dict[str, dict[str, Any]],
+    ) -> BrandConfig:
+        """Update specific sections of a brand config.
+
+        Args:
+            db: AsyncSession for database operations.
+            project_id: UUID string of the project.
+            sections: Dict mapping section names to their updated content.
+
+        Returns:
+            Updated BrandConfig instance.
+
+        Raises:
+            HTTPException: 404 if project not found or brand config not generated yet.
+        """
+        # Get existing brand config (validates project and config existence)
+        brand_config = await BrandConfigService.get_brand_config(db, project_id)
+
+        # Update the v2_schema with new section content
+        updated_schema = dict(brand_config.v2_schema)  # Copy existing schema
+
+        for section_name, section_content in sections.items():
+            updated_schema[section_name] = section_content
+
+        # Update the timestamp and schema
+        brand_config.v2_schema = updated_schema
+        brand_config.updated_at = datetime.now(UTC)
+
+        await db.flush()
+        await db.refresh(brand_config)
+
+        logger.info(
+            "Updated brand config sections",
             extra={
-                "brand_config_id": brand_config_id,
                 "project_id": project_id,
-                "update_fields": [
-                    k
-                    for k, v in [
-                        ("brand_name", brand_name),
-                        ("domain", domain),
-                        ("v2_schema", v2_schema),
-                    ]
-                    if v is not None
-                ],
+                "brand_config_id": brand_config.id,
+                "sections_updated": list(sections.keys()),
             },
         )
 
-        # Validate existence and ownership
-        await self.get_brand_config(brand_config_id, project_id)
+        return brand_config
 
-        config = await self._repository.update(
-            brand_config_id,
-            brand_name=brand_name,
-            domain=domain,
-            v2_schema=v2_schema,
-        )
-
-        if config is None:
-            raise BrandConfigNotFoundError(brand_config_id, project_id)
-
-        return config
-
-    async def delete_brand_config(
-        self,
-        brand_config_id: str,
-        project_id: str | None = None,
-    ) -> bool:
-        """Delete a brand config.
+    @staticmethod
+    async def regenerate_sections(
+        db: AsyncSession,
+        project_id: str,
+        sections: list[str] | None,
+        perplexity: PerplexityClient,
+        crawl4ai: Crawl4AIClient,
+        claude: ClaudeClient,
+    ) -> BrandConfig:
+        """Regenerate specific sections or all sections of a brand config.
 
         Args:
-            brand_config_id: UUID of the brand config
-            project_id: Optional project ID for validation
+            db: AsyncSession for database operations.
+            project_id: UUID string of the project.
+            sections: List of section names to regenerate, or None for all.
+            perplexity: PerplexityClient for web research.
+            crawl4ai: Crawl4AIClient for website crawling.
+            claude: ClaudeClient for LLM generation.
 
         Returns:
-            True if deleted
+            Updated BrandConfig instance.
 
         Raises:
-            BrandConfigNotFoundError: If brand config not found
+            HTTPException: 404 if project not found or brand config not generated yet.
+            HTTPException: 503 if Claude is not available.
         """
-        logger.debug(
-            "delete_brand_config() called",
+        # Import here to avoid circular import
+        from app.integrations.claude import get_claude
+
+        # Get existing brand config (validates project and config existence)
+        brand_config = await BrandConfigService.get_brand_config(db, project_id)
+
+        # If passed client isn't available, try getting fresh from global
+        if not claude.available:
+            logger.warning(
+                "Passed Claude client not available in regenerate, trying global instance",
+                extra={"project_id": project_id},
+            )
+            claude = await get_claude()
+
+        if not claude.available:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Claude LLM is not configured",
+            )
+
+        # Determine which sections to regenerate
+        sections_to_regenerate = sections if sections else GENERATION_STEPS
+
+        logger.info(
+            "Starting section regeneration",
             extra={
-                "brand_config_id": brand_config_id,
                 "project_id": project_id,
+                "sections": sections_to_regenerate,
             },
         )
 
-        # Validate existence and ownership
-        await self.get_brand_config(brand_config_id, project_id)
+        # Run research phase to get fresh context
+        research_context = await BrandConfigService._research_phase(
+            db=db,
+            project_id=project_id,
+            perplexity=perplexity,
+            crawl4ai=crawl4ai,
+        )
 
-        deleted = await self._repository.delete(brand_config_id)
+        if not research_context.has_any_data():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No research data available for regeneration",
+            )
 
-        if not deleted:
-            raise BrandConfigNotFoundError(brand_config_id, project_id)
+        # Build research text for prompts
+        research_text_parts: list[str] = []
 
-        return deleted
+        if research_context.perplexity_research:
+            research_text_parts.append(
+                f"## Web Research\n{research_context.perplexity_research}"
+            )
+
+        if research_context.crawl_content:
+            crawl_preview = research_context.crawl_content[:CRAWL_CONTENT_MAX_CHARS]
+            if len(research_context.crawl_content) > CRAWL_CONTENT_MAX_CHARS:
+                crawl_preview += "\n... (content truncated)"
+            research_text_parts.append(f"## Website Content\n{crawl_preview}")
+
+        if research_context.document_texts:
+            docs_combined = "\n---\n".join(research_context.document_texts)
+            if len(docs_combined) > DOC_TEXT_MAX_CHARS:
+                docs_combined = (
+                    docs_combined[:DOC_TEXT_MAX_CHARS] + "\n... (documents truncated)"
+                )
+            research_text_parts.append(f"## Uploaded Documents\n{docs_combined}")
+
+        research_text = "\n\n".join(research_text_parts)
+
+        # Get existing sections for context
+        existing_sections = dict(brand_config.v2_schema)
+
+        # Regenerate requested sections
+        regenerated_sections: dict[str, Any] = {}
+        errors: list[str] = []
+
+        for section_index, section_name in enumerate(sections_to_regenerate):
+            if section_name not in SECTION_PROMPTS:
+                errors.append(f"Unknown section: {section_name}")
+                continue
+
+            # Update progress so frontend can show current step
+            try:
+                await BrandConfigService.update_progress(
+                    db=db,
+                    project_id=project_id,
+                    current_step=section_name,
+                    steps_completed=section_index,
+                )
+                await db.commit()
+            except Exception:
+                pass  # Non-fatal: progress update failure shouldn't block regeneration
+
+            logger.info(
+                "Regenerating section",
+                extra={"project_id": project_id, "section": section_name},
+            )
+
+            system_prompt = SECTION_PROMPTS[section_name]
+
+            # Inject brand directives as mandatory instructions into the system prompt
+            if research_context.brand_directives:
+                system_prompt += (
+                    "\n\n---\n"
+                    "MANDATORY BRAND DIRECTIVES (from project owner — override defaults):\n"
+                    "The following are top-level requirements set by the project owner. "
+                    "You MUST follow these directives exactly. They take priority over "
+                    "any conflicting guidance above.\n\n"
+                    f"{research_context.brand_directives}"
+                )
+
+            # Build user prompt with research context and other existing sections
+            user_prompt_parts = [
+                "# Research Context",
+                research_text,
+            ]
+
+            # Add other existing sections as context (not being regenerated)
+            context_sections = {
+                k: v
+                for k, v in existing_sections.items()
+                if k in GENERATION_STEPS
+                and k != section_name
+                and k not in sections_to_regenerate
+            }
+            if context_sections:
+                user_prompt_parts.append("\n# Existing Brand Sections (for context)")
+                for prev_section, prev_data in context_sections.items():
+                    if isinstance(prev_data, dict):
+                        user_prompt_parts.append(
+                            f"\n## {prev_section}\n```json\n{json.dumps(prev_data, indent=2)}\n```"
+                        )
+
+            # Add already regenerated sections
+            if regenerated_sections:
+                user_prompt_parts.append("\n# Previously Regenerated Sections")
+                for prev_section, prev_data in regenerated_sections.items():
+                    user_prompt_parts.append(
+                        f"\n## {prev_section}\n```json\n{json.dumps(prev_data, indent=2)}\n```"
+                    )
+
+            user_prompt_parts.append(
+                f"\n\nRegenerate the {section_name.replace('_', ' ')} section now."
+            )
+            user_prompt = "\n".join(user_prompt_parts)
+
+            # Per-section config (max_tokens, timeout) with retry logic
+            base_max_tokens, base_timeout = SECTION_CONFIG.get(
+                section_name, (2048, SECTION_TIMEOUT_SECONDS)
+            )
+
+            for attempt in range(1, MAX_SECTION_RETRIES + 1):
+                attempt_max_tokens = base_max_tokens
+                attempt_timeout = base_timeout
+                if attempt > 1:
+                    attempt_max_tokens = int(
+                        base_max_tokens * (1 + 0.5 * (attempt - 1))
+                    )
+                    attempt_timeout = int(base_timeout * (1 + 0.25 * (attempt - 1)))
+
+                try:
+                    result = await asyncio.wait_for(
+                        claude.complete(
+                            user_prompt=user_prompt,
+                            system_prompt=system_prompt,
+                            max_tokens=attempt_max_tokens,
+                            temperature=0.3,
+                            timeout=float(attempt_timeout),
+                        ),
+                        timeout=attempt_timeout + 10,
+                    )
+                except TimeoutError:
+                    error_msg = f"Timeout regenerating {section_name} (attempt {attempt}/{MAX_SECTION_RETRIES})"
+                    logger.warning(error_msg, extra={"project_id": project_id})
+                    if attempt < MAX_SECTION_RETRIES:
+                        continue
+                    errors.append(error_msg)
+                    break
+
+                if not result.success:
+                    error_msg = f"Failed to regenerate {section_name}: {result.error} (attempt {attempt}/{MAX_SECTION_RETRIES})"
+                    logger.warning(error_msg, extra={"project_id": project_id})
+                    if attempt < MAX_SECTION_RETRIES:
+                        continue
+                    errors.append(error_msg)
+                    break
+
+                try:
+                    section_data = _extract_json_from_response(result.text or "")
+                    regenerated_sections[section_name] = section_data
+
+                    logger.info(
+                        "Section regenerated successfully",
+                        extra={
+                            "project_id": project_id,
+                            "section": section_name,
+                            "attempt": attempt,
+                        },
+                    )
+                    break
+
+                except json.JSONDecodeError as e:
+                    was_truncated = result.stop_reason == "max_tokens"
+                    error_msg = f"Failed to parse {section_name} JSON: {e} (attempt {attempt}/{MAX_SECTION_RETRIES}, truncated={was_truncated})"
+                    logger.warning(error_msg, extra={"project_id": project_id})
+                    if attempt < MAX_SECTION_RETRIES:
+                        continue
+                    errors.append(error_msg)
+                    break
+
+        # Update brand config with regenerated sections
+        updated_schema = dict(brand_config.v2_schema)
+        for section_name, section_data in regenerated_sections.items():
+            updated_schema[section_name] = section_data
+
+        if errors:
+            updated_schema["_regeneration_warnings"] = errors
+
+        brand_config.v2_schema = updated_schema
+        brand_config.updated_at = datetime.now(UTC)
+
+        await db.flush()
+        await db.refresh(brand_config)
+
+        logger.info(
+            "Brand config regeneration completed",
+            extra={
+                "project_id": project_id,
+                "sections_regenerated": list(regenerated_sections.keys()),
+                "errors": errors if errors else None,
+            },
+        )
+
+        return brand_config
 
 
-# =============================================================================
-# GLOBAL SERVICE ACCESSOR
-# =============================================================================
+def _seed_competitors_from_context(
+    generated_sections: dict[str, Any],
+    project_id: str,
+) -> None:
+    """Back-fill vocabulary.competitors from competitor_context.direct_competitors.
 
+    After all sections are generated, extracts competitor names from the
+    competitor_context section and stores them in vocabulary.competitors.
+    This gives users a solid starting list of competitor brands from day one.
 
-def get_brand_config_service(session: AsyncSession) -> BrandConfigService:
-    """Get BrandConfigService instance.
-
-    Args:
-        session: Async SQLAlchemy session
-
-    Returns:
-        BrandConfigService instance
+    Mutates generated_sections in place.
     """
-    return BrandConfigService(session)
+    competitor_context = generated_sections.get("competitor_context")
+    if not isinstance(competitor_context, dict):
+        return
+
+    direct_competitors = competitor_context.get("direct_competitors", [])
+    if not isinstance(direct_competitors, list) or not direct_competitors:
+        return
+
+    # Extract competitor names
+    competitor_names: list[str] = []
+    for comp in direct_competitors:
+        if isinstance(comp, dict):
+            name = comp.get("name", "").strip()
+            if name:
+                competitor_names.append(name)
+
+    if not competitor_names:
+        return
+
+    # Ensure vocabulary section exists
+    vocabulary = generated_sections.get("vocabulary")
+    if not isinstance(vocabulary, dict):
+        vocabulary = {}
+        generated_sections["vocabulary"] = vocabulary
+
+    # Merge with any existing competitors (case-insensitive dedup)
+    existing = vocabulary.get("competitors", [])
+    if not isinstance(existing, list):
+        existing = []
+
+    existing_lower = {name.lower() for name in existing}
+    for name in competitor_names:
+        if name.lower() not in existing_lower:
+            existing.append(name)
+            existing_lower.add(name.lower())
+
+    vocabulary["competitors"] = existing
+
+    logger.info(
+        "Seeded vocabulary.competitors from competitor_context",
+        extra={
+            "project_id": project_id,
+            "competitor_count": len(existing),
+        },
+    )

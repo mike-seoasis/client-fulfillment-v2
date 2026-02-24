@@ -81,7 +81,13 @@ class DatabaseManager:
                 connect_args={
                     "timeout": settings.db_connect_timeout,
                     "command_timeout": settings.db_command_timeout,
-                    "ssl": "require",  # Railway requires SSL
+                    # Require SSL when connecting to Neon (even in development)
+                    **(
+                        {"ssl": "require"}
+                        if "neon.tech" in db_url
+                        or settings.environment != "development"
+                        else {}
+                    ),
                 },
             )
 

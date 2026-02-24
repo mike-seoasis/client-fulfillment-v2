@@ -3,19 +3,27 @@
 The PageKeywords model represents keyword data for a page:
 - primary_keyword: The main target keyword for the page
 - secondary_keywords: JSONB array of supporting keywords
+- alternative_keywords: JSONB array of alternative keyword suggestions
+- is_approved: Boolean for approval status
+- is_priority: Boolean for priority flagging
+- composite_score/relevance_score: AI-generated scores
+- ai_reasoning: Explanation of AI's keyword recommendation
 - Foreign key relationship to CrawledPage
 - Timestamps for auditing
 """
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-from sqlalchemy import DateTime, Text, text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+if TYPE_CHECKING:
+    from app.models.crawled_page import CrawledPage
 
 
 class PageKeywords(Base):
@@ -26,6 +34,12 @@ class PageKeywords(Base):
         crawled_page_id: Reference to the parent crawled page
         primary_keyword: The main target keyword for the page
         secondary_keywords: JSONB array of supporting/related keywords
+        alternative_keywords: JSONB array of alternative keyword suggestions
+        is_approved: Boolean indicating if keyword is approved
+        is_priority: Boolean indicating if keyword is marked as priority
+        composite_score: Overall AI-generated score for the keyword (0-100)
+        relevance_score: Relevance score to page content (0-100)
+        ai_reasoning: Text explaining AI's keyword recommendation
         search_volume: Estimated monthly search volume for primary keyword
         difficulty_score: SEO difficulty score (0-100) for primary keyword
         created_at: Timestamp when record was created
@@ -46,6 +60,7 @@ class PageKeywords(Base):
 
     crawled_page_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False),
+        ForeignKey("crawled_pages.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -61,6 +76,44 @@ class PageKeywords(Base):
         nullable=False,
         default=list,
         server_default=text("'[]'::jsonb"),
+    )
+
+    alternative_keywords: Mapped[list[Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'::jsonb"),
+    )
+
+    is_approved: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+        index=True,
+    )
+
+    is_priority: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+        index=True,
+    )
+
+    composite_score: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    relevance_score: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    ai_reasoning: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
     )
 
     search_volume: Mapped[int | None] = mapped_column(
@@ -84,6 +137,12 @@ class PageKeywords(Base):
         default=lambda: datetime.now(UTC),
         server_default=text("now()"),
         onupdate=lambda: datetime.now(UTC),
+    )
+
+    # Relationship to CrawledPage
+    page: Mapped["CrawledPage"] = relationship(
+        "CrawledPage",
+        back_populates="keywords",
     )
 
     def __repr__(self) -> str:

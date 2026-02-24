@@ -1,219 +1,284 @@
 {
-  "name": "Brand Config & UX Rework",
-  "description": "Implement comprehensive 11-part brand guidelines framework with Perplexity research, 7-step wizard UI, fix WebSocket indicator, and rename phases",
+  "name": "Phase 12: Neon Auth (Google OAuth)",
+  "description": "Gate the app behind Google OAuth using Neon Auth. Frontend: sign-in page, route protection middleware, session token forwarding. Backend: session validation against neon_auth.session table, applied to all API routes. No data siloing — all users see all projects.",
+  "branchName": "v2-rebuild",
   "userStories": [
     {
-      "id": "brand-rework.1.1",
-      "title": "Add PERPLEXITY_API_KEY to config and .env.example",
-      "description": "Add PERPLEXITY_API_KEY environment variable to backend/app/core/config.py settings class and document it in .env.example",
-      "acceptanceCriteria": ["PERPLEXITY_API_KEY in config.py", "PERPLEXITY_API_KEY documented in .env.example"],
-      "passes": false
+      "id": "S12-001",
+      "title": "Install @neondatabase/auth SDK",
+      "description": "As a developer, I need the Neon Auth SDK installed so that I can use its auth primitives.",
+      "acceptanceCriteria": [
+        "Run `npm install @neondatabase/auth@latest` in frontend/",
+        "Package appears in frontend/package.json dependencies",
+        "No version conflicts or peer dependency issues"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "This is the managed Neon Auth SDK built on Better Auth. It provides createNeonAuth() for server-side and createAuthClient() for client-side.",
+      "completionNotes": "Completed by agent"
     },
     {
-      "id": "brand-rework.1.2",
-      "title": "Create skills/ directory and move brand_guidelines_bible.md there",
-      "description": "Create skills/ directory at project root with README.md explaining purpose. Move brand_guideilnes_bible.md from root to skills/brand_guidelines_bible.md",
-      "acceptanceCriteria": ["skills/ directory exists", "skills/README.md exists", "brand_guidelines_bible.md moved to skills/"],
-      "passes": false
+      "id": "S12-002",
+      "title": "Create auth server configuration",
+      "description": "As a developer, I need a server-side auth instance so that middleware and API routes can validate sessions.",
+      "acceptanceCriteria": [
+        "Create frontend/src/lib/auth/server.ts",
+        "Import createNeonAuth from '@neondatabase/auth/next/server'",
+        "Export `auth` instance configured with process.env.NEON_AUTH_BASE_URL and process.env.NEON_AUTH_COOKIE_SECRET",
+        "Add NEON_AUTH_BASE_URL and NEON_AUTH_COOKIE_SECRET to frontend/.env.local (placeholder values for now)"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "The auth server instance provides .handler(), .middleware(), and .getSession() methods. Cookie secret must be at least 32 characters. Env var values will be set by user after enabling Neon Auth in their console.",
+      "completionNotes": "Completed by agent"
     },
     {
-      "id": "brand-rework.2.1",
-      "title": "Create PerplexityClient with research_brand() method",
-      "description": "Create backend/app/integrations/perplexity.py with PerplexityClient class. Implement research_brand(domain: str) method that calls Perplexity API to research a brand from their website URL. Handle API errors gracefully.",
-      "acceptanceCriteria": ["PerplexityClient class exists", "research_brand() method works", "Handles missing API key gracefully"],
-      "passes": false
+      "id": "S12-003",
+      "title": "Create auth client configuration",
+      "description": "As a developer, I need a client-side auth instance so that React components can trigger sign-in/out and read session data.",
+      "acceptanceCriteria": [
+        "Create frontend/src/lib/auth/client.ts with 'use client' directive",
+        "Import createAuthClient from '@neondatabase/auth/next'",
+        "Export `authClient` instance from createAuthClient()",
+        "authClient exposes signIn.social(), signOut(), and useSession() methods"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "The client instance is used in React components for auth operations. useSession() returns { data: { session, user }, isPending, error }.",
+      "completionNotes": "Completed by agent"
     },
     {
-      "id": "brand-rework.2.2",
-      "title": "Add caching (24hr TTL) and rate limiting (5/hr/project) to Perplexity",
-      "description": "Add Redis-based caching for Perplexity research results with 24-hour TTL. Add rate limiting of 5 requests per hour per project using Redis.",
-      "acceptanceCriteria": ["Research results cached in Redis", "Rate limiting enforced", "Cache bypass option for force refresh"],
-      "passes": false
+      "id": "S12-004",
+      "title": "Create auth API route handler",
+      "description": "As a developer, I need an API route that proxies auth requests to Neon Auth service.",
+      "acceptanceCriteria": [
+        "Create frontend/src/app/api/auth/[...path]/route.ts",
+        "Import auth from '@/lib/auth/server'",
+        "Export GET and POST from auth.handler()",
+        "Auth API requests at /api/auth/* are handled correctly"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "This catch-all route handles all Better Auth API endpoints: sign-in, sign-out, session, callbacks, etc. The [...path] pattern catches /api/auth/sign-in/social, /api/auth/get-session, /api/auth/callback/google, etc.",
+      "completionNotes": "Completed by agent"
     },
     {
-      "id": "brand-rework.3.1",
-      "title": "Create V3 Pydantic schemas for all 11 Brand Guidelines Bible sections",
-      "description": "Create backend/app/schemas/brand_config_v3.py with Pydantic models for: foundation, personas, voice_dimensions, voice_characteristics, writing_rules, vocabulary, proof_elements, examples_bank, competitor_context, ai_prompts, quick_reference. Include root V3BrandConfigSchema with _version, _generated_at, _sources_used fields.",
-      "acceptanceCriteria": ["All 11 section schemas defined", "Root V3BrandConfigSchema combines all sections", "Version marker _version: 3.0"],
-      "passes": false
+      "id": "S12-005",
+      "title": "Create Next.js route protection middleware",
+      "description": "As a developer, I need middleware that blocks unauthenticated users from accessing app routes.",
+      "acceptanceCriteria": [
+        "Create frontend/src/middleware.ts",
+        "Unauthenticated users navigating to any app route (/, /projects/*, /reddit/*) are redirected to /auth/sign-in",
+        "Routes under /auth/* are accessible without authentication",
+        "Routes under /api/auth/* are accessible without authentication (auth API handler)",
+        "Static assets (/_next/*, /fonts/*, /favicon.ico) bypass middleware",
+        "Authenticated users navigating to /auth/sign-in are redirected to /",
+        "Use auth.middleware() from the server auth instance OR manual session check via auth.api.getSession() with request headers"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Project uses Next.js 14 / React 18. The Neon Auth SDK's auth.middleware() should work but if it has Next.js 15 compatibility issues, fall back to manual middleware using auth.api.getSession({ headers: request.headers }). The matcher config should exclude static assets and auth routes. Export the middleware function as default and a config object with matcher array.",
+      "completionNotes": "Completed by agent"
     },
     {
-      "id": "brand-rework.3.2",
-      "title": "Add is_v3_config() / is_v2_config() detection helpers",
-      "description": "Add helper functions to detect schema version: is_v3_config(config) checks for _version: 3.0, is_v2_config(config) checks for v2 structure without _version or _version: 2.0",
-      "acceptanceCriteria": ["is_v3_config() correctly identifies V3", "is_v2_config() correctly identifies V2", "Functions handle edge cases"],
-      "passes": false
+      "id": "S12-006",
+      "title": "Create auth layout (no Header)",
+      "description": "As a developer, I need a layout for auth pages that doesn't render the app Header.",
+      "acceptanceCriteria": [
+        "Create frontend/src/app/auth/layout.tsx",
+        "Layout renders children without the Header component",
+        "Layout maintains the same base styling (bg-cream-100, fonts, etc.) from root layout",
+        "Auth pages use this layout instead of the root layout's Header"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Since Next.js App Router nests layouts, the root layout already provides html/body/fonts. The auth layout just needs to NOT render Header. The simplest approach: move Header rendering out of root layout into a separate (authenticated) layout group. Use route groups: (authenticated) for app routes with Header, (auth) or auth/ for sign-in without Header.",
+      "completionNotes": "Completed by agent"
     },
     {
-      "id": "brand-rework.4.1",
-      "title": "Create BrandResearchService with Perplexity→Claude synthesis pipeline",
-      "description": "Create backend/app/services/brand_research.py with BrandResearchService class. Implement: research_brand() calls Perplexity, synthesize_to_v3() calls Claude to structure results into V3 schema, research_and_synthesize() combines both steps.",
-      "acceptanceCriteria": ["BrandResearchService class exists", "Two-stage pipeline: Perplexity research then Claude synthesis", "Returns valid V3 schema"],
-      "passes": false
+      "id": "S12-007",
+      "title": "Create Google OAuth sign-in page",
+      "description": "As a user, I need a sign-in page so that I can authenticate with my Google account.",
+      "acceptanceCriteria": [
+        "Create frontend/src/app/auth/sign-in/page.tsx with 'use client' directive",
+        "Page displays a 'Sign in with Google' button",
+        "Clicking the button calls authClient.signIn.social({ provider: 'google', callbackURL: window.location.origin })",
+        "Page is styled to match the tropical oasis design (bg-cream-100, palm-500 accents, warm-gray text, rounded-sm corners)",
+        "Page shows app logo/name (same 'C' logo + 'Client Onboarding' as Header)",
+        "Page handles loading state while OAuth redirect is in progress",
+        "No Header or navigation is shown (uses auth layout)"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Keep it simple — one centered card with logo, title, subtitle ('Sign in to continue'), and the Google button. Use the same font classes as the rest of the app. The callbackURL should be window.location.origin so after Google OAuth, user returns to the app root. Reference frontend/src/components/Header.tsx for logo styling.",
+      "completionNotes": "Completed by agent"
     },
     {
-      "id": "brand-rework.4.2",
-      "title": "Create Claude prompt for V3 schema synthesis",
-      "description": "Create Claude system prompt that takes Perplexity research results and synthesizes them into V3 brand config schema. Reference brand_guidelines_bible.md for the 11-part structure. Prompt should handle partial data gracefully.",
-      "acceptanceCriteria": ["Prompt generates valid V3 JSON", "All 11 sections populated where data available", "Missing sections have sensible defaults"],
-      "passes": false
+      "id": "S12-008",
+      "title": "Restructure layouts for authenticated vs auth routes",
+      "description": "As a developer, I need to separate authenticated routes (with Header) from auth routes (without Header) using Next.js layout nesting.",
+      "acceptanceCriteria": [
+        "Root layout (src/app/layout.tsx) provides html, body, fonts, and QueryProvider only — NO Header",
+        "Create a route group or wrapper that renders Header for all authenticated routes (/, /projects/*, /reddit/*)",
+        "Auth routes (/auth/*) do NOT render Header",
+        "All existing pages continue to work with Header visible",
+        "AuthTokenSync component is rendered inside QueryProvider in root layout"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Approach: Move Header into a (main) or (app) route group layout. Move all existing page.tsx files into that group. OR simpler: create a ClientLayout component that conditionally renders Header based on pathname (skip if pathname starts with /auth). The conditional approach is simpler and avoids moving all files. Reference current root layout at frontend/src/app/layout.tsx.",
+      "completionNotes": "Completed by agent"
     },
     {
-      "id": "brand-rework.5.1",
-      "title": "Add brand_wizard_state column to projects table (migration)",
-      "description": "Create Alembic migration to add brand_wizard_state JSONB column to projects table with default empty object {}",
-      "acceptanceCriteria": ["Migration file created", "Column added with JSONB type", "Default value is empty object"],
-      "passes": false
+      "id": "S12-009",
+      "title": "Update Header with user display and sign-out",
+      "description": "As a user, I need to see who I'm logged in as and be able to sign out.",
+      "acceptanceCriteria": [
+        "Header uses authClient.useSession() to get current user data",
+        "User menu area shows user's name (from Google) or email as fallback",
+        "User avatar shows first letter of name (replace hardcoded 'U')",
+        "Clicking user menu area or a sign-out button calls authClient.signOut() then redirects to /auth/sign-in",
+        "Loading state handled while session is being fetched (show skeleton or placeholder)",
+        "Header still shows nav links (AI SEO, Reddit) and logo as before"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference current Header at frontend/src/components/Header.tsx. The user menu placeholder (the 'U' circle + chevron) should become functional. authClient.useSession() returns { data: { user: { name, email, image }, session: { token } }, isPending }. Use data.user.name for display, data.user.name[0] for avatar initial. signOut() can use authClient.signOut({ fetchOptions: { onSuccess: () => router.push('/auth/sign-in') } }).",
+      "completionNotes": "Completed by agent"
     },
     {
-      "id": "brand-rework.5.2",
-      "title": "Create wizard API endpoints (GET/PUT state, POST research, POST generate)",
-      "description": "Create backend/app/api/v1/brand_wizard.py router with: GET /projects/{id}/brand-wizard (get state), PUT /projects/{id}/brand-wizard (save step), POST /projects/{id}/brand-wizard/research (trigger Perplexity), POST /projects/{id}/brand-wizard/generate (create V3 config). Register router.",
-      "acceptanceCriteria": ["All 4 endpoints working", "Router registered in __init__.py", "Proper error handling"],
-      "passes": false
+      "id": "S12-010",
+      "title": "Create auth token store and sync component",
+      "description": "As a developer, I need the session token available to the API client module so that all backend requests include auth.",
+      "acceptanceCriteria": [
+        "Create frontend/src/lib/auth-token.ts with setSessionToken(token: string | null) and getSessionToken(): string | null",
+        "Module stores token in a module-level variable (simple, no React dependency)",
+        "Create frontend/src/components/AuthTokenSync.tsx ('use client') that uses authClient.useSession() and syncs session.token into the token store via useEffect",
+        "AuthTokenSync renders null (invisible component)",
+        "Token updates when session changes (sign-in, sign-out, refresh)",
+        "AuthTokenSync is mounted in the root layout inside QueryProvider"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "The session object from useSession() has shape { session: { token: string, ... }, user: { ... } }. The token field is what we need to pass to the backend. When data is null (signed out), set token to null. This decouples auth from the API client — api.ts just calls getSessionToken() without needing React context.",
+      "completionNotes": "Completed by agent"
     },
     {
-      "id": "brand-rework.6.1",
-      "title": "Create migration to rename phases (discovery→brand_setup, etc.)",
-      "description": "Create Alembic migration with SQL to rename phase keys in all existing project records: discovery→brand_setup, requirements→site_analysis, implementation→content_generation, review→review_edit, launch→export. Include rollback.",
-      "acceptanceCriteria": ["Migration updates existing records", "All 5 phase names renamed", "Rollback SQL included"],
-      "passes": false
+      "id": "S12-011",
+      "title": "Update API client to include Authorization header",
+      "description": "As a developer, I need all API requests to include the session token so that the backend can validate auth.",
+      "acceptanceCriteria": [
+        "Modify frontend/src/lib/api.ts api() function to read token via getSessionToken()",
+        "When token is available, add 'Authorization': `Bearer ${token}` to request headers",
+        "When token is null, omit the Authorization header (don't send empty Bearer)",
+        "All existing API functions (apiClient.get, post, patch, put, delete) automatically include the header",
+        "The exportProject() and downloadBlogPostHtml() functions that use raw fetch() also include the header"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference frontend/src/lib/api.ts. The change is small — in the api() function, import getSessionToken from './auth-token', read the token, and spread it into the headers object. Also update the two raw fetch() calls in exportProject() and downloadBlogPostHtml() to include the same header.",
+      "completionNotes": "Completed by agent"
     },
     {
-      "id": "brand-rework.6.2",
-      "title": "Update PHASE_NAMES constant in project model",
-      "description": "Update backend/app/models/project.py PHASE_NAMES constant (or equivalent) to use new phase names: brand_setup, site_analysis, content_generation, review_edit, export",
-      "acceptanceCriteria": ["PHASE_NAMES updated", "Any other backend references updated"],
-      "passes": false
+      "id": "S12-012",
+      "title": "Add AUTH_REQUIRED config setting to backend",
+      "description": "As a developer, I need an auth toggle so that development can work without Neon Auth enabled.",
+      "acceptanceCriteria": [
+        "Add auth_required: bool = Field(default=True) to Settings class in backend/app/core/config.py",
+        "When false, auth is bypassed and a placeholder dev user is returned",
+        "When true (default), real session validation is enforced"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Add it near the top of Settings class with the other application settings. Description: 'Require authentication for API requests (disable for local development)'.",
+      "completionNotes": "Completed by agent"
     },
     {
-      "id": "brand-rework.7.1",
-      "title": "Create wizard layout components (WizardProgress, WizardNavigation, WizardContainer)",
-      "description": "Create frontend/src/components/brand-wizard/ directory with: WizardProgress.tsx (step indicator showing 1-7), WizardNavigation.tsx (prev/next buttons), WizardContainer.tsx (layout wrapper). Export from index.ts",
-      "acceptanceCriteria": ["All 3 components created", "WizardProgress shows clickable steps", "Proper styling"],
-      "passes": false
+      "id": "S12-013",
+      "title": "Create backend auth dependency (get_current_user)",
+      "description": "As a developer, I need a FastAPI dependency that validates session tokens against the neon_auth schema.",
+      "acceptanceCriteria": [
+        "Create backend/app/core/auth.py",
+        "Define a UserInfo dataclass/model with fields: id (str), email (str), name (str)",
+        "Implement get_current_user(request: Request, db: AsyncSession) -> UserInfo as an async FastAPI dependency",
+        "When AUTH_REQUIRED=false, return UserInfo(id='dev-user', email='dev@localhost', name='Dev User') without checking headers",
+        "When AUTH_REQUIRED=true: read Authorization header, extract Bearer token, query neon_auth.session table WHERE token matches AND expires_at > now(), join neon_auth.user to get user info",
+        "Return 401 {'detail': 'Not authenticated'} if no Authorization header or not Bearer format",
+        "Return 401 {'detail': 'Invalid or expired session'} if token not found or expired",
+        "Use raw SQL via db.execute(text(...)) since neon_auth tables are not in our SQLAlchemy models"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "The neon_auth schema is managed by Neon Auth, not Alembic. Tables are: neon_auth.user (id, name, email, emailVerified, image, createdAt, updatedAt), neon_auth.session (id, expiresAt, token, createdAt, updatedAt, ipAddress, userAgent, userId FK). Use text() for raw SQL: SELECT u.id, u.email, u.name FROM neon_auth.session s JOIN neon_auth.\"user\" u ON s.\"userId\" = u.id WHERE s.token = :token AND s.\"expiresAt\" > now(). Note: Better Auth uses camelCase column names and 'user' is a reserved word in Postgres, so quote it.",
+      "completionNotes": "Completed by agent"
     },
     {
-      "id": "brand-rework.7.2",
-      "title": "Create VoiceDimensionSlider component with 1-10 scale and example text",
-      "description": "Create VoiceDimensionSlider.tsx with slider 1-10, value display, and example text at low/high ends. Props: name, value, onChange, lowExample, highExample. Style with brand colors.",
-      "acceptanceCriteria": ["Slider works 1-10", "Shows current value", "Displays low/high examples"],
-      "passes": false
+      "id": "S12-014",
+      "title": "Apply auth dependency to API v1 router",
+      "description": "As a developer, I need all API endpoints to require authentication by default.",
+      "acceptanceCriteria": [
+        "Add get_current_user as a dependency on the api_v1_router in backend/app/api/v1/__init__.py using router = APIRouter(prefix='/api/v1', dependencies=[Depends(get_current_user)])",
+        "All endpoints under /api/v1/* now require a valid Bearer token",
+        "Health check at /health is NOT affected (mounted on app directly, not on api_v1_router)"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Import Depends from fastapi and get_current_user from app.core.auth. The health check is defined directly on the app object in main.py, not on the v1 router, so it's unaffected.",
+      "completionNotes": "Completed by agent"
     },
     {
-      "id": "brand-rework.7.3",
-      "title": "Create form components (ChipInput, PersonaCard, ExampleEditor)",
-      "description": "Create: ChipInput.tsx (add/remove chips for power_words, banned_words), PersonaCard.tsx (display/edit persona with all fields), ExampleEditor.tsx (good/bad example pairs)",
-      "acceptanceCriteria": ["ChipInput adds/removes chips", "PersonaCard shows all persona fields", "ExampleEditor handles good/bad pairs"],
-      "passes": false
+      "id": "S12-015",
+      "title": "Move CrowdReply webhook outside authenticated router",
+      "description": "As a developer, I need the CrowdReply webhook to remain accessible without auth since it receives external callbacks.",
+      "acceptanceCriteria": [
+        "Create a separate webhook_router (APIRouter) in backend/app/api/v1/reddit.py for the CrowdReply webhook endpoint",
+        "Move the POST /webhooks/crowdreply endpoint from reddit_router to webhook_router (keep the same handler logic)",
+        "Mount webhook_router directly on the app in main.py at /webhooks prefix (not under /api/v1)",
+        "The webhook simulator endpoint can stay inside /api/v1 (it's dev-only and auth is fine for it)",
+        "CrowdReply webhook continues to work without any Authorization header",
+        "Export webhook_router from backend/app/api/v1/reddit.py and import/mount in main.py"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "The webhook endpoint currently lives at POST /api/v1/reddit/webhooks/crowdreply. After this change it moves to POST /webhooks/crowdreply. The webhook has its own verification via crowdreply_webhook_secret. Update any CrowdReply webhook URL configuration if needed.",
+      "completionNotes": "Completed by agent"
     },
     {
-      "id": "brand-rework.8.1",
-      "title": "Create Step 1: Brand Setup (name, domain, research button)",
-      "description": "Create Step1BrandSetup.tsx with: brand name input (required), domain URL input (optional), 'Research Brand' button that triggers Perplexity API call. Show loading state during research.",
-      "acceptanceCriteria": ["Brand name required validation", "Research button calls API", "Loading state shown"],
-      "passes": false
+      "id": "S12-016",
+      "title": "Update V2_REBUILD_PLAN.md",
+      "description": "As a developer, I need to update the plan status so that progress is tracked.",
+      "acceptanceCriteria": [
+        "Mark all Phase 12 checkboxes as [x] complete in V2_REBUILD_PLAN.md",
+        "Update Current Status table: Phase=12 Auth complete, Last Session=today's date, Next Action=Phase 13 (Polish) or Phase 15 (GEO) or Phase 16 (Migration)",
+        "Add new row to Session Log table with date, completed items, next up"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "This task maintains our planning discipline.",
+      "completionNotes": "Completed by agent"
     },
     {
-      "id": "brand-rework.8.2",
-      "title": "Create Step 2: Foundation (company info, positioning, differentiators)",
-      "description": "Create Step2Foundation.tsx with editable fields for: company overview, industry, business model, positioning statement, mission statement, core values (chips), key differentiators (chips), products/services. Pre-fill from research.",
-      "acceptanceCriteria": ["All foundation fields editable", "Pre-fills from research if available", "Chips for values/differentiators"],
-      "passes": false
-    },
-    {
-      "id": "brand-rework.8.3",
-      "title": "Create Step 3: Audience (persona cards with add/edit/remove)",
-      "description": "Create Step3Audience.tsx with: list of PersonaCards, add persona button, ability to mark one as primary. Each persona has: name, demographics, psychographics, pain points, motivations, buying triggers.",
-      "acceptanceCriteria": ["Add/edit/remove personas", "Mark primary persona", "All persona fields editable"],
-      "passes": false
-    },
-    {
-      "id": "brand-rework.8.4",
-      "title": "Create Step 4: Voice (4 dimension sliders + characteristics)",
-      "description": "Create Step4Voice.tsx with: 4 VoiceDimensionSliders (formality, humor, reverence, enthusiasm) with appropriate example text, and voice characteristics editor (we are/we are not with trait, description, example fields).",
-      "acceptanceCriteria": ["4 sliders with examples", "Voice characteristics add/edit/remove", "Each characteristic has trait/description/example"],
-      "passes": false
-    },
-    {
-      "id": "brand-rework.8.5",
-      "title": "Create Step 5: Writing Rules (toggles, vocabulary editors)",
-      "description": "Create Step5WritingRules.tsx with: sentence/paragraph length inputs, toggles (contractions, oxford comma), exclamation limit, capitalization rules, and vocabulary editors (power words chips, banned words chips, preferred terms key-value, industry terms).",
-      "acceptanceCriteria": ["All writing rule fields", "Vocabulary editors working", "Chips and key-value inputs"],
-      "passes": false
-    },
-    {
-      "id": "brand-rework.8.6",
-      "title": "Create Step 6: Proof & Examples (stats, quotes, good/bad examples)",
-      "description": "Create Step6ProofExamples.tsx with: statistics editor (stat + context), credentials list, customer quotes (quote + attribution), guarantees list, and examples bank with ExampleEditors for headlines, product descriptions, CTAs.",
-      "acceptanceCriteria": ["All proof element fields", "Examples bank with good/bad pairs", "Add/remove for all lists"],
-      "passes": false
-    },
-    {
-      "id": "brand-rework.8.7",
-      "title": "Create Step 7: Review & Generate (summary, quick reference, generate button)",
-      "description": "Create Step7Review.tsx with: summary of all sections with edit links, quick reference editor (voice in 3 words, one-sentence summary, primary audience, key CTA, avoid list), and 'Generate Brand Config' button with loading state.",
-      "acceptanceCriteria": ["Summary shows all sections", "Quick reference editable", "Generate button saves V3 and redirects"],
-      "passes": false
-    },
-    {
-      "id": "brand-rework.9.1",
-      "title": "Create BrandWizardPage with state management and auto-save",
-      "description": "Create frontend/src/pages/BrandWizardPage.tsx with: wizard state in useState/useReducer, load existing state via useApiQuery, auto-save on step change via mutation, step navigation logic (block 2-7 until step 1 complete).",
-      "acceptanceCriteria": ["State management working", "Auto-save on step change", "Step 1 required first"],
-      "passes": false
-    },
-    {
-      "id": "brand-rework.9.2",
-      "title": "Add route and link from ProjectDetailPage",
-      "description": "Add route /projects/:projectId/brand-wizard in App.tsx. Add 'Configure Brand' button to ProjectDetailPage that links to wizard.",
-      "acceptanceCriteria": ["Route works", "Button visible on project detail", "Navigation works"],
-      "passes": false
-    },
-    {
-      "id": "brand-rework.9.3",
-      "title": "Update BrandConfigPanel to detect V3 and show 'Launch Wizard' button",
-      "description": "Update BrandConfigPanel.tsx to: detect V3 vs V2 configs, show 'Launch Brand Wizard' for projects without config, show 'Upgrade to V3' for V2 configs, display V3 quick reference when V3 exists.",
-      "acceptanceCriteria": ["V3 detection working", "Appropriate buttons shown", "V3 quick reference displayed"],
-      "passes": false
-    },
-    {
-      "id": "brand-rework.10.1",
-      "title": "Hide WebSocket indicator until 3+ failed reconnection attempts",
-      "description": "Update useWebSocket.ts to track reconnection attempt count. Update ProjectDetailPage.tsx to hide indicator when connected or reconnecting (<3 attempts). Show subtle 'Updates may be delayed' after 3+ failures with static icon (no spinning).",
-      "acceptanceCriteria": ["Indicator hidden by default", "Only shows after 3+ failures", "No alarming animation"],
-      "passes": false
-    },
-    {
-      "id": "brand-rework.10.2",
-      "title": "Update phaseLabels to user-friendly names",
-      "description": "Update frontend/src/lib/phaseUtils.ts: change PHASE_ORDER to new names (brand_setup, site_analysis, content_generation, review_edit, export), update phaseLabels mapping to 'Brand Setup', 'Site Analysis', 'Content Generation', 'Review & Edit', 'Export'.",
-      "acceptanceCriteria": ["PHASE_ORDER updated", "phaseLabels updated", "UI shows new labels"],
-      "passes": false
-    },
-    {
-      "id": "brand-rework.11.1",
-      "title": "Test complete wizard flow end-to-end",
-      "description": "Test: create new project → enter wizard → research brand → complete all 7 steps → generate V3 config → verify config saved correctly. Test resume (leave mid-wizard, return).",
-      "acceptanceCriteria": ["Full flow works", "V3 config saved", "Resume works"],
-      "passes": false
-    },
-    {
-      "id": "brand-rework.11.2",
-      "title": "Test V2 backward compatibility and Perplexity fallback",
-      "description": "Test: load existing V2 config displays correctly, upgrade to V3 works. Test: remove PERPLEXITY_API_KEY, verify wizard allows manual entry without research.",
-      "acceptanceCriteria": ["V2 displays correctly", "Upgrade works", "Manual entry fallback works"],
-      "passes": false
-    },
-    {
-      "id": "brand-rework.11.3",
-      "title": "Add PERPLEXITY_API_KEY to Railway and deploy",
-      "description": "Add PERPLEXITY_API_KEY environment variable in Railway dashboard for backend service. Run database migrations. Verify deployment works end-to-end.",
-      "acceptanceCriteria": ["Env var set in Railway", "Migrations run", "Production works"],
-      "passes": false
+      "id": "S12-017",
+      "title": "Verify Phase 12 completion",
+      "description": "As a developer, I need to verify the full auth flow works end-to-end.",
+      "acceptanceCriteria": [
+        "Unauthenticated user visiting / is redirected to /auth/sign-in",
+        "Sign-in page renders with Google button and tropical oasis styling",
+        "Google OAuth sign-in completes and redirects to dashboard",
+        "Header shows user name and sign-out button after sign-in",
+        "API calls include Authorization header and succeed (200 responses)",
+        "Backend returns 401 for requests without valid Bearer token (when AUTH_REQUIRED=true)",
+        "Sign-out clears session and redirects to /auth/sign-in",
+        "Health check at /health works without auth",
+        "No uncommitted changes remain"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "For local testing, set AUTH_REQUIRED=false on backend to bypass DB session validation. Test the full flow in staging after deploying with real Neon Auth credentials. Do not proceed until this passes.",
+      "completionNotes": "Completed by agent"
     }
   ],
   "metadata": {
-    "updatedAt": "2026-02-02T12:00:00.000Z"
+    "updatedAt": "2026-02-19T21:45:12.300Z"
   }
 }

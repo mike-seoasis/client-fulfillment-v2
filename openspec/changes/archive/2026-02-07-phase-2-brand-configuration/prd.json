@@ -1,0 +1,697 @@
+{
+  "name": "Phase 2: Brand Configuration",
+  "description": "Add file upload, Perplexity research, and AI-powered brand config generation following the 9-section skill bible structure.",
+  "branchName": "feature/phase-2-brand-configuration",
+  "userStories": [
+    {
+      "id": "S2-001",
+      "title": "Create ProjectFile model",
+      "description": "As a developer, I need a ProjectFile model so that uploaded brand documents can be persisted with metadata.",
+      "acceptanceCriteria": [
+        "Create backend/app/models/project_file.py with ProjectFile class",
+        "Fields: id (UUID), project_id (FK to projects), filename (str), content_type (str), s3_key (str), extracted_text (Text nullable), file_size (int), created_at (datetime)",
+        "Add cascade delete on project_id foreign key",
+        "Model is importable from app.models"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Reference backend/app/models/project.py for pattern. Use UUID(as_uuid=False) like other models.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-002",
+      "title": "Create Alembic migration for project_files table",
+      "description": "As a developer, I need a database migration so that the project_files table is created.",
+      "acceptanceCriteria": [
+        "Create new Alembic migration file",
+        "Migration creates project_files table with all columns",
+        "Foreign key to projects table with ON DELETE CASCADE",
+        "Index on project_id for efficient queries",
+        "Migration runs successfully: alembic upgrade head"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Run: alembic revision --autogenerate -m 'Add project_files table'",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-003",
+      "title": "Add additional_info column to Project model",
+      "description": "As a developer, I need an additional_info field on Project so users can provide notes during creation.",
+      "acceptanceCriteria": [
+        "Add additional_info field to Project model: Text, nullable",
+        "Create Alembic migration for the new column",
+        "Migration runs successfully"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "This is a simple column addition to existing projects table.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-004",
+      "title": "Create S3 integration client",
+      "description": "As a developer, I need an S3 client so that files can be stored in cloud storage.",
+      "acceptanceCriteria": [
+        "Create backend/app/integrations/s3.py with S3Client class",
+        "Use boto3 with S3-compatible API",
+        "Implement upload_file(key, file_obj, content_type) -> str (returns S3 key)",
+        "Implement get_file(key) -> bytes",
+        "Implement delete_file(key) -> bool",
+        "Add circuit breaker pattern matching other integrations",
+        "Add settings to core/config.py: s3_bucket, s3_endpoint_url, s3_access_key, s3_secret_key"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Reference backend/app/integrations/crawl4ai.py for circuit breaker pattern. Use endpoint_url for LocalStack compatibility.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-005",
+      "title": "Add LocalStack to docker-compose for local S3",
+      "description": "As a developer, I need LocalStack running locally so S3 works in development.",
+      "acceptanceCriteria": [
+        "Add localstack service to docker-compose.yml",
+        "Configure S3 service in LocalStack",
+        "Add S3 environment variables to .env.example",
+        "Document local S3 endpoint URL (http://localhost:4566)"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "LocalStack provides S3-compatible API for local dev. Default bucket should auto-create.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-006",
+      "title": "Create text extraction utilities",
+      "description": "As a developer, I need text extraction functions so uploaded documents can be processed.",
+      "acceptanceCriteria": [
+        "Add pypdf and python-docx to pyproject.toml dependencies",
+        "Create backend/app/utils/text_extraction.py",
+        "Implement extract_text_from_pdf(file_bytes) -> str using pypdf",
+        "Implement extract_text_from_docx(file_bytes) -> str using python-docx",
+        "Implement extract_text_from_txt(file_bytes) -> str",
+        "Implement extract_text(file_bytes, content_type) -> str dispatcher",
+        "Truncate extracted text at 100,000 characters with warning log"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "pypdf replaces PyPDF2 (deprecated). python-docx handles .docx files.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-007",
+      "title": "Create ProjectFile Pydantic schemas",
+      "description": "As a developer, I need Pydantic schemas for file upload API validation and responses.",
+      "acceptanceCriteria": [
+        "Create backend/app/schemas/project_file.py",
+        "ProjectFileResponse: id, project_id, filename, content_type, file_size, created_at",
+        "ProjectFileList: list of ProjectFileResponse"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "No Create schema needed - files come as multipart/form-data, not JSON.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-008",
+      "title": "Create FileService",
+      "description": "As a developer, I need a FileService so file operations have a clean service layer.",
+      "acceptanceCriteria": [
+        "Create backend/app/services/file.py with FileService class",
+        "Implement upload_file(project_id, file, filename, content_type) -> ProjectFile",
+        "Implement list_files(project_id) -> list[ProjectFile]",
+        "Implement delete_file(project_id, file_id) -> bool",
+        "Upload should: store in S3, extract text, create DB record",
+        "Delete should: remove from S3, delete DB record"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Coordinate S3Client and text extraction. S3 key format: projects/{project_id}/files/{file_id}/{filename}",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-009",
+      "title": "Implement file upload API endpoints",
+      "description": "As a developer, I need file API endpoints so the frontend can manage project files.",
+      "acceptanceCriteria": [
+        "Create backend/app/api/v1/files.py router",
+        "POST /api/v1/projects/{project_id}/files - Upload file (multipart/form-data)",
+        "GET /api/v1/projects/{project_id}/files - List files",
+        "DELETE /api/v1/projects/{project_id}/files/{file_id} - Delete file",
+        "Add file size validation: max 10MB (return 413)",
+        "Add file type validation: PDF, DOCX, TXT only (return 415)",
+        "Return 404 if project not found",
+        "Register router in api/v1/__init__.py"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Use UploadFile from fastapi for multipart handling. Check content_type for validation.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-010",
+      "title": "Write file upload API tests",
+      "description": "As a developer, I need tests for file endpoints so uploads are verified.",
+      "acceptanceCriteria": [
+        "Create backend/tests/api/test_files.py",
+        "Test upload PDF file successfully",
+        "Test upload DOCX file successfully",
+        "Test upload TXT file successfully",
+        "Test upload to non-existent project returns 404",
+        "Test upload oversized file returns 413",
+        "Test upload unsupported type returns 415",
+        "Test list files for project",
+        "Test delete file"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Mock S3Client for tests. Use pytest fixtures for test files.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-011",
+      "title": "Update Perplexity research_brand prompt for 9 sections",
+      "description": "As a developer, I need the Perplexity prompt to cover all 9 brand config sections.",
+      "acceptanceCriteria": [
+        "Update BRAND_RESEARCH_SYSTEM_PROMPT in backend/app/integrations/perplexity.py",
+        "Prompt covers: Brand Foundation, Target Audience, Voice Dimensions, Voice Characteristics, Writing Style, Vocabulary, Trust Elements, Examples Bank, Competitor Context",
+        "Prompt requests structured output for each section",
+        "Increase max_tokens to 4096 for comprehensive response"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference skills/brand_guidelines_bible.md for section structure. Perplexity finds external info (reviews, press, competitors).",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-012",
+      "title": "Create BrandConfigService",
+      "description": "As a developer, I need a BrandConfigService to orchestrate brand config generation.",
+      "acceptanceCriteria": [
+        "Create backend/app/services/brand_config.py with BrandConfigService class",
+        "Implement start_generation(project_id) -> starts background task",
+        "Implement get_status(project_id) -> GenerationStatus",
+        "Store status in project.brand_wizard_state JSONB field",
+        "Status includes: status, current_step, steps_completed, steps_total, error"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Use project.brand_wizard_state for status tracking. Status values: pending, generating, complete, failed.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-013",
+      "title": "Implement research phase (parallel)",
+      "description": "As a developer, I need the research phase to gather data from 3 sources in parallel.",
+      "acceptanceCriteria": [
+        "Implement _research_phase(project_id) in BrandConfigService",
+        "Call PerplexityClient.research_brand() for web research",
+        "Call Crawl4AIClient.crawl() for website content",
+        "Retrieve extracted_text from all ProjectFile records",
+        "Run all 3 in parallel using asyncio.gather()",
+        "Handle failures gracefully - continue with available data",
+        "Combine results into research_context dict"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "If Perplexity fails, continue with crawl + docs. If crawl fails, continue with Perplexity + docs. Log warnings for failures.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-014",
+      "title": "Implement synthesis phase (sequential)",
+      "description": "As a developer, I need the synthesis phase to generate 9 brand config sections using Claude.",
+      "acceptanceCriteria": [
+        "Implement _synthesis_phase(research_context) in BrandConfigService",
+        "Generate sections in order: brand_foundation, target_audience, voice_dimensions, voice_characteristics, writing_style, vocabulary, trust_elements, examples_bank, competitor_context, ai_prompt_snippet",
+        "Each section uses ClaudeClient.complete() with section-specific prompt",
+        "Prompts include research_context and previously generated sections",
+        "Update status after each section completes",
+        "Add 60s timeout per section"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference skills/brand_guidelines_bible.md for section templates. ai_prompt_snippet is generated last as summary.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-015",
+      "title": "Store brand config result",
+      "description": "As a developer, I need generated brand config stored in BrandConfig model.",
+      "acceptanceCriteria": [
+        "After synthesis completes, store result in BrandConfig.v2_schema",
+        "v2_schema includes: version, generated_at, source_documents (file IDs), all 9 sections, ai_prompt_snippet",
+        "Create BrandConfig record if not exists, update if exists",
+        "Set generation status to 'complete' on success",
+        "Set generation status to 'failed' with error on failure"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "BrandConfig already has FK to project. Use v2_schema JSONB for flexible storage.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-016",
+      "title": "Implement brand config generation API endpoints",
+      "description": "As a developer, I need API endpoints to trigger and monitor brand config generation.",
+      "acceptanceCriteria": [
+        "Create backend/app/api/v1/brand_config.py router",
+        "POST /api/v1/projects/{id}/brand-config/generate - Start generation (returns 202)",
+        "GET /api/v1/projects/{id}/brand-config/status - Get generation status",
+        "Return 409 if generation already in progress",
+        "Return 404 if project not found",
+        "Wire generation to FastAPI BackgroundTasks"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Use BackgroundTasks for async generation. Frontend will poll status endpoint.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-017",
+      "title": "Create BrandConfig Pydantic schemas",
+      "description": "As a developer, I need Pydantic schemas for brand config API.",
+      "acceptanceCriteria": [
+        "Create backend/app/schemas/brand_config.py",
+        "BrandConfigResponse: full v2_schema structure",
+        "GenerationStatus: status, current_step, steps_completed, steps_total, error",
+        "SectionUpdate: dict of section names to section content",
+        "RegenerateRequest: optional section or sections list"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Response schema should match v2_schema JSON structure from design.md.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-018",
+      "title": "Implement brand config management endpoints",
+      "description": "As a developer, I need endpoints to get, update, and regenerate brand config.",
+      "acceptanceCriteria": [
+        "GET /api/v1/projects/{id}/brand-config - Get full brand config",
+        "PATCH /api/v1/projects/{id}/brand-config - Update section(s)",
+        "POST /api/v1/projects/{id}/brand-config/regenerate - Regenerate all or specific sections",
+        "Return 404 if brand config not generated yet",
+        "Validate section names on update/regenerate"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Valid sections: brand_foundation, target_audience, voice_dimensions, voice_characteristics, writing_style, vocabulary, trust_elements, examples_bank, competitor_context.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-019",
+      "title": "Write brand config API tests",
+      "description": "As a developer, I need tests for brand config endpoints.",
+      "acceptanceCriteria": [
+        "Create backend/tests/api/test_brand_config.py",
+        "Test start generation returns 202",
+        "Test start generation while in progress returns 409",
+        "Test get status during generation",
+        "Test get brand config after generation",
+        "Test update single section",
+        "Test update invalid section returns 400",
+        "Test regenerate specific section"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Mock ClaudeClient and PerplexityClient for tests. Test status transitions.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-020",
+      "title": "Update Project schemas for new fields",
+      "description": "As a developer, I need Project schemas updated to include brand config status and file count.",
+      "acceptanceCriteria": [
+        "Update ProjectCreate to include additional_info (optional str)",
+        "Update ProjectResponse to include: brand_config_status, has_brand_config, uploaded_files_count",
+        "brand_config_status derives from project.brand_wizard_state",
+        "has_brand_config is true if BrandConfig exists for project",
+        "uploaded_files_count is count of ProjectFile records"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "These are computed fields in the response, not stored columns.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-021",
+      "title": "Update Project API for new fields",
+      "description": "As a developer, I need project endpoints to return new fields.",
+      "acceptanceCriteria": [
+        "Update GET /api/v1/projects to include new fields in list",
+        "Update GET /api/v1/projects/{id} to include new fields",
+        "Update POST /api/v1/projects to accept additional_info",
+        "Update DELETE to cascade delete files from S3"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Cascade delete: delete ProjectFile records AND call S3Client.delete_file() for each.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-022",
+      "title": "Update project API tests for new fields",
+      "description": "As a developer, I need project tests updated for new response fields.",
+      "acceptanceCriteria": [
+        "Update backend/tests/api/test_projects.py",
+        "Test create project with additional_info",
+        "Test project response includes brand_config_status",
+        "Test project response includes has_brand_config",
+        "Test project response includes uploaded_files_count",
+        "Test delete project cascades to files"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Add new assertions to existing tests plus new test cases.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-023",
+      "title": "Create FileUpload React component",
+      "description": "As a user, I need a file upload component so I can drag-and-drop brand documents.",
+      "acceptanceCriteria": [
+        "Create frontend/src/components/FileUpload.tsx",
+        "Support drag-and-drop file selection",
+        "Support click-to-browse file selection",
+        "Show file type validation errors (PDF, DOCX, TXT only)",
+        "Show file size validation errors (max 10MB)",
+        "Display list of selected/uploaded files with remove buttons",
+        "Show upload progress indicator"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Use react-dropzone or native drag-drop API. Style with Tailwind matching tropical oasis theme.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-024",
+      "title": "Create useProjectFiles hook",
+      "description": "As a developer, I need a hook for file operations with TanStack Query.",
+      "acceptanceCriteria": [
+        "Create frontend/src/hooks/useProjectFiles.ts",
+        "useProjectFiles(projectId) returns: files, isLoading, error",
+        "useUploadFile() mutation for uploading",
+        "useDeleteFile() mutation for deleting",
+        "Invalidate files query after upload/delete"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference existing useProjects hook pattern. Use multipart/form-data for upload.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-025",
+      "title": "Convert CreateProject to multi-step wizard",
+      "description": "As a user, I need a multi-step project creation flow with file upload and generation.",
+      "acceptanceCriteria": [
+        "Update frontend/src/app/projects/new/page.tsx to wizard layout",
+        "Step 1: Project details (name, URL, additional_info, file upload)",
+        "Step 2: Brand config generation progress",
+        "Show step indicator (Step 1 of 2, Step 2 of 2)",
+        "Continue button advances to step 2 and triggers generation",
+        "Back button returns to step 1"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference WIREFRAMES.md section 3 for layout. Match existing form styling.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-026",
+      "title": "Create generation progress screen",
+      "description": "As a user, I need to see generation progress with step indicators.",
+      "acceptanceCriteria": [
+        "Create GenerationProgress component for Step 2",
+        "Show animated progress indicator",
+        "List all 13 generation steps with status icons (pending, in-progress, complete)",
+        "Highlight current step",
+        "Poll status endpoint every 2 seconds",
+        "Stop polling when status is complete or failed",
+        "Show error message if generation fails"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Steps: perplexity_research, crawling, processing_docs, then 9 section names, then ai_prompt_snippet.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-027",
+      "title": "Handle generation completion",
+      "description": "As a user, I need appropriate feedback when generation completes.",
+      "acceptanceCriteria": [
+        "Show success state with checkmark when complete",
+        "Display 'Project Created!' message",
+        "Show 'Go to Project' button",
+        "Navigate to project detail page on button click",
+        "Show error state with retry option if generation fails"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference WIREFRAMES.md section 3 (Step 3: Complete) for design.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-028",
+      "title": "Create useBrandConfig hook",
+      "description": "As a developer, I need a hook for brand config operations.",
+      "acceptanceCriteria": [
+        "Create frontend/src/hooks/useBrandConfig.ts",
+        "useBrandConfig(projectId) returns: config, isLoading, error",
+        "useBrandConfigStatus(projectId) returns: status, isLoading (for polling)",
+        "useUpdateBrandConfig() mutation for section updates",
+        "useRegenerateBrandConfig() mutation for regeneration"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Status hook should support refetchInterval for polling during generation.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-029",
+      "title": "Create BrandConfigView page",
+      "description": "As a user, I need a page to view and edit brand configuration.",
+      "acceptanceCriteria": [
+        "Create frontend/src/app/projects/[id]/brand-config/page.tsx",
+        "Add route to app router",
+        "Show back link to project detail",
+        "Show project name in header",
+        "Show 'Regenerate All' button in header"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "This is the container page. Section navigation and content come next.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-030",
+      "title": "Create brand config section navigation",
+      "description": "As a user, I need vertical tabs to navigate between brand config sections.",
+      "acceptanceCriteria": [
+        "Create SectionNav component with vertical tabs",
+        "Tabs: Brand Foundation, Target Audience, Voice Dimensions, Voice Characteristics, Writing Style, Vocabulary, Trust Elements, Examples Bank, Competitor Context, AI Prompt",
+        "Highlight active section",
+        "Click tab scrolls to or shows that section",
+        "Show source documents list in sidebar"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference WIREFRAMES.md section 14 for layout. Left sidebar with section list.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-031",
+      "title": "Create section display components",
+      "description": "As a user, I need each brand config section displayed with proper formatting.",
+      "acceptanceCriteria": [
+        "Create BrandFoundationSection component",
+        "Create TargetAudienceSection component (with persona cards)",
+        "Create VoiceDimensionsSection component (with scale sliders)",
+        "Create VoiceCharacteristicsSection component (with do/don't examples)",
+        "Create WritingStyleSection component",
+        "Create VocabularySection component (with word lists)",
+        "Create TrustElementsSection component",
+        "Create ExamplesBankSection component",
+        "Create CompetitorContextSection component",
+        "Create AIPromptSection component (with copy button)"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference WIREFRAMES.md section 14 for each section's layout. Match tropical oasis styling.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-032",
+      "title": "Add inline editing to sections",
+      "description": "As a user, I need to edit brand config sections inline.",
+      "acceptanceCriteria": [
+        "Add Edit button to each section header",
+        "Click Edit toggles section to edit mode",
+        "Edit mode shows editable fields instead of display",
+        "Save button calls PATCH API and exits edit mode",
+        "Cancel button discards changes and exits edit mode",
+        "Show loading state during save",
+        "Show success toast on save"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Use optimistic updates for better UX. Invalidate query on successful save.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-033",
+      "title": "Add regenerate buttons",
+      "description": "As a user, I need to regenerate brand config sections.",
+      "acceptanceCriteria": [
+        "Add 'Regenerate' button to each section header",
+        "Click triggers regeneration of that section only",
+        "Show loading state during regeneration",
+        "Update section content when complete",
+        "'Regenerate All' in page header regenerates entire config"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Regeneration uses stored research context, doesn't re-run Perplexity/crawl.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-034",
+      "title": "Update project detail page for brand config",
+      "description": "As a user, I need brand config status visible on project detail page.",
+      "acceptanceCriteria": [
+        "Add brand config status badge to project header",
+        "Add 'Edit Brand' button linking to /projects/{id}/brand-config",
+        "Show uploaded files count",
+        "If no brand config, show prompt to generate",
+        "If generation in progress, show progress indicator"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Reference WIREFRAMES.md section 4 for project view layout.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-035",
+      "title": "Write unit tests for text extraction",
+      "description": "As a developer, I need tests for text extraction utilities.",
+      "acceptanceCriteria": [
+        "Create backend/tests/utils/test_text_extraction.py",
+        "Test extract_text_from_pdf with sample PDF",
+        "Test extract_text_from_docx with sample DOCX",
+        "Test extract_text_from_txt with sample text",
+        "Test text truncation at 100k chars",
+        "Test unsupported content type raises error"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Include small test fixtures in tests/fixtures/ directory.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-036",
+      "title": "Write unit tests for S3 client",
+      "description": "As a developer, I need tests for S3 integration.",
+      "acceptanceCriteria": [
+        "Create backend/tests/integrations/test_s3.py",
+        "Test upload_file stores file and returns key",
+        "Test get_file retrieves file content",
+        "Test delete_file removes file",
+        "Test circuit breaker on S3 failure",
+        "Mock boto3 client for unit tests"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Use moto library for S3 mocking, or mock boto3 directly.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-037",
+      "title": "Write integration tests for brand config generation",
+      "description": "As a developer, I need integration tests for the full generation flow.",
+      "acceptanceCriteria": [
+        "Create backend/tests/services/test_brand_config_service.py",
+        "Test full generation flow with mocked external services",
+        "Test research phase combines 3 sources",
+        "Test synthesis phase generates all sections",
+        "Test status updates throughout generation",
+        "Test graceful handling of Perplexity failure",
+        "Test graceful handling of Crawl4AI failure"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Mock PerplexityClient, Crawl4AIClient, ClaudeClient. Test status transitions.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-038",
+      "title": "Write frontend component tests",
+      "description": "As a developer, I need tests for new frontend components.",
+      "acceptanceCriteria": [
+        "Create tests for FileUpload component",
+        "Create tests for GenerationProgress component",
+        "Create tests for BrandConfigView page",
+        "Test drag-and-drop file selection",
+        "Test file validation errors",
+        "Test section navigation"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Use Vitest + React Testing Library. Mock API calls.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-039",
+      "title": "Manual E2E verification",
+      "description": "As a developer, I need to manually verify the full flow works.",
+      "acceptanceCriteria": [
+        "Create new project with name and URL",
+        "Upload PDF brand document",
+        "Upload DOCX brand document",
+        "Add additional notes",
+        "Start brand config generation",
+        "Watch progress through all 13 steps",
+        "View completed brand config",
+        "Edit a section and save",
+        "Regenerate a single section",
+        "Verify all changes persist"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Use real Perplexity/Claude APIs for this test. Document any issues found.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-098",
+      "title": "Update V2_REBUILD_PLAN.md",
+      "description": "As a developer, I need to update the plan status so that progress is tracked.",
+      "acceptanceCriteria": [
+        "Mark Phase 2 checkboxes as [x] complete in V2_REBUILD_PLAN.md",
+        "Update Current Status table: Phase=2 complete, Next=Phase 3",
+        "Add new row to Session Log table with date, completed items, next up"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "This task maintains our planning discipline.",
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "S2-099",
+      "title": "Verify phase completion and commit",
+      "description": "As a developer, I need to verify all phase criteria are met before moving on.",
+      "acceptanceCriteria": [
+        "All tests pass: pytest backend/tests/ && npm test",
+        "Manual verification: Can upload files, generate brand config, view and edit sections",
+        "Git commit created with message: feat(phase-2): Add brand configuration with file upload and AI generation",
+        "No uncommitted changes remain"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Do not proceed to Phase 3 until this passes.",
+      "completionNotes": "Completed by agent"
+    }
+  ],
+  "metadata": {
+    "updatedAt": "2026-02-03T23:42:07.942Z"
+  }
+}
