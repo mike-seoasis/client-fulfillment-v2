@@ -39,8 +39,14 @@ export default async function middleware(request: NextRequest) {
   }
 
   // All other routes: SDK middleware handles auth check + redirect
-  const protectRoutes = getAuth().middleware({ loginUrl: "/auth/sign-in" });
-  return protectRoutes(request);
+  try {
+    const protectRoutes = getAuth().middleware({ loginUrl: "/auth/sign-in" });
+    return protectRoutes(request);
+  } catch {
+    // If Neon Auth SDK throws (expired cookie, network error, etc.),
+    // redirect to sign-in rather than returning a 500.
+    return NextResponse.redirect(new URL("/auth/sign-in", request.url));
+  }
 }
 
 export const config = {
