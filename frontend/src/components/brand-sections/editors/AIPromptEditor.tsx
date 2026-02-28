@@ -31,6 +31,9 @@ export function AIPromptEditor({
   onSave,
   onCancel,
 }: AIPromptEditorProps) {
+  // Manual override - when filled in, used instead of full_prompt during content generation
+  const [promptOverride, setPromptOverride] = useState(data?.prompt_override || '');
+
   // Main prompt - support both new and legacy field names
   const [fullPrompt, setFullPrompt] = useState(data?.full_prompt || data?.snippet || '');
 
@@ -124,6 +127,7 @@ export function AIPromptEditor({
 
     const updatedData: AIPromptSnippetData = {
       full_prompt: fullPrompt.trim(),
+      prompt_override: promptOverride.trim() || undefined,
       quick_reference: {
         voice_in_three_words: cleanArr(voiceInThreeWords),
         we_sound_like: cleanStr(weSoundLike),
@@ -168,7 +172,7 @@ export function AIPromptEditor({
 
     onSave(updatedData);
   }, [
-    validate, fullPrompt,
+    validate, fullPrompt, promptOverride,
     voiceInThreeWords, weSoundLike, weNeverSoundLike, elevatorPitch,
     primaryPersona, demographics, psychographics, howTheyTalk, whatTheyCareAbout,
     personalityTraits, formalToCasual, seriousToPlayful, reservedToEnthusiastic, sentenceStyle, vocabularyLevel,
@@ -197,10 +201,33 @@ export function AIPromptEditor({
         </p>
       </div>
 
+      {/* Manual Override */}
+      <section className="bg-lagoon-50 border border-lagoon-200 rounded-sm p-4">
+        <h3 className="text-sm font-semibold text-lagoon-800 mb-1 uppercase tracking-wide">
+          Prompt Override
+        </h3>
+        <p className="text-xs text-lagoon-600 mb-3">
+          When filled in, this text is injected as the brand prompt instead of the generated Full AI Prompt below.
+          Leave empty to use the auto-generated prompt.
+        </p>
+        <Textarea
+          value={promptOverride}
+          onChange={(e) => setPromptOverride(e.target.value)}
+          placeholder="Paste or write a custom brand prompt to override the generated one..."
+          disabled={isSaving}
+          className="min-h-[160px] font-mono text-sm"
+        />
+        {promptOverride.trim() && (
+          <p className="mt-2 text-xs text-lagoon-700 font-medium">
+            Override is active. The Full AI Prompt below will not be used for content generation.
+          </p>
+        )}
+      </section>
+
       {/* Main Prompt */}
-      <section className="bg-warm-gray-900 border border-warm-gray-700 rounded-sm p-4">
+      <section className={`border rounded-sm p-4 ${promptOverride.trim() ? 'bg-warm-gray-800 border-warm-gray-600 opacity-60' : 'bg-warm-gray-900 border-warm-gray-700'}`}>
         <h3 className="text-sm font-semibold text-warm-gray-100 mb-3 uppercase tracking-wide">
-          Full AI Prompt *
+          Full AI Prompt {promptOverride.trim() ? '(overridden)' : '*'}
         </h3>
         <Textarea
           value={fullPrompt}

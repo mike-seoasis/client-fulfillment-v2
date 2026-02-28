@@ -79,14 +79,17 @@ export function AIPromptSection({ data }: AIPromptSectionProps) {
 
   // Get the main prompt text (support both new and legacy field names)
   const promptText = data?.full_prompt || data?.snippet;
+  const hasOverride = !!data?.prompt_override?.trim();
+  // The "active" prompt is the override if present, otherwise the generated one
+  const activePrompt = hasOverride ? data!.prompt_override! : promptText;
 
-  if (!data || !promptText) {
+  if (!data || !activePrompt) {
     return <EmptySection message="AI prompt not available" />;
   }
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(promptText);
+      await navigator.clipboard.writeText(activePrompt);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
@@ -113,10 +116,19 @@ export function AIPromptSection({ data }: AIPromptSectionProps) {
 
   return (
     <div className="space-y-6">
-      {/* Main Prompt - Copyable */}
+      {/* Override Notice */}
+      {hasOverride && (
+        <div className="bg-lagoon-50 border border-lagoon-200 rounded-sm p-3">
+          <p className="text-sm text-lagoon-700 font-medium">
+            Manual override is active. The prompt below is your custom override, not the auto-generated one.
+          </p>
+        </div>
+      )}
+
+      {/* Active Prompt - Copyable */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <SectionHeader>Full AI Prompt</SectionHeader>
+          <SectionHeader>{hasOverride ? 'Prompt Override (Active)' : 'Full AI Prompt'}</SectionHeader>
           <button
             onClick={handleCopy}
             className={`
@@ -145,10 +157,24 @@ export function AIPromptSection({ data }: AIPromptSectionProps) {
         </div>
         <div className="bg-warm-gray-900 rounded-sm p-4 max-h-[400px] overflow-y-auto">
           <pre className="text-sm text-warm-gray-100 whitespace-pre-wrap font-mono leading-relaxed">
-            {promptText}
+            {activePrompt}
           </pre>
         </div>
       </div>
+
+      {/* Show generated prompt collapsed when override is active */}
+      {hasOverride && promptText && (
+        <details className="group">
+          <summary className="cursor-pointer text-xs text-warm-gray-500 hover:text-warm-gray-700 transition-colors">
+            Show generated Full AI Prompt (not in use)
+          </summary>
+          <div className="mt-2 bg-warm-gray-900 rounded-sm p-4 max-h-[300px] overflow-y-auto opacity-60">
+            <pre className="text-sm text-warm-gray-100 whitespace-pre-wrap font-mono leading-relaxed">
+              {promptText}
+            </pre>
+          </div>
+        </details>
+      )}
 
       {/* Quick Reference */}
       {(quickRef.voice_in_three_words?.length || quickRef.we_sound_like || quickRef.elevator_pitch) && (

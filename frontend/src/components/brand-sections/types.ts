@@ -226,6 +226,8 @@ export interface CompetitorContextData {
 export interface AIPromptSnippetData {
   // Main prompt (400-600 words)
   full_prompt: string;
+  // Manual override — when filled in, injected instead of full_prompt
+  prompt_override?: string;
   // Legacy field for backwards compatibility
   snippet?: string;
 
