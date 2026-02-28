@@ -6,6 +6,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useProject, useDeleteProject } from '@/hooks/use-projects';
 import { useStartBrandConfigGeneration, useBrandConfigGeneration } from '@/hooks/useBrandConfigGeneration';
 import { useCrawlStatus, getOnboardingStep } from '@/hooks/use-crawl-status';
+import { useOnboardingBatches } from '@/hooks/useOnboardingBatches';
 import { useClusters } from '@/hooks/useClusters';
 import { useBlogCampaigns } from '@/hooks/useBlogs';
 import { useLinkMap, usePlanStatus } from '@/hooks/useLinks';
@@ -525,6 +526,13 @@ function ProjectDetailContent() {
   });
   const onboardingProgress = getOnboardingStep(crawlStatus);
 
+  // Fetch onboarding batches for batch management
+  const { data: batches } = useOnboardingBatches(projectId, {
+    enabled: !!projectId && !isLoading && !error,
+  });
+  const latestIncompleteBatch = batches?.find(b => b.pipeline_status !== 'complete');
+  const latestBatch = batches && batches.length > 0 ? batches[batches.length - 1] : null;
+
   // Fetch clusters for New Content section
   const { data: clusters } = useClusters(projectId, {
     enabled: !!projectId && !isLoading && !error,
@@ -927,19 +935,53 @@ function ProjectDetailContent() {
             </p>
           )}
 
+          {/* Batch summary */}
+          {batches && batches.length > 0 && (
+            <div className="mb-4 flex flex-wrap gap-2">
+              {batches.map((b) => (
+                <span
+                  key={b.batch}
+                  className={`text-xs px-2 py-1 rounded-sm border ${
+                    b.pipeline_status === 'complete'
+                      ? 'bg-palm-50 border-palm-200 text-palm-700'
+                      : 'bg-lagoon-50 border-lagoon-200 text-lagoon-700'
+                  }`}
+                >
+                  Batch {b.batch} &mdash; {b.total_pages} pages ({b.pipeline_status})
+                </span>
+              ))}
+            </div>
+          )}
+
           {/* Action buttons */}
           <div className="flex items-center gap-3">
             <ButtonLink
-              href={
-                onboardingProgress.currentStep === 'upload'
-                  ? `/projects/${projectId}/onboarding/upload`
-                  : onboardingProgress.currentStep === 'crawl'
-                  ? `/projects/${projectId}/onboarding/crawl`
-                  : `/projects/${projectId}/onboarding/keywords`
-              }
+              href={(() => {
+                // If there's a latest incomplete batch, link to its current step with batch param
+                if (latestIncompleteBatch) {
+                  const batchParam = `?batch=${latestIncompleteBatch.batch}`;
+                  const step = latestIncompleteBatch.pipeline_status;
+                  if (step === 'crawling') return `/projects/${projectId}/onboarding/crawl${batchParam}`;
+                  if (step === 'keywords') return `/projects/${projectId}/onboarding/keywords${batchParam}`;
+                  if (step === 'content') return `/projects/${projectId}/onboarding/content${batchParam}`;
+                  return `/projects/${projectId}/onboarding/crawl${batchParam}`;
+                }
+                // Fallback to existing logic
+                if (onboardingProgress.currentStep === 'upload') return `/projects/${projectId}/onboarding/upload`;
+                if (onboardingProgress.currentStep === 'crawl') return `/projects/${projectId}/onboarding/crawl`;
+                return `/projects/${projectId}/onboarding/keywords`;
+              })()}
             >
               {onboardingProgress.hasStarted ? 'Continue Onboarding' : 'Start Onboarding'}
             </ButtonLink>
+            {onboardingProgress.hasStarted && (
+              <ButtonLink
+                href={`/projects/${projectId}/onboarding/upload`}
+                variant="secondary"
+              >
+                Add More Pages
+              </ButtonLink>
+            )}
             {onboardingProgress.hasStarted && (
               <Button
                 variant="secondary"

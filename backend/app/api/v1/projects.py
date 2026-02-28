@@ -6,8 +6,8 @@ REST endpoints for managing projects with CRUD operations.
 from datetime import datetime
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
-from sqlalchemy import delete, select
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.attributes import flag_modified
@@ -221,6 +221,15 @@ async def upload_urls(
     result = await db.execute(stmt)
     existing_urls = set(result.scalars().all())
 
+    # Compute next batch number for onboarding pages
+    max_batch_result = await db.execute(
+        select(func.max(CrawledPage.onboarding_batch)).where(
+            CrawledPage.project_id == project_id,
+            CrawledPage.source == "onboarding",
+        )
+    )
+    next_batch = (max_batch_result.scalar_one_or_none() or 0) + 1
+
     # Create CrawledPage records for new URLs only
     new_page_ids: list[str] = []
     pages_created = 0
@@ -241,6 +250,7 @@ async def upload_urls(
             normalized_url=normalized_url,
             raw_url=data.urls[i],  # Store original URL
             status=CrawlStatus.PENDING.value,
+            onboarding_batch=next_batch,
         )
         db.add(page)
         await db.flush()  # Get the page ID
@@ -299,6 +309,7 @@ async def upload_urls(
         pages_created=pages_created,
         pages_skipped=pages_skipped,
         total_urls=len(data.urls),
+        batch=next_batch,
     )
 
 
@@ -547,9 +558,101 @@ async def list_project_pages(
     return [CrawledPageResponse.model_validate(page) for page in pages]
 
 
+@router.get("/{project_id}/onboarding-batches")
+async def list_onboarding_batches(
+    project_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> list[dict]:
+    """List all onboarding batches for a project with per-batch pipeline status.
+
+    Returns batch number, page counts, pipeline status, and creation timestamp.
+    """
+    from app.models.page_content import PageContent
+    from app.models.page_keywords import PageKeywords as PK
+
+    await ProjectService.get_project(db, project_id)
+
+    # Load all onboarding pages with keywords and content eagerly
+    from sqlalchemy.orm import selectinload
+
+    stmt = (
+        select(CrawledPage)
+        .where(
+            CrawledPage.project_id == project_id,
+            CrawledPage.source == "onboarding",
+            CrawledPage.onboarding_batch.isnot(None),
+        )
+        .options(
+            selectinload(CrawledPage.keywords),
+            selectinload(CrawledPage.page_content),
+        )
+        .order_by(CrawledPage.onboarding_batch, CrawledPage.created_at)
+    )
+    result = await db.execute(stmt)
+    pages = result.scalars().unique().all()
+
+    # Group pages by batch
+    batches: dict[int, list] = {}
+    for page in pages:
+        b = page.onboarding_batch
+        if b not in batches:
+            batches[b] = []
+        batches[b].append(page)
+
+    # Compute per-batch status
+    summaries = []
+    for batch_num in sorted(batches.keys()):
+        batch_pages = batches[batch_num]
+        total = len(batch_pages)
+        completed = sum(
+            1
+            for p in batch_pages
+            if p.page_content and p.page_content.is_approved
+        )
+
+        # Determine pipeline status
+        any_pending_crawl = any(
+            p.status in ("pending", "crawling") for p in batch_pages
+        )
+        all_crawled = all(p.status == "completed" for p in batch_pages)
+        has_keywords = any(p.keywords and p.keywords.primary_keyword for p in batch_pages)
+        all_have_keywords = all(
+            p.keywords and p.keywords.primary_keyword for p in batch_pages
+        )
+        has_content = any(p.page_content for p in batch_pages)
+        all_approved_content = all(
+            p.page_content and p.page_content.is_approved for p in batch_pages
+        )
+
+        if any_pending_crawl or not all_crawled:
+            pipeline_status = "crawling"
+        elif not all_have_keywords:
+            pipeline_status = "keywords"
+        elif not all_approved_content:
+            pipeline_status = "content"
+        else:
+            pipeline_status = "complete"
+
+        # Earliest created_at in the batch
+        created_at = min(p.created_at for p in batch_pages).isoformat()
+
+        summaries.append(
+            {
+                "batch": batch_num,
+                "total_pages": total,
+                "completed_pages": completed,
+                "pipeline_status": pipeline_status,
+                "created_at": created_at,
+            }
+        )
+
+    return summaries
+
+
 @router.get("/{project_id}/crawl-status", response_model=CrawlStatusResponse)
 async def get_crawl_status(
     project_id: str,
+    batch: int | None = Query(None, description="Filter by onboarding batch number"),
     db: AsyncSession = Depends(get_session),
 ) -> CrawlStatusResponse:
     """Get crawl status for a project.
@@ -578,6 +681,8 @@ async def get_crawl_status(
         CrawledPage.project_id == project_id,
         CrawledPage.source == "onboarding",
     )
+    if batch is not None:
+        stmt = stmt.where(CrawledPage.onboarding_batch == batch)
     result = await db.execute(stmt)
     pages = result.scalars().all()
 
@@ -1019,6 +1124,7 @@ async def recrawl_all_pages(
 async def generate_primary_keywords(
     project_id: str,
     background_tasks: BackgroundTasks,
+    batch: int | None = Query(None, description="Filter by onboarding batch number"),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, str]:
     """Start primary keyword generation for all completed pages in a project.
@@ -1054,6 +1160,8 @@ async def generate_primary_keywords(
         CrawledPage.project_id == project_id,
         CrawledPage.status == CrawlStatus.COMPLETED.value,
     )
+    if batch is not None:
+        stmt = stmt.where(CrawledPage.onboarding_batch == batch)
     result = await db.execute(stmt)
     completed_pages = list(result.scalars().all())
 
@@ -1095,6 +1203,7 @@ async def generate_primary_keywords(
         _generate_keywords_background,
         project_id=project_id,
         task_id=task_id,
+        batch=batch,
     )
 
     return {
@@ -1107,6 +1216,7 @@ async def generate_primary_keywords(
 async def _generate_keywords_background(
     project_id: str,
     task_id: str,
+    batch: int | None = None,
 ) -> None:
     """Background task to generate primary keywords for all pages.
 
@@ -1145,7 +1255,7 @@ async def _generate_keywords_background(
             )
 
             # Run generation for the project
-            result = await keyword_service.generate_for_project(project_id, db)
+            result = await keyword_service.generate_for_project(project_id, db, batch=batch)
 
             logger.info(
                 "Background keyword generation completed",
@@ -1247,6 +1357,7 @@ async def get_primary_keywords_status(
 )
 async def list_pages_with_keywords(
     project_id: str,
+    batch: int | None = Query(None, description="Filter by onboarding batch number"),
     db: AsyncSession = Depends(get_session),
 ) -> list[PageWithKeywords]:
     """List all completed pages with their keyword research data.
@@ -1280,6 +1391,8 @@ async def list_pages_with_keywords(
         )
         .order_by(CrawledPage.normalized_url)
     )
+    if batch is not None:
+        stmt = stmt.where(CrawledPage.onboarding_batch == batch)
 
     result = await db.execute(stmt)
     pages = result.scalars().unique().all()
@@ -1618,6 +1731,7 @@ async def approve_keyword(
 )
 async def approve_all_keywords(
     project_id: str,
+    batch: int | None = Query(None, description="Filter by onboarding batch number"),
     db: AsyncSession = Depends(get_session),
 ) -> BulkApproveResponse:
     """Approve all keywords for pages in a project.
@@ -1648,6 +1762,8 @@ async def approve_all_keywords(
             CrawledPage.status == CrawlStatus.COMPLETED.value,
         )
     )
+    if batch is not None:
+        stmt = stmt.where(CrawledPage.onboarding_batch == batch)
     result = await db.execute(stmt)
     page_keywords_list = list(result.scalars().all())
 

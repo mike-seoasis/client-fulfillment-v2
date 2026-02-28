@@ -48,13 +48,14 @@ export function useKeywordGenerationStatus(
 export function useStartKeywordGeneration(): UseMutationResult<
   GeneratePrimaryKeywordsResponse,
   Error,
-  string
+  { projectId: string; batch?: number | null }
 > {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (projectId: string) => generatePrimaryKeywords(projectId),
-    onSuccess: (_data, projectId) => {
+    mutationFn: ({ projectId, batch }: { projectId: string; batch?: number | null }) =>
+      generatePrimaryKeywords(projectId, batch),
+    onSuccess: (_data, { projectId }) => {
       // Invalidate status to trigger a fresh fetch
       queryClient.invalidateQueries({
         queryKey: keywordGenerationKeys.status(projectId),
@@ -71,7 +72,8 @@ export function useStartKeywordGeneration(): UseMutationResult<
  * - Returns status, progress, isGenerating, error
  * - Exposes startGeneration function
  */
-export function useKeywordGeneration(projectId: string) {
+export function useKeywordGeneration(projectId: string, options?: { batch?: number | null }) {
+  const batch = options?.batch;
   const queryClient = useQueryClient();
 
   // Poll status - refetch every 2 seconds while generating or pending
@@ -119,8 +121,8 @@ export function useKeywordGeneration(projectId: string) {
     isFailed: status.data?.status === 'failed',
 
     // Actions
-    startGeneration: () => startGenerationMutation.mutate(projectId),
-    startGenerationAsync: () => startGenerationMutation.mutateAsync(projectId),
+    startGeneration: () => startGenerationMutation.mutate({ projectId, batch }),
+    startGenerationAsync: () => startGenerationMutation.mutateAsync({ projectId, batch }),
     isStarting: startGenerationMutation.isPending,
     startError: startGenerationMutation.error,
 

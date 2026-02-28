@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useProject } from '@/hooks/use-projects';
 import { useContentGenerationStatus } from '@/hooks/useContentGeneration';
 import { exportProject } from '@/lib/api';
@@ -105,10 +105,14 @@ function displayPath(url: string): string {
 
 export default function ExportPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const projectId = params.id as string;
+  const batch = searchParams.get('batch');
+  const batchNum = batch ? parseInt(batch, 10) : undefined;
+  const batchParam = batch ? `?batch=${batch}` : '';
 
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
-  const { data: status, isLoading: isStatusLoading } = useContentGenerationStatus(projectId);
+  const { data: status, isLoading: isStatusLoading } = useContentGenerationStatus(projectId, { batch: batchNum });
 
   // Page selection state
   const [selectedPageIds, setSelectedPageIds] = useState<Set<string>>(new Set());
@@ -220,7 +224,7 @@ export default function ExportPage() {
       </nav>
 
       {/* Step indicator */}
-      <StepIndicator projectId={projectId} currentStep="export" completedStepKeys={['upload', 'crawl', 'keywords', 'content', 'links']} />
+      <StepIndicator projectId={projectId} currentStep="export" completedStepKeys={['upload', 'crawl', 'keywords', 'content', 'links']} batch={batch} />
 
       {/* Divider */}
       <hr className="border-cream-500 mb-6" />
@@ -360,7 +364,7 @@ export default function ExportPage() {
 
         {/* Navigation */}
         <div className="flex justify-end gap-3">
-          <Link href={`/projects/${projectId}/onboarding/content`}>
+          <Link href={`/projects/${projectId}/onboarding/content${batchParam}`}>
             <Button variant="secondary">Back</Button>
           </Link>
           <Link href={`/projects/${projectId}`}>

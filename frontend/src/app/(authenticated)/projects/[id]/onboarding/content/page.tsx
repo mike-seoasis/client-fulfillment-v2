@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useProject } from '@/hooks/use-projects';
 import { useContentGeneration, useBulkApproveContent } from '@/hooks/useContentGeneration';
@@ -497,7 +497,11 @@ function ReviewTable({
 export default function ContentGenerationPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const projectId = params.id as string;
+  const batch = searchParams.get('batch');
+  const batchNum = batch ? parseInt(batch, 10) : undefined;
+  const batchParam = batch ? `?batch=${batch}` : '';
 
   // Toast state
   const [showToast, setShowToast] = useState(false);
@@ -517,7 +521,7 @@ export default function ContentGenerationPage() {
   };
 
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
-  const contentGen = useContentGeneration(projectId);
+  const contentGen = useContentGeneration(projectId, { batch: batchNum });
   const bulkApproveMutation = useBulkApproveContent();
 
   // Link planning — auto-trigger when content gen completes
@@ -636,7 +640,7 @@ export default function ContentGenerationPage() {
   // Handle bulk approve
   const handleBulkApprove = async () => {
     try {
-      const result = await bulkApproveMutation.mutateAsync(projectId);
+      const result = await bulkApproveMutation.mutateAsync({ projectId, batch: batchNum });
       setToastMessage(`Approved ${result.approved_count} page${result.approved_count === 1 ? '' : 's'}`);
       setToastVariant('success');
       setShowToast(true);
@@ -697,7 +701,7 @@ export default function ContentGenerationPage() {
       </nav>
 
       {/* Step indicator */}
-      <StepIndicator projectId={projectId} currentStep="content" completedStepKeys={['upload', 'crawl', 'keywords']} />
+      <StepIndicator projectId={projectId} currentStep="content" completedStepKeys={['upload', 'crawl', 'keywords']} batch={batch} />
 
       {/* Divider */}
       <hr className="border-cream-500 mb-6" />
@@ -994,12 +998,12 @@ export default function ContentGenerationPage() {
 
         {/* Navigation */}
         <div className="flex justify-end gap-3">
-          <Link href={`/projects/${projectId}/onboarding/keywords`}>
+          <Link href={`/projects/${projectId}/onboarding/keywords${batchParam}`}>
             <Button variant="secondary">Back</Button>
           </Link>
           {(isComplete || isFailed) && !isGenerating && !isLinkPlanning && (
             onboardingPagesApproved > 0 ? (
-              <Button onClick={() => router.push(`/projects/${projectId}/onboarding/export`)}>
+              <Button onClick={() => router.push(`/projects/${projectId}/onboarding/export${batchParam}`)}>
                 Continue to Export
               </Button>
             ) : (

@@ -95,6 +95,7 @@ interface UrlUploadResponse {
   pages_created: number;
   pages_skipped: number;
   total_urls: number;
+  batch: number;
 }
 
 export default function UrlUploadPage() {
@@ -205,13 +206,14 @@ export default function UrlUploadPage() {
 
     try {
       // POST to /api/v1/projects/{id}/urls with the valid URLs
-      await apiClient.post<UrlUploadResponse>(
+      const response = await apiClient.post<UrlUploadResponse>(
         `/projects/${projectId}/urls`,
         { urls: validUrls.map((u) => u.url) }
       );
 
-      // Navigate to crawl progress page on success
-      router.push(`/projects/${projectId}/onboarding/crawl`);
+      // Navigate to crawl progress page on success, passing batch number
+      const batchParam = response.batch ? `?batch=${response.batch}` : '';
+      router.push(`/projects/${projectId}/onboarding/crawl${batchParam}`);
     } catch (err) {
       // Show user-friendly error message
       const message = getErrorMessage(err);

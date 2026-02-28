@@ -232,10 +232,12 @@ export interface BulkApproveResponse {
  * Returns immediately with a task_id for polling progress.
  */
 export function generatePrimaryKeywords(
-  projectId: string
+  projectId: string,
+  batch?: number | null
 ): Promise<GeneratePrimaryKeywordsResponse> {
+  const qs = batch != null ? `?batch=${batch}` : '';
   return apiClient.post<GeneratePrimaryKeywordsResponse>(
-    `/projects/${projectId}/generate-primary-keywords`
+    `/projects/${projectId}/generate-primary-keywords${qs}`
   );
 }
 
@@ -256,10 +258,12 @@ export function getPrimaryKeywordsStatus(
  * Only returns completed pages.
  */
 export function getPagesWithKeywords(
-  projectId: string
+  projectId: string,
+  batch?: number | null
 ): Promise<PageWithKeywords[]> {
+  const qs = batch != null ? `?batch=${batch}` : '';
   return apiClient.get<PageWithKeywords[]>(
-    `/projects/${projectId}/pages-with-keywords`
+    `/projects/${projectId}/pages-with-keywords${qs}`
   );
 }
 
@@ -299,10 +303,12 @@ export function approveKeyword(
  * Returns the count of newly approved keywords.
  */
 export function approveAllKeywords(
-  projectId: string
+  projectId: string,
+  batch?: number | null
 ): Promise<BulkApproveResponse> {
+  const qs = batch != null ? `?batch=${batch}` : '';
   return apiClient.post<BulkApproveResponse>(
-    `/projects/${projectId}/approve-all-keywords`
+    `/projects/${projectId}/approve-all-keywords${qs}`
   );
 }
 
@@ -318,6 +324,26 @@ export function togglePriority(
   const queryParam = value !== undefined ? `?value=${value}` : "";
   return apiClient.put<PageKeywordsData>(
     `/projects/${projectId}/pages/${pageId}/priority${queryParam}`
+  );
+}
+
+// =============================================================================
+// ONBOARDING BATCHES
+// =============================================================================
+
+export interface OnboardingBatchSummary {
+  batch: number;
+  total_pages: number;
+  completed_pages: number;
+  pipeline_status: 'crawling' | 'keywords' | 'content' | 'complete';
+  created_at: string;
+}
+
+export function getOnboardingBatches(
+  projectId: string
+): Promise<OnboardingBatchSummary[]> {
+  return apiClient.get<OnboardingBatchSummary[]>(
+    `/projects/${projectId}/onboarding-batches`
   );
 }
 
@@ -422,11 +448,13 @@ export interface PromptLogResponse {
  */
 export function triggerContentGeneration(
   projectId: string,
-  options?: { forceRefresh?: boolean; refreshBriefs?: boolean }
+  options?: { forceRefresh?: boolean; refreshBriefs?: boolean },
+  batch?: number | null
 ): Promise<ContentGenerationTriggerResponse> {
   const searchParams = new URLSearchParams();
   if (options?.forceRefresh) searchParams.set('force_refresh', 'true');
   if (options?.refreshBriefs) searchParams.set('refresh_briefs', 'true');
+  if (batch != null) searchParams.set('batch', String(batch));
   const qs = searchParams.toString();
   return apiClient.post<ContentGenerationTriggerResponse>(
     `/projects/${projectId}/generate-content${qs ? `?${qs}` : ''}`
@@ -438,10 +466,12 @@ export function triggerContentGeneration(
  * Returns overall status and per-page breakdown.
  */
 export function pollContentGenerationStatus(
-  projectId: string
+  projectId: string,
+  batch?: number | null
 ): Promise<ContentGenerationStatus> {
+  const qs = batch != null ? `?batch=${batch}` : '';
   return apiClient.get<ContentGenerationStatus>(
-    `/projects/${projectId}/content-generation-status`
+    `/projects/${projectId}/content-generation-status${qs}`
   );
 }
 
@@ -520,10 +550,12 @@ export function recheckPageContent(
  * Returns count of newly approved pages.
  */
 export function bulkApproveContent(
-  projectId: string
+  projectId: string,
+  batch?: number | null
 ): Promise<ContentBulkApproveResponse> {
+  const qs = batch != null ? `?batch=${batch}` : '';
   return apiClient.post<ContentBulkApproveResponse>(
-    `/projects/${projectId}/bulk-approve-content`
+    `/projects/${projectId}/bulk-approve-content${qs}`
   );
 }
 

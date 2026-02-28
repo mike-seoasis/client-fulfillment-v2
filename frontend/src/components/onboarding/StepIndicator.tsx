@@ -15,9 +15,10 @@ export const ONBOARDING_STEPS = [
 export type OnboardingStepKey = typeof ONBOARDING_STEPS[number]['key'];
 
 /** Map step key to its onboarding route segment. "links" maps to /content (no separate links page). */
-function stepUrl(projectId: string, stepKey: OnboardingStepKey): string {
+function stepUrl(projectId: string, stepKey: OnboardingStepKey, batch?: string | null): string {
   const segment = stepKey === 'links' ? 'content' : stepKey;
-  return `/projects/${projectId}/onboarding/${segment}`;
+  const batchParam = batch ? `?batch=${batch}` : '';
+  return `/projects/${projectId}/onboarding/${segment}${batchParam}`;
 }
 
 export interface StepIndicatorProps {
@@ -25,6 +26,8 @@ export interface StepIndicatorProps {
   currentStep: OnboardingStepKey;
   /** Step keys that are fully completed. Used to determine which steps are clickable. */
   completedStepKeys?: OnboardingStepKey[];
+  /** Batch number to preserve in step navigation links. */
+  batch?: string | null;
 }
 
 export function BackArrowIcon({ className }: { className?: string }) {
@@ -80,7 +83,7 @@ export function SpinnerIcon({ className }: { className?: string }) {
  * Shared step indicator for the onboarding flow.
  * Completed and current steps are clickable links; future steps are inert.
  */
-export function StepIndicator({ projectId, currentStep, completedStepKeys = [] }: StepIndicatorProps) {
+export function StepIndicator({ projectId, currentStep, completedStepKeys = [], batch }: StepIndicatorProps) {
   const currentIndex = ONBOARDING_STEPS.findIndex((s) => s.key === currentStep);
   const completedSet = new Set(completedStepKeys);
 
@@ -115,7 +118,7 @@ export function StepIndicator({ projectId, currentStep, completedStepKeys = [] }
             <div key={step.key} className="flex items-center">
               {isClickable ? (
                 <Link
-                  href={stepUrl(projectId, step.key)}
+                  href={stepUrl(projectId, step.key, batch)}
                   className="rounded-full hover:ring-2 ring-palm-200 transition-shadow"
                   title={step.label}
                 >
@@ -148,7 +151,7 @@ export function StepIndicator({ projectId, currentStep, completedStepKeys = [] }
           return isClickable ? (
             <Link
               key={step.key}
-              href={stepUrl(projectId, step.key)}
+              href={stepUrl(projectId, step.key, batch)}
               className={`${labelClass} hover:text-palm-500 transition-colors`}
               style={style}
             >

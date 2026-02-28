@@ -8,7 +8,7 @@ and fetching prompt logs.
 import re
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -54,6 +54,7 @@ async def generate_content(
     background_tasks: BackgroundTasks,
     force_refresh: bool = False,
     refresh_briefs: bool = False,
+    batch: int | None = Query(None, description="Filter by onboarding batch number"),
     db: AsyncSession = Depends(get_session),
 ) -> ContentGenerationTriggerResponse:
     """Trigger content generation for all pages with approved keywords.
@@ -89,6 +90,10 @@ async def generate_content(
             PageKeywords.is_approved.is_(True),
         )
     )
+    if batch is not None:
+        approved_count_stmt = approved_count_stmt.where(
+            CrawledPage.onboarding_batch == batch
+        )
     result = await db.execute(approved_count_stmt)
     approved_count = result.scalar_one()
 
@@ -106,6 +111,7 @@ async def generate_content(
         project_id=project_id,
         force_refresh=force_refresh,
         refresh_briefs=refresh_briefs,
+        batch=batch,
     )
 
     logger.info(
@@ -126,6 +132,7 @@ async def _run_generation_background(
     project_id: str,
     force_refresh: bool = False,
     refresh_briefs: bool = False,
+    batch: int | None = None,
 ) -> None:
     """Background task wrapper for the content generation pipeline.
 
@@ -138,6 +145,7 @@ async def _run_generation_background(
             project_id,
             force_refresh=force_refresh,
             refresh_briefs=refresh_briefs,
+            batch=batch,
         )
         logger.info(
             "Content generation pipeline finished",
@@ -168,6 +176,7 @@ async def _run_generation_background(
 )
 async def get_content_generation_status(
     project_id: str,
+    batch: int | None = Query(None, description="Filter by onboarding batch number"),
     db: AsyncSession = Depends(get_session),
 ) -> ContentGenerationStatus:
     """Get content generation status for a project.
@@ -191,6 +200,8 @@ async def get_content_generation_status(
             selectinload(CrawledPage.page_content),
         )
     )
+    if batch is not None:
+        stmt = stmt.where(CrawledPage.onboarding_batch == batch)
     result = await db.execute(stmt)
     pages = result.scalars().unique().all()
 
@@ -586,6 +597,7 @@ async def approve_content(
 )
 async def bulk_approve_content(
     project_id: str,
+    batch: int | None = Query(None, description="Filter by onboarding batch number"),
     db: AsyncSession = Depends(get_session),
 ) -> BulkApproveResponse:
     """Bulk-approve all eligible content pages for a project.
@@ -611,6 +623,8 @@ async def bulk_approve_content(
             PageContent.is_approved.is_(False),
         )
     )
+    if batch is not None:
+        stmt = stmt.where(CrawledPage.onboarding_batch == batch)
     result = await db.execute(stmt)
     eligible = result.scalars().all()
 

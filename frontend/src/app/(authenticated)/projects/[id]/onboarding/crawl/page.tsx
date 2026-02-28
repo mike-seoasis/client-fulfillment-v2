@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useProject } from '@/hooks/use-projects';
@@ -560,7 +560,11 @@ function getErrorMessage(err: unknown): string {
 
 export default function CrawlProgressPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const projectId = params.id as string;
+  const batch = searchParams.get('batch');
+  const batchNum = batch ? parseInt(batch, 10) : undefined;
+  const batchParam = batch ? `?batch=${batch}` : '';
   const queryClient = useQueryClient();
   const [retryingPageId, setRetryingPageId] = useState<string | null>(null);
   const [editingPageId, setEditingPageId] = useState<string | null>(null);
@@ -582,8 +586,11 @@ export default function CrawlProgressPage() {
 
   // Poll crawl status every 2 seconds while crawling
   const { data: crawlStatus, isLoading: isCrawlStatusLoading, error: crawlStatusError } = useQuery({
-    queryKey: ['crawl-status', projectId],
-    queryFn: () => apiClient.get<CrawlStatusResponse>(`/projects/${projectId}/crawl-status`),
+    queryKey: batchNum != null ? ['crawl-status', projectId, batchNum] : ['crawl-status', projectId],
+    queryFn: () => {
+      const qs = batchNum != null ? `?batch=${batchNum}` : '';
+      return apiClient.get<CrawlStatusResponse>(`/projects/${projectId}/crawl-status${qs}`);
+    },
     enabled: !!projectId,
     refetchInterval: (data) => {
       // Stop polling when status is complete
@@ -818,7 +825,7 @@ export default function CrawlProgressPage() {
       </nav>
 
       {/* Step indicator */}
-      <StepIndicator projectId={projectId} currentStep="crawl" completedStepKeys={['upload']} />
+      <StepIndicator projectId={projectId} currentStep="crawl" completedStepKeys={['upload']} batch={batch} />
 
       {/* Divider */}
       <hr className="border-cream-500 mb-6" />
@@ -962,11 +969,11 @@ export default function CrawlProgressPage() {
 
         {/* Actions */}
         <div className="flex justify-end gap-3">
-          <Link href={`/projects/${projectId}/onboarding/upload`}>
+          <Link href={`/projects/${projectId}/onboarding/upload${batchParam}`}>
             <Button variant="secondary">Back</Button>
           </Link>
           {isComplete ? (
-            <Link href={`/projects/${projectId}/onboarding/keywords`}>
+            <Link href={`/projects/${projectId}/onboarding/keywords${batchParam}`}>
               <Button>Continue to Keywords</Button>
             </Link>
           ) : (

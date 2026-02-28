@@ -195,6 +195,9 @@ class UrlUploadResponse(BaseModel):
         ..., ge=0, description="Number of duplicate URLs skipped"
     )
     total_urls: int = Field(..., ge=0, description="Total URLs in request")
+    batch: int = Field(
+        ..., ge=1, description="Onboarding batch number assigned to uploaded pages"
+    )
 
 
 class TaxonomyLabel(BaseModel):

@@ -11,6 +11,7 @@ const mockRouterPush = vi.fn();
 vi.mock('next/navigation', () => ({
   useParams: () => ({ id: 'test-project-123' }),
   useRouter: () => ({ push: mockRouterPush }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 // ============================================================================
@@ -225,7 +226,7 @@ describe('Keywords Page - Integration Tests', () => {
       expect(screen.getByText('Onboarding')).toBeInTheDocument();
 
       // Step indicator
-      expect(screen.getByText(/Step 3 of 5/)).toBeInTheDocument();
+      expect(screen.getByText(/Step 3 of 6/)).toBeInTheDocument();
 
       // Page title
       expect(screen.getByText('2 Keywords Generated')).toBeInTheDocument();
@@ -243,7 +244,7 @@ describe('Keywords Page - Integration Tests', () => {
       render(<KeywordsPage />);
 
       // Check for step label text
-      expect(screen.getByText(/Step 3 of 5: Keywords/)).toBeInTheDocument();
+      expect(screen.getByText(/Step 3 of 6: Keywords/)).toBeInTheDocument();
 
       // Check step labels
       expect(screen.getByText('Upload')).toBeInTheDocument();
@@ -718,7 +719,7 @@ describe('Keywords Page - Integration Tests', () => {
 
       await user.click(screen.getByRole('button', { name: /Approve All/i }));
 
-      expect(mockApproveAllMutation.mutateAsync).toHaveBeenCalledWith('test-project-123');
+      expect(mockApproveAllMutation.mutateAsync).toHaveBeenCalledWith({ projectId: 'test-project-123', batch: undefined });
     });
 
     it('shows loading state during Approve All operation', () => {

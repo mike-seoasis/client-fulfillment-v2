@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useProject } from '@/hooks/use-projects';
 import { useKeywordGeneration } from '@/hooks/useKeywordGeneration';
 import { usePagesWithKeywordsData } from '@/hooks/usePagesWithKeywords';
@@ -250,7 +250,11 @@ function GenerationProgressIndicator({
 export default function KeywordsPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const projectId = params.id as string;
+  const batch = searchParams.get('batch');
+  const batchNum = batch ? parseInt(batch, 10) : undefined;
+  const batchParam = batch ? `?batch=${batch}` : '';
 
   // Toast state
   const [showToast, setShowToast] = useState(false);
@@ -262,8 +266,8 @@ export default function KeywordsPage() {
   const continueButtonRef = useRef<HTMLButtonElement>(null);
 
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
-  const keywordGen = useKeywordGeneration(projectId);
-  const { pages, isLoading: isPagesLoading, isError: isPagesError, error: pagesError, refetch: refetchPages } = usePagesWithKeywordsData(projectId);
+  const keywordGen = useKeywordGeneration(projectId, { batch: batchNum });
+  const { pages, isLoading: isPagesLoading, isError: isPagesError, error: pagesError, refetch: refetchPages } = usePagesWithKeywordsData(projectId, { batch: batchNum });
   const approveAllMutation = useApproveAllKeywords();
   const [isRetrying, setIsRetrying] = useState(false);
 
@@ -311,7 +315,7 @@ export default function KeywordsPage() {
   // Handle approve all
   const handleApproveAll = async () => {
     try {
-      const result = await approveAllMutation.mutateAsync(projectId);
+      const result = await approveAllMutation.mutateAsync({ projectId, batch: batchNum });
       setToastMessage(`${result.approved_count} keywords approved`);
       setToastVariant('success');
       setShowToast(true);
@@ -378,7 +382,7 @@ export default function KeywordsPage() {
       </nav>
 
       {/* Step indicator */}
-      <StepIndicator projectId={projectId} currentStep="keywords" completedStepKeys={['upload', 'crawl']} />
+      <StepIndicator projectId={projectId} currentStep="keywords" completedStepKeys={['upload', 'crawl']} batch={batch} />
 
       {/* Divider */}
       <hr className="border-cream-500 mb-6" />
@@ -569,7 +573,7 @@ export default function KeywordsPage() {
 
         {/* Actions */}
         <div className="flex justify-end gap-3">
-          <Link href={`/projects/${projectId}/onboarding/crawl`}>
+          <Link href={`/projects/${projectId}/onboarding/crawl${batchParam}`}>
             <Button variant="secondary">Back</Button>
           </Link>
           {(() => {
@@ -580,7 +584,7 @@ export default function KeywordsPage() {
 
             if (allApproved) {
               return (
-                <Button onClick={() => router.push(`/projects/${projectId}/onboarding/content`)}>
+                <Button onClick={() => router.push(`/projects/${projectId}/onboarding/content${batchParam}`)}>
                   Continue to Content
                 </Button>
               );

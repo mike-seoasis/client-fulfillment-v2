@@ -17,7 +17,10 @@ import {
 
 // Query keys factory
 export const pagesWithKeywordsKeys = {
-  list: (projectId: string) => ['projects', projectId, 'pages-with-keywords'] as const,
+  list: (projectId: string, batch?: number | null) =>
+    batch != null
+      ? (['projects', projectId, 'pages-with-keywords', batch] as const)
+      : (['projects', projectId, 'pages-with-keywords'] as const),
 };
 
 /**
@@ -36,11 +39,13 @@ export function usePagesWithKeywords(
     enabled?: boolean;
     staleTime?: number;
     gcTime?: number;
+    batch?: number | null;
   }
 ): UseQueryResult<PageWithKeywords[]> {
+  const batch = options?.batch;
   return useQuery({
-    queryKey: pagesWithKeywordsKeys.list(projectId),
-    queryFn: () => getPagesWithKeywords(projectId),
+    queryKey: pagesWithKeywordsKeys.list(projectId, batch),
+    queryFn: () => getPagesWithKeywords(projectId, batch),
     enabled: options?.enabled ?? !!projectId,
     staleTime: options?.staleTime ?? 30_000, // 30 seconds
     gcTime: options?.gcTime ?? 5 * 60 * 1000, // 5 minutes
@@ -51,9 +56,10 @@ export function usePagesWithKeywords(
  * Helper hook that provides pages with keywords data along with
  * convenient derived state and actions.
  */
-export function usePagesWithKeywordsData(projectId: string) {
+export function usePagesWithKeywordsData(projectId: string, options?: { batch?: number | null }) {
+  const batch = options?.batch;
   const queryClient = useQueryClient();
-  const query = usePagesWithKeywords(projectId);
+  const query = usePagesWithKeywords(projectId, { batch });
 
   return {
     // Data
@@ -66,7 +72,7 @@ export function usePagesWithKeywordsData(projectId: string) {
     refetch: query.refetch,
     invalidate: () =>
       queryClient.invalidateQueries({
-        queryKey: pagesWithKeywordsKeys.list(projectId),
+        queryKey: pagesWithKeywordsKeys.list(projectId, batch),
       }),
   };
 }

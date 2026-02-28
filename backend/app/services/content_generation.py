@@ -67,6 +67,7 @@ async def run_content_pipeline(
     project_id: str,
     force_refresh: bool = False,
     refresh_briefs: bool = False,
+    batch: int | None = None,
 ) -> PipelineResult:
     """Run the content generation pipeline for all approved pages in a project.
 
@@ -105,7 +106,7 @@ async def run_content_pipeline(
 
     # Load approved pages and brand config in a read-only session
     async with db_manager.session_factory() as session:
-        pages_data = await _load_approved_pages(session, project_id)
+        pages_data = await _load_approved_pages(session, project_id, batch=batch)
         brand_config = await _load_brand_config(session, project_id)
 
     if not pages_data:
@@ -361,6 +362,7 @@ async def _auto_link_planning(project_id: str) -> None:
 async def _load_approved_pages(
     db: AsyncSession,
     project_id: str,
+    batch: int | None = None,
 ) -> list[dict[str, Any]]:
     """Load all approved-keyword pages for a project.
 
@@ -379,6 +381,8 @@ async def _load_approved_pages(
             selectinload(CrawledPage.page_content),
         )
     )
+    if batch is not None:
+        stmt = stmt.where(CrawledPage.onboarding_batch == batch)
     result = await db.execute(stmt)
     pages = result.scalars().all()
 

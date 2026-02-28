@@ -11,6 +11,7 @@ const mockRouterPush = vi.fn();
 vi.mock('next/navigation', () => ({
   useParams: () => ({ id: 'test-project-123' }),
   useRouter: () => ({ push: mockRouterPush }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 // ============================================================================
@@ -259,7 +260,7 @@ describe('Keywords Page - Approval Flow', () => {
 
       await user.click(screen.getByRole('button', { name: /Approve All/i }));
 
-      expect(mockApproveAllMutation.mutateAsync).toHaveBeenCalledWith('test-project-123');
+      expect(mockApproveAllMutation.mutateAsync).toHaveBeenCalledWith({ projectId: 'test-project-123', batch: undefined });
     });
 
     it('shows loading state during Approve All operation', () => {

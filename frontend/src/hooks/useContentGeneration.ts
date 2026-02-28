@@ -47,11 +47,14 @@ export const contentGenerationKeys = {
  */
 export function useContentGenerationStatus(
   projectId: string,
-  options?: { enabled?: boolean }
+  options?: { enabled?: boolean; batch?: number | null }
 ): UseQueryResult<ContentGenerationStatus> {
+  const batch = options?.batch;
   return useQuery({
-    queryKey: contentGenerationKeys.status(projectId),
-    queryFn: () => pollContentGenerationStatus(projectId),
+    queryKey: batch != null
+      ? [...contentGenerationKeys.status(projectId), batch]
+      : contentGenerationKeys.status(projectId),
+    queryFn: () => pollContentGenerationStatus(projectId, batch),
     enabled: options?.enabled ?? !!projectId,
     refetchInterval: (query) => {
       const data = query.state.data as ContentGenerationStatus | undefined;
@@ -100,7 +103,7 @@ export function usePagePrompts(
 export function useTriggerContentGeneration(): UseMutationResult<
   ContentGenerationTriggerResponse,
   Error,
-  { projectId: string; forceRefresh?: boolean; refreshBriefs?: boolean }
+  { projectId: string; forceRefresh?: boolean; refreshBriefs?: boolean; batch?: number | null }
 > {
   const queryClient = useQueryClient();
 
@@ -109,11 +112,13 @@ export function useTriggerContentGeneration(): UseMutationResult<
       projectId,
       forceRefresh,
       refreshBriefs,
+      batch,
     }: {
       projectId: string;
       forceRefresh?: boolean;
       refreshBriefs?: boolean;
-    }) => triggerContentGeneration(projectId, { forceRefresh, refreshBriefs }),
+      batch?: number | null;
+    }) => triggerContentGeneration(projectId, { forceRefresh, refreshBriefs }, batch),
     onSuccess: (_data, { projectId }) => {
       queryClient.invalidateQueries({
         queryKey: contentGenerationKeys.status(projectId),
@@ -130,10 +135,11 @@ export function useTriggerContentGeneration(): UseMutationResult<
  * - Returns status, progress, isGenerating, error
  * - Exposes startGeneration function
  */
-export function useContentGeneration(projectId: string) {
+export function useContentGeneration(projectId: string, options?: { batch?: number | null }) {
+  const batch = options?.batch;
   const queryClient = useQueryClient();
 
-  const status = useContentGenerationStatus(projectId);
+  const status = useContentGenerationStatus(projectId, { batch });
   const triggerMutation = useTriggerContentGeneration();
 
   const pagesTotal = status.data?.pages_total ?? 0;
@@ -160,12 +166,12 @@ export function useContentGeneration(projectId: string) {
     isFailed: status.data?.overall_status === 'failed',
 
     // Actions
-    startGeneration: () => triggerMutation.mutate({ projectId }),
-    startGenerationAsync: () => triggerMutation.mutateAsync({ projectId }),
+    startGeneration: () => triggerMutation.mutate({ projectId, batch }),
+    startGenerationAsync: () => triggerMutation.mutateAsync({ projectId, batch }),
     regenerate: (opts?: { refreshBriefs?: boolean }) =>
-      triggerMutation.mutate({ projectId, forceRefresh: true, refreshBriefs: opts?.refreshBriefs }),
+      triggerMutation.mutate({ projectId, forceRefresh: true, refreshBriefs: opts?.refreshBriefs, batch }),
     regenerateAsync: (opts?: { refreshBriefs?: boolean }) =>
-      triggerMutation.mutateAsync({ projectId, forceRefresh: true, refreshBriefs: opts?.refreshBriefs }),
+      triggerMutation.mutateAsync({ projectId, forceRefresh: true, refreshBriefs: opts?.refreshBriefs, batch }),
     isStarting: triggerMutation.isPending,
     startError: triggerMutation.error,
 
@@ -272,13 +278,14 @@ export function useRecheckPageContent(): UseMutationResult<
 export function useBulkApproveContent(): UseMutationResult<
   ContentBulkApproveResponse,
   Error,
-  string
+  { projectId: string; batch?: number | null }
 > {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (projectId: string) => bulkApproveContent(projectId),
-    onSuccess: (_data, projectId) => {
+    mutationFn: ({ projectId, batch }: { projectId: string; batch?: number | null }) =>
+      bulkApproveContent(projectId, batch),
+    onSuccess: (_data, { projectId }) => {
       queryClient.invalidateQueries({
         queryKey: contentGenerationKeys.status(projectId),
       });

@@ -691,7 +691,7 @@ export default function ClusterContentGenerationPage() {
   // Handle bulk approve
   const handleBulkApprove = async () => {
     try {
-      const result = await bulkApproveMutation.mutateAsync(projectId);
+      const result = await bulkApproveMutation.mutateAsync({ projectId });
       setToastMessage(`Approved ${result.approved_count} page${result.approved_count === 1 ? '' : 's'}`);
       setToastVariant('success');
       setShowToast(true);
