@@ -239,7 +239,8 @@ def _build_system_prompt(
     ai_snippet = brand_config.get("ai_prompt_snippet", {})
     full_prompt = ""
     if isinstance(ai_snippet, dict):
-        full_prompt = ai_snippet.get("full_prompt", "")
+        # Use prompt_override if set, otherwise fall back to generated full_prompt
+        full_prompt = ai_snippet.get("prompt_override", "").strip() or ai_snippet.get("full_prompt", "")
 
     if content_type == "blog":
         # Extract brand identity for the role description
