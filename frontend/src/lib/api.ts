@@ -2273,3 +2273,134 @@ export function wpExport(
     title_filter: titleFilter || null,
   });
 }
+
+// =============================================================================
+// SHOPIFY INTEGRATION API TYPES
+// =============================================================================
+
+/** Shopify connection status for a project. */
+export interface ShopifyStatus {
+  connected: boolean;
+  store_domain?: string;
+  last_sync_at?: string;
+  sync_status?: string;
+  connected_at?: string;
+}
+
+/** A single Shopify page (collection, product, article, or page). */
+export interface ShopifyPage {
+  id: string;
+  shopify_id: string;
+  page_type: string;
+  title: string;
+  handle: string;
+  full_url: string;
+  status: string;
+  published_at?: string;
+  product_type?: string;
+  product_count?: number;
+  blog_name?: string;
+  tags?: string[];
+}
+
+/** Paginated response for Shopify pages. */
+export interface ShopifyPagesResponse {
+  items: ShopifyPage[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
+/** Count of pages per category type. */
+export interface ShopifyPageCounts {
+  collection: number;
+  product: number;
+  article: number;
+  page: number;
+}
+
+// =============================================================================
+// SHOPIFY INTEGRATION API FUNCTIONS
+// =============================================================================
+
+/** Get Shopify connection status for a project. */
+export function getShopifyStatus(
+  projectId: string
+): Promise<ShopifyStatus> {
+  return apiClient.get<ShopifyStatus>(
+    `/projects/${projectId}/shopify/status`
+  );
+}
+
+/** Get paginated Shopify pages for a project, filtered by type. */
+export function getShopifyPages(
+  projectId: string,
+  params: { type: string; page?: number; per_page?: number; search?: string }
+): Promise<ShopifyPagesResponse> {
+  const searchParams = new URLSearchParams({ type: params.type });
+  if (params.page) searchParams.set("page", String(params.page));
+  if (params.per_page) searchParams.set("per_page", String(params.per_page));
+  if (params.search) searchParams.set("search", params.search);
+  return apiClient.get<ShopifyPagesResponse>(
+    `/projects/${projectId}/shopify/pages?${searchParams.toString()}`
+  );
+}
+
+/** Get page counts per category for a project. */
+export function getShopifyPageCounts(
+  projectId: string
+): Promise<ShopifyPageCounts> {
+  return apiClient.get<ShopifyPageCounts>(
+    `/projects/${projectId}/shopify/pages/counts`
+  );
+}
+
+/** Trigger an immediate Shopify sync for a project. */
+export function triggerShopifySync(
+  projectId: string
+): Promise<{ status: string }> {
+  return apiClient.post<{ status: string }>(
+    `/projects/${projectId}/shopify/sync`
+  );
+}
+
+/** Disconnect Shopify from a project. */
+export function disconnectShopify(
+  projectId: string
+): Promise<void> {
+  return apiClient.delete<void>(
+    `/projects/${projectId}/shopify`
+  );
+}
+
+// --- Page deletion ---
+
+/** Delete a single crawled page. */
+export function deleteCrawledPage(
+  projectId: string,
+  pageId: string
+): Promise<void> {
+  return apiClient.delete<void>(
+    `/projects/${projectId}/pages/${pageId}`
+  );
+}
+
+/** Bulk-delete crawled pages (uses POST because apiClient.delete doesn't pass body). */
+export function deleteCrawledPagesBulk(
+  projectId: string,
+  pageIds: string[]
+): Promise<{ deleted_count: number }> {
+  return apiClient.post<{ deleted_count: number }>(
+    `/projects/${projectId}/pages/bulk-delete`,
+    { page_ids: pageIds }
+  );
+}
+
+/** Reset onboarding — deletes all onboarding-sourced pages. */
+export function resetOnboarding(
+  projectId: string
+): Promise<{ deleted_count: number }> {
+  return apiClient.post<{ deleted_count: number }>(
+    `/projects/${projectId}/onboarding/reset`
+  );
+}

@@ -214,3 +214,19 @@ class TaxonomyResponse(BaseModel):
         ..., description="Array of taxonomy labels with definitions"
     )
     generated_at: datetime = Field(..., description="When the taxonomy was generated")
+
+
+class BulkDeleteRequest(BaseModel):
+    """Request schema for bulk-deleting crawled pages."""
+
+    page_ids: list[str] = Field(
+        ...,
+        min_length=1,
+        description="List of page UUIDs to delete",
+    )
+
+
+class BulkDeleteResponse(BaseModel):
+    """Response schema for bulk delete and onboarding reset endpoints."""
+
+    deleted_count: int = Field(..., ge=0, description="Number of pages deleted")

@@ -8,16 +8,8 @@ import { useProject } from '@/hooks/use-projects';
 import { Button, Toast } from '@/components/ui';
 import { apiClient, ApiError } from '@/lib/api';
 import { LabelEditDropdown } from '@/components/onboarding/LabelEditDropdown';
-
-// Step indicator data - shared across onboarding pages
-const ONBOARDING_STEPS = [
-  { key: 'upload', label: 'Upload' },
-  { key: 'crawl', label: 'Crawl' },
-  { key: 'keywords', label: 'Keywords' },
-  { key: 'content', label: 'Content' },
-  { key: 'links', label: 'Links' },
-  { key: 'export', label: 'Export' },
-] as const;
+import { StepIndicator, BackArrowIcon, CheckIcon, SpinnerIcon } from '@/components/onboarding/StepIndicator';
+import { useDeletePage, useDeletePagesBulk } from '@/hooks/usePageDeletion';
 
 // Types matching backend CrawlStatusResponse
 interface PageSummary {
@@ -56,55 +48,6 @@ interface TaxonomyLabel {
 interface TaxonomyResponse {
   labels: TaxonomyLabel[];
   generated_at: string;
-}
-
-function BackArrowIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M19 12H5M12 19l-7-7 7-7" />
-    </svg>
-  );
-}
-
-function CheckIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
-}
-
-function SpinnerIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="10" opacity="0.25" />
-      <path d="M12 2a10 10 0 0 1 10 10" className="animate-spin origin-center" />
-    </svg>
-  );
 }
 
 function RetryIcon({ className }: { className?: string }) {
@@ -157,54 +100,20 @@ function PencilIcon({ className }: { className?: string }) {
   );
 }
 
-function StepIndicator({ currentStep }: { currentStep: string }) {
-  const currentIndex = ONBOARDING_STEPS.findIndex((s) => s.key === currentStep);
-
+function TrashIcon({ className }: { className?: string }) {
   return (
-    <div className="mb-8">
-      <p className="text-sm text-warm-gray-600 mb-3">
-        Step {currentIndex + 1} of {ONBOARDING_STEPS.length}: {ONBOARDING_STEPS[currentIndex].label}
-      </p>
-      <div className="flex items-center gap-1">
-        {ONBOARDING_STEPS.map((step, index) => (
-          <div key={step.key} className="flex items-center">
-            {/* Step circle */}
-            <div
-              className={`w-3 h-3 rounded-full ${
-                index < currentIndex
-                  ? 'bg-palm-500'
-                  : index === currentIndex
-                  ? 'bg-palm-500'
-                  : 'bg-cream-300'
-              }`}
-            />
-            {/* Connector line */}
-            {index < ONBOARDING_STEPS.length - 1 && (
-              <div
-                className={`w-12 h-0.5 ${
-                  index < currentIndex ? 'bg-palm-500' : 'bg-cream-300'
-                }`}
-              />
-            )}
-          </div>
-        ))}
-      </div>
-      <div className="flex mt-1">
-        {ONBOARDING_STEPS.map((step, index) => (
-          <div
-            key={step.key}
-            className={`text-xs ${
-              index === 0 ? 'text-left' : index === ONBOARDING_STEPS.length - 1 ? 'text-right' : 'text-center'
-            } ${
-              index <= currentIndex ? 'text-palm-700' : 'text-warm-gray-400'
-            }`}
-            style={{ width: index === ONBOARDING_STEPS.length - 1 ? 'auto' : '60px' }}
-          >
-            {step.label}
-          </div>
-        ))}
-      </div>
-    </div>
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </svg>
   );
 }
 
@@ -387,6 +296,12 @@ interface PageListItemProps {
   onCloseEditLabels?: () => void;
   onSaveLabels?: (labels: string[]) => Promise<void>;
   isSavingLabels?: boolean;
+  /** Whether to show selection/deletion controls (only when crawl is complete) */
+  showDeletion?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (pageId: string) => void;
+  onDelete?: (pageId: string) => void;
+  isDeleting?: boolean;
 }
 
 function PageListItem({
@@ -399,6 +314,11 @@ function PageListItem({
   onCloseEditLabels,
   onSaveLabels,
   isSavingLabels,
+  showDeletion,
+  isSelected,
+  onToggleSelect,
+  onDelete,
+  isDeleting,
 }: PageListItemProps) {
   // Extract path from URL for display
   const displayUrl = (() => {
@@ -419,6 +339,17 @@ function PageListItem({
   return (
     <div className="py-3 border-b border-cream-200 last:border-b-0">
       <div className="flex items-start gap-3">
+        {/* Selection checkbox (only when crawl is complete) */}
+        {showDeletion && (
+          <label className="flex-shrink-0 mt-1 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => onToggleSelect?.(page.id)}
+              className="w-4 h-4 rounded-sm border-warm-gray-300 text-palm-500 focus:ring-palm-400"
+            />
+          </label>
+        )}
         <div className="flex-shrink-0 mt-0.5">
           <PageStatusIcon status={page.status} />
         </div>
@@ -442,6 +373,17 @@ function PageListItem({
                     <RetryIcon className="w-3 h-3" />
                   )}
                   {isRetrying ? 'Retrying...' : 'Retry'}
+                </button>
+              )}
+              {/* Individual delete button */}
+              {showDeletion && onDelete && (
+                <button
+                  onClick={() => onDelete(page.id)}
+                  disabled={isDeleting}
+                  className="p-1 text-warm-gray-400 hover:text-coral-500 rounded-sm transition-colors disabled:opacity-50"
+                  title="Delete page"
+                >
+                  <TrashIcon className="w-4 h-4" />
                 </button>
               )}
             </div>
@@ -628,6 +570,14 @@ export default function CrawlProgressPage() {
   const [toastMessage, setToastMessage] = useState('');
   const [toastVariant, setToastVariant] = useState<'success' | 'error'>('success');
 
+  // Page selection for bulk operations
+  const [selectedPages, setSelectedPages] = useState<Set<string>>(new Set());
+  const [confirmingBulkDelete, setConfirmingBulkDelete] = useState(false);
+  const [deletingPageId, setDeletingPageId] = useState<string | null>(null);
+
+  const deletePage = useDeletePage(projectId);
+  const deletePagesBulk = useDeletePagesBulk(projectId);
+
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
 
   // Poll crawl status every 2 seconds while crawling
@@ -742,6 +692,78 @@ export default function CrawlProgressPage() {
     }
   };
 
+  // Selection handlers
+  const handleToggleSelect = (pageId: string) => {
+    setSelectedPages((prev) => {
+      const next = new Set(prev);
+      if (next.has(pageId)) {
+        next.delete(pageId);
+      } else {
+        next.add(pageId);
+      }
+      return next;
+    });
+    setConfirmingBulkDelete(false);
+  };
+
+  const handleSelectAll = (pages: PageSummary[]) => {
+    setSelectedPages(new Set(pages.map((p) => p.id)));
+    setConfirmingBulkDelete(false);
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedPages(new Set());
+    setConfirmingBulkDelete(false);
+  };
+
+  // Individual page delete
+  const handleDeletePage = async (pageId: string) => {
+    setDeletingPageId(pageId);
+    try {
+      await deletePage.mutateAsync(pageId);
+      setSelectedPages((prev) => {
+        const next = new Set(prev);
+        next.delete(pageId);
+        return next;
+      });
+      setToastMessage('Page deleted');
+      setToastVariant('success');
+      setShowToast(true);
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setToastMessage(message);
+      setToastVariant('error');
+      setShowToast(true);
+    } finally {
+      setDeletingPageId(null);
+    }
+  };
+
+  // Bulk delete with 2-step confirmation
+  const handleBulkDelete = async () => {
+    if (!confirmingBulkDelete) {
+      setConfirmingBulkDelete(true);
+      // Auto-reset after 3 seconds
+      setTimeout(() => setConfirmingBulkDelete(false), 3000);
+      return;
+    }
+
+    try {
+      const result = await deletePagesBulk.mutateAsync(Array.from(selectedPages));
+      setSelectedPages(new Set());
+      setConfirmingBulkDelete(false);
+      setToastMessage(`Deleted ${result.deleted_count} ${result.deleted_count === 1 ? 'page' : 'pages'}`);
+      setToastVariant('success');
+      setShowToast(true);
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setToastMessage(message);
+      setToastVariant('error');
+      setShowToast(true);
+      setConfirmingBulkDelete(false);
+    }
+  };
+
   // Loading state
   if (isLoading) {
     return (
@@ -796,7 +818,7 @@ export default function CrawlProgressPage() {
       </nav>
 
       {/* Step indicator */}
-      <StepIndicator currentStep="crawl" />
+      <StepIndicator projectId={projectId} currentStep="crawl" completedStepKeys={['upload']} />
 
       {/* Divider */}
       <hr className="border-cream-500 mb-6" />
@@ -859,6 +881,44 @@ export default function CrawlProgressPage() {
           </div>
         )}
 
+        {/* Selection toolbar (only when crawl is complete and pages exist) */}
+        {isComplete && pages.length > 0 && (
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-sm text-warm-gray-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedPages.size === pages.length && pages.length > 0}
+                  ref={(el) => {
+                    if (el) el.indeterminate = selectedPages.size > 0 && selectedPages.size < pages.length;
+                  }}
+                  onChange={() =>
+                    selectedPages.size === pages.length ? handleDeselectAll() : handleSelectAll(pages)
+                  }
+                  className="w-4 h-4 rounded-sm border-warm-gray-300 text-palm-500 focus:ring-palm-400"
+                />
+                {selectedPages.size > 0
+                  ? `${selectedPages.size} selected`
+                  : 'Select all'}
+              </label>
+            </div>
+            {selectedPages.size > 0 && (
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={handleBulkDelete}
+                disabled={deletePagesBulk.isPending}
+              >
+                {deletePagesBulk.isPending
+                  ? 'Deleting...'
+                  : confirmingBulkDelete
+                  ? `Confirm Delete (${selectedPages.size})`
+                  : `Delete Selected (${selectedPages.size})`}
+              </Button>
+            )}
+          </div>
+        )}
+
         {/* Pages list */}
         <div className="border border-cream-300 rounded-sm overflow-hidden">
           <div className="max-h-80 overflow-y-auto px-4">
@@ -874,6 +934,11 @@ export default function CrawlProgressPage() {
                 onCloseEditLabels={handleCloseEditLabels}
                 onSaveLabels={(labels) => handleSaveLabels(page.id, labels)}
                 isSavingLabels={savingLabels}
+                showDeletion={isComplete}
+                isSelected={selectedPages.has(page.id)}
+                onToggleSelect={handleToggleSelect}
+                onDelete={handleDeletePage}
+                isDeleting={deletingPageId === page.id}
               />
             ))}
             {pages.length === 0 && (

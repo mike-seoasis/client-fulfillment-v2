@@ -9,17 +9,8 @@ import { useContentGeneration, useBulkApproveContent } from '@/hooks/useContentG
 import { Button, Toast } from '@/components/ui';
 import { PromptInspector } from '@/components/PromptInspector';
 import { usePlanLinks, usePlanStatus } from '@/hooks/useLinks';
+import { StepIndicator, BackArrowIcon, CheckIcon, SpinnerIcon } from '@/components/onboarding/StepIndicator';
 import type { PageGenerationStatusItem } from '@/lib/api';
-
-// Step indicator data - shared across onboarding pages
-const ONBOARDING_STEPS = [
-  { key: 'upload', label: 'Upload' },
-  { key: 'crawl', label: 'Crawl' },
-  { key: 'keywords', label: 'Keywords' },
-  { key: 'content', label: 'Content' },
-  { key: 'links', label: 'Links' },
-  { key: 'export', label: 'Export' },
-] as const;
 
 // Pipeline step definitions for status indicator
 const PIPELINE_STEPS = [
@@ -70,55 +61,6 @@ function getStatusLabel(status: string): string {
   }
 }
 
-function BackArrowIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M19 12H5M12 19l-7-7 7-7" />
-    </svg>
-  );
-}
-
-function CheckIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
-}
-
-function SpinnerIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="10" opacity="0.25" />
-      <path d="M12 2a10 10 0 0 1 10 10" className="animate-spin origin-center" />
-    </svg>
-  );
-}
-
 function XCircleIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -134,55 +76,6 @@ function XCircleIcon({ className }: { className?: string }) {
       <line x1="15" y1="9" x2="9" y2="15" />
       <line x1="9" y1="9" x2="15" y2="15" />
     </svg>
-  );
-}
-
-function StepIndicator({ currentStep }: { currentStep: string }) {
-  const currentIndex = ONBOARDING_STEPS.findIndex((s) => s.key === currentStep);
-
-  return (
-    <div className="mb-8">
-      <p className="text-sm text-warm-gray-600 mb-3">
-        Step {currentIndex + 1} of {ONBOARDING_STEPS.length}: {ONBOARDING_STEPS[currentIndex].label}
-      </p>
-      <div className="flex items-center gap-1">
-        {ONBOARDING_STEPS.map((step, index) => (
-          <div key={step.key} className="flex items-center">
-            <div
-              className={`w-3 h-3 rounded-full ${
-                index < currentIndex
-                  ? 'bg-palm-500'
-                  : index === currentIndex
-                  ? 'bg-palm-500'
-                  : 'bg-cream-300'
-              }`}
-            />
-            {index < ONBOARDING_STEPS.length - 1 && (
-              <div
-                className={`w-12 h-0.5 ${
-                  index < currentIndex ? 'bg-palm-500' : 'bg-cream-300'
-                }`}
-              />
-            )}
-          </div>
-        ))}
-      </div>
-      <div className="flex mt-1">
-        {ONBOARDING_STEPS.map((step, index) => (
-          <div
-            key={step.key}
-            className={`text-xs ${
-              index === 0 ? 'text-left' : index === ONBOARDING_STEPS.length - 1 ? 'text-right' : 'text-center'
-            } ${
-              index <= currentIndex ? 'text-palm-700' : 'text-warm-gray-400'
-            }`}
-            style={{ width: index === ONBOARDING_STEPS.length - 1 ? 'auto' : '60px' }}
-          >
-            {step.label}
-          </div>
-        ))}
-      </div>
-    </div>
   );
 }
 
@@ -804,7 +697,7 @@ export default function ContentGenerationPage() {
       </nav>
 
       {/* Step indicator */}
-      <StepIndicator currentStep="content" />
+      <StepIndicator projectId={projectId} currentStep="content" completedStepKeys={['upload', 'crawl', 'keywords']} />
 
       {/* Divider */}
       <hr className="border-cream-500 mb-6" />

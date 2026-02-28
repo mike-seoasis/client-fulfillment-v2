@@ -7,7 +7,7 @@ from datetime import datetime
 from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.attributes import flag_modified
@@ -20,6 +20,8 @@ from app.models.crawled_page import CrawledPage, CrawlStatus
 from app.models.page_keywords import PageKeywords
 from app.models.project import Project
 from app.schemas.crawled_page import (
+    BulkDeleteRequest,
+    BulkDeleteResponse,
     CrawledPageResponse,
     CrawlStatusResponse,
     PageLabelsUpdate,
@@ -1910,3 +1912,140 @@ async def export_csv(
             "Content-Disposition": f'attachment; filename="{filename}"',
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Page deletion endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.delete(
+    "/{project_id}/pages/{page_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_page(
+    project_id: str,
+    page_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> None:
+    """Delete a single crawled page.
+
+    Verifies the page belongs to the given project before deleting.
+    Cascade rules on the CrawledPage model will remove related records.
+
+    Args:
+        project_id: UUID of the project.
+        page_id: UUID of the page to delete.
+
+    Raises:
+        HTTPException: 404 if project or page not found.
+    """
+    # Verify project exists
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Project {project_id} not found",
+        )
+
+    # Fetch the page and verify it belongs to this project
+    page = await db.get(CrawledPage, page_id)
+    if not page or page.project_id != project_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Page {page_id} not found in project {project_id}",
+        )
+
+    await db.delete(page)
+    await db.commit()
+
+
+@router.post(
+    "/{project_id}/pages/bulk-delete",
+    response_model=BulkDeleteResponse,
+)
+async def bulk_delete_pages(
+    project_id: str,
+    data: BulkDeleteRequest,
+    db: AsyncSession = Depends(get_session),
+) -> BulkDeleteResponse:
+    """Bulk-delete crawled pages by ID.
+
+    Deletes all pages whose IDs are in the request body *and* belong to the
+    specified project.  Pages that don't exist or belong to a different
+    project are silently ignored.
+
+    Uses POST instead of DELETE so the frontend apiClient can pass a body.
+
+    Args:
+        project_id: UUID of the project.
+        data: Request body with list of page IDs to delete.
+
+    Returns:
+        Number of pages actually deleted.
+
+    Raises:
+        HTTPException: 404 if project not found.
+    """
+    # Verify project exists
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Project {project_id} not found",
+        )
+
+    stmt = (
+        delete(CrawledPage)
+        .where(
+            CrawledPage.project_id == project_id,
+            CrawledPage.id.in_(data.page_ids),
+        )
+    )
+    result = await db.execute(stmt)
+    await db.commit()
+
+    return BulkDeleteResponse(deleted_count=result.rowcount)
+
+
+@router.post(
+    "/{project_id}/onboarding/reset",
+    response_model=BulkDeleteResponse,
+)
+async def reset_onboarding_pages(
+    project_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> BulkDeleteResponse:
+    """Reset onboarding by deleting all onboarding-sourced pages.
+
+    Removes every CrawledPage for the project where ``source == 'onboarding'``.
+    This allows the user to re-run the onboarding crawl from scratch.
+
+    Args:
+        project_id: UUID of the project.
+
+    Returns:
+        Number of pages deleted.
+
+    Raises:
+        HTTPException: 404 if project not found.
+    """
+    # Verify project exists
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Project {project_id} not found",
+        )
+
+    stmt = (
+        delete(CrawledPage)
+        .where(
+            CrawledPage.project_id == project_id,
+            CrawledPage.source == "onboarding",
+        )
+    )
+    result = await db.execute(stmt)
+    await db.commit()
+
+    return BulkDeleteResponse(deleted_count=result.rowcount)

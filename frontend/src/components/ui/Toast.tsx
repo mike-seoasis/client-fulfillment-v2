@@ -1,85 +1,97 @@
-'use client';
+/**
+ * Toast notification component for user feedback.
+ *
+ * Fixed-position toast that auto-dismisses after 4 seconds.
+ * Matches the tropical oasis design system (palm/coral/sand palette).
+ */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react'
+import { X, CheckCircle, XCircle } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
-type ToastVariant = 'success' | 'error' | 'info';
+export type ToastVariant = 'success' | 'error'
 
-interface ToastProps {
-  message: string;
-  variant?: ToastVariant;
-  duration?: number;
-  onClose: () => void;
+export interface ToastProps {
+  message: string
+  variant?: ToastVariant
+  onClose: () => void
+  /** Auto-dismiss duration in ms (default 4000, 0 = never) */
+  duration?: number
+  className?: string
 }
 
-const variantClasses: Record<ToastVariant, string> = {
-  success: 'bg-green-50 border-green-200 text-green-800',
-  error: 'bg-coral-50 border-coral-200 text-coral-700',
-  info: 'bg-cream-50 border-cream-200 text-warm-gray-800',
-};
+const variantStyles: Record<ToastVariant, { bg: string; icon: typeof CheckCircle; iconClass: string; ringClass: string }> = {
+  success: {
+    bg: 'bg-palm-50 border-palm-200 text-palm-800',
+    icon: CheckCircle,
+    iconClass: 'text-palm-500',
+    ringClass: 'focus:ring-palm-400',
+  },
+  error: {
+    bg: 'bg-coral-50 border-coral-200 text-coral-800',
+    icon: XCircle,
+    iconClass: 'text-coral-500',
+    ringClass: 'focus:ring-coral-400',
+  },
+}
 
-const iconPaths: Record<ToastVariant, string> = {
-  success: 'M5 13l4 4L19 7',
-  error: 'M6 18L18 6M6 6l12 12',
-  info: 'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
-};
+export function Toast({
+  message,
+  variant = 'success',
+  onClose,
+  duration = 4000,
+  className,
+}: ToastProps) {
+  const [isExiting, setIsExiting] = useState(false)
 
-function Toast({ message, variant = 'success', duration = 3000, onClose }: ToastProps) {
-  const [isVisible, setIsVisible] = useState(true);
+  const { bg, icon: Icon, iconClass, ringClass } = variantStyles[variant]
+
+  const handleDismiss = () => {
+    setIsExiting(true)
+    setTimeout(onClose, 200)
+  }
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsVisible(false);
-      setTimeout(onClose, 150); // Wait for fade out animation
-    }, duration);
+    if (duration === 0) return
 
-    return () => clearTimeout(timer);
-  }, [duration, onClose]);
+    const timer = setTimeout(handleDismiss, duration)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [duration])
 
   return (
     <div
-      className={`
-        fixed bottom-4 right-4 z-50
-        flex items-center gap-3 px-4 py-3 rounded-sm border shadow-lg
-        transition-opacity duration-150
-        ${variantClasses[variant]}
-        ${isVisible ? 'opacity-100' : 'opacity-0'}
-      `}
-      role="alert"
+      className={cn(
+        'fixed top-4 right-4 z-50 pointer-events-auto',
+        isExiting ? 'opacity-0 translate-x-2' : 'opacity-100 translate-x-0',
+        'transition-all duration-200',
+      )}
     >
-      <svg
-        className="w-5 h-5"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+      <div
+        role="alert"
+        aria-live="assertive"
+        aria-atomic="true"
+        className={cn(
+          'flex items-start gap-3 w-full max-w-sm rounded-sm p-4 shadow-lg border',
+          bg,
+          className,
+        )}
       >
-        <path d={iconPaths[variant]} />
-      </svg>
-      <span className="text-sm font-medium">{message}</span>
-      <button
-        onClick={() => {
-          setIsVisible(false);
-          setTimeout(onClose, 150);
-        }}
-        className="ml-2 hover:opacity-70"
-        aria-label="Close"
-      >
-        <svg
-          className="w-4 h-4"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+        <Icon className={cn('w-5 h-5 mt-0.5 shrink-0', iconClass)} aria-hidden="true" />
+        <p className="flex-1 min-w-0 text-sm font-medium">{message}</p>
+        <button
+          type="button"
+          onClick={handleDismiss}
+          className={cn(
+            'shrink-0 p-1 rounded-sm transition-colors',
+            'hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-offset-1',
+            ringClass,
+          )}
+          aria-label="Dismiss notification"
         >
-          <path d="M18 6L6 18M6 6l12 12" />
-        </svg>
-      </button>
+          <X className="w-4 h-4" aria-hidden="true" />
+        </button>
+      </div>
     </div>
-  );
+  )
 }
-
-export { Toast, type ToastProps, type ToastVariant };

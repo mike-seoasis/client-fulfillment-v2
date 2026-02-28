@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { Suspense, useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useProject, useDeleteProject } from '@/hooks/use-projects';
 import { useStartBrandConfigGeneration, useBrandConfigGeneration } from '@/hooks/useBrandConfigGeneration';
 import { useCrawlStatus, getOnboardingStep } from '@/hooks/use-crawl-status';
@@ -11,6 +11,8 @@ import { useBlogCampaigns } from '@/hooks/useBlogs';
 import { useLinkMap, usePlanStatus } from '@/hooks/useLinks';
 import { useRedditConfig, useUpsertRedditConfig } from '@/hooks/useReddit';
 import { Button, ButtonLink, Toast } from '@/components/ui';
+import { PagesTab } from '@/components/PagesTab';
+import { useResetOnboarding } from '@/hooks/usePageDeletion';
 
 function LoadingSkeleton() {
   return (
@@ -489,9 +491,28 @@ function BlogCampaignCard({
 }
 
 export default function ProjectDetailPage() {
+  return (
+    <Suspense fallback={<LoadingSkeleton />}>
+      <ProjectDetailContent />
+    </Suspense>
+  );
+}
+
+function ProjectDetailContent() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const projectId = params.id as string;
+
+  // Tab state from URL
+  const activeTab = searchParams.get('tab') || 'tools';
+
+  const setActiveTab = useCallback((tab: string) => {
+    const url = tab === 'tools'
+      ? `/projects/${projectId}`
+      : `/projects/${projectId}?tab=${tab}`;
+    router.replace(url, { scroll: false });
+  }, [router, projectId]);
 
   const { data: project, isLoading, error } = useProject(projectId);
   const deleteProject = useDeleteProject();
@@ -525,6 +546,11 @@ export default function ProjectDetailPage() {
   const { data: onboardingPlanStatus } = usePlanStatus(projectId, 'onboarding', undefined, true);
   const isOnboardingLinkPlanning = onboardingPlanStatus?.status === 'planning';
 
+  // Onboarding reset
+  const resetOnboarding = useResetOnboarding(projectId);
+  const [isConfirmingReset, setIsConfirmingReset] = useState(false);
+  const resetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Two-step delete confirmation
   const [isConfirming, setIsConfirming] = useState(false);
   const [showToast, setShowToast] = useState(false);
@@ -553,6 +579,33 @@ export default function ProjectDetailPage() {
       setIsConfirming(false);
     }
   }, []);
+
+  // Onboarding reset: 2-step confirmation
+  useEffect(() => {
+    if (isConfirmingReset) {
+      resetTimeoutRef.current = setTimeout(() => setIsConfirmingReset(false), 3000);
+    }
+    return () => {
+      if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
+    };
+  }, [isConfirmingReset]);
+
+  const handleResetOnboarding = async () => {
+    if (!isConfirmingReset) {
+      setIsConfirmingReset(true);
+      return;
+    }
+    try {
+      const result = await resetOnboarding.mutateAsync();
+      setIsConfirmingReset(false);
+      setToastMessage(`Reset onboarding — removed ${result.deleted_count} pages`);
+      setShowToast(true);
+    } catch {
+      setIsConfirmingReset(false);
+      setToastMessage('Failed to reset onboarding');
+      setShowToast(true);
+    }
+  };
 
   const handleDeleteClick = async () => {
     if (!isConfirming) {
@@ -738,10 +791,34 @@ export default function ProjectDetailPage() {
         />
       )}
 
-      {/* Divider */}
-      <hr className="border-cream-500 mb-8" />
+      {/* Tab bar */}
+      <div className="flex border-b border-cream-300 mb-8">
+        <button
+          onClick={() => setActiveTab('tools')}
+          className={`px-4 py-2 text-sm transition-colors ${
+            activeTab === 'tools'
+              ? 'border-b-2 border-palm-500 font-semibold text-warm-gray-900'
+              : 'text-warm-gray-400 hover:text-warm-gray-600'
+          }`}
+        >
+          Tools
+        </button>
+        <button
+          onClick={() => setActiveTab('pages')}
+          className={`px-4 py-2 text-sm transition-colors ${
+            activeTab === 'pages'
+              ? 'border-b-2 border-palm-500 font-semibold text-warm-gray-900'
+              : 'text-warm-gray-400 hover:text-warm-gray-600'
+          }`}
+        >
+          Pages
+        </button>
+      </div>
 
-      {/* Sections */}
+      {/* Tab content */}
+      {activeTab === 'pages' ? (
+        <PagesTab projectId={projectId} />
+      ) : (
       <div className="space-y-6">
         {/* Onboarding section */}
         <div className="bg-white rounded-sm border border-cream-500 p-6 shadow-sm">
@@ -850,18 +927,33 @@ export default function ProjectDetailPage() {
             </p>
           )}
 
-          {/* Action button */}
-          <ButtonLink
-            href={
-              onboardingProgress.currentStep === 'upload'
-                ? `/projects/${projectId}/onboarding/upload`
-                : onboardingProgress.currentStep === 'crawl'
-                ? `/projects/${projectId}/onboarding/crawl`
-                : `/projects/${projectId}/onboarding/keywords`
-            }
-          >
-            {onboardingProgress.hasStarted ? 'Continue Onboarding' : 'Start Onboarding'}
-          </ButtonLink>
+          {/* Action buttons */}
+          <div className="flex items-center gap-3">
+            <ButtonLink
+              href={
+                onboardingProgress.currentStep === 'upload'
+                  ? `/projects/${projectId}/onboarding/upload`
+                  : onboardingProgress.currentStep === 'crawl'
+                  ? `/projects/${projectId}/onboarding/crawl`
+                  : `/projects/${projectId}/onboarding/keywords`
+              }
+            >
+              {onboardingProgress.hasStarted ? 'Continue Onboarding' : 'Start Onboarding'}
+            </ButtonLink>
+            {onboardingProgress.hasStarted && (
+              <Button
+                variant="secondary"
+                onClick={handleResetOnboarding}
+                disabled={resetOnboarding.isPending}
+              >
+                {resetOnboarding.isPending
+                  ? 'Resetting...'
+                  : isConfirmingReset
+                  ? 'Confirm Reset'
+                  : 'Reset Onboarding'}
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* New Content section */}
@@ -989,6 +1081,7 @@ export default function ProjectDetailPage() {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }
