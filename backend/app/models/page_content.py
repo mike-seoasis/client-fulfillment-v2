@@ -110,6 +110,22 @@ class PageContent(Base):
         nullable=True,
     )
 
+    outline_json: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
+
+    outline_status: Mapped[str | None] = mapped_column(
+        String(30),
+        nullable=True,
+        index=True,
+    )
+
+    google_doc_url: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
     is_approved: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,

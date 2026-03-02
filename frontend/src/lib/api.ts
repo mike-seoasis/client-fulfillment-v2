@@ -368,6 +368,7 @@ export interface PageGenerationStatusItem {
   qa_passed: boolean | null;
   qa_issue_count: number;
   is_approved: boolean;
+  outline_status: string | null;
 }
 
 /** Overall content generation pipeline status for a project. */
@@ -407,6 +408,11 @@ export interface ContentBulkApproveResponse {
   approved_count: number;
 }
 
+/** Request to update an outline draft. */
+export interface OutlineUpdateRequest {
+  outline_json: any;
+}
+
 /** Generated content for a single page. */
 export interface PageContentResponse {
   page_title: string | null;
@@ -422,6 +428,9 @@ export interface PageContentResponse {
   brief: ContentBriefData | null;
   generation_started_at: string | null;
   generation_completed_at: string | null;
+  outline_json: any | null;
+  outline_status: string | null;
+  google_doc_url: string | null;
 }
 
 /** A prompt/response exchange record. */
@@ -448,12 +457,13 @@ export interface PromptLogResponse {
  */
 export function triggerContentGeneration(
   projectId: string,
-  options?: { forceRefresh?: boolean; refreshBriefs?: boolean },
+  options?: { forceRefresh?: boolean; refreshBriefs?: boolean; outlineFirst?: boolean },
   batch?: number | null
 ): Promise<ContentGenerationTriggerResponse> {
   const searchParams = new URLSearchParams();
   if (options?.forceRefresh) searchParams.set('force_refresh', 'true');
   if (options?.refreshBriefs) searchParams.set('refresh_briefs', 'true');
+  if (options?.outlineFirst) searchParams.set('outline_first', 'true');
   if (batch != null) searchParams.set('batch', String(batch));
   const qs = searchParams.toString();
   return apiClient.post<ContentGenerationTriggerResponse>(
@@ -556,6 +566,48 @@ export function bulkApproveContent(
   const qs = batch != null ? `?batch=${batch}` : '';
   return apiClient.post<ContentBulkApproveResponse>(
     `/projects/${projectId}/bulk-approve-content${qs}`
+  );
+}
+
+// =============================================================================
+// OUTLINE WORKFLOW API FUNCTIONS
+// =============================================================================
+
+/**
+ * Update an outline draft for a specific page.
+ */
+export function updateOutline(
+  projectId: string,
+  pageId: string,
+  data: OutlineUpdateRequest
+): Promise<PageContentResponse> {
+  return apiClient.put<PageContentResponse>(
+    `/projects/${projectId}/pages/${pageId}/outline`,
+    data
+  );
+}
+
+/**
+ * Approve an outline for a specific page, moving it to 'approved' status.
+ */
+export function approveOutline(
+  projectId: string,
+  pageId: string
+): Promise<PageContentResponse> {
+  return apiClient.post<PageContentResponse>(
+    `/projects/${projectId}/pages/${pageId}/approve-outline`
+  );
+}
+
+/**
+ * Generate full content from an approved outline for a specific page.
+ */
+export function generateFromOutline(
+  projectId: string,
+  pageId: string
+): Promise<ContentGenerationTriggerResponse> {
+  return apiClient.post<ContentGenerationTriggerResponse>(
+    `/projects/${projectId}/pages/${pageId}/generate-from-outline`
   );
 }
 

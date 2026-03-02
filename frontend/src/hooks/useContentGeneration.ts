@@ -23,6 +23,9 @@ import {
   approvePageContent,
   recheckPageContent,
   bulkApproveContent,
+  updateOutline,
+  approveOutline,
+  generateFromOutline,
   type ContentGenerationTriggerResponse,
   type ContentGenerationStatus,
   type PageContentResponse,
@@ -103,7 +106,7 @@ export function usePagePrompts(
 export function useTriggerContentGeneration(): UseMutationResult<
   ContentGenerationTriggerResponse,
   Error,
-  { projectId: string; forceRefresh?: boolean; refreshBriefs?: boolean; batch?: number | null }
+  { projectId: string; forceRefresh?: boolean; refreshBriefs?: boolean; outlineFirst?: boolean; batch?: number | null }
 > {
   const queryClient = useQueryClient();
 
@@ -112,13 +115,15 @@ export function useTriggerContentGeneration(): UseMutationResult<
       projectId,
       forceRefresh,
       refreshBriefs,
+      outlineFirst,
       batch,
     }: {
       projectId: string;
       forceRefresh?: boolean;
       refreshBriefs?: boolean;
+      outlineFirst?: boolean;
       batch?: number | null;
-    }) => triggerContentGeneration(projectId, { forceRefresh, refreshBriefs }, batch),
+    }) => triggerContentGeneration(projectId, { forceRefresh, refreshBriefs, outlineFirst }, batch),
     onSuccess: (_data, { projectId }) => {
       queryClient.invalidateQueries({
         queryKey: contentGenerationKeys.status(projectId),
@@ -288,6 +293,99 @@ export function useBulkApproveContent(): UseMutationResult<
     onSuccess: (_data, { projectId }) => {
       queryClient.invalidateQueries({
         queryKey: contentGenerationKeys.status(projectId),
+      });
+    },
+  });
+}
+
+// =============================================================================
+// OUTLINE WORKFLOW MUTATION HOOKS
+// =============================================================================
+
+/**
+ * Mutation hook to update an outline draft.
+ * Invalidates the page content query on success.
+ */
+export function useUpdateOutline(): UseMutationResult<
+  PageContentResponse,
+  Error,
+  { projectId: string; pageId: string; outlineJson: any }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      pageId,
+      outlineJson,
+    }: {
+      projectId: string;
+      pageId: string;
+      outlineJson: any;
+    }) => updateOutline(projectId, pageId, { outline_json: outlineJson }),
+    onSuccess: (_data, { projectId, pageId }) => {
+      queryClient.invalidateQueries({
+        queryKey: contentGenerationKeys.pageContent(projectId, pageId),
+      });
+    },
+  });
+}
+
+/**
+ * Mutation hook to approve an outline.
+ * Invalidates both the page content and generation status queries on success.
+ */
+export function useApproveOutline(): UseMutationResult<
+  PageContentResponse,
+  Error,
+  { projectId: string; pageId: string }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      pageId,
+    }: {
+      projectId: string;
+      pageId: string;
+    }) => approveOutline(projectId, pageId),
+    onSuccess: (_data, { projectId, pageId }) => {
+      queryClient.invalidateQueries({
+        queryKey: contentGenerationKeys.pageContent(projectId, pageId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: contentGenerationKeys.status(projectId),
+      });
+    },
+  });
+}
+
+/**
+ * Mutation hook to generate full content from an approved outline.
+ * Invalidates the generation status query on success.
+ */
+export function useGenerateFromOutline(): UseMutationResult<
+  ContentGenerationTriggerResponse,
+  Error,
+  { projectId: string; pageId: string }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      pageId,
+    }: {
+      projectId: string;
+      pageId: string;
+    }) => generateFromOutline(projectId, pageId),
+    onSuccess: (_data, { projectId, pageId }) => {
+      queryClient.invalidateQueries({
+        queryKey: contentGenerationKeys.status(projectId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: contentGenerationKeys.pageContent(projectId, pageId),
       });
     },
   });

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useProject } from '@/hooks/use-projects';
-import { useContentGeneration, useBulkApproveContent } from '@/hooks/useContentGeneration';
+import { useContentGeneration, useBulkApproveContent, useGenerateFromOutline, useTriggerContentGeneration } from '@/hooks/useContentGeneration';
 import { Button, Toast } from '@/components/ui';
 import { PromptInspector } from '@/components/PromptInspector';
 import { usePlanLinks, usePlanStatus } from '@/hooks/useLinks';
@@ -18,6 +18,15 @@ const PIPELINE_STEPS = [
   { key: 'write', label: 'Write' },
   { key: 'check', label: 'Check' },
   { key: 'links', label: 'Links' },
+  { key: 'done', label: 'Done' },
+] as const;
+
+const OUTLINE_PIPELINE_STEPS = [
+  { key: 'brief', label: 'Brief' },
+  { key: 'outline', label: 'Outline' },
+  { key: 'review', label: 'Review' },
+  { key: 'write', label: 'Write' },
+  { key: 'check', label: 'Check' },
   { key: 'done', label: 'Done' },
 ] as const;
 
@@ -126,12 +135,86 @@ function NotFoundState() {
   );
 }
 
-/** Pipeline step indicator showing Brief → Write → Check → Links → Done */
-function PipelineIndicator({ status, linkPlanningStatus }: { status: string; linkPlanningStatus?: string }) {
+/** Pipeline step indicator showing Brief → Write → Check → Links → Done (or outline variant) */
+function PipelineIndicator({ status, linkPlanningStatus, outlineStatus }: { status: string; linkPlanningStatus?: string; outlineStatus?: string | null }) {
   const contentStep = getContentStep(status);
   const isFailed = status === 'failed';
   const isPageComplete = status === 'complete';
+  const hasOutline = !!outlineStatus;
 
+  // Use outline pipeline when an outline_status exists
+  if (hasOutline) {
+    // Outline pipeline: Brief → Outline → Review → Write → Check → Done
+    const steps = OUTLINE_PIPELINE_STEPS;
+
+    return (
+      <div className="flex items-center gap-1">
+        {steps.map((step, index) => {
+          let isComplete = false;
+          let isCurrent = false;
+
+          if (isPageComplete) {
+            // Everything is complete
+            isComplete = true;
+          } else if (index === 0) {
+            // Brief — always complete once outline exists
+            isComplete = true;
+          } else if (index === 1) {
+            // Outline — complete once draft or approved
+            isComplete = outlineStatus === 'draft' || outlineStatus === 'approved';
+            isCurrent = outlineStatus === 'generating';
+          } else if (index === 2) {
+            // Review — complete once approved
+            isComplete = outlineStatus === 'approved';
+            isCurrent = outlineStatus === 'draft';
+          } else if (index === 3) {
+            // Write — maps to content 'writing' status
+            isComplete = contentStep > 1;
+            isCurrent = status === 'writing' && outlineStatus === 'approved';
+          } else if (index === 4) {
+            // Check — maps to content 'checking' status
+            isComplete = contentStep > 2;
+            isCurrent = status === 'checking';
+          } else if (index === 5) {
+            // Done
+            isComplete = isPageComplete;
+          }
+
+          let dotClass = 'bg-cream-300';
+          let labelClass = 'text-warm-gray-400';
+
+          if (isFailed && contentStep > index) {
+            dotClass = 'bg-palm-500';
+            labelClass = 'text-palm-700';
+          } else if (isComplete) {
+            dotClass = 'bg-palm-500';
+            labelClass = 'text-palm-700';
+          } else if (isCurrent) {
+            dotClass = 'bg-lagoon-500 animate-pulse';
+            labelClass = 'text-lagoon-700 font-medium';
+          }
+
+          return (
+            <div key={step.key} className="flex items-center">
+              <div className="flex flex-col items-center">
+                <div className={`w-2.5 h-2.5 rounded-full ${dotClass}`} />
+                <span className={`text-[10px] mt-0.5 ${labelClass}`}>{step.label}</span>
+              </div>
+              {index < steps.length - 1 && (
+                <div
+                  className={`w-8 h-0.5 mb-3 mx-0.5 ${
+                    isComplete ? 'bg-palm-400' : 'bg-cream-300'
+                  }`}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // Standard pipeline: Brief → Write → Check → Links → Done
   return (
     <div className="flex items-center gap-1">
       {PIPELINE_STEPS.map((step, index) => {
@@ -232,12 +315,16 @@ function PageRow({
   isGenerating,
   linkPlanningStatus,
   onInspect,
+  onGenerateFromOutline,
+  isGeneratingFromOutline,
 }: {
   page: PageGenerationStatusItem;
   projectId: string;
   isGenerating: boolean;
   linkPlanningStatus?: string;
   onInspect: (pageId: string, pageUrl: string) => void;
+  onGenerateFromOutline?: (pageId: string) => void;
+  isGeneratingFromOutline?: boolean;
 }) {
   // Extract path from URL for compact display
   const displayUrl = (() => {
@@ -251,6 +338,9 @@ function PageRow({
 
   const isFailed = page.status === 'failed';
   const isComplete = page.status === 'complete';
+  const isActivelyWriting = page.status === 'writing' || page.status === 'checking';
+  const hasOutlineDraft = page.outline_status === 'draft';
+  const hasOutlineApproved = page.outline_status === 'approved' && !isComplete && !isActivelyWriting;
 
   return (
     <div className={`px-4 py-3 ${isFailed ? 'bg-coral-50/50' : ''}`}>
@@ -267,10 +357,15 @@ function PageRow({
             <span className={`text-xs ${
               isFailed ? 'text-coral-600' :
               isComplete ? 'text-palm-600' :
+              hasOutlineDraft ? 'text-lagoon-600' :
+              hasOutlineApproved ? 'text-palm-600' :
               page.status === 'pending' && !isGenerating ? 'text-warm-gray-500' :
               'text-lagoon-600'
             }`}>
-              {getStatusLabel(page.status)}
+              {hasOutlineDraft ? 'Outline ready for review' :
+               hasOutlineApproved ? 'Outline approved — ready to write' :
+               page.outline_status === 'generating' ? 'Generating outline...' :
+               getStatusLabel(page.status)}
             </span>
             {isFailed && page.error && (
               <span className="text-xs text-coral-500 truncate max-w-xs" title={page.error}>
@@ -282,9 +377,39 @@ function PageRow({
 
         {/* Right side: pipeline indicator + actions */}
         <div className="flex items-center gap-3 shrink-0">
-          <PipelineIndicator status={page.status} linkPlanningStatus={linkPlanningStatus} />
+          <PipelineIndicator status={page.status} linkPlanningStatus={linkPlanningStatus} outlineStatus={page.outline_status} />
           <div className="flex items-center gap-1">
-            {isComplete && (
+            {/* Outline draft: show "Edit Outline" link */}
+            {hasOutlineDraft && (
+              <Link
+                href={`/projects/${projectId}/onboarding/content/${page.page_id}`}
+                className="inline-flex items-center gap-1 text-xs font-medium text-lagoon-600 hover:text-lagoon-700 px-2 py-1 rounded-sm hover:bg-cream-100 transition-colors"
+                title="Edit outline"
+              >
+                <EyeIcon className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Edit Outline</span>
+              </Link>
+            )}
+            {/* Outline approved but not yet written: show "Generate Copy" button */}
+            {hasOutlineApproved && onGenerateFromOutline && (
+              <button
+                type="button"
+                onClick={() => onGenerateFromOutline(page.page_id)}
+                disabled={isGeneratingFromOutline}
+                className="inline-flex items-center gap-1 text-xs font-medium text-white bg-palm-500 hover:bg-palm-600 px-2.5 py-1 rounded-sm transition-colors disabled:opacity-50"
+              >
+                {isGeneratingFromOutline ? (
+                  <>
+                    <SpinnerIcon className="w-3.5 h-3.5 animate-spin" />
+                    <span className="hidden sm:inline">Generating...</span>
+                  </>
+                ) : (
+                  <span className="hidden sm:inline">Generate Copy</span>
+                )}
+              </button>
+            )}
+            {/* Standard complete: show "View" link */}
+            {isComplete && !hasOutlineDraft && (
               <Link
                 href={`/projects/${projectId}/onboarding/content/${page.page_id}`}
                 className="inline-flex items-center gap-1 text-xs text-warm-gray-500 hover:text-palm-600 px-2 py-1 rounded-sm hover:bg-cream-100 transition-colors"
@@ -511,6 +636,11 @@ export default function ContentGenerationPage() {
   // Regeneration options
   const [refreshBriefs, setRefreshBriefs] = useState(false);
 
+  // Outline-first mode
+  const [outlineFirst, setOutlineFirst] = useState(false);
+  const generateFromOutlineMutation = useGenerateFromOutline();
+  const [generatingOutlinePageId, setGeneratingOutlinePageId] = useState<string | null>(null);
+
   // Prompt inspector state
   const [inspectPageId, setInspectPageId] = useState<string | null>(null);
   const [inspectPageUrl, setInspectPageUrl] = useState('');
@@ -523,6 +653,7 @@ export default function ContentGenerationPage() {
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
   const contentGen = useContentGeneration(projectId, { batch: batchNum });
   const bulkApproveMutation = useBulkApproveContent();
+  const triggerMutation = useTriggerContentGeneration();
 
   // Link planning — auto-trigger when content gen completes
   const queryClient = useQueryClient();
@@ -553,6 +684,7 @@ export default function ContentGenerationPage() {
   const isComplete = !isGenerating && onboardingPagesTotal > 0 && onboardingPagesCompleted + onboardingPagesFailed >= onboardingPagesTotal && onboardingPagesFailed === 0;
   const isFailed = !isGenerating && onboardingPagesTotal > 0 && onboardingPagesFailed > 0 && onboardingPagesCompleted + onboardingPagesFailed >= onboardingPagesTotal;
   const isPartial = !isGenerating && !isIdle && !isComplete && !isFailed && hasPages;
+  const hasAnyOutlines = onboardingPages.some((p) => p.outline_status === 'draft' || p.outline_status === 'approved');
 
   const isLinkPlanning = linkStatus?.status === 'planning' || planLinksMutation.isPending;
 
@@ -587,17 +719,40 @@ export default function ContentGenerationPage() {
 
   // Handle trigger generation
   const handleGenerate = async () => {
-    shouldPlanLinksRef.current = true;
+    shouldPlanLinksRef.current = !outlineFirst; // Don't auto-plan links for outline mode
     try {
-      await contentGen.startGenerationAsync();
-      setToastMessage('Content generation started');
+      if (outlineFirst) {
+        await triggerMutation.mutateAsync({ projectId, outlineFirst: true, batch: batchNum });
+        setToastMessage('Outline generation started');
+      } else {
+        await contentGen.startGenerationAsync();
+        setToastMessage('Content generation started');
+      }
       setToastVariant('success');
       setShowToast(true);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to start content generation';
+      const message = error instanceof Error ? error.message : 'Failed to start generation';
       setToastMessage(message);
       setToastVariant('error');
       setShowToast(true);
+    }
+  };
+
+  // Handle generate full copy from approved outline (per-page)
+  const handleGenerateFromOutline = async (pageId: string) => {
+    setGeneratingOutlinePageId(pageId);
+    try {
+      await generateFromOutlineMutation.mutateAsync({ projectId, pageId });
+      setToastMessage('Content generation started from outline');
+      setToastVariant('success');
+      setShowToast(true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to generate from outline';
+      setToastMessage(message);
+      setToastVariant('error');
+      setShowToast(true);
+    } finally {
+      setGeneratingOutlinePageId(null);
     }
   };
 
@@ -724,21 +879,34 @@ export default function ContentGenerationPage() {
 
           {/* Generate / Retry buttons */}
           {(isIdle || isPartial) && hasPages && (
-            <Button
-              onClick={handleGenerate}
-              disabled={contentGen.isStarting}
-            >
-              {contentGen.isStarting ? (
-                <>
-                  <SpinnerIcon className="w-4 h-4 mr-1.5 animate-spin" />
-                  Starting...
-                </>
-              ) : isPartial ? (
-                'Continue Generation'
-              ) : (
-                'Generate Content'
-              )}
-            </Button>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-1.5 text-xs text-warm-gray-500 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={outlineFirst}
+                  onChange={(e) => setOutlineFirst(e.target.checked)}
+                  className="rounded-sm border-sand-500 text-palm-500 focus:ring-palm-400"
+                />
+                Generate Outline First
+              </label>
+              <Button
+                onClick={handleGenerate}
+                disabled={contentGen.isStarting || triggerMutation.isPending}
+              >
+                {contentGen.isStarting || triggerMutation.isPending ? (
+                  <>
+                    <SpinnerIcon className="w-4 h-4 mr-1.5 animate-spin" />
+                    Starting...
+                  </>
+                ) : isPartial ? (
+                  'Continue Generation'
+                ) : outlineFirst ? (
+                  'Generate Outlines'
+                ) : (
+                  'Generate Content'
+                )}
+              </Button>
+            </div>
           )}
           {isFailed && failedPages.length > 0 && (
             <div className="flex items-center gap-3">
@@ -932,7 +1100,7 @@ export default function ContentGenerationPage() {
         )}
 
         {/* Pages table - generation progress view */}
-        {hasPages && (isGenerating || isIdle || isPartial) && (
+        {hasPages && (isGenerating || isIdle || isPartial || hasAnyOutlines) && (
           <div className="border border-cream-500 rounded-sm overflow-hidden">
             <div className="max-h-[28rem] overflow-y-auto divide-y divide-cream-300">
               {onboardingPages.map((page) => (
@@ -943,6 +1111,8 @@ export default function ContentGenerationPage() {
                   isGenerating={isGenerating}
                   linkPlanningStatus={linkStatus?.status}
                   onInspect={handleInspect}
+                  onGenerateFromOutline={handleGenerateFromOutline}
+                  isGeneratingFromOutline={generatingOutlinePageId === page.page_id}
                 />
               ))}
             </div>
