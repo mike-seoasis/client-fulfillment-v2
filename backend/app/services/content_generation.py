@@ -349,7 +349,8 @@ async def run_generate_from_outline(
                 },
             )
 
-        # Check if link planning should run
+        # Check if link planning should run — only count pages with actual
+        # generated content (not outline-only pages)
         async with db_manager.session_factory() as db2:
             complete_count_stmt = (
                 select(func.count())
@@ -358,6 +359,8 @@ async def run_generate_from_outline(
                 .where(
                     CrawledPage.project_id == project_id,
                     PageContent.status == ContentStatus.COMPLETE.value,
+                    PageContent.outline_status.is_(None),
+                    PageContent.bottom_description.isnot(None),
                 )
             )
             count_result = await db2.execute(complete_count_stmt)
