@@ -40,6 +40,12 @@ dependencies = [
     "boto3>=1.34.0",
     # HTML parsing for content extraction
     "beautifulsoup4>=4.12.0",
+    # Shopify integration
+    "cryptography>=42.0.0",
+    "rapidfuzz>=3.6.0",
+    # Google Docs/Sheets/Drive (service account auth)
+    "google-api-python-client>=2.100",
+    "google-auth>=2.20",
 ]
 
 [dependency-groups]
@@ -162,6 +168,12 @@ module = [
     "botocore.*",
     "bs4",
     "bs4.*",
+    "googleapiclient",
+    "googleapiclient.*",
+    "google.oauth2",
+    "google.oauth2.*",
+    "google.auth",
+    "google.auth.*",
 ]
 ignore_missing_imports = true
 

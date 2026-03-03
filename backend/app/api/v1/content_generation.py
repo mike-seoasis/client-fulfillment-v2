@@ -27,6 +27,7 @@ from app.schemas.content_generation import (
     ContentGenerationStatus,
     ContentGenerationTriggerResponse,
     ContentUpdateRequest,
+    ExportOutlineResponse,
     OutlineUpdateRequest,
     PageContentResponse,
     PageGenerationStatusItem,
@@ -901,6 +902,88 @@ async def approve_outline(
     )
 
     return _build_page_content_response(page)
+
+
+@router.post(
+    "/{project_id}/pages/{page_id}/export-outline",
+    response_model=ExportOutlineResponse,
+)
+async def export_outline(
+    project_id: str,
+    page_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> ExportOutlineResponse:
+    """Export a page outline to a formatted Google Doc.
+
+    Creates a Google Doc in the shared Drive folder, populates it with
+    the formatted outline, shares it (anyone with link), and logs a row
+    in the per-project tracking spreadsheet.
+
+    Idempotent: if a Google Doc URL already exists for this page, returns
+    the existing URL without re-exporting.
+
+    Returns 400 if no outline_json exists on the page content.
+    Returns 404 if page or content not found.
+    """
+    from app.services.outline_export import export_outline_to_google
+
+    project = await ProjectService.get_project(db, project_id)
+
+    stmt = (
+        select(CrawledPage)
+        .where(
+            CrawledPage.id == page_id,
+            CrawledPage.project_id == project_id,
+        )
+        .options(
+            selectinload(CrawledPage.page_content),
+            selectinload(CrawledPage.keywords),
+        )
+    )
+    result = await db.execute(stmt)
+    page = result.scalar_one_or_none()
+
+    if not page:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Page {page_id} not found in project {project_id}",
+        )
+
+    if not page.page_content:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Content has not been generated yet for this page",
+        )
+
+    content = page.page_content
+
+    if not content.outline_json:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No outline exists for this page. Generate an outline first.",
+        )
+
+    # Idempotent: return existing doc if already exported
+    if content.google_doc_url:
+        return ExportOutlineResponse(google_doc_url=content.google_doc_url)
+
+    keyword = page.keywords.primary_keyword if page.keywords else ""
+
+    export_result = await export_outline_to_google(
+        db=db,
+        project_name=project.name,
+        crawled_page=page,
+        page_content=content,
+        keyword=keyword,
+    )
+
+    if not export_result.success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=export_result.error or "Failed to export outline to Google Doc",
+        )
+
+    return ExportOutlineResponse(google_doc_url=export_result.google_doc_url)  # type: ignore[arg-type]
 
 
 @router.post(

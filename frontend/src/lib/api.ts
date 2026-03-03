@@ -413,6 +413,11 @@ export interface OutlineUpdateRequest {
   outline_json: any;
 }
 
+/** Response from exporting an outline to Google Doc. */
+export interface ExportOutlineResponse {
+  google_doc_url: string;
+}
+
 /** Generated content for a single page. */
 export interface PageContentResponse {
   page_title: string | null;
@@ -608,6 +613,21 @@ export function generateFromOutline(
 ): Promise<ContentGenerationTriggerResponse> {
   return apiClient.post<ContentGenerationTriggerResponse>(
     `/projects/${projectId}/pages/${pageId}/generate-from-outline`
+  );
+}
+
+/**
+ * Export an outline to a formatted Google Doc.
+ * Idempotent — returns existing doc URL if already exported.
+ */
+export function exportOutline(
+  projectId: string,
+  pageId: string
+): Promise<ExportOutlineResponse> {
+  return apiClient.post<ExportOutlineResponse>(
+    `/projects/${projectId}/pages/${pageId}/export-outline`,
+    undefined,
+    { timeout: 30_000 }
   );
 }
 

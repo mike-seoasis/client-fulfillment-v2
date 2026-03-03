@@ -26,12 +26,14 @@ import {
   updateOutline,
   approveOutline,
   generateFromOutline,
+  exportOutline,
   type ContentGenerationTriggerResponse,
   type ContentGenerationStatus,
   type PageContentResponse,
   type PromptLogResponse,
   type ContentUpdateRequest,
   type ContentBulkApproveResponse,
+  type ExportOutlineResponse,
 } from '@/lib/api';
 
 // Query keys factory
@@ -384,6 +386,33 @@ export function useGenerateFromOutline(): UseMutationResult<
       queryClient.invalidateQueries({
         queryKey: contentGenerationKeys.status(projectId),
       });
+      queryClient.invalidateQueries({
+        queryKey: contentGenerationKeys.pageContent(projectId, pageId),
+      });
+    },
+  });
+}
+
+/**
+ * Mutation hook to export an outline to a Google Doc.
+ * Invalidates the page content query on success so the UI sees google_doc_url.
+ */
+export function useExportOutline(): UseMutationResult<
+  ExportOutlineResponse,
+  Error,
+  { projectId: string; pageId: string }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      pageId,
+    }: {
+      projectId: string;
+      pageId: string;
+    }) => exportOutline(projectId, pageId),
+    onSuccess: (_data, { projectId, pageId }) => {
       queryClient.invalidateQueries({
         queryKey: contentGenerationKeys.pageContent(projectId, pageId),
       });

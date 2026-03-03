@@ -471,6 +471,38 @@ class Settings(BaseSettings):
         description="Seconds before polling for task ID after create",
     )
 
+    # Shopify Integration
+    shopify_api_key: str | None = Field(
+        default=None,
+        description="Shopify app API key (client ID)",
+    )
+    shopify_api_secret: str | None = Field(
+        default=None,
+        description="Shopify app API secret (client secret)",
+    )
+    shopify_token_encryption_key: str | None = Field(
+        default=None,
+        description="Fernet key for encrypting Shopify access tokens at rest",
+    )
+    shopify_redirect_uri: str | None = Field(
+        default=None,
+        description="Explicit OAuth callback URL (overrides constructed URL)",
+    )
+    backend_url: str | None = Field(
+        default=None,
+        description="Backend base URL (used to construct OAuth redirect if shopify_redirect_uri not set)",
+    )
+
+    # Google Docs/Sheets Export (service account)
+    google_service_account_path: str = Field(
+        default="google-service-account.json",
+        description="Path to Google service account JSON credentials file",
+    )
+    google_drive_folder_id: str = Field(
+        default="1YpHVMtbd9Tmexc6eCsINSKw2zwpIgpoR",
+        description="Google Drive folder ID for exported docs",
+    )
+
     # S3/Object Storage
     s3_bucket: str | None = Field(
         default=None,

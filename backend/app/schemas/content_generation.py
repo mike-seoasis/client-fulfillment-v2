@@ -40,6 +40,12 @@ class OutlineUpdateRequest(BaseModel):
     outline_json: dict[str, Any] = Field(..., description="Updated outline JSON")
 
 
+class ExportOutlineResponse(BaseModel):
+    """Response when an outline is exported to a Google Doc."""
+
+    google_doc_url: str = Field(..., description="URL of the created Google Doc")
+
+
 # =============================================================================
 # BULK APPROVE RESPONSE
 # =============================================================================
