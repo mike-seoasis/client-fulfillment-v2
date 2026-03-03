@@ -666,12 +666,15 @@ function OutlineEditor({
   }, [projectId, pageId, outline, isDirty, updateOutlineMutation, approveOutlineMutation]);
 
   // Generate full copy
+  const [generateError, setGenerateError] = useState<string | null>(null);
   const handleGenerateFullCopy = useCallback(async () => {
+    setGenerateError(null);
     try {
       await generateFromOutlineMutation.mutateAsync({ projectId, pageId });
       router.push(`/projects/${projectId}/onboarding/content`);
-    } catch {
-      // Error handled by mutation
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to start content generation';
+      setGenerateError(msg);
     }
   }, [projectId, pageId, generateFromOutlineMutation, router]);
 
@@ -1087,24 +1090,29 @@ function OutlineEditor({
 
             {/* Generate Full Copy (only when approved) */}
             {isApproved && (
-              <button
-                type="button"
-                onClick={handleGenerateFullCopy}
-                disabled={generateFromOutlineMutation.isPending}
-                className="px-5 py-2 text-sm font-semibold text-white bg-palm-500 hover:bg-palm-600 rounded-sm transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2"
-              >
-                {generateFromOutlineMutation.isPending ? (
-                  <>
-                    <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    Generating...
-                  </>
-                ) : (
-                  'Generate Full Copy'
+              <>
+                <button
+                  type="button"
+                  onClick={handleGenerateFullCopy}
+                  disabled={generateFromOutlineMutation.isPending}
+                  className="px-5 py-2 text-sm font-semibold text-white bg-palm-500 hover:bg-palm-600 rounded-sm transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2"
+                >
+                  {generateFromOutlineMutation.isPending ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Generating...
+                    </>
+                  ) : (
+                    'Generate Full Copy'
+                  )}
+                </button>
+                {generateError && (
+                  <p className="text-sm text-coral-600">{generateError}</p>
                 )}
-              </button>
+              </>
             )}
           </div>
         </div>

@@ -275,6 +275,51 @@ def format_outline_doc(
         )
 
 
+def clear_google_doc(doc_id: str) -> None:
+    """Delete all content from an existing Google Doc so it can be re-populated.
+
+    Reads the current document length, then deletes everything between
+    index 1 and the end (index 0 is the implicit start-of-body marker).
+    """
+    docs = _docs_service()
+    doc = docs.documents().get(documentId=doc_id).execute()
+    body = doc.get("body", {})
+    content = body.get("content", [])
+    if not content:
+        return
+
+    # The last element's endIndex is the total doc length
+    end_index = content[-1].get("endIndex", 1)
+    if end_index <= 1:
+        return  # Already empty
+
+    # Delete from index 1 to end_index - 1 (must leave the trailing newline)
+    docs.documents().batchUpdate(
+        documentId=doc_id,
+        body={
+            "requests": [
+                {
+                    "deleteContentRange": {
+                        "range": {
+                            "startIndex": 1,
+                            "endIndex": end_index - 1,
+                        }
+                    }
+                }
+            ]
+        },
+    ).execute()
+    logger.info("Cleared Google Doc content", extra={"doc_id": doc_id})
+
+
+def extract_doc_id_from_url(url: str) -> str | None:
+    """Extract the Google Doc ID from a URL like https://docs.google.com/document/d/{id}/edit."""
+    import re
+
+    match = re.search(r"/document/d/([a-zA-Z0-9_-]+)", url)
+    return match.group(1) if match else None
+
+
 def share_doc(doc_id: str, role: str = "reader", share_type: str = "anyone") -> None:
     """Make a doc viewable by anyone with the link."""
     drive = _drive_service()

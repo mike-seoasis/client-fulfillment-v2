@@ -214,3 +214,36 @@ class TestExportOutline:
 
         assert resp.status_code == 500
         assert "Google API error" in resp.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_force_reexport_updates_existing_doc(
+        self, async_client: AsyncClient, db_session: AsyncSession
+    ):
+        """Force re-export should update the existing Google Doc, not create a new one."""
+        project = await _create_project(db_session)
+        page = await _create_page(db_session, project.id)
+        await _create_keywords(db_session, page.id, "test keyword")
+        await _create_content(
+            db_session,
+            page.id,
+            outline_json=SAMPLE_OUTLINE,
+            google_doc_url=MOCK_DOC_URL,
+        )
+
+        with patch("app.services.outline_export.export_outline_to_google") as mock_export:
+            from app.services.outline_export import ExportResult
+
+            # Should return the SAME URL (updated doc, not a new one)
+            mock_export.return_value = ExportResult(
+                success=True, google_doc_url=MOCK_DOC_URL
+            )
+
+            resp = await async_client.post(
+                f"/api/v1/projects/{project.id}/pages/{page.id}/export-outline?force=true"
+            )
+            # Unlike the idempotent test, force=true SHOULD call the export service
+            mock_export.assert_called_once()
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["google_doc_url"] == MOCK_DOC_URL

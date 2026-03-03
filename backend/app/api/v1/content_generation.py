@@ -1043,6 +1043,7 @@ async def generate_from_outline(
         )
 
     _active_outline_generations.add(page_id)
+    _active_generations.add(project_id)
 
     background_tasks.add_task(
         _run_generate_from_outline_background,
@@ -1090,6 +1091,7 @@ async def _run_generate_from_outline_background(
         )
     finally:
         _active_outline_generations.discard(page_id)
+        _active_generations.discard(project_id)
 
 
 def _build_page_content_response(page: CrawledPage) -> PageContentResponse:

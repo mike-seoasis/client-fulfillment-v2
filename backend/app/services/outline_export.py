@@ -18,7 +18,9 @@ from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.integrations.google_docs import (
     append_sheet_row,
+    clear_google_doc,
     create_google_doc,
+    extract_doc_id_from_url,
     find_or_create_sheet,
     format_outline_doc,
     share_doc,
@@ -69,30 +71,44 @@ async def export_outline_to_google(
     doc_title = f"{project_name} — {page_name} Outline"
 
     try:
-        # 1. Create the Google Doc
-        doc_id, doc_url = create_google_doc(doc_title, folder_id)
+        # Check if we can update an existing doc (re-export)
+        existing_doc_id = (
+            extract_doc_id_from_url(page_content.google_doc_url)
+            if page_content.google_doc_url
+            else None
+        )
 
-        # 2. Populate with formatted outline
-        format_outline_doc(doc_id, outline, project_name)
+        if existing_doc_id:
+            # Re-export: clear existing doc and re-populate
+            doc_id = existing_doc_id
+            doc_url = page_content.google_doc_url  # type: ignore[assignment]
+            clear_google_doc(doc_id)
+            format_outline_doc(doc_id, outline, project_name)
+            logger.info(
+                "Re-exported outline to existing Google Doc",
+                extra={"doc_id": doc_id, "page_id": crawled_page.id},
+            )
+        else:
+            # First export: create new doc
+            doc_id, doc_url = create_google_doc(doc_title, folder_id)
+            format_outline_doc(doc_id, outline, project_name)
+            share_doc(doc_id)
+            page_content.google_doc_url = doc_url
 
-        # 3. Share — anyone with link can view
-        share_doc(doc_id)
-
-        # 4. Find or create the tracking sheet, append a row
+        # Log to tracking sheet
         sheet_id, _sheet_url = find_or_create_sheet(project_name, folder_id)
+        action = "re-exported" if existing_doc_id else page_content.outline_status or "draft"
         append_sheet_row(
             sheet_id,
             [
                 crawled_page.normalized_url,
                 keyword,
-                page_content.outline_status or "draft",
+                action,
                 doc_url,
                 datetime.now(UTC).strftime("%Y-%m-%d %H:%M"),
             ],
         )
 
-        # 5. Save the doc URL on the content record
-        page_content.google_doc_url = doc_url
         await db.commit()
         await db.refresh(page_content)
 
