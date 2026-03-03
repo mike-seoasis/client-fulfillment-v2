@@ -74,7 +74,11 @@ def create_google_doc(title: str, folder_id: str) -> tuple[str, str]:
         "mimeType": "application/vnd.google-apps.document",
         "parents": [folder_id],
     }
-    file = drive.files().create(body=file_metadata, fields="id,webViewLink").execute()
+    file = drive.files().create(
+        body=file_metadata,
+        fields="id,webViewLink",
+        supportsAllDrives=True,
+    ).execute()
     doc_id: str = file["id"]
     doc_url: str = file["webViewLink"]
     logger.info("Created Google Doc", extra={"doc_id": doc_id, "title": title})
@@ -263,6 +267,7 @@ def share_doc(doc_id: str, role: str = "reader", share_type: str = "anyone") -> 
         fileId=doc_id,
         body={"role": role, "type": share_type},
         fields="id",
+        supportsAllDrives=True,
     ).execute()
     logger.info("Shared Google Doc", extra={"doc_id": doc_id, "role": role})
 
@@ -293,7 +298,12 @@ def find_or_create_sheet(
         f"and mimeType = 'application/vnd.google-apps.spreadsheet' "
         f"and trashed = false"
     )
-    results = drive.files().list(q=query, fields="files(id,webViewLink)").execute()
+    results = drive.files().list(
+        q=query,
+        fields="files(id,webViewLink)",
+        includeItemsFromAllDrives=True,
+        supportsAllDrives=True,
+    ).execute()
     files = results.get("files", [])
 
     if files:
@@ -308,7 +318,11 @@ def find_or_create_sheet(
         "mimeType": "application/vnd.google-apps.spreadsheet",
         "parents": [folder_id],
     }
-    file = drive.files().create(body=file_metadata, fields="id,webViewLink").execute()
+    file = drive.files().create(
+        body=file_metadata,
+        fields="id,webViewLink",
+        supportsAllDrives=True,
+    ).execute()
     sheet_id = file["id"]
     sheet_url = file["webViewLink"]
 
@@ -345,7 +359,7 @@ def find_or_create_sheet(
         },
     ).execute()
 
-    logger.info("Created tracker sheet", extra={"sheet_id": sheet_id, "name": sheet_name})
+    logger.info("Created tracker sheet", extra={"sheet_id": sheet_id, "sheet_name": sheet_name})
     return sheet_id, sheet_url
 
 
