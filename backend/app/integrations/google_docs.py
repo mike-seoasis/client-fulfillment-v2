@@ -92,32 +92,47 @@ def format_outline_doc(
 ) -> None:
     """Populate a Google Doc with a formatted outline using batchUpdate.
 
-    Expected outline_json structure:
-    {
-      "page_name": "...",
-      "audience": "...",
-      "sections": [
-        {
-          "headline": "...",
-          "purpose": "...",
-          "key_points": ["...", ...],
-          "client_notes": "..." (optional)
-        },
-        ...
-      ],
-      "keywords": ["...", ...],
-      "people_also_ask": ["...", ...],
-      "competitors": ["...", ...]
-    }
+    Supports the actual outline_json structure produced by the generation
+    pipeline, with fallbacks for alternate key names:
+    - section_details (or sections): list of section objects
+    - keyword_reference.keyword_variations / keyword_reference.lsi_terms
+    - secondary_keywords (or keywords): flat keyword list
+    - people_also_ask: PAA questions
+    - top_ranked_results (or competitors): competitor pages
     """
     docs = _docs_service()
 
     page_name = outline_json.get("page_name", "Untitled")
     audience = outline_json.get("audience", "")
-    sections = outline_json.get("sections", [])
-    keywords = outline_json.get("keywords", [])
+    # Support both "section_details" (actual) and "sections" (legacy)
+    sections = outline_json.get("section_details") or outline_json.get("sections", [])
     paa = outline_json.get("people_also_ask", [])
-    competitors = outline_json.get("competitors", [])
+
+    # Build keyword list from keyword_reference or flat "keywords" field
+    keyword_ref = outline_json.get("keyword_reference", {})
+    keywords: list[str] = []
+    primary_kw = outline_json.get("primary_keyword")
+    if primary_kw:
+        keywords.append(primary_kw)
+    keywords.extend(outline_json.get("secondary_keywords", []))
+    for var in keyword_ref.get("keyword_variations", []):
+        v = var.get("variation", var) if isinstance(var, dict) else var
+        if v and v not in keywords:
+            keywords.append(v)
+    # Fallback to flat "keywords" list
+    if not keywords:
+        keywords = outline_json.get("keywords", [])
+
+    # Build competitor list from top_ranked_results or flat "competitors"
+    raw_competitors = outline_json.get("top_ranked_results") or outline_json.get("competitors", [])
+    competitors: list[str] = []
+    for c in raw_competitors:
+        if isinstance(c, dict):
+            url = c.get("url", "")
+            title = c.get("title", "")
+            competitors.append(f"{title} — {url}" if title else url)
+        else:
+            competitors.append(str(c))
 
     # Build requests list — insert from bottom up (index 1 = after title)
     # We'll build a list of text segments, then reverse them since
