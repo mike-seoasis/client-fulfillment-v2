@@ -619,13 +619,16 @@ export function generateFromOutline(
 /**
  * Export an outline to a formatted Google Doc.
  * Idempotent — returns existing doc URL if already exported.
+ * Pass force=true to re-export (creates a new doc).
  */
 export function exportOutline(
   projectId: string,
-  pageId: string
+  pageId: string,
+  options?: { force?: boolean }
 ): Promise<ExportOutlineResponse> {
+  const qs = options?.force ? '?force=true' : '';
   return apiClient.post<ExportOutlineResponse>(
-    `/projects/${projectId}/pages/${pageId}/export-outline`,
+    `/projects/${projectId}/pages/${pageId}/export-outline${qs}`,
     undefined,
     { timeout: 30_000 }
   );

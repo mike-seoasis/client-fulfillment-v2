@@ -400,7 +400,7 @@ export function useGenerateFromOutline(): UseMutationResult<
 export function useExportOutline(): UseMutationResult<
   ExportOutlineResponse,
   Error,
-  { projectId: string; pageId: string }
+  { projectId: string; pageId: string; force?: boolean }
 > {
   const queryClient = useQueryClient();
 
@@ -408,10 +408,12 @@ export function useExportOutline(): UseMutationResult<
     mutationFn: ({
       projectId,
       pageId,
+      force,
     }: {
       projectId: string;
       pageId: string;
-    }) => exportOutline(projectId, pageId),
+      force?: boolean;
+    }) => exportOutline(projectId, pageId, { force }),
     onSuccess: (_data, { projectId, pageId }) => {
       queryClient.invalidateQueries({
         queryKey: contentGenerationKeys.pageContent(projectId, pageId),

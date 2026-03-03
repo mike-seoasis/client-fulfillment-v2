@@ -911,6 +911,7 @@ async def approve_outline(
 async def export_outline(
     project_id: str,
     page_id: str,
+    force: bool = Query(False, description="Re-export even if a Google Doc already exists"),
     db: AsyncSession = Depends(get_session),
 ) -> ExportOutlineResponse:
     """Export a page outline to a formatted Google Doc.
@@ -963,8 +964,8 @@ async def export_outline(
             detail="No outline exists for this page. Generate an outline first.",
         )
 
-    # Idempotent: return existing doc if already exported
-    if content.google_doc_url:
+    # Idempotent: return existing doc if already exported (unless forced)
+    if content.google_doc_url and not force:
         return ExportOutlineResponse(google_doc_url=content.google_doc_url)
 
     keyword = page.keywords.primary_keyword if page.keywords else ""

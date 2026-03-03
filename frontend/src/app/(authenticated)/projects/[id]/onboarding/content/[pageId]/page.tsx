@@ -998,19 +998,48 @@ function OutlineEditor({
               {updateOutlineMutation.isPending ? 'Saving...' : 'Save Draft'}
             </button>
 
-            {/* Export to Google Doc / Open Google Doc */}
+            {/* Export to Google Doc / Open Google Doc + Re-export */}
             {content.google_doc_url ? (
-              <a
-                href={content.google_doc_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-lagoon-700 bg-lagoon-50 hover:bg-lagoon-100 border border-lagoon-200 rounded-sm transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-                Open Google Doc
-              </a>
+              <div className="flex items-center gap-1.5">
+                <a
+                  href={content.google_doc_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-lagoon-700 bg-lagoon-50 hover:bg-lagoon-100 border border-lagoon-200 rounded-sm transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                  Open Google Doc
+                </a>
+                <button
+                  type="button"
+                  disabled={exportOutlineMutation.isPending}
+                  onClick={() => {
+                    exportOutlineMutation.mutate(
+                      { projectId, pageId, force: true },
+                      {
+                        onSuccess: (data) => {
+                          window.open(data.google_doc_url, '_blank');
+                        },
+                      }
+                    );
+                  }}
+                  className="inline-flex items-center gap-1 px-2.5 py-2 text-sm text-warm-500 hover:text-warm-700 hover:bg-sand-100 rounded-sm transition-colors disabled:opacity-50"
+                  title="Re-export outline to a new Google Doc"
+                >
+                  {exportOutlineMutation.isPending ? (
+                    <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  )}
+                </button>
+              </div>
             ) : (
               <button
                 type="button"
