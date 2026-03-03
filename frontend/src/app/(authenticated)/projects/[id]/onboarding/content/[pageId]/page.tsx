@@ -1508,8 +1508,10 @@ export default function ContentEditorPage() {
 
   if (!content) return null;
 
-  // Show outline editor when outline_status is 'draft' or 'approved'
-  if (content.outline_status === 'draft' || content.outline_status === 'approved') {
+  // Show outline editor when outline_status is 'draft' or 'approved',
+  // but NOT if full content has already been generated (status='complete' with content)
+  const hasGeneratedContent = content.status === 'complete' && (content.top_description || content.bottom_description);
+  if ((content.outline_status === 'draft' || content.outline_status === 'approved') && !hasGeneratedContent) {
     return (
       <OutlineEditor
         content={content}

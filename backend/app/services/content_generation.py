@@ -336,6 +336,9 @@ async def run_generate_from_outline(
 
                 written_content.status = ContentStatus.COMPLETE.value
                 written_content.generation_completed_at = datetime.now(UTC)
+                # Clear outline_status so the frontend shows the content
+                # review view instead of the outline editor
+                written_content.outline_status = None
                 await db.commit()
 
             logger.info(
