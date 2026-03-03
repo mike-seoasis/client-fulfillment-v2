@@ -672,7 +672,11 @@ export default function ContentGenerationPage() {
   );
 
   const onboardingPagesTotal = onboardingPages.length;
-  const onboardingPagesCompleted = onboardingPages.filter((p) => p.status === 'complete').length;
+  // Pages with outline_status 'draft' or 'approved' are still in the outline review
+  // pipeline — they shouldn't count as "completed" for progress/state purposes
+  const onboardingPagesCompleted = onboardingPages.filter(
+    (p) => p.status === 'complete' && p.outline_status !== 'draft' && p.outline_status !== 'approved'
+  ).length;
   const onboardingPagesFailed = onboardingPages.filter((p) => p.status === 'failed').length;
   const onboardingPagesApproved = onboardingPages.filter((p) => p.status === 'complete' && p.is_approved).length;
   const onboardingProgress = onboardingPagesTotal > 0 ? Math.round((onboardingPagesCompleted / onboardingPagesTotal) * 100) : 0;
