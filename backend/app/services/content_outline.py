@@ -187,6 +187,7 @@ def _build_outline_user_prompt(
         '- page_progression and section_details are YOUR strategic recommendations\n'
         '- Each section_details entry must have a matching page_progression entry\n'
         '- Labels should be kebab-case slugs\n'
+        '- client_notes must ALWAYS be an empty string "" — this field is reserved for human input\n'
     )
 
     return "\n\n".join(sections)
