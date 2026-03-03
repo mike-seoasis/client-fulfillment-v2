@@ -192,30 +192,65 @@ def _build_outline_user_prompt(
     return "\n\n".join(sections)
 
 
+def _extract_json_block(text: str) -> str | None:
+    """Find the outermost balanced JSON object in text."""
+    start = text.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if escape:
+            escape = False
+            continue
+        if ch == "\\":
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    return None
+
+
 def _parse_outline_json(text: str) -> dict[str, Any] | None:
     """Parse Claude's outline response as JSON."""
     cleaned = text.strip()
 
-    # Strip markdown code fences
+    # Strip markdown code fences (```json or ```)
     if cleaned.startswith("```"):
         lines = cleaned.split("\n")
-        lines = lines[1:]
+        lines = lines[1:]  # drop opening fence
         if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
+            lines = lines[:-1]  # drop closing fence
         cleaned = "\n".join(lines).strip()
 
-    # Extract JSON object
-    if not cleaned.startswith("{"):
-        match = re.search(r"\{[\s\S]*\}", cleaned)
-        if match:
-            cleaned = match.group(0)
-
+    # Try direct parse first
     try:
         parsed = json.loads(cleaned)
-        if isinstance(parsed, dict) and "section_details" in parsed:
+        if isinstance(parsed, dict) and ("section_details" in parsed or "page_progression" in parsed):
             return parsed
     except (json.JSONDecodeError, ValueError):
         pass
+
+    # Extract balanced JSON object from surrounding text
+    json_block = _extract_json_block(cleaned)
+    if json_block:
+        try:
+            parsed = json.loads(json_block)
+            if isinstance(parsed, dict) and ("section_details" in parsed or "page_progression" in parsed):
+                return parsed
+        except (json.JSONDecodeError, ValueError):
+            pass
 
     logger.warning(
         "Failed to parse outline JSON",
