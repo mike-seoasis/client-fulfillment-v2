@@ -665,6 +665,26 @@ function OutlineEditor({
     await approveOutlineMutation.mutateAsync({ projectId, pageId });
   }, [projectId, pageId, outline, isDirty, updateOutlineMutation, approveOutlineMutation]);
 
+  // Export to Google Doc (auto-saves if dirty)
+  const handleExport = useCallback(async (force?: boolean) => {
+    if (isDirty) {
+      try {
+        await updateOutlineMutation.mutateAsync({ projectId, pageId, outlineJson: outline });
+        setIsDirty(false);
+      } catch {
+        return; // Save failed — don't export stale data
+      }
+    }
+    exportOutlineMutation.mutate(
+      { projectId, pageId, force },
+      {
+        onSuccess: (data) => {
+          window.open(data.google_doc_url, '_blank');
+        },
+      }
+    );
+  }, [projectId, pageId, outline, isDirty, updateOutlineMutation, exportOutlineMutation]);
+
   // Generate full copy
   const [generateError, setGenerateError] = useState<string | null>(null);
   const handleGenerateFullCopy = useCallback(async () => {
@@ -1017,17 +1037,8 @@ function OutlineEditor({
                 </a>
                 <button
                   type="button"
-                  disabled={exportOutlineMutation.isPending}
-                  onClick={() => {
-                    exportOutlineMutation.mutate(
-                      { projectId, pageId, force: true },
-                      {
-                        onSuccess: (data) => {
-                          window.open(data.google_doc_url, '_blank');
-                        },
-                      }
-                    );
-                  }}
+                  disabled={exportOutlineMutation.isPending || updateOutlineMutation.isPending}
+                  onClick={() => handleExport(true)}
                   className="inline-flex items-center gap-1 px-2.5 py-2 text-sm text-warm-500 hover:text-warm-700 hover:bg-sand-100 rounded-sm transition-colors disabled:opacity-50"
                   title="Re-export outline to a new Google Doc"
                 >
@@ -1046,17 +1057,8 @@ function OutlineEditor({
             ) : (
               <button
                 type="button"
-                disabled={!content.outline_json || exportOutlineMutation.isPending}
-                onClick={() => {
-                  exportOutlineMutation.mutate(
-                    { projectId, pageId },
-                    {
-                      onSuccess: (data) => {
-                        window.open(data.google_doc_url, '_blank');
-                      },
-                    }
-                  );
-                }}
+                disabled={!content.outline_json || exportOutlineMutation.isPending || updateOutlineMutation.isPending}
+                onClick={() => handleExport()}
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-warm-600 bg-sand-200 hover:bg-sand-300 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {exportOutlineMutation.isPending ? (
