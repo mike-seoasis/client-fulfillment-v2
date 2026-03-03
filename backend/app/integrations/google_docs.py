@@ -302,8 +302,8 @@ def clear_google_doc(doc_id: str) -> None:
 
     # The last element's endIndex is the total doc length
     end_index = content[-1].get("endIndex", 1)
-    if end_index <= 1:
-        return  # Already empty
+    if end_index <= 2:
+        return  # Already empty (only the trailing newline remains)
 
     # Delete from index 1 to end_index - 1 (must leave the trailing newline)
     docs.documents().batchUpdate(
