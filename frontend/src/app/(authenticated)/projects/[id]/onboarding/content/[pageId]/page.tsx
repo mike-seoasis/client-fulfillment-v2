@@ -666,7 +666,9 @@ function OutlineEditor({
   }, [projectId, pageId, outline, isDirty, updateOutlineMutation, approveOutlineMutation]);
 
   // Export to Google Doc (auto-saves if dirty)
+  const [exportError, setExportError] = useState<string | null>(null);
   const handleExport = useCallback(async (force?: boolean) => {
+    setExportError(null);
     if (isDirty) {
       try {
         await updateOutlineMutation.mutateAsync({ projectId, pageId, outlineJson: outline });
@@ -680,6 +682,9 @@ function OutlineEditor({
       {
         onSuccess: (data) => {
           window.open(data.google_doc_url, '_blank');
+        },
+        onError: (err) => {
+          setExportError(err instanceof Error ? err.message : 'Export failed');
         },
       }
     );
@@ -1053,6 +1058,7 @@ function OutlineEditor({
                     </svg>
                   )}
                 </button>
+                {exportError && <p className="text-xs text-coral-600">{exportError}</p>}
               </div>
             ) : (
               <button

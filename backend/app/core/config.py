@@ -494,9 +494,13 @@ class Settings(BaseSettings):
     )
 
     # Google Docs/Sheets Export (service account)
+    google_service_account_json: str | None = Field(
+        default=None,
+        description="Google service account credentials as a JSON string (for cloud deployments)",
+    )
     google_service_account_path: str = Field(
         default="google-service-account.json",
-        description="Path to Google service account JSON credentials file",
+        description="Path to Google service account JSON credentials file (local dev fallback)",
     )
     google_drive_folder_id: str = Field(
         default="1YpHVMtbd9Tmexc6eCsINSKw2zwpIgpoR",

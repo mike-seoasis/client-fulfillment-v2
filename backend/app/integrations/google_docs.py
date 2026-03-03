@@ -32,8 +32,20 @@ _SCOPES = [
 
 
 def get_credentials() -> Credentials:
-    """Load service account credentials from the JSON key file."""
+    """Load service account credentials from env var (JSON string) or file.
+
+    Checks GOOGLE_SERVICE_ACCOUNT_JSON first (for Railway/cloud deployments),
+    then falls back to the file at GOOGLE_SERVICE_ACCOUNT_PATH (for local dev).
+    """
     settings = get_settings()
+
+    # Prefer JSON string from env var (Railway deployment)
+    json_str = settings.google_service_account_json
+    if json_str:
+        info = json.loads(json_str)
+        return Credentials.from_service_account_info(info, scopes=_SCOPES)
+
+    # Fall back to file path (local development)
     key_path = Path(settings.google_service_account_path)
     if not key_path.is_absolute():
         # Resolve relative to backend/ directory
@@ -41,7 +53,7 @@ def get_credentials() -> Credentials:
     if not key_path.exists():
         raise FileNotFoundError(
             f"Google service account key not found: {key_path}. "
-            "Set GOOGLE_SERVICE_ACCOUNT_PATH to the correct path."
+            "Set GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_PATH."
         )
     return Credentials.from_service_account_file(str(key_path), scopes=_SCOPES)
 
