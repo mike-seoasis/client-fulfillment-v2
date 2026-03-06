@@ -350,6 +350,27 @@ async def generate_comment(
     if comment_text.startswith('"') and comment_text.endswith('"'):
         comment_text = comment_text[1:-1]
 
+    # Run lightweight guardrails on comment text
+    from app.services.guardrails_checks import run_comment_guardrails
+
+    comment_issues = run_comment_guardrails(comment_text)
+
+    # Build generation metadata
+    gen_metadata: dict[str, Any] = {
+        "model": claude.model,
+        "approach": approach,
+        "is_promotional": is_promotional,
+        "generated_at": datetime.now(UTC).isoformat(),
+    }
+    if comment_issues:
+        from dataclasses import asdict
+
+        gen_metadata["qa_results"] = {
+            "passed": False,
+            "issues": [asdict(i) for i in comment_issues],
+            "checked_at": datetime.now(UTC).isoformat(),
+        }
+
     # Store as DRAFT
     comment = RedditComment(
         post_id=post.id,
@@ -359,12 +380,7 @@ async def generate_comment(
         is_promotional=is_promotional,
         approach_type=approach,
         status=CommentStatus.DRAFT.value,
-        generation_metadata={
-            "model": claude.model,
-            "approach": approach,
-            "is_promotional": is_promotional,
-            "generated_at": datetime.now(UTC).isoformat(),
-        },
+        generation_metadata=gen_metadata,
     )
     db.add(comment)
     await db.flush()

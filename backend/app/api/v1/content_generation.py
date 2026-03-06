@@ -724,7 +724,10 @@ async def recheck_content(
 
     # Re-run quality checks (mutates content.qa_results)
     content = page.page_content
-    run_quality_checks(content, brand_config or {})
+    brief_dict = None
+    if page.content_brief:
+        brief_dict = {"lsi_terms": page.content_brief.lsi_terms or []}
+    run_quality_checks(content, brand_config or {}, content_brief=brief_dict)
 
     await db.commit()
     await db.refresh(content)

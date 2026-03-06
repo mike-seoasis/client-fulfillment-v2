@@ -46,7 +46,16 @@ dependencies = [
     # Google Docs/Sheets/Drive (service account auth)
     "google-api-python-client>=2.100",
     "google-auth>=2.20",
+    # Content quality validators (standalone implementations)
+    "nltk>=3.8",
+    "py-readability-metrics>=1.4",
+    "thefuzz>=0.20",
+    "alt-profanity-check>=1.4",
+    "bleach>=6.0",
 ]
+
+[project.optional-dependencies]
+ml = ["transformers>=4.35", "torch>=2.1"]
 
 [dependency-groups]
 dev = [
@@ -174,6 +183,20 @@ module = [
     "google.oauth2.*",
     "google.auth",
     "google.auth.*",
+    "nltk",
+    "nltk.*",
+    "readability",
+    "readability.*",
+    "thefuzz",
+    "thefuzz.*",
+    "profanity_check",
+    "profanity_check.*",
+    "bleach",
+    "bleach.*",
+    "transformers",
+    "transformers.*",
+    "torch",
+    "torch.*",
 ]
 ignore_missing_imports = true
 
