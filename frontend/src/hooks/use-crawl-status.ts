@@ -37,7 +37,10 @@ export interface CrawlStatusResponse {
 
 // Query keys factory
 export const crawlStatusKeys = {
-  detail: (projectId: string) => ["projects", projectId, "crawl-status"] as const,
+  detail: (projectId: string, batch?: number | null) =>
+    batch != null
+      ? (["projects", projectId, "crawl-status", batch] as const)
+      : (["projects", projectId, "crawl-status"] as const),
 };
 
 /**
@@ -46,13 +49,15 @@ export const crawlStatusKeys = {
  */
 export function useCrawlStatus(
   projectId: string,
-  options?: { enabled?: boolean; refetchInterval?: number | false }
+  options?: { enabled?: boolean; refetchInterval?: number | false; batch?: number | null }
 ): UseQueryResult<CrawlStatusResponse | null> {
+  const batch = options?.batch;
   return useQuery({
-    queryKey: crawlStatusKeys.detail(projectId),
+    queryKey: crawlStatusKeys.detail(projectId, batch),
     queryFn: async () => {
       try {
-        return await apiClient.get<CrawlStatusResponse>(`/projects/${projectId}/crawl-status`);
+        const qs = batch != null ? `?batch=${batch}` : '';
+        return await apiClient.get<CrawlStatusResponse>(`/projects/${projectId}/crawl-status${qs}`);
       } catch (error) {
         // Return null for 404 (no pages exist yet)
         if (error instanceof Error && error.message.includes("404")) {

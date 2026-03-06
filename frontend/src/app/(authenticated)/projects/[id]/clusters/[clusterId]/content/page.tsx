@@ -6,7 +6,12 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useProject } from '@/hooks/use-projects';
 import { useCluster } from '@/hooks/useClusters';
-import { useContentGeneration, useBulkApproveContent } from '@/hooks/useContentGeneration';
+import {
+  useContentGeneration,
+  useBulkApproveContent,
+  useTriggerContentGeneration,
+  useGenerateFromOutline,
+} from '@/hooks/useContentGeneration';
 import { Button, Toast } from '@/components/ui';
 import { PromptInspector } from '@/components/PromptInspector';
 import { usePlanLinks, usePlanStatus } from '@/hooks/useLinks';
@@ -18,6 +23,15 @@ const PIPELINE_STEPS = [
   { key: 'write', label: 'Write' },
   { key: 'check', label: 'Check' },
   { key: 'links', label: 'Links' },
+  { key: 'done', label: 'Done' },
+] as const;
+
+const OUTLINE_PIPELINE_STEPS = [
+  { key: 'brief', label: 'Brief' },
+  { key: 'outline', label: 'Outline' },
+  { key: 'review', label: 'Review' },
+  { key: 'write', label: 'Write' },
+  { key: 'check', label: 'Check' },
   { key: 'done', label: 'Done' },
 ] as const;
 
@@ -42,7 +56,10 @@ function getContentStep(status: string): number {
 }
 
 /** Human-readable label for the current status */
-function getStatusLabel(status: string): string {
+function getStatusLabel(status: string, outlineStatus?: string | null): string {
+  if (outlineStatus === 'draft') return 'Outline ready for review';
+  if (outlineStatus === 'approved') return 'Outline approved — ready to write';
+  if (outlineStatus === 'generating') return 'Generating outline...';
   switch (status) {
     case 'pending':
       return 'Queued';
@@ -164,11 +181,70 @@ function NotFoundState() {
   );
 }
 
-/** Pipeline step indicator showing Brief → Write → Check → Links → Done */
-function PipelineIndicator({ status, linkPlanningStatus }: { status: string; linkPlanningStatus?: string }) {
+/** Pipeline step indicator showing Brief → Write → Check → Links → Done (or outline variant) */
+function PipelineIndicator({ status, linkPlanningStatus, outlineStatus }: { status: string; linkPlanningStatus?: string; outlineStatus?: string | null }) {
   const contentStep = getContentStep(status);
   const isFailed = status === 'failed';
-  const isPageComplete = status === 'complete';
+  const isPageComplete = status === 'complete' && outlineStatus !== 'draft' && outlineStatus !== 'approved';
+  const hasOutline = !!outlineStatus;
+
+  if (hasOutline) {
+    const steps = OUTLINE_PIPELINE_STEPS;
+    return (
+      <div className="flex items-center gap-1">
+        {steps.map((step, index) => {
+          let isComplete = false;
+          let isCurrent = false;
+
+          if (isPageComplete && !hasOutline) {
+            isComplete = true;
+          } else if (index === 0) {
+            isComplete = true; // Brief always complete once outline exists
+          } else if (index === 1) {
+            isComplete = outlineStatus === 'draft' || outlineStatus === 'approved';
+            isCurrent = outlineStatus === 'generating';
+          } else if (index === 2) {
+            isComplete = outlineStatus === 'approved';
+            isCurrent = outlineStatus === 'draft';
+          } else if (index === 3) {
+            isComplete = isPageComplete;
+            isCurrent = status === 'writing';
+          } else if (index === 4) {
+            isComplete = isPageComplete;
+            isCurrent = status === 'checking';
+          } else if (index === 5) {
+            isComplete = isPageComplete;
+          }
+
+          let dotClass = 'bg-cream-300';
+          let labelClass = 'text-warm-gray-400';
+
+          if (isFailed && contentStep > index) {
+            dotClass = 'bg-palm-500';
+            labelClass = 'text-palm-700';
+          } else if (isComplete) {
+            dotClass = 'bg-palm-500';
+            labelClass = 'text-palm-700';
+          } else if (isCurrent) {
+            dotClass = 'bg-lagoon-500 animate-pulse';
+            labelClass = 'text-lagoon-700 font-medium';
+          }
+
+          return (
+            <div key={step.key} className="flex items-center">
+              <div className="flex flex-col items-center">
+                <div className={`w-2.5 h-2.5 rounded-full ${dotClass}`} />
+                <span className={`text-[10px] mt-0.5 ${labelClass}`}>{step.label}</span>
+              </div>
+              {index < steps.length - 1 && (
+                <div className={`w-8 h-0.5 mb-3 mx-0.5 ${isComplete ? 'bg-palm-400' : 'bg-cream-300'}`} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-1">
@@ -177,7 +253,6 @@ function PipelineIndicator({ status, linkPlanningStatus }: { status: string; lin
         let isCurrent = false;
 
         if (index <= 2) {
-          // Brief (0), Write (1), Check (2) — driven by content gen
           if (isPageComplete) {
             isComplete = true;
           } else {
@@ -185,15 +260,13 @@ function PipelineIndicator({ status, linkPlanningStatus }: { status: string; lin
             isCurrent = contentStep === index;
           }
         } else if (index === 3) {
-          // Links — driven by link planning status
           isComplete = isPageComplete && linkPlanningStatus === 'complete';
           isCurrent = isPageComplete && linkPlanningStatus === 'planning';
         } else if (index === 4) {
-          // Done — complete only when links are done
           isComplete = isPageComplete && linkPlanningStatus === 'complete';
         }
 
-        let dotClass = 'bg-cream-300'; // default: not reached
+        let dotClass = 'bg-cream-300';
         let labelClass = 'text-warm-gray-400';
 
         if (isFailed) {
@@ -216,11 +289,7 @@ function PipelineIndicator({ status, linkPlanningStatus }: { status: string; lin
               <span className={`text-[10px] mt-0.5 ${labelClass}`}>{step.label}</span>
             </div>
             {index < PIPELINE_STEPS.length - 1 && (
-              <div
-                className={`w-8 h-0.5 mb-3 mx-0.5 ${
-                  isComplete ? 'bg-palm-400' : 'bg-cream-300'
-                }`}
-              />
+              <div className={`w-8 h-0.5 mb-3 mx-0.5 ${isComplete ? 'bg-palm-400' : 'bg-cream-300'}`} />
             )}
           </div>
         );
@@ -271,6 +340,8 @@ function PageRow({
   isGenerating,
   linkPlanningStatus,
   onInspect,
+  onGenerateFromOutline,
+  isGeneratingFromOutline,
 }: {
   page: PageGenerationStatusItem;
   projectId: string;
@@ -278,6 +349,8 @@ function PageRow({
   isGenerating: boolean;
   linkPlanningStatus?: string;
   onInspect: (pageId: string, pageUrl: string) => void;
+  onGenerateFromOutline?: (pageId: string) => void;
+  isGeneratingFromOutline?: boolean;
 }) {
   // Extract path from URL for compact display
   const displayUrl = (() => {
@@ -291,6 +364,11 @@ function PageRow({
 
   const isFailed = page.status === 'failed';
   const isComplete = page.status === 'complete';
+  const isActivelyWriting = page.status === 'writing' || page.status === 'checking';
+  const hasOutlineDraft = page.outline_status === 'draft';
+  const hasOutlineApproved = page.outline_status === 'approved' && !isComplete && !isActivelyWriting;
+  // Page is truly "content complete" only if it has no pending outline
+  const isContentComplete = isComplete && page.outline_status !== 'draft' && page.outline_status !== 'approved';
 
   return (
     <div className={`px-4 py-3 ${isFailed ? 'bg-coral-50/50' : ''}`}>
@@ -306,11 +384,13 @@ function PageRow({
           <div className="flex items-center gap-2 mt-1.5">
             <span className={`text-xs ${
               isFailed ? 'text-coral-600' :
-              isComplete ? 'text-palm-600' :
+              isContentComplete ? 'text-palm-600' :
+              hasOutlineDraft ? 'text-lagoon-600' :
+              hasOutlineApproved ? 'text-palm-600' :
               page.status === 'pending' && !isGenerating ? 'text-warm-gray-500' :
               'text-lagoon-600'
             }`}>
-              {getStatusLabel(page.status)}
+              {getStatusLabel(page.status, page.outline_status)}
             </span>
             {isFailed && page.error && (
               <span className="text-xs text-coral-500 truncate max-w-xs" title={page.error}>
@@ -322,9 +402,39 @@ function PageRow({
 
         {/* Right side: pipeline indicator + actions */}
         <div className="flex items-center gap-3 shrink-0">
-          <PipelineIndicator status={page.status} linkPlanningStatus={linkPlanningStatus} />
+          <PipelineIndicator status={page.status} linkPlanningStatus={linkPlanningStatus} outlineStatus={page.outline_status} />
           <div className="flex items-center gap-1">
-            {isComplete && (
+            {/* Outline draft: show "Edit Outline" link */}
+            {hasOutlineDraft && (
+              <Link
+                href={`/projects/${projectId}/clusters/${clusterId}/content/${page.page_id}`}
+                className="inline-flex items-center gap-1 text-xs font-medium text-lagoon-600 hover:text-lagoon-700 px-2 py-1 rounded-sm hover:bg-cream-100 transition-colors"
+                title="Edit outline"
+              >
+                <EyeIcon className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Edit Outline</span>
+              </Link>
+            )}
+            {/* Outline approved but not yet written: show "Generate Copy" button */}
+            {hasOutlineApproved && onGenerateFromOutline && (
+              <button
+                type="button"
+                onClick={() => onGenerateFromOutline(page.page_id)}
+                disabled={isGeneratingFromOutline}
+                className="inline-flex items-center gap-1 text-xs font-medium text-white bg-palm-500 hover:bg-palm-600 px-2.5 py-1 rounded-sm transition-colors disabled:opacity-50"
+              >
+                {isGeneratingFromOutline ? (
+                  <>
+                    <SpinnerIcon className="w-3.5 h-3.5 animate-spin" />
+                    <span className="hidden sm:inline">Generating...</span>
+                  </>
+                ) : (
+                  <span className="hidden sm:inline">Generate Copy</span>
+                )}
+              </button>
+            )}
+            {/* Standard complete: show "View" link */}
+            {isContentComplete && (
               <Link
                 href={`/projects/${projectId}/clusters/${clusterId}/content/${page.page_id}`}
                 className="inline-flex items-center gap-1 text-xs text-warm-gray-500 hover:text-palm-600 px-2 py-1 rounded-sm hover:bg-cream-100 transition-colors"
@@ -547,8 +657,14 @@ export default function ClusterContentGenerationPage() {
   const [toastMessage, setToastMessage] = useState('');
   const [toastVariant, setToastVariant] = useState<'success' | 'error'>('success');
 
+  // Outline-first toggle
+  const [outlineFirst, setOutlineFirst] = useState(false);
+
   // Regeneration options
   const [refreshBriefs, setRefreshBriefs] = useState(false);
+
+  // Per-page generate from outline state
+  const [generatingOutlinePageId, setGeneratingOutlinePageId] = useState<string | null>(null);
 
   // Prompt inspector state
   const [inspectPageId, setInspectPageId] = useState<string | null>(null);
@@ -563,6 +679,8 @@ export default function ClusterContentGenerationPage() {
   const { data: cluster, isLoading: isClusterLoading } = useCluster(projectId, clusterId);
   const contentGen = useContentGeneration(projectId);
   const bulkApproveMutation = useBulkApproveContent();
+  const triggerMutation = useTriggerContentGeneration();
+  const generateFromOutlineMutation = useGenerateFromOutline();
 
   // Link planning — auto-trigger when content gen completes
   const queryClient = useQueryClient();
@@ -591,7 +709,11 @@ export default function ClusterContentGenerationPage() {
   );
 
   const clusterPagesTotal = clusterPages.length;
-  const clusterPagesCompleted = clusterPages.filter((p) => p.status === 'complete').length;
+  // Pages with outline_status 'draft' or 'approved' are still in the outline
+  // review pipeline — don't count them as truly "completed"
+  const clusterPagesCompleted = clusterPages.filter(
+    (p) => p.status === 'complete' && p.outline_status !== 'draft' && p.outline_status !== 'approved'
+  ).length;
   const clusterPagesFailed = clusterPages.filter((p) => p.status === 'failed').length;
   const clusterPagesApproved = clusterPages.filter((p) => p.status === 'complete' && p.is_approved).length;
   const clusterProgress = clusterPagesTotal > 0 ? Math.round((clusterPagesCompleted / clusterPagesTotal) * 100) : 0;
@@ -604,6 +726,7 @@ export default function ClusterContentGenerationPage() {
   const hasPages = clusterPagesTotal > 0;
   // Partial: some pages done but not all, pipeline not running (e.g. 3/4 complete, 1 pending)
   const isPartial = !isGenerating && !isIdle && !isComplete && !isFailed && hasPages;
+  const hasAnyOutlines = clusterPages.some((p) => p.outline_status === 'draft' || p.outline_status === 'approved');
 
   const isLinkPlanning = linkStatus?.status === 'planning' || planLinksMutation.isPending;
 
@@ -638,17 +761,40 @@ export default function ClusterContentGenerationPage() {
 
   // Handle trigger generation
   const handleGenerate = async () => {
-    shouldPlanLinksRef.current = true;
+    shouldPlanLinksRef.current = !outlineFirst; // Don't auto-plan links for outline mode
     try {
-      await contentGen.startGenerationAsync();
-      setToastMessage('Content generation started');
+      if (outlineFirst) {
+        await triggerMutation.mutateAsync({ projectId, outlineFirst: true });
+        setToastMessage('Outline generation started');
+      } else {
+        await contentGen.startGenerationAsync();
+        setToastMessage('Content generation started');
+      }
       setToastVariant('success');
       setShowToast(true);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to start content generation';
+      const message = error instanceof Error ? error.message : 'Failed to start generation';
       setToastMessage(message);
       setToastVariant('error');
       setShowToast(true);
+    }
+  };
+
+  // Handle generate full copy from approved outline (per-page)
+  const handleGenerateFromOutline = async (pageId: string) => {
+    setGeneratingOutlinePageId(pageId);
+    try {
+      await generateFromOutlineMutation.mutateAsync({ projectId, pageId });
+      setToastMessage('Content generation started from outline');
+      setToastVariant('success');
+      setShowToast(true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to generate from outline';
+      setToastMessage(message);
+      setToastVariant('error');
+      setShowToast(true);
+    } finally {
+      setGeneratingOutlinePageId(null);
     }
   };
 
@@ -691,7 +837,7 @@ export default function ClusterContentGenerationPage() {
   // Handle bulk approve
   const handleBulkApprove = async () => {
     try {
-      const result = await bulkApproveMutation.mutateAsync(projectId);
+      const result = await bulkApproveMutation.mutateAsync({ projectId });
       setToastMessage(`Approved ${result.approved_count} page${result.approved_count === 1 ? '' : 's'}`);
       setToastVariant('success');
       setShowToast(true);
@@ -776,21 +922,34 @@ export default function ClusterContentGenerationPage() {
 
           {/* Generate / Retry buttons */}
           {(isIdle || isPartial) && hasPages && (
-            <Button
-              onClick={handleGenerate}
-              disabled={contentGen.isStarting}
-            >
-              {contentGen.isStarting ? (
-                <>
-                  <SpinnerIcon className="w-4 h-4 mr-1.5 animate-spin" />
-                  Starting...
-                </>
-              ) : isPartial ? (
-                'Continue Generation'
-              ) : (
-                'Generate Content'
-              )}
-            </Button>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-1.5 text-xs text-warm-gray-500 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={outlineFirst}
+                  onChange={(e) => setOutlineFirst(e.target.checked)}
+                  className="rounded-sm border-sand-500 text-palm-500 focus:ring-palm-400"
+                />
+                Generate Outline First
+              </label>
+              <Button
+                onClick={handleGenerate}
+                disabled={contentGen.isStarting || triggerMutation.isPending}
+              >
+                {contentGen.isStarting || triggerMutation.isPending ? (
+                  <>
+                    <SpinnerIcon className="w-4 h-4 mr-1.5 animate-spin" />
+                    Starting...
+                  </>
+                ) : isPartial ? (
+                  'Continue Generation'
+                ) : outlineFirst ? (
+                  'Generate Outlines'
+                ) : (
+                  'Generate Content'
+                )}
+              </Button>
+            </div>
           )}
           {isFailed && failedPages.length > 0 && (
             <div className="flex items-center gap-3">
@@ -984,7 +1143,7 @@ export default function ClusterContentGenerationPage() {
         )}
 
         {/* Pages table - generation progress view */}
-        {hasPages && (isGenerating || isIdle || isPartial) && (
+        {hasPages && (isGenerating || isIdle || isPartial || hasAnyOutlines) && (
           <div className="border border-cream-500 rounded-sm overflow-hidden">
             <div className="max-h-[28rem] overflow-y-auto divide-y divide-cream-300">
               {clusterPages.map((page) => (
@@ -996,6 +1155,8 @@ export default function ClusterContentGenerationPage() {
                   isGenerating={isGenerating}
                   linkPlanningStatus={linkStatus?.status}
                   onInspect={handleInspect}
+                  onGenerateFromOutline={handleGenerateFromOutline}
+                  isGeneratingFromOutline={generatingOutlinePageId === page.page_id}
                 />
               ))}
             </div>

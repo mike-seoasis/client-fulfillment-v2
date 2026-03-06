@@ -34,6 +34,18 @@ class ContentUpdateRequest(BaseModel):
     )
 
 
+class OutlineUpdateRequest(BaseModel):
+    """Request schema for saving an edited outline."""
+
+    outline_json: dict[str, Any] = Field(..., description="Updated outline JSON")
+
+
+class ExportOutlineResponse(BaseModel):
+    """Response when an outline is exported to a Google Doc."""
+
+    google_doc_url: str = Field(..., description="URL of the created Google Doc")
+
+
 # =============================================================================
 # BULK APPROVE RESPONSE
 # =============================================================================
@@ -87,6 +99,9 @@ class PageGenerationStatusItem(BaseModel):
     )
     qa_issue_count: int = Field(0, description="Number of QA issues found")
     is_approved: bool = Field(False, description="Whether content has been approved")
+    outline_status: str | None = Field(
+        None, description="Outline status (draft, approved, or null)"
+    )
 
 
 class ContentGenerationStatus(BaseModel):
@@ -177,6 +192,15 @@ class PageContentResponse(BaseModel):
     status: str = Field(
         ...,
         description="Content status (pending, generating_brief, writing, checking, complete, failed)",
+    )
+    outline_json: dict[str, Any] | None = Field(
+        None, description="Structured outline JSON (when using outline-first workflow)"
+    )
+    outline_status: str | None = Field(
+        None, description="Outline status: draft, approved, or null"
+    )
+    google_doc_url: str | None = Field(
+        None, description="Google Doc URL for collaborative editing"
     )
     is_approved: bool = Field(False, description="Whether content has been approved")
     approved_at: datetime | None = Field(None, description="When content was approved")

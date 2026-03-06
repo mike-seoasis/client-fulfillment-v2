@@ -90,13 +90,14 @@ export function useApproveKeyword(): UseMutationResult<
 export function useApproveAllKeywords(): UseMutationResult<
   BulkApproveResponse,
   Error,
-  string
+  { projectId: string; batch?: number | null }
 > {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (projectId: string) => approveAllKeywords(projectId),
-    onSuccess: (_data, projectId) => {
+    mutationFn: ({ projectId, batch }: { projectId: string; batch?: number | null }) =>
+      approveAllKeywords(projectId, batch),
+    onSuccess: (_data, { projectId }) => {
       queryClient.invalidateQueries({
         queryKey: pagesWithKeywordsKeys.list(projectId),
       });

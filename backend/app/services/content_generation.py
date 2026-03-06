@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -32,6 +32,10 @@ from app.models.page_content import ContentStatus, PageContent
 from app.models.page_keywords import PageKeywords
 from app.models.prompt_log import PromptLog
 from app.services.content_quality import run_quality_checks
+from app.services.content_outline import (
+    generate_content_from_outline,
+    generate_outline,
+)
 from app.services.content_writing import extract_competitor_brands, generate_content
 from app.services.pop_content_brief import fetch_content_brief
 
@@ -67,6 +71,8 @@ async def run_content_pipeline(
     project_id: str,
     force_refresh: bool = False,
     refresh_briefs: bool = False,
+    batch: int | None = None,
+    outline_first: bool = False,
 ) -> PipelineResult:
     """Run the content generation pipeline for all approved pages in a project.
 
@@ -105,7 +111,7 @@ async def run_content_pipeline(
 
     # Load approved pages and brand config in a read-only session
     async with db_manager.session_factory() as session:
-        pages_data = await _load_approved_pages(session, project_id)
+        pages_data = await _load_approved_pages(session, project_id, batch=batch)
         brand_config = await _load_brand_config(session, project_id)
 
     if not pages_data:
@@ -167,6 +173,7 @@ async def run_content_pipeline(
                 brand_config=brand_config,
                 force_refresh=force_refresh,
                 refresh_briefs=False,  # Briefs already fetched in Phase 1
+                outline_first=outline_first,
             )
 
     tasks = [_process_with_semaphore(pd) for pd in pages_data]
@@ -197,11 +204,213 @@ async def run_content_pipeline(
 
     # --- Phase 3: Auto-run link planning to inject/re-inject internal links ---
     # Only run if at least 2 pages have complete content (link planning needs ≥2)
+    # Skip link planning in outline_first mode (outlines don't have content yet)
     completed_count = result.succeeded + result.skipped  # skipped = already complete
-    if completed_count >= 2:
+    if completed_count >= 2 and not outline_first:
         await _auto_link_planning(project_id)
 
     return result
+
+
+async def run_generate_from_outline(
+    project_id: str,
+    page_id: str,
+) -> PipelinePageResult:
+    """Generate content from an approved outline for a single page.
+
+    Per-page pipeline:
+    1. Load page with relationships, brand config
+    2. Validate outline_status='approved' and outline_json exists
+    3. Call generate_content_from_outline()
+    4. Run quality checks
+    5. Mark status='complete'
+    6. Trigger link planning if >= 2 pages have complete content
+
+    Designed to be called from a FastAPI BackgroundTask.
+
+    Args:
+        project_id: UUID of the project.
+        page_id: UUID of the crawled page.
+
+    Returns:
+        PipelinePageResult with success status.
+    """
+    logger.info(
+        "Starting generate-from-outline pipeline",
+        extra={"project_id": project_id, "page_id": page_id},
+    )
+
+    try:
+        async with db_manager.session_factory() as db:
+            # Load page with relationships
+            stmt = (
+                select(CrawledPage)
+                .where(
+                    CrawledPage.id == page_id,
+                    CrawledPage.project_id == project_id,
+                )
+                .options(
+                    selectinload(CrawledPage.page_content),
+                    selectinload(CrawledPage.content_brief),
+                )
+            )
+            result = await db.execute(stmt)
+            crawled_page = result.scalar_one_or_none()
+
+            if crawled_page is None:
+                return PipelinePageResult(
+                    page_id=page_id,
+                    url="",
+                    success=False,
+                    error="CrawledPage not found",
+                )
+
+            page_content = crawled_page.page_content
+            if page_content is None:
+                return PipelinePageResult(
+                    page_id=page_id,
+                    url=crawled_page.normalized_url,
+                    success=False,
+                    error="No PageContent record exists",
+                )
+
+            # Validate outline is approved
+            if page_content.outline_status != "approved":
+                return PipelinePageResult(
+                    page_id=page_id,
+                    url=crawled_page.normalized_url,
+                    success=False,
+                    error=f"Outline status is '{page_content.outline_status}', expected 'approved'",
+                )
+
+            if not page_content.outline_json:
+                return PipelinePageResult(
+                    page_id=page_id,
+                    url=crawled_page.normalized_url,
+                    success=False,
+                    error="No outline_json found",
+                )
+
+            # Load brand config
+            brand_config = await _load_brand_config(db, project_id)
+
+            # Load keyword
+            keyword_stmt = select(PageKeywords).where(
+                PageKeywords.crawled_page_id == page_id
+            )
+            kw_result = await db.execute(keyword_stmt)
+            page_keywords = kw_result.scalar_one_or_none()
+            keyword = page_keywords.primary_keyword if page_keywords else ""
+
+            # Generate content from outline
+            content_result = await generate_content_from_outline(
+                db=db,
+                crawled_page=crawled_page,
+                content_brief=crawled_page.content_brief,
+                brand_config=brand_config,
+                keyword=keyword,
+                outline_json=page_content.outline_json,
+            )
+
+            if not content_result.success:
+                await db.commit()
+                return PipelinePageResult(
+                    page_id=page_id,
+                    url=crawled_page.normalized_url,
+                    success=False,
+                    error=content_result.error,
+                )
+
+            # Run quality checks
+            written_content = content_result.page_content
+            if written_content is not None:
+                written_content.status = ContentStatus.CHECKING.value
+                await db.commit()
+
+                run_quality_checks(written_content, brand_config)
+
+                # flag_modified needed for in-place JSONB dict mutation
+                from sqlalchemy.orm.attributes import flag_modified
+
+                flag_modified(written_content, "qa_results")
+
+                written_content.status = ContentStatus.COMPLETE.value
+                written_content.generation_completed_at = datetime.now(UTC)
+                # Clear outline_status so the frontend shows the content
+                # review view instead of the outline editor
+                written_content.outline_status = None
+                await db.commit()
+
+            logger.info(
+                "Generate-from-outline complete",
+                extra={
+                    "page_id": page_id,
+                    "word_count": written_content.word_count if written_content else 0,
+                },
+            )
+
+        # Check if link planning should run — only count pages with actual
+        # generated content (not outline-only pages)
+        async with db_manager.session_factory() as db2:
+            complete_count_stmt = (
+                select(func.count())
+                .select_from(PageContent)
+                .join(CrawledPage, PageContent.crawled_page_id == CrawledPage.id)
+                .where(
+                    CrawledPage.project_id == project_id,
+                    PageContent.status == ContentStatus.COMPLETE.value,
+                    PageContent.outline_status.is_(None),
+                    PageContent.bottom_description.isnot(None),
+                )
+            )
+            count_result = await db2.execute(complete_count_stmt)
+            complete_count = count_result.scalar_one() or 0
+
+        if complete_count >= 2:
+            await _auto_link_planning(project_id)
+
+        return PipelinePageResult(
+            page_id=page_id,
+            url=crawled_page.normalized_url,
+            success=True,
+        )
+
+    except Exception as exc:
+        logger.error(
+            "Generate-from-outline failed",
+            extra={
+                "page_id": page_id,
+                "error": str(exc),
+            },
+            exc_info=True,
+        )
+
+        # Mark as failed
+        try:
+            async with db_manager.session_factory() as err_db:
+                err_stmt = select(PageContent).where(
+                    PageContent.crawled_page_id == page_id
+                )
+                err_result = await err_db.execute(err_stmt)
+                pc = err_result.scalar_one_or_none()
+                if pc is not None:
+                    pc.status = ContentStatus.FAILED.value
+                    pc.generation_completed_at = datetime.now(UTC)
+                    pc.qa_results = {"error": str(exc)}
+                    await err_db.commit()
+        except Exception:
+            logger.error(
+                "Failed to mark page as failed",
+                extra={"page_id": page_id},
+                exc_info=True,
+            )
+
+        return PipelinePageResult(
+            page_id=page_id,
+            url="",
+            success=False,
+            error=str(exc),
+        )
 
 
 async def _prefetch_all_briefs(
@@ -361,6 +570,7 @@ async def _auto_link_planning(project_id: str) -> None:
 async def _load_approved_pages(
     db: AsyncSession,
     project_id: str,
+    batch: int | None = None,
 ) -> list[dict[str, Any]]:
     """Load all approved-keyword pages for a project.
 
@@ -379,6 +589,8 @@ async def _load_approved_pages(
             selectinload(CrawledPage.page_content),
         )
     )
+    if batch is not None:
+        stmt = stmt.where(CrawledPage.onboarding_batch == batch)
     result = await db.execute(stmt)
     pages = result.scalars().all()
 
@@ -432,6 +644,7 @@ async def _process_single_page(
     brand_config: dict[str, Any],
     force_refresh: bool,
     refresh_briefs: bool = False,
+    outline_first: bool = False,
 ) -> PipelinePageResult:
     """Process a single page through the brief → write → check pipeline.
 
@@ -521,8 +734,44 @@ async def _process_single_page(
                     db, brand_config, content_brief.competitors, crawled_page.project_id
                 )
 
-            # --- Step 2: Write content ---
-            # generate_content sets status to WRITING internally
+            # --- Step 2: Write content (or outline) ---
+            if outline_first:
+                # Outline-first mode: generate outline, skip quality checks
+                outline_result = await generate_outline(
+                    db=db,
+                    crawled_page=crawled_page,
+                    content_brief=content_brief,
+                    brand_config=brand_config,
+                    keyword=keyword,
+                )
+
+                if not outline_result.success:
+                    await db.commit()
+                    return PipelinePageResult(
+                        page_id=page_id,
+                        url=url,
+                        success=False,
+                        error=outline_result.error,
+                    )
+
+                logger.info(
+                    "Page outline generation complete",
+                    extra={
+                        "page_id": page_id,
+                        "url": url,
+                        "sections": len(
+                            (outline_result.outline_json or {}).get("section_details", [])
+                        ),
+                    },
+                )
+
+                return PipelinePageResult(
+                    page_id=page_id,
+                    url=url,
+                    success=True,
+                )
+
+            # Standard mode: generate content
             writing_result = await generate_content(
                 db=db,
                 crawled_page=crawled_page,

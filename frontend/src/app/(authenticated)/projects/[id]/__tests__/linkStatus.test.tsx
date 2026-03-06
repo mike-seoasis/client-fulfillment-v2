@@ -9,6 +9,7 @@ const mockRouterPush = vi.fn();
 vi.mock('next/navigation', () => ({
   useParams: () => ({ id: 'test-project-123' }),
   useRouter: () => ({ push: mockRouterPush }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 // ============================================================================
@@ -54,6 +55,15 @@ vi.mock('@/hooks/useLinks', () => ({
 const mockUseRedditConfig = vi.fn();
 vi.mock('@/hooks/useReddit', () => ({
   useRedditConfig: (...args: unknown[]) => mockUseRedditConfig(...args),
+  useUpsertRedditConfig: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
+vi.mock('@/hooks/useOnboardingBatches', () => ({
+  useOnboardingBatches: () => ({ data: undefined }),
+}));
+
+vi.mock('@/hooks/usePageDeletion', () => ({
+  useResetOnboarding: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 // ============================================================================

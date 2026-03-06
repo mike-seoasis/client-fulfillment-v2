@@ -23,12 +23,17 @@ import {
   approvePageContent,
   recheckPageContent,
   bulkApproveContent,
+  updateOutline,
+  approveOutline,
+  generateFromOutline,
+  exportOutline,
   type ContentGenerationTriggerResponse,
   type ContentGenerationStatus,
   type PageContentResponse,
   type PromptLogResponse,
   type ContentUpdateRequest,
   type ContentBulkApproveResponse,
+  type ExportOutlineResponse,
 } from '@/lib/api';
 
 // Query keys factory
@@ -47,11 +52,14 @@ export const contentGenerationKeys = {
  */
 export function useContentGenerationStatus(
   projectId: string,
-  options?: { enabled?: boolean }
+  options?: { enabled?: boolean; batch?: number | null }
 ): UseQueryResult<ContentGenerationStatus> {
+  const batch = options?.batch;
   return useQuery({
-    queryKey: contentGenerationKeys.status(projectId),
-    queryFn: () => pollContentGenerationStatus(projectId),
+    queryKey: batch != null
+      ? [...contentGenerationKeys.status(projectId), batch]
+      : contentGenerationKeys.status(projectId),
+    queryFn: () => pollContentGenerationStatus(projectId, batch),
     enabled: options?.enabled ?? !!projectId,
     refetchInterval: (query) => {
       const data = query.state.data as ContentGenerationStatus | undefined;
@@ -100,7 +108,7 @@ export function usePagePrompts(
 export function useTriggerContentGeneration(): UseMutationResult<
   ContentGenerationTriggerResponse,
   Error,
-  { projectId: string; forceRefresh?: boolean; refreshBriefs?: boolean }
+  { projectId: string; forceRefresh?: boolean; refreshBriefs?: boolean; outlineFirst?: boolean; batch?: number | null }
 > {
   const queryClient = useQueryClient();
 
@@ -109,11 +117,15 @@ export function useTriggerContentGeneration(): UseMutationResult<
       projectId,
       forceRefresh,
       refreshBriefs,
+      outlineFirst,
+      batch,
     }: {
       projectId: string;
       forceRefresh?: boolean;
       refreshBriefs?: boolean;
-    }) => triggerContentGeneration(projectId, { forceRefresh, refreshBriefs }),
+      outlineFirst?: boolean;
+      batch?: number | null;
+    }) => triggerContentGeneration(projectId, { forceRefresh, refreshBriefs, outlineFirst }, batch),
     onSuccess: (_data, { projectId }) => {
       queryClient.invalidateQueries({
         queryKey: contentGenerationKeys.status(projectId),
@@ -130,10 +142,11 @@ export function useTriggerContentGeneration(): UseMutationResult<
  * - Returns status, progress, isGenerating, error
  * - Exposes startGeneration function
  */
-export function useContentGeneration(projectId: string) {
+export function useContentGeneration(projectId: string, options?: { batch?: number | null }) {
+  const batch = options?.batch;
   const queryClient = useQueryClient();
 
-  const status = useContentGenerationStatus(projectId);
+  const status = useContentGenerationStatus(projectId, { batch });
   const triggerMutation = useTriggerContentGeneration();
 
   const pagesTotal = status.data?.pages_total ?? 0;
@@ -160,12 +173,12 @@ export function useContentGeneration(projectId: string) {
     isFailed: status.data?.overall_status === 'failed',
 
     // Actions
-    startGeneration: () => triggerMutation.mutate({ projectId }),
-    startGenerationAsync: () => triggerMutation.mutateAsync({ projectId }),
+    startGeneration: () => triggerMutation.mutate({ projectId, batch }),
+    startGenerationAsync: () => triggerMutation.mutateAsync({ projectId, batch }),
     regenerate: (opts?: { refreshBriefs?: boolean }) =>
-      triggerMutation.mutate({ projectId, forceRefresh: true, refreshBriefs: opts?.refreshBriefs }),
+      triggerMutation.mutate({ projectId, forceRefresh: true, refreshBriefs: opts?.refreshBriefs, batch }),
     regenerateAsync: (opts?: { refreshBriefs?: boolean }) =>
-      triggerMutation.mutateAsync({ projectId, forceRefresh: true, refreshBriefs: opts?.refreshBriefs }),
+      triggerMutation.mutateAsync({ projectId, forceRefresh: true, refreshBriefs: opts?.refreshBriefs, batch }),
     isStarting: triggerMutation.isPending,
     startError: triggerMutation.error,
 
@@ -272,15 +285,138 @@ export function useRecheckPageContent(): UseMutationResult<
 export function useBulkApproveContent(): UseMutationResult<
   ContentBulkApproveResponse,
   Error,
-  string
+  { projectId: string; batch?: number | null }
 > {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (projectId: string) => bulkApproveContent(projectId),
-    onSuccess: (_data, projectId) => {
+    mutationFn: ({ projectId, batch }: { projectId: string; batch?: number | null }) =>
+      bulkApproveContent(projectId, batch),
+    onSuccess: (_data, { projectId }) => {
       queryClient.invalidateQueries({
         queryKey: contentGenerationKeys.status(projectId),
+      });
+    },
+  });
+}
+
+// =============================================================================
+// OUTLINE WORKFLOW MUTATION HOOKS
+// =============================================================================
+
+/**
+ * Mutation hook to update an outline draft.
+ * Invalidates the page content query on success.
+ */
+export function useUpdateOutline(): UseMutationResult<
+  PageContentResponse,
+  Error,
+  { projectId: string; pageId: string; outlineJson: any }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      pageId,
+      outlineJson,
+    }: {
+      projectId: string;
+      pageId: string;
+      outlineJson: any;
+    }) => updateOutline(projectId, pageId, { outline_json: outlineJson }),
+    onSuccess: (_data, { projectId, pageId }) => {
+      queryClient.invalidateQueries({
+        queryKey: contentGenerationKeys.pageContent(projectId, pageId),
+      });
+    },
+  });
+}
+
+/**
+ * Mutation hook to approve an outline.
+ * Invalidates both the page content and generation status queries on success.
+ */
+export function useApproveOutline(): UseMutationResult<
+  PageContentResponse,
+  Error,
+  { projectId: string; pageId: string }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      pageId,
+    }: {
+      projectId: string;
+      pageId: string;
+    }) => approveOutline(projectId, pageId),
+    onSuccess: (_data, { projectId, pageId }) => {
+      queryClient.invalidateQueries({
+        queryKey: contentGenerationKeys.pageContent(projectId, pageId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: contentGenerationKeys.status(projectId),
+      });
+    },
+  });
+}
+
+/**
+ * Mutation hook to generate full content from an approved outline.
+ * Invalidates the generation status query on success.
+ */
+export function useGenerateFromOutline(): UseMutationResult<
+  ContentGenerationTriggerResponse,
+  Error,
+  { projectId: string; pageId: string }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      pageId,
+    }: {
+      projectId: string;
+      pageId: string;
+    }) => generateFromOutline(projectId, pageId),
+    onSuccess: (_data, { projectId, pageId }) => {
+      queryClient.invalidateQueries({
+        queryKey: contentGenerationKeys.status(projectId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: contentGenerationKeys.pageContent(projectId, pageId),
+      });
+    },
+  });
+}
+
+/**
+ * Mutation hook to export an outline to a Google Doc.
+ * Invalidates the page content query on success so the UI sees google_doc_url.
+ */
+export function useExportOutline(): UseMutationResult<
+  ExportOutlineResponse,
+  Error,
+  { projectId: string; pageId: string; force?: boolean }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      pageId,
+      force,
+    }: {
+      projectId: string;
+      pageId: string;
+      force?: boolean;
+    }) => exportOutline(projectId, pageId, { force }),
+    onSuccess: (_data, { projectId, pageId }) => {
+      queryClient.invalidateQueries({
+        queryKey: contentGenerationKeys.pageContent(projectId, pageId),
       });
     },
   });

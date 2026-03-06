@@ -2,123 +2,14 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useProject } from '@/hooks/use-projects';
 import { useKeywordGeneration } from '@/hooks/useKeywordGeneration';
 import { usePagesWithKeywordsData } from '@/hooks/usePagesWithKeywords';
 import { useApproveAllKeywords } from '@/hooks/useKeywordMutations';
 import { Button, Toast } from '@/components/ui';
 import { KeywordPageRow } from '@/components/onboarding/KeywordPageRow';
-
-// Step indicator data - shared across onboarding pages
-const ONBOARDING_STEPS = [
-  { key: 'upload', label: 'Upload' },
-  { key: 'crawl', label: 'Crawl' },
-  { key: 'keywords', label: 'Keywords' },
-  { key: 'content', label: 'Content' },
-  { key: 'links', label: 'Links' },
-  { key: 'export', label: 'Export' },
-] as const;
-
-function BackArrowIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M19 12H5M12 19l-7-7 7-7" />
-    </svg>
-  );
-}
-
-function CheckIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
-}
-
-function SpinnerIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="10" opacity="0.25" />
-      <path d="M12 2a10 10 0 0 1 10 10" className="animate-spin origin-center" />
-    </svg>
-  );
-}
-
-function StepIndicator({ currentStep }: { currentStep: string }) {
-  const currentIndex = ONBOARDING_STEPS.findIndex((s) => s.key === currentStep);
-
-  return (
-    <div className="mb-8">
-      <p className="text-sm text-warm-gray-600 mb-3">
-        Step {currentIndex + 1} of {ONBOARDING_STEPS.length}: {ONBOARDING_STEPS[currentIndex].label}
-      </p>
-      <div className="flex items-center gap-1">
-        {ONBOARDING_STEPS.map((step, index) => (
-          <div key={step.key} className="flex items-center">
-            {/* Step circle */}
-            <div
-              className={`w-3 h-3 rounded-full ${
-                index < currentIndex
-                  ? 'bg-palm-500'
-                  : index === currentIndex
-                  ? 'bg-palm-500'
-                  : 'bg-cream-300'
-              }`}
-            />
-            {/* Connector line */}
-            {index < ONBOARDING_STEPS.length - 1 && (
-              <div
-                className={`w-12 h-0.5 ${
-                  index < currentIndex ? 'bg-palm-500' : 'bg-cream-300'
-                }`}
-              />
-            )}
-          </div>
-        ))}
-      </div>
-      <div className="flex mt-1">
-        {ONBOARDING_STEPS.map((step, index) => (
-          <div
-            key={step.key}
-            className={`text-xs ${
-              index === 0 ? 'text-left' : index === ONBOARDING_STEPS.length - 1 ? 'text-right' : 'text-center'
-            } ${
-              index <= currentIndex ? 'text-palm-700' : 'text-warm-gray-400'
-            }`}
-            style={{ width: index === ONBOARDING_STEPS.length - 1 ? 'auto' : '60px' }}
-          >
-            {step.label}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+import { StepIndicator, BackArrowIcon, CheckIcon, SpinnerIcon } from '@/components/onboarding/StepIndicator';
 
 function LoadingSkeleton() {
   return (
@@ -359,7 +250,11 @@ function GenerationProgressIndicator({
 export default function KeywordsPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const projectId = params.id as string;
+  const batch = searchParams.get('batch');
+  const batchNum = batch ? parseInt(batch, 10) : undefined;
+  const batchParam = batch ? `?batch=${batch}` : '';
 
   // Toast state
   const [showToast, setShowToast] = useState(false);
@@ -371,8 +266,8 @@ export default function KeywordsPage() {
   const continueButtonRef = useRef<HTMLButtonElement>(null);
 
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
-  const keywordGen = useKeywordGeneration(projectId);
-  const { pages, isLoading: isPagesLoading, isError: isPagesError, error: pagesError, refetch: refetchPages } = usePagesWithKeywordsData(projectId);
+  const keywordGen = useKeywordGeneration(projectId, { batch: batchNum });
+  const { pages, isLoading: isPagesLoading, isError: isPagesError, error: pagesError, refetch: refetchPages } = usePagesWithKeywordsData(projectId, { batch: batchNum });
   const approveAllMutation = useApproveAllKeywords();
   const [isRetrying, setIsRetrying] = useState(false);
 
@@ -420,7 +315,7 @@ export default function KeywordsPage() {
   // Handle approve all
   const handleApproveAll = async () => {
     try {
-      const result = await approveAllMutation.mutateAsync(projectId);
+      const result = await approveAllMutation.mutateAsync({ projectId, batch: batchNum });
       setToastMessage(`${result.approved_count} keywords approved`);
       setToastVariant('success');
       setShowToast(true);
@@ -487,7 +382,7 @@ export default function KeywordsPage() {
       </nav>
 
       {/* Step indicator */}
-      <StepIndicator currentStep="keywords" />
+      <StepIndicator projectId={projectId} currentStep="keywords" completedStepKeys={['upload', 'crawl']} batch={batch} />
 
       {/* Divider */}
       <hr className="border-cream-500 mb-6" />
@@ -678,7 +573,7 @@ export default function KeywordsPage() {
 
         {/* Actions */}
         <div className="flex justify-end gap-3">
-          <Link href={`/projects/${projectId}/onboarding/crawl`}>
+          <Link href={`/projects/${projectId}/onboarding/crawl${batchParam}`}>
             <Button variant="secondary">Back</Button>
           </Link>
           {(() => {
@@ -689,7 +584,7 @@ export default function KeywordsPage() {
 
             if (allApproved) {
               return (
-                <Button onClick={() => router.push(`/projects/${projectId}/onboarding/content`)}>
+                <Button onClick={() => router.push(`/projects/${projectId}/onboarding/content${batchParam}`)}>
                   Continue to Content
                 </Button>
               );

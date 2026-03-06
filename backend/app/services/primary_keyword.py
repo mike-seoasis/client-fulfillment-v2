@@ -1117,6 +1117,7 @@ Example: [{{"keyword": "keyword one", "relevance_score": 0.95}}, {{"keyword": "k
         self,
         project_id: str,
         db: AsyncSession,
+        batch: int | None = None,
     ) -> dict[str, Any]:
         """Process all completed pages in a project to generate primary keywords.
 
@@ -1188,8 +1189,29 @@ Example: [{{"keyword": "keyword one", "relevance_score": 0.95}}, {{"keyword": "k
                 .where(CrawledPage.status == CrawlStatus.COMPLETED.value)
                 .order_by(CrawledPage.normalized_url)
             )
+            if batch is not None:
+                stmt = stmt.where(CrawledPage.onboarding_batch == batch)
             result = await db.execute(stmt)
             pages = list(result.scalars().all())
+
+            # Seed used keywords from ALL existing keywords in the project
+            # (not just this batch) to avoid duplicate primary keywords
+            if batch is not None:
+                from app.models.page_keywords import PageKeywords
+
+                all_kw_stmt = (
+                    select(PageKeywords.primary_keyword)
+                    .join(CrawledPage, PageKeywords.crawled_page_id == CrawledPage.id)
+                    .where(
+                        CrawledPage.project_id == project_id,
+                        PageKeywords.primary_keyword.isnot(None),
+                    )
+                )
+                all_kw_result = await db.execute(all_kw_stmt)
+                existing_keywords = [
+                    kw for kw in all_kw_result.scalars().all() if kw
+                ]
+                self.add_used_keywords(existing_keywords)
 
             total_pages = len(pages)
 

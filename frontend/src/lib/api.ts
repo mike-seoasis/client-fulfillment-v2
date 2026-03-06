@@ -232,10 +232,12 @@ export interface BulkApproveResponse {
  * Returns immediately with a task_id for polling progress.
  */
 export function generatePrimaryKeywords(
-  projectId: string
+  projectId: string,
+  batch?: number | null
 ): Promise<GeneratePrimaryKeywordsResponse> {
+  const qs = batch != null ? `?batch=${batch}` : '';
   return apiClient.post<GeneratePrimaryKeywordsResponse>(
-    `/projects/${projectId}/generate-primary-keywords`
+    `/projects/${projectId}/generate-primary-keywords${qs}`
   );
 }
 
@@ -256,10 +258,12 @@ export function getPrimaryKeywordsStatus(
  * Only returns completed pages.
  */
 export function getPagesWithKeywords(
-  projectId: string
+  projectId: string,
+  batch?: number | null
 ): Promise<PageWithKeywords[]> {
+  const qs = batch != null ? `?batch=${batch}` : '';
   return apiClient.get<PageWithKeywords[]>(
-    `/projects/${projectId}/pages-with-keywords`
+    `/projects/${projectId}/pages-with-keywords${qs}`
   );
 }
 
@@ -299,10 +303,12 @@ export function approveKeyword(
  * Returns the count of newly approved keywords.
  */
 export function approveAllKeywords(
-  projectId: string
+  projectId: string,
+  batch?: number | null
 ): Promise<BulkApproveResponse> {
+  const qs = batch != null ? `?batch=${batch}` : '';
   return apiClient.post<BulkApproveResponse>(
-    `/projects/${projectId}/approve-all-keywords`
+    `/projects/${projectId}/approve-all-keywords${qs}`
   );
 }
 
@@ -318,6 +324,26 @@ export function togglePriority(
   const queryParam = value !== undefined ? `?value=${value}` : "";
   return apiClient.put<PageKeywordsData>(
     `/projects/${projectId}/pages/${pageId}/priority${queryParam}`
+  );
+}
+
+// =============================================================================
+// ONBOARDING BATCHES
+// =============================================================================
+
+export interface OnboardingBatchSummary {
+  batch: number;
+  total_pages: number;
+  completed_pages: number;
+  pipeline_status: 'crawling' | 'keywords' | 'content' | 'complete';
+  created_at: string;
+}
+
+export function getOnboardingBatches(
+  projectId: string
+): Promise<OnboardingBatchSummary[]> {
+  return apiClient.get<OnboardingBatchSummary[]>(
+    `/projects/${projectId}/onboarding-batches`
   );
 }
 
@@ -342,6 +368,7 @@ export interface PageGenerationStatusItem {
   qa_passed: boolean | null;
   qa_issue_count: number;
   is_approved: boolean;
+  outline_status: string | null;
 }
 
 /** Overall content generation pipeline status for a project. */
@@ -381,6 +408,16 @@ export interface ContentBulkApproveResponse {
   approved_count: number;
 }
 
+/** Request to update an outline draft. */
+export interface OutlineUpdateRequest {
+  outline_json: any;
+}
+
+/** Response from exporting an outline to Google Doc. */
+export interface ExportOutlineResponse {
+  google_doc_url: string;
+}
+
 /** Generated content for a single page. */
 export interface PageContentResponse {
   page_title: string | null;
@@ -396,6 +433,9 @@ export interface PageContentResponse {
   brief: ContentBriefData | null;
   generation_started_at: string | null;
   generation_completed_at: string | null;
+  outline_json: any | null;
+  outline_status: string | null;
+  google_doc_url: string | null;
 }
 
 /** A prompt/response exchange record. */
@@ -422,11 +462,14 @@ export interface PromptLogResponse {
  */
 export function triggerContentGeneration(
   projectId: string,
-  options?: { forceRefresh?: boolean; refreshBriefs?: boolean }
+  options?: { forceRefresh?: boolean; refreshBriefs?: boolean; outlineFirst?: boolean },
+  batch?: number | null
 ): Promise<ContentGenerationTriggerResponse> {
   const searchParams = new URLSearchParams();
   if (options?.forceRefresh) searchParams.set('force_refresh', 'true');
   if (options?.refreshBriefs) searchParams.set('refresh_briefs', 'true');
+  if (options?.outlineFirst) searchParams.set('outline_first', 'true');
+  if (batch != null) searchParams.set('batch', String(batch));
   const qs = searchParams.toString();
   return apiClient.post<ContentGenerationTriggerResponse>(
     `/projects/${projectId}/generate-content${qs ? `?${qs}` : ''}`
@@ -438,10 +481,12 @@ export function triggerContentGeneration(
  * Returns overall status and per-page breakdown.
  */
 export function pollContentGenerationStatus(
-  projectId: string
+  projectId: string,
+  batch?: number | null
 ): Promise<ContentGenerationStatus> {
+  const qs = batch != null ? `?batch=${batch}` : '';
   return apiClient.get<ContentGenerationStatus>(
-    `/projects/${projectId}/content-generation-status`
+    `/projects/${projectId}/content-generation-status${qs}`
   );
 }
 
@@ -520,10 +565,72 @@ export function recheckPageContent(
  * Returns count of newly approved pages.
  */
 export function bulkApproveContent(
-  projectId: string
+  projectId: string,
+  batch?: number | null
 ): Promise<ContentBulkApproveResponse> {
+  const qs = batch != null ? `?batch=${batch}` : '';
   return apiClient.post<ContentBulkApproveResponse>(
-    `/projects/${projectId}/bulk-approve-content`
+    `/projects/${projectId}/bulk-approve-content${qs}`
+  );
+}
+
+// =============================================================================
+// OUTLINE WORKFLOW API FUNCTIONS
+// =============================================================================
+
+/**
+ * Update an outline draft for a specific page.
+ */
+export function updateOutline(
+  projectId: string,
+  pageId: string,
+  data: OutlineUpdateRequest
+): Promise<PageContentResponse> {
+  return apiClient.put<PageContentResponse>(
+    `/projects/${projectId}/pages/${pageId}/outline`,
+    data
+  );
+}
+
+/**
+ * Approve an outline for a specific page, moving it to 'approved' status.
+ */
+export function approveOutline(
+  projectId: string,
+  pageId: string
+): Promise<PageContentResponse> {
+  return apiClient.post<PageContentResponse>(
+    `/projects/${projectId}/pages/${pageId}/approve-outline`
+  );
+}
+
+/**
+ * Generate full content from an approved outline for a specific page.
+ */
+export function generateFromOutline(
+  projectId: string,
+  pageId: string
+): Promise<ContentGenerationTriggerResponse> {
+  return apiClient.post<ContentGenerationTriggerResponse>(
+    `/projects/${projectId}/pages/${pageId}/generate-from-outline`
+  );
+}
+
+/**
+ * Export an outline to a formatted Google Doc.
+ * Idempotent — returns existing doc URL if already exported.
+ * Pass force=true to re-export (creates a new doc).
+ */
+export function exportOutline(
+  projectId: string,
+  pageId: string,
+  options?: { force?: boolean }
+): Promise<ExportOutlineResponse> {
+  const qs = options?.force ? '?force=true' : '';
+  return apiClient.post<ExportOutlineResponse>(
+    `/projects/${projectId}/pages/${pageId}/export-outline${qs}`,
+    undefined,
+    { timeout: 30_000 }
   );
 }
 
@@ -2272,4 +2379,135 @@ export function wpExport(
     app_password: appPassword,
     title_filter: titleFilter || null,
   });
+}
+
+// =============================================================================
+// SHOPIFY INTEGRATION API TYPES
+// =============================================================================
+
+/** Shopify connection status for a project. */
+export interface ShopifyStatus {
+  connected: boolean;
+  store_domain?: string;
+  last_sync_at?: string;
+  sync_status?: string;
+  connected_at?: string;
+}
+
+/** A single Shopify page (collection, product, article, or page). */
+export interface ShopifyPage {
+  id: string;
+  shopify_id: string;
+  page_type: string;
+  title: string;
+  handle: string;
+  full_url: string;
+  status: string;
+  published_at?: string;
+  product_type?: string;
+  product_count?: number;
+  blog_name?: string;
+  tags?: string[];
+}
+
+/** Paginated response for Shopify pages. */
+export interface ShopifyPagesResponse {
+  items: ShopifyPage[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
+/** Count of pages per category type. */
+export interface ShopifyPageCounts {
+  collection: number;
+  product: number;
+  article: number;
+  page: number;
+}
+
+// =============================================================================
+// SHOPIFY INTEGRATION API FUNCTIONS
+// =============================================================================
+
+/** Get Shopify connection status for a project. */
+export function getShopifyStatus(
+  projectId: string
+): Promise<ShopifyStatus> {
+  return apiClient.get<ShopifyStatus>(
+    `/projects/${projectId}/shopify/status`
+  );
+}
+
+/** Get paginated Shopify pages for a project, filtered by type. */
+export function getShopifyPages(
+  projectId: string,
+  params: { type: string; page?: number; per_page?: number; search?: string }
+): Promise<ShopifyPagesResponse> {
+  const searchParams = new URLSearchParams({ type: params.type });
+  if (params.page) searchParams.set("page", String(params.page));
+  if (params.per_page) searchParams.set("per_page", String(params.per_page));
+  if (params.search) searchParams.set("search", params.search);
+  return apiClient.get<ShopifyPagesResponse>(
+    `/projects/${projectId}/shopify/pages?${searchParams.toString()}`
+  );
+}
+
+/** Get page counts per category for a project. */
+export function getShopifyPageCounts(
+  projectId: string
+): Promise<ShopifyPageCounts> {
+  return apiClient.get<ShopifyPageCounts>(
+    `/projects/${projectId}/shopify/pages/counts`
+  );
+}
+
+/** Trigger an immediate Shopify sync for a project. */
+export function triggerShopifySync(
+  projectId: string
+): Promise<{ status: string }> {
+  return apiClient.post<{ status: string }>(
+    `/projects/${projectId}/shopify/sync`
+  );
+}
+
+/** Disconnect Shopify from a project. */
+export function disconnectShopify(
+  projectId: string
+): Promise<void> {
+  return apiClient.delete<void>(
+    `/projects/${projectId}/shopify`
+  );
+}
+
+// --- Page deletion ---
+
+/** Delete a single crawled page. */
+export function deleteCrawledPage(
+  projectId: string,
+  pageId: string
+): Promise<void> {
+  return apiClient.delete<void>(
+    `/projects/${projectId}/pages/${pageId}`
+  );
+}
+
+/** Bulk-delete crawled pages (uses POST because apiClient.delete doesn't pass body). */
+export function deleteCrawledPagesBulk(
+  projectId: string,
+  pageIds: string[]
+): Promise<{ deleted_count: number }> {
+  return apiClient.post<{ deleted_count: number }>(
+    `/projects/${projectId}/pages/bulk-delete`,
+    { page_ids: pageIds }
+  );
+}
+
+/** Reset onboarding — deletes all onboarding-sourced pages. */
+export function resetOnboarding(
+  projectId: string
+): Promise<{ deleted_count: number }> {
+  return apiClient.post<{ deleted_count: number }>(
+    `/projects/${projectId}/onboarding/reset`
+  );
 }

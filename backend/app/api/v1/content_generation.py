@@ -8,7 +8,7 @@ and fetching prompt logs.
 import re
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -27,6 +27,8 @@ from app.schemas.content_generation import (
     ContentGenerationStatus,
     ContentGenerationTriggerResponse,
     ContentUpdateRequest,
+    ExportOutlineResponse,
+    OutlineUpdateRequest,
     PageContentResponse,
     PageGenerationStatusItem,
     PromptLogResponse,
@@ -54,6 +56,8 @@ async def generate_content(
     background_tasks: BackgroundTasks,
     force_refresh: bool = False,
     refresh_briefs: bool = False,
+    outline_first: bool = False,
+    batch: int | None = Query(None, description="Filter by onboarding batch number"),
     db: AsyncSession = Depends(get_session),
 ) -> ContentGenerationTriggerResponse:
     """Trigger content generation for all pages with approved keywords.
@@ -89,6 +93,10 @@ async def generate_content(
             PageKeywords.is_approved.is_(True),
         )
     )
+    if batch is not None:
+        approved_count_stmt = approved_count_stmt.where(
+            CrawledPage.onboarding_batch == batch
+        )
     result = await db.execute(approved_count_stmt)
     approved_count = result.scalar_one()
 
@@ -106,6 +114,8 @@ async def generate_content(
         project_id=project_id,
         force_refresh=force_refresh,
         refresh_briefs=refresh_briefs,
+        batch=batch,
+        outline_first=outline_first,
     )
 
     logger.info(
@@ -116,9 +126,10 @@ async def generate_content(
         },
     )
 
+    mode = "outline generation" if outline_first else "content generation"
     return ContentGenerationTriggerResponse(
         status="accepted",
-        message=f"Content generation started for {approved_count} pages with approved keywords",
+        message=f"{mode.capitalize()} started for {approved_count} pages with approved keywords",
     )
 
 
@@ -126,6 +137,8 @@ async def _run_generation_background(
     project_id: str,
     force_refresh: bool = False,
     refresh_briefs: bool = False,
+    batch: int | None = None,
+    outline_first: bool = False,
 ) -> None:
     """Background task wrapper for the content generation pipeline.
 
@@ -138,6 +151,8 @@ async def _run_generation_background(
             project_id,
             force_refresh=force_refresh,
             refresh_briefs=refresh_briefs,
+            batch=batch,
+            outline_first=outline_first,
         )
         logger.info(
             "Content generation pipeline finished",
@@ -168,6 +183,7 @@ async def _run_generation_background(
 )
 async def get_content_generation_status(
     project_id: str,
+    batch: int | None = Query(None, description="Filter by onboarding batch number"),
     db: AsyncSession = Depends(get_session),
 ) -> ContentGenerationStatus:
     """Get content generation status for a project.
@@ -191,6 +207,8 @@ async def get_content_generation_status(
             selectinload(CrawledPage.page_content),
         )
     )
+    if batch is not None:
+        stmt = stmt.where(CrawledPage.onboarding_batch == batch)
     result = await db.execute(stmt)
     pages = result.scalars().unique().all()
 
@@ -228,6 +246,10 @@ async def get_content_generation_status(
                 qa_issue_count = len(qa.get("issues", []))
             page_is_approved = page.page_content.is_approved
 
+        outline_status = None
+        if page.page_content:
+            outline_status = page.page_content.outline_status
+
         page_items.append(
             PageGenerationStatusItem(
                 page_id=page.id,
@@ -239,6 +261,7 @@ async def get_content_generation_status(
                 qa_passed=qa_passed,
                 qa_issue_count=qa_issue_count,
                 is_approved=page_is_approved,
+                outline_status=outline_status,
             )
         )
 
@@ -349,6 +372,9 @@ async def get_page_content(
         bottom_description=content.bottom_description,
         word_count=content.word_count,
         status=content.status,
+        outline_json=content.outline_json,
+        outline_status=content.outline_status,
+        google_doc_url=content.google_doc_url,
         qa_results=content.qa_results,
         brief_summary=brief_summary,
         brief=brief_data,
@@ -469,6 +495,9 @@ async def update_page_content(
         bottom_description=content.bottom_description,
         word_count=content.word_count,
         status=content.status,
+        outline_json=content.outline_json,
+        outline_status=content.outline_status,
+        google_doc_url=content.google_doc_url,
         is_approved=content.is_approved,
         approved_at=content.approved_at,
         qa_results=content.qa_results,
@@ -571,6 +600,9 @@ async def approve_content(
         bottom_description=content.bottom_description,
         word_count=content.word_count,
         status=content.status,
+        outline_json=content.outline_json,
+        outline_status=content.outline_status,
+        google_doc_url=content.google_doc_url,
         is_approved=content.is_approved,
         approved_at=content.approved_at,
         qa_results=content.qa_results,
@@ -586,6 +618,7 @@ async def approve_content(
 )
 async def bulk_approve_content(
     project_id: str,
+    batch: int | None = Query(None, description="Filter by onboarding batch number"),
     db: AsyncSession = Depends(get_session),
 ) -> BulkApproveResponse:
     """Bulk-approve all eligible content pages for a project.
@@ -611,6 +644,8 @@ async def bulk_approve_content(
             PageContent.is_approved.is_(False),
         )
     )
+    if batch is not None:
+        stmt = stmt.where(CrawledPage.onboarding_batch == batch)
     result = await db.execute(stmt)
     eligible = result.scalars().all()
 
@@ -733,10 +768,379 @@ async def recheck_content(
         bottom_description=content.bottom_description,
         word_count=content.word_count,
         status=content.status,
+        outline_json=content.outline_json,
+        outline_status=content.outline_status,
+        google_doc_url=content.google_doc_url,
         is_approved=content.is_approved,
         approved_at=content.approved_at,
         qa_results=content.qa_results,
         brief_summary=brief_summary,
+        generation_started_at=content.generation_started_at,
+        generation_completed_at=content.generation_completed_at,
+    )
+
+
+# Module-level set to track pages with active outline-to-content generation.
+_active_outline_generations: set[str] = set()
+
+
+@router.put(
+    "/{project_id}/pages/{page_id}/outline",
+    response_model=PageContentResponse,
+)
+async def update_outline(
+    project_id: str,
+    page_id: str,
+    body: OutlineUpdateRequest,
+    db: AsyncSession = Depends(get_session),
+) -> PageContentResponse:
+    """Save an edited outline for a page.
+
+    Updates outline_json on the PageContent record.
+    Returns 404 if page or PageContent not found.
+    """
+    await ProjectService.get_project(db, project_id)
+
+    stmt = (
+        select(CrawledPage)
+        .where(
+            CrawledPage.id == page_id,
+            CrawledPage.project_id == project_id,
+        )
+        .options(
+            selectinload(CrawledPage.page_content),
+            selectinload(CrawledPage.content_brief),
+        )
+    )
+    result = await db.execute(stmt)
+    page = result.scalar_one_or_none()
+
+    if not page:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Page {page_id} not found in project {project_id}",
+        )
+
+    if not page.page_content:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Content has not been generated yet for this page",
+        )
+
+    content = page.page_content
+    content.outline_json = body.outline_json
+
+    await db.commit()
+    await db.refresh(content)
+
+    logger.info(
+        "Outline updated",
+        extra={"project_id": project_id, "page_id": page_id},
+    )
+
+    return _build_page_content_response(page)
+
+
+@router.post(
+    "/{project_id}/pages/{page_id}/approve-outline",
+    response_model=PageContentResponse,
+)
+async def approve_outline(
+    project_id: str,
+    page_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> PageContentResponse:
+    """Approve the outline for a page (set outline_status='approved').
+
+    Returns 400 if outline_status is not 'draft'.
+    Returns 404 if page or PageContent not found.
+    """
+    await ProjectService.get_project(db, project_id)
+
+    stmt = (
+        select(CrawledPage)
+        .where(
+            CrawledPage.id == page_id,
+            CrawledPage.project_id == project_id,
+        )
+        .options(
+            selectinload(CrawledPage.page_content),
+            selectinload(CrawledPage.content_brief),
+        )
+    )
+    result = await db.execute(stmt)
+    page = result.scalar_one_or_none()
+
+    if not page:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Page {page_id} not found in project {project_id}",
+        )
+
+    if not page.page_content:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Content has not been generated yet for this page",
+        )
+
+    content = page.page_content
+
+    if content.outline_status != "draft":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot approve outline with status '{content.outline_status}'. Expected 'draft'.",
+        )
+
+    content.outline_status = "approved"
+
+    await db.commit()
+    await db.refresh(content)
+
+    logger.info(
+        "Outline approved",
+        extra={"project_id": project_id, "page_id": page_id},
+    )
+
+    return _build_page_content_response(page)
+
+
+@router.post(
+    "/{project_id}/pages/{page_id}/export-outline",
+    response_model=ExportOutlineResponse,
+)
+async def export_outline(
+    project_id: str,
+    page_id: str,
+    force: bool = Query(False, description="Re-export even if a Google Doc already exists"),
+    db: AsyncSession = Depends(get_session),
+) -> ExportOutlineResponse:
+    """Export a page outline to a formatted Google Doc.
+
+    Creates a Google Doc in the shared Drive folder, populates it with
+    the formatted outline, shares it (anyone with link), and logs a row
+    in the per-project tracking spreadsheet.
+
+    Idempotent: if a Google Doc URL already exists for this page, returns
+    the existing URL without re-exporting.
+
+    Returns 400 if no outline_json exists on the page content.
+    Returns 404 if page or content not found.
+    """
+    from app.services.outline_export import export_outline_to_google
+
+    project = await ProjectService.get_project(db, project_id)
+
+    stmt = (
+        select(CrawledPage)
+        .where(
+            CrawledPage.id == page_id,
+            CrawledPage.project_id == project_id,
+        )
+        .options(
+            selectinload(CrawledPage.page_content),
+            selectinload(CrawledPage.keywords),
+        )
+    )
+    result = await db.execute(stmt)
+    page = result.scalar_one_or_none()
+
+    if not page:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Page {page_id} not found in project {project_id}",
+        )
+
+    if not page.page_content:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Content has not been generated yet for this page",
+        )
+
+    content = page.page_content
+
+    if not content.outline_json:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No outline exists for this page. Generate an outline first.",
+        )
+
+    # Idempotent: return existing doc if already exported (unless forced)
+    if content.google_doc_url and not force:
+        return ExportOutlineResponse(google_doc_url=content.google_doc_url)
+
+    keyword = page.keywords.primary_keyword if page.keywords else ""
+
+    export_result = await export_outline_to_google(
+        db=db,
+        project_name=project.name,
+        crawled_page=page,
+        page_content=content,
+        keyword=keyword,
+    )
+
+    if not export_result.success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=export_result.error or "Failed to export outline to Google Doc",
+        )
+
+    return ExportOutlineResponse(google_doc_url=export_result.google_doc_url)  # type: ignore[arg-type]
+
+
+@router.post(
+    "/{project_id}/pages/{page_id}/generate-from-outline",
+    response_model=ContentGenerationTriggerResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def generate_from_outline(
+    project_id: str,
+    page_id: str,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_session),
+) -> ContentGenerationTriggerResponse:
+    """Generate content from an approved outline.
+
+    Starts a background task to generate content using the approved outline.
+    Returns 400 if outline_status is not 'approved'.
+    Returns 409 if generation is already in progress for this page.
+    """
+    await ProjectService.get_project(db, project_id)
+
+    # Check for duplicate runs
+    if page_id in _active_outline_generations:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Content generation from outline is already in progress for this page",
+        )
+
+    stmt = (
+        select(CrawledPage)
+        .where(
+            CrawledPage.id == page_id,
+            CrawledPage.project_id == project_id,
+        )
+        .options(selectinload(CrawledPage.page_content))
+    )
+    result = await db.execute(stmt)
+    page = result.scalar_one_or_none()
+
+    if not page:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Page {page_id} not found in project {project_id}",
+        )
+
+    if not page.page_content:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Content has not been generated yet for this page",
+        )
+
+    if page.page_content.outline_status != "approved":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Outline must be approved before generating content. Current status: '{page.page_content.outline_status}'",
+        )
+
+    _active_outline_generations.add(page_id)
+    _active_generations.add(project_id)
+
+    background_tasks.add_task(
+        _run_generate_from_outline_background,
+        project_id=project_id,
+        page_id=page_id,
+    )
+
+    logger.info(
+        "Generate-from-outline triggered",
+        extra={"project_id": project_id, "page_id": page_id},
+    )
+
+    return ContentGenerationTriggerResponse(
+        status="accepted",
+        message="Content generation from outline started",
+    )
+
+
+async def _run_generate_from_outline_background(
+    project_id: str,
+    page_id: str,
+) -> None:
+    """Background task wrapper for generate-from-outline."""
+    from app.services.content_generation import run_generate_from_outline
+
+    try:
+        result = await run_generate_from_outline(project_id, page_id)
+        logger.info(
+            "Generate-from-outline background task finished",
+            extra={
+                "project_id": project_id,
+                "page_id": page_id,
+                "success": result.success,
+            },
+        )
+    except Exception as e:
+        logger.error(
+            "Generate-from-outline background task failed",
+            extra={
+                "project_id": project_id,
+                "page_id": page_id,
+                "error": str(e),
+            },
+            exc_info=True,
+        )
+    finally:
+        _active_outline_generations.discard(page_id)
+        _active_generations.discard(project_id)
+
+
+def _build_page_content_response(page: CrawledPage) -> PageContentResponse:
+    """Helper to build PageContentResponse from a CrawledPage with loaded relations."""
+    content = page.page_content
+
+    brief_summary = None
+    brief_data = None
+    if page.content_brief:
+        brief = page.content_brief
+        lsi_terms = brief.lsi_terms or []
+        competitors = brief.competitors or []
+        related_questions = brief.related_questions or []
+
+        word_count_range = None
+        if brief.word_count_min and brief.word_count_max:
+            word_count_range = f"{brief.word_count_min}-{brief.word_count_max}"
+
+        brief_summary = BriefSummary(
+            keyword=brief.keyword,
+            lsi_terms_count=len(lsi_terms),
+            competitors_count=len(competitors),
+            related_questions_count=len(related_questions),
+            page_score_target=brief.page_score_target,
+            word_count_range=word_count_range,
+        )
+
+        brief_data = ContentBriefData(
+            keyword=brief.keyword,
+            lsi_terms=lsi_terms,
+            heading_targets=brief.heading_targets or [],
+            keyword_targets=brief.keyword_targets or [],
+        )
+
+    return PageContentResponse(
+        page_title=content.page_title,
+        meta_description=content.meta_description,
+        top_description=content.top_description,
+        bottom_description=content.bottom_description,
+        word_count=content.word_count,
+        status=content.status,
+        outline_json=content.outline_json,
+        outline_status=content.outline_status,
+        google_doc_url=content.google_doc_url,
+        is_approved=content.is_approved,
+        approved_at=content.approved_at,
+        qa_results=content.qa_results,
+        brief_summary=brief_summary,
+        brief=brief_data,
         generation_started_at=content.generation_started_at,
         generation_completed_at=content.generation_completed_at,
     )

@@ -195,6 +195,9 @@ class UrlUploadResponse(BaseModel):
         ..., ge=0, description="Number of duplicate URLs skipped"
     )
     total_urls: int = Field(..., ge=0, description="Total URLs in request")
+    batch: int = Field(
+        ..., ge=1, description="Onboarding batch number assigned to uploaded pages"
+    )
 
 
 class TaxonomyLabel(BaseModel):
@@ -214,3 +217,19 @@ class TaxonomyResponse(BaseModel):
         ..., description="Array of taxonomy labels with definitions"
     )
     generated_at: datetime = Field(..., description="When the taxonomy was generated")
+
+
+class BulkDeleteRequest(BaseModel):
+    """Request schema for bulk-deleting crawled pages."""
+
+    page_ids: list[str] = Field(
+        ...,
+        min_length=1,
+        description="List of page UUIDs to delete",
+    )
+
+
+class BulkDeleteResponse(BaseModel):
+    """Response schema for bulk delete and onboarding reset endpoints."""
+
+    deleted_count: int = Field(..., ge=0, description="Number of pages deleted")

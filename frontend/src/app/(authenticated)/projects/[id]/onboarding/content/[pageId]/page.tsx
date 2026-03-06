@@ -19,6 +19,7 @@ import {
 import { generateVariations } from '@/lib/keyword-variations';
 import { Button } from '@/components/ui';
 import { useBrandConfig } from '@/hooks/useBrandConfig';
+import { OutlineEditor } from '@/components/OutlineEditor';
 
 // ---------------------------------------------------------------------------
 // Utility helpers
@@ -842,6 +843,22 @@ export default function ContentEditorPage() {
   }
 
   if (!content) return null;
+
+  // Show outline editor when outline_status is 'draft' or 'approved',
+  // but NOT if full content has already been generated (status='complete' with content)
+  const hasGeneratedContent = content.status === 'complete' && (content.top_description || content.bottom_description);
+  if ((content.outline_status === 'draft' || content.outline_status === 'approved') && !hasGeneratedContent) {
+    return (
+      <OutlineEditor
+        content={content}
+        projectId={projectId}
+        pageId={pageId}
+        pageInfo={pageInfo}
+        backUrl={`/projects/${projectId}/onboarding/content`}
+        onGenerateRedirectUrl={`/projects/${projectId}/onboarding/content`}
+      />
+    );
+  }
 
   return (
     <div className="max-w-[1600px] mx-auto pb-24">

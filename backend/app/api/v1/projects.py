@@ -6,8 +6,8 @@ REST endpoints for managing projects with CRUD operations.
 from datetime import datetime
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
-from sqlalchemy import select
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.attributes import flag_modified
@@ -20,6 +20,8 @@ from app.models.crawled_page import CrawledPage, CrawlStatus
 from app.models.page_keywords import PageKeywords
 from app.models.project import Project
 from app.schemas.crawled_page import (
+    BulkDeleteRequest,
+    BulkDeleteResponse,
     CrawledPageResponse,
     CrawlStatusResponse,
     PageLabelsUpdate,
@@ -219,6 +221,15 @@ async def upload_urls(
     result = await db.execute(stmt)
     existing_urls = set(result.scalars().all())
 
+    # Compute next batch number for onboarding pages
+    max_batch_result = await db.execute(
+        select(func.max(CrawledPage.onboarding_batch)).where(
+            CrawledPage.project_id == project_id,
+            CrawledPage.source == "onboarding",
+        )
+    )
+    next_batch = (max_batch_result.scalar_one_or_none() or 0) + 1
+
     # Create CrawledPage records for new URLs only
     new_page_ids: list[str] = []
     pages_created = 0
@@ -239,6 +250,7 @@ async def upload_urls(
             normalized_url=normalized_url,
             raw_url=data.urls[i],  # Store original URL
             status=CrawlStatus.PENDING.value,
+            onboarding_batch=next_batch,
         )
         db.add(page)
         await db.flush()  # Get the page ID
@@ -297,6 +309,7 @@ async def upload_urls(
         pages_created=pages_created,
         pages_skipped=pages_skipped,
         total_urls=len(data.urls),
+        batch=next_batch,
     )
 
 
@@ -545,9 +558,101 @@ async def list_project_pages(
     return [CrawledPageResponse.model_validate(page) for page in pages]
 
 
+@router.get("/{project_id}/onboarding-batches")
+async def list_onboarding_batches(
+    project_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> list[dict]:
+    """List all onboarding batches for a project with per-batch pipeline status.
+
+    Returns batch number, page counts, pipeline status, and creation timestamp.
+    """
+    from app.models.page_content import PageContent
+    from app.models.page_keywords import PageKeywords as PK
+
+    await ProjectService.get_project(db, project_id)
+
+    # Load all onboarding pages with keywords and content eagerly
+    from sqlalchemy.orm import selectinload
+
+    stmt = (
+        select(CrawledPage)
+        .where(
+            CrawledPage.project_id == project_id,
+            CrawledPage.source == "onboarding",
+            CrawledPage.onboarding_batch.isnot(None),
+        )
+        .options(
+            selectinload(CrawledPage.keywords),
+            selectinload(CrawledPage.page_content),
+        )
+        .order_by(CrawledPage.onboarding_batch, CrawledPage.created_at)
+    )
+    result = await db.execute(stmt)
+    pages = result.scalars().unique().all()
+
+    # Group pages by batch
+    batches: dict[int, list] = {}
+    for page in pages:
+        b = page.onboarding_batch
+        if b not in batches:
+            batches[b] = []
+        batches[b].append(page)
+
+    # Compute per-batch status
+    summaries = []
+    for batch_num in sorted(batches.keys()):
+        batch_pages = batches[batch_num]
+        total = len(batch_pages)
+        completed = sum(
+            1
+            for p in batch_pages
+            if p.page_content and p.page_content.is_approved
+        )
+
+        # Determine pipeline status
+        any_pending_crawl = any(
+            p.status in ("pending", "crawling") for p in batch_pages
+        )
+        all_crawled = all(p.status == "completed" for p in batch_pages)
+        has_keywords = any(p.keywords and p.keywords.primary_keyword for p in batch_pages)
+        all_have_keywords = all(
+            p.keywords and p.keywords.primary_keyword for p in batch_pages
+        )
+        has_content = any(p.page_content for p in batch_pages)
+        all_approved_content = all(
+            p.page_content and p.page_content.is_approved for p in batch_pages
+        )
+
+        if any_pending_crawl or not all_crawled:
+            pipeline_status = "crawling"
+        elif not all_have_keywords:
+            pipeline_status = "keywords"
+        elif not all_approved_content:
+            pipeline_status = "content"
+        else:
+            pipeline_status = "complete"
+
+        # Earliest created_at in the batch
+        created_at = min(p.created_at for p in batch_pages).isoformat()
+
+        summaries.append(
+            {
+                "batch": batch_num,
+                "total_pages": total,
+                "completed_pages": completed,
+                "pipeline_status": pipeline_status,
+                "created_at": created_at,
+            }
+        )
+
+    return summaries
+
+
 @router.get("/{project_id}/crawl-status", response_model=CrawlStatusResponse)
 async def get_crawl_status(
     project_id: str,
+    batch: int | None = Query(None, description="Filter by onboarding batch number"),
     db: AsyncSession = Depends(get_session),
 ) -> CrawlStatusResponse:
     """Get crawl status for a project.
@@ -576,6 +681,8 @@ async def get_crawl_status(
         CrawledPage.project_id == project_id,
         CrawledPage.source == "onboarding",
     )
+    if batch is not None:
+        stmt = stmt.where(CrawledPage.onboarding_batch == batch)
     result = await db.execute(stmt)
     pages = result.scalars().all()
 
@@ -1017,6 +1124,7 @@ async def recrawl_all_pages(
 async def generate_primary_keywords(
     project_id: str,
     background_tasks: BackgroundTasks,
+    batch: int | None = Query(None, description="Filter by onboarding batch number"),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, str]:
     """Start primary keyword generation for all completed pages in a project.
@@ -1052,6 +1160,8 @@ async def generate_primary_keywords(
         CrawledPage.project_id == project_id,
         CrawledPage.status == CrawlStatus.COMPLETED.value,
     )
+    if batch is not None:
+        stmt = stmt.where(CrawledPage.onboarding_batch == batch)
     result = await db.execute(stmt)
     completed_pages = list(result.scalars().all())
 
@@ -1093,6 +1203,7 @@ async def generate_primary_keywords(
         _generate_keywords_background,
         project_id=project_id,
         task_id=task_id,
+        batch=batch,
     )
 
     return {
@@ -1105,6 +1216,7 @@ async def generate_primary_keywords(
 async def _generate_keywords_background(
     project_id: str,
     task_id: str,
+    batch: int | None = None,
 ) -> None:
     """Background task to generate primary keywords for all pages.
 
@@ -1143,7 +1255,7 @@ async def _generate_keywords_background(
             )
 
             # Run generation for the project
-            result = await keyword_service.generate_for_project(project_id, db)
+            result = await keyword_service.generate_for_project(project_id, db, batch=batch)
 
             logger.info(
                 "Background keyword generation completed",
@@ -1245,6 +1357,7 @@ async def get_primary_keywords_status(
 )
 async def list_pages_with_keywords(
     project_id: str,
+    batch: int | None = Query(None, description="Filter by onboarding batch number"),
     db: AsyncSession = Depends(get_session),
 ) -> list[PageWithKeywords]:
     """List all completed pages with their keyword research data.
@@ -1278,6 +1391,8 @@ async def list_pages_with_keywords(
         )
         .order_by(CrawledPage.normalized_url)
     )
+    if batch is not None:
+        stmt = stmt.where(CrawledPage.onboarding_batch == batch)
 
     result = await db.execute(stmt)
     pages = result.scalars().unique().all()
@@ -1616,6 +1731,7 @@ async def approve_keyword(
 )
 async def approve_all_keywords(
     project_id: str,
+    batch: int | None = Query(None, description="Filter by onboarding batch number"),
     db: AsyncSession = Depends(get_session),
 ) -> BulkApproveResponse:
     """Approve all keywords for pages in a project.
@@ -1646,6 +1762,8 @@ async def approve_all_keywords(
             CrawledPage.status == CrawlStatus.COMPLETED.value,
         )
     )
+    if batch is not None:
+        stmt = stmt.where(CrawledPage.onboarding_batch == batch)
     result = await db.execute(stmt)
     page_keywords_list = list(result.scalars().all())
 
@@ -1910,3 +2028,140 @@ async def export_csv(
             "Content-Disposition": f'attachment; filename="{filename}"',
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Page deletion endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.delete(
+    "/{project_id}/pages/{page_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_page(
+    project_id: str,
+    page_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> None:
+    """Delete a single crawled page.
+
+    Verifies the page belongs to the given project before deleting.
+    Cascade rules on the CrawledPage model will remove related records.
+
+    Args:
+        project_id: UUID of the project.
+        page_id: UUID of the page to delete.
+
+    Raises:
+        HTTPException: 404 if project or page not found.
+    """
+    # Verify project exists
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Project {project_id} not found",
+        )
+
+    # Fetch the page and verify it belongs to this project
+    page = await db.get(CrawledPage, page_id)
+    if not page or page.project_id != project_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Page {page_id} not found in project {project_id}",
+        )
+
+    await db.delete(page)
+    await db.commit()
+
+
+@router.post(
+    "/{project_id}/pages/bulk-delete",
+    response_model=BulkDeleteResponse,
+)
+async def bulk_delete_pages(
+    project_id: str,
+    data: BulkDeleteRequest,
+    db: AsyncSession = Depends(get_session),
+) -> BulkDeleteResponse:
+    """Bulk-delete crawled pages by ID.
+
+    Deletes all pages whose IDs are in the request body *and* belong to the
+    specified project.  Pages that don't exist or belong to a different
+    project are silently ignored.
+
+    Uses POST instead of DELETE so the frontend apiClient can pass a body.
+
+    Args:
+        project_id: UUID of the project.
+        data: Request body with list of page IDs to delete.
+
+    Returns:
+        Number of pages actually deleted.
+
+    Raises:
+        HTTPException: 404 if project not found.
+    """
+    # Verify project exists
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Project {project_id} not found",
+        )
+
+    stmt = (
+        delete(CrawledPage)
+        .where(
+            CrawledPage.project_id == project_id,
+            CrawledPage.id.in_(data.page_ids),
+        )
+    )
+    result = await db.execute(stmt)
+    await db.commit()
+
+    return BulkDeleteResponse(deleted_count=result.rowcount)
+
+
+@router.post(
+    "/{project_id}/onboarding/reset",
+    response_model=BulkDeleteResponse,
+)
+async def reset_onboarding_pages(
+    project_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> BulkDeleteResponse:
+    """Reset onboarding by deleting all onboarding-sourced pages.
+
+    Removes every CrawledPage for the project where ``source == 'onboarding'``.
+    This allows the user to re-run the onboarding crawl from scratch.
+
+    Args:
+        project_id: UUID of the project.
+
+    Returns:
+        Number of pages deleted.
+
+    Raises:
+        HTTPException: 404 if project not found.
+    """
+    # Verify project exists
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Project {project_id} not found",
+        )
+
+    stmt = (
+        delete(CrawledPage)
+        .where(
+            CrawledPage.project_id == project_id,
+            CrawledPage.source == "onboarding",
+        )
+    )
+    result = await db.execute(stmt)
+    await db.commit()
+
+    return BulkDeleteResponse(deleted_count=result.rowcount)

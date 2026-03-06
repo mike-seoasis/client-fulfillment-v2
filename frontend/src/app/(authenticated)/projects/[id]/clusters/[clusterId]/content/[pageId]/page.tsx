@@ -10,6 +10,7 @@ import {
   useApprovePageContent,
   useRecheckPageContent,
 } from '@/hooks/useContentGeneration';
+import { OutlineEditor } from '@/components/OutlineEditor';
 import { ContentEditorWithSource } from '@/components/content-editor/ContentEditorWithSource';
 import {
   HighlightToggleControls,
@@ -843,6 +844,22 @@ export default function ClusterContentEditorPage() {
   }
 
   if (!content) return null;
+
+  // Show outline editor when outline_status is 'draft' or 'approved',
+  // but NOT if full content has already been generated
+  const hasGeneratedContent = content.status === 'complete' && (content.top_description || content.bottom_description);
+  if ((content.outline_status === 'draft' || content.outline_status === 'approved') && !hasGeneratedContent) {
+    return (
+      <OutlineEditor
+        content={content}
+        projectId={projectId}
+        pageId={pageId}
+        pageInfo={pageInfo}
+        backUrl={`/projects/${projectId}/clusters/${clusterId}/content`}
+        onGenerateRedirectUrl={`/projects/${projectId}/clusters/${clusterId}/content`}
+      />
+    );
+  }
 
   return (
     <div className="max-w-[1600px] mx-auto pb-24">
