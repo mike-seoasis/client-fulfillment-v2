@@ -85,15 +85,6 @@ function QualityStatusCard({ qaResults }: { qaResults: QaResults | null }) {
     'tier2_ai_excess',
     'negation_contrast',
     'competitor_name',
-    // Guardrails AI checks
-    'gr_competitor',
-    'gr_reading_level',
-    'gr_redundant',
-    'gr_ban_list',
-    'gr_profanity',
-    'gr_toxic',
-    'gr_xss',
-    'lsi_coverage',
   ];
   const checkLabels: Record<string, string> = {
     banned_word: 'Banned Words',
@@ -105,14 +96,6 @@ function QualityStatusCard({ qaResults }: { qaResults: QaResults | null }) {
     tier2_ai_excess: 'Tier 2 AI Words',
     negation_contrast: 'Negation Contrast',
     competitor_name: 'Competitor Names',
-    gr_competitor: 'Competitor (NLP)',
-    gr_reading_level: 'Reading Level',
-    gr_redundant: 'Redundant Sentences',
-    gr_ban_list: 'Ban List (Fuzzy)',
-    gr_profanity: 'Profanity',
-    gr_toxic: 'Toxic Language',
-    gr_xss: 'XSS / Sanitization',
-    lsi_coverage: 'LSI Coverage',
   };
 
   const issuesByType: Record<string, number> = {};
@@ -170,14 +153,6 @@ const ISSUE_TYPE_LABELS: Record<string, string> = {
   tier2_ai_excess: 'Tier 2 AI Words',
   negation_contrast: 'Negation/Contrast',
   competitor_name: 'Competitor Names',
-  gr_competitor: 'Competitor (NLP)',
-  gr_reading_level: 'Reading Level',
-  gr_redundant: 'Redundant Sentences',
-  gr_ban_list: 'Ban List (Fuzzy)',
-  gr_profanity: 'Profanity',
-  gr_toxic: 'Toxic Language',
-  gr_xss: 'XSS / Sanitization',
-  lsi_coverage: 'LSI Coverage',
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -185,7 +160,6 @@ const FIELD_LABELS: Record<string, string> = {
   meta_description: 'meta',
   top_description: 'top',
   bottom_description: 'body',
-  all: 'all fields',
 };
 
 function FlaggedPassagesCard({

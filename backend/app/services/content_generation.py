@@ -327,10 +327,7 @@ async def run_generate_from_outline(
                 written_content.status = ContentStatus.CHECKING.value
                 await db.commit()
 
-                brief_dict = None
-                if crawled_page.content_brief is not None:
-                    brief_dict = {"lsi_terms": crawled_page.content_brief.lsi_terms or []}
-                run_quality_checks(written_content, brand_config, content_brief=brief_dict)
+                run_quality_checks(written_content, brand_config)
 
                 # flag_modified needed for in-place JSONB dict mutation
                 from sqlalchemy.orm.attributes import flag_modified
@@ -807,10 +804,7 @@ async def _process_single_page(
             written_content.status = ContentStatus.CHECKING.value
             await db.commit()
 
-            brief_dict = None
-            if content_brief is not None:
-                brief_dict = {"lsi_terms": content_brief.lsi_terms or []}
-            run_quality_checks(written_content, brand_config, content_brief=brief_dict)
+            run_quality_checks(written_content, brand_config)
 
             # --- Step 4: Mark complete ---
             written_content.status = ContentStatus.COMPLETE.value

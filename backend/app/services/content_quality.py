@@ -132,9 +132,7 @@ class QualityResult:
 
 
 def run_quality_checks(
-    content: PageContent,
-    brand_config: dict[str, Any],
-    content_brief: dict[str, Any] | None = None,
+    content: PageContent, brand_config: dict[str, Any]
 ) -> QualityResult:
     """Run all deterministic quality checks on generated content.
 
@@ -148,12 +146,10 @@ def run_quality_checks(
     7. Tier 2 AI words (max 1 per piece)
     8. Negation/contrast pattern (max 1 per piece)
     9. Competitor brand names from vocabulary.competitors
-    14-21. Guardrails AI Hub validators + LSI coverage
 
     Args:
         content: PageContent with generated fields.
         brand_config: The BrandConfig.v2_schema dict.
-        content_brief: Optional dict with lsi_terms for LSI coverage check.
 
     Returns:
         QualityResult with pass/fail and list of issues.
@@ -191,12 +187,6 @@ def run_quality_checks(
     # Check 9: Competitor brand names
     issues.extend(_check_competitor_names(fields, brand_config))
 
-    # Checks 14-21: Guardrails AI Hub validators + LSI coverage
-    from app.services.guardrails_checks import run_guardrails_checks
-
-    guardrails_issues = run_guardrails_checks(fields, brand_config, content_brief)
-    issues.extend(guardrails_issues)
-
     result = QualityResult(
         passed=len(issues) == 0,
         issues=issues,
@@ -219,13 +209,9 @@ def _get_content_fields(content: PageContent) -> dict[str, str]:
     return result
 
 
-def strip_html_tags(text: str) -> str:
+def _strip_html_tags(text: str) -> str:
     """Strip HTML tags from text for clean context strings."""
     return re.sub(r"<[^>]+>", " ", text).replace("  ", " ").strip()
-
-
-# Keep private alias for backward compatibility within this module
-_strip_html_tags = strip_html_tags
 
 
 def _extract_context(text: str, start: int, end: int, pad: int = 30) -> str:
@@ -690,18 +676,15 @@ def _check_business_jargon(fields: dict[str, str]) -> list[QualityIssue]:
 def run_blog_quality_checks(
     fields: dict[str, str],
     brand_config: dict[str, Any],
-    content_brief: dict[str, Any] | None = None,
 ) -> QualityResult:
     """Run all quality checks including blog-specific checks.
 
-    Runs the 9 standard checks plus 4 blog-specific checks (13 total)
-    plus Guardrails AI checks (14-21).
+    Runs the 9 standard checks plus 4 blog-specific checks (13 total).
     Designed to be called from blog_content_generation.py.
 
     Args:
         fields: Dict of field_name -> text content to check.
         brand_config: The BrandConfig.v2_schema dict.
-        content_brief: Optional dict with lsi_terms for LSI coverage check.
 
     Returns:
         QualityResult with pass/fail and list of issues.
@@ -724,12 +707,6 @@ def run_blog_quality_checks(
     issues.extend(_check_empty_signposts(fields))
     issues.extend(_check_missing_direct_answer(fields))
     issues.extend(_check_business_jargon(fields))
-
-    # Checks 14-21: Guardrails AI Hub validators + LSI coverage
-    from app.services.guardrails_checks import run_guardrails_checks
-
-    guardrails_issues = run_guardrails_checks(fields, brand_config, content_brief)
-    issues.extend(guardrails_issues)
 
     return QualityResult(
         passed=len(issues) == 0,

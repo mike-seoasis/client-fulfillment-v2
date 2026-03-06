@@ -1040,7 +1040,7 @@ def _run_blog_quality_checks(
     """Run deterministic quality checks on blog post content.
 
     Uses run_blog_quality_checks from content_quality.py which runs all 9
-    standard checks plus 4 blog-specific checks plus Guardrails checks (21 total).
+    standard checks plus 4 blog-specific checks (13 total).
     """
     # Gather field values
     fields: dict[str, str] = {}
@@ -1049,11 +1049,7 @@ def _run_blog_quality_checks(
         if value:
             fields[field_name] = value
 
-    brief_dict = None
-    if blog_post.pop_brief:
-        brief_dict = {"lsi_terms": blog_post.pop_brief.get("lsi_terms", [])}
-
-    return run_blog_quality_checks(fields, brand_config, content_brief=brief_dict)
+    return run_blog_quality_checks(fields, brand_config)
 
 
 async def _update_campaign_status(campaign_id: str) -> None:

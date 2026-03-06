@@ -493,32 +493,6 @@ class Settings(BaseSettings):
         description="Backend base URL (used to construct OAuth redirect if shopify_redirect_uri not set)",
     )
 
-    # Guardrails AI content quality checks
-    enable_guardrails_checks: bool = Field(
-        default=True,
-        description="Enable Guardrails AI Hub validators for content quality checks",
-    )
-    enable_toxic_language_check: bool = Field(
-        default=False,
-        description="Enable toxic language check (requires transformers + torch, opt-in)",
-    )
-    guardrails_reading_level_min: int = Field(
-        default=5,
-        description="Minimum acceptable reading grade level",
-    )
-    guardrails_reading_level_max: int = Field(
-        default=8,
-        description="Maximum acceptable reading grade level",
-    )
-    guardrails_redundant_threshold: int = Field(
-        default=75,
-        description="Fuzzy duplicate sentence similarity threshold (0-100)",
-    )
-    guardrails_lsi_coverage_min: float = Field(
-        default=0.3,
-        description="Minimum fraction of POP LSI terms that must appear in content",
-    )
-
     # Google Docs/Sheets Export (service account)
     google_service_account_json: str | None = Field(
         default=None,
