@@ -165,4 +165,59 @@ describe('QualityPanel', () => {
     expect(screen.getByText('Tattoo Needles')).toBeTruthy();
     expect(screen.getByText('Domain Checks')).toBeTruthy();
   });
+
+  it('shows short_circuited message when set', () => {
+    const qaResults: QaResults = {
+      passed: false,
+      score: 65,
+      score_tier: 'needs_attention',
+      short_circuited: true,
+      issues: [
+        { type: 'tier1_ai_word', field: 'body', description: 'AI word', context: '...delve...' },
+      ],
+    };
+    render(<QualityPanel qaResults={qaResults} />);
+    expect(screen.getByText('AI evaluation skipped (critical issues found)')).toBeTruthy();
+  });
+
+  it('does not show short_circuited message when tier2 data exists', () => {
+    const qaResults: QaResults = {
+      passed: true,
+      score: 92,
+      short_circuited: true,
+      issues: [],
+      tier2: {
+        model: 'gpt-4.1',
+        naturalness: 0.85,
+        brief_adherence: 0.72,
+        heading_structure: 0.91,
+        cost_usd: 0.04,
+        latency_ms: 1200,
+      },
+    };
+    render(<QualityPanel qaResults={qaResults} />);
+    expect(screen.queryByText('AI evaluation skipped (critical issues found)')).toBeNull();
+  });
+
+  it('shows tier2 error message when tier2.error exists', () => {
+    const qaResults: QaResults = {
+      passed: true,
+      score: 85,
+      issues: [],
+      tier2: {
+        model: 'gpt-4.1',
+        naturalness: 0,
+        brief_adherence: 0,
+        heading_structure: 0,
+        cost_usd: 0,
+        latency_ms: 0,
+        error: 'OpenAI API timeout',
+      },
+    };
+    render(<QualityPanel qaResults={qaResults} />);
+    expect(screen.getByText('AI Evaluation')).toBeTruthy();
+    expect(screen.getByText(/OpenAI API timeout/)).toBeTruthy();
+    // Should NOT show score bars when there's an error
+    expect(screen.queryByText('Naturalness')).toBeNull();
+  });
 });

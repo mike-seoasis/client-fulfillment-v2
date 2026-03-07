@@ -48,6 +48,8 @@ dependencies = [
     # Google Docs/Sheets/Drive (service account auth)
     "google-api-python-client>=2.100",
     "google-auth>=2.20",
+    # LLM judge (Tier 2 quality pipeline)
+    "openai>=1.30.0",
 ]
 
 [dependency-groups]
@@ -176,6 +178,8 @@ module = [
     "google.oauth2.*",
     "google.auth",
     "google.auth.*",
+    "openai",
+    "openai.*",
 ]
 ignore_missing_imports = true
 

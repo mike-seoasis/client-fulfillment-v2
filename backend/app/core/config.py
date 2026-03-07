@@ -427,6 +427,36 @@ class Settings(BaseSettings):
         description="Enable shadow mode to run both POP and legacy scoring for comparison analysis",
     )
 
+    # Quality pipeline — Tier 2 LLM judge
+    quality_tier2_enabled: bool = Field(
+        default=False,
+        description="Enable Tier 2 LLM judge evaluation (requires OpenAI API key)",
+    )
+    quality_judge_model: str = Field(
+        default="gpt-4.1",
+        description="OpenAI model for LLM judge evaluation",
+    )
+    openai_api_key: str | None = Field(
+        default=None,
+        description="OpenAI API key for Tier 2 LLM judge",
+    )
+    quality_tier2_timeout: int = Field(
+        default=30,
+        description="Timeout in seconds for each LLM judge call",
+    )
+    quality_naturalness_threshold: float = Field(
+        default=0.6,
+        description="Minimum naturalness score before flagging as issue",
+    )
+    quality_brief_adherence_threshold: float = Field(
+        default=0.7,
+        description="Minimum brief adherence score before flagging as issue",
+    )
+    quality_heading_structure_threshold: float = Field(
+        default=0.6,
+        description="Minimum heading structure score before flagging as issue",
+    )
+
     # Content generation pipeline
     content_generation_concurrency: int = Field(
         default=1,

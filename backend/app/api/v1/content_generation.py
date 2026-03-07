@@ -33,7 +33,7 @@ from app.schemas.content_generation import (
     PageGenerationStatusItem,
     PromptLogResponse,
 )
-from app.services.content_quality import run_quality_checks
+from app.services.quality_pipeline import run_quality_pipeline
 from app.services.project import ProjectService
 
 logger = get_logger(__name__)
@@ -724,6 +724,7 @@ async def recheck_content(
 
     # Load and match bibles for this page's keyword
     matched_bibles: list = []
+    page_kw = None
     try:
         from app.services.content_generation import (
             _load_project_bibles,
@@ -749,7 +750,23 @@ async def recheck_content(
 
     # Re-run quality checks (mutates content.qa_results)
     content = page.page_content
-    run_quality_checks(content, brand_config or {}, matched_bibles=matched_bibles)
+
+    # Need keyword for Tier 2 brief adherence
+    primary_keyword = ""
+    if page_kw and page_kw.primary_keyword:
+        primary_keyword = page_kw.primary_keyword
+
+    await run_quality_pipeline(
+        content=content,
+        brand_config=brand_config or {},
+        primary_keyword=primary_keyword,
+        content_brief=page.content_brief,
+        matched_bibles=matched_bibles,
+    )
+
+    from sqlalchemy.orm.attributes import flag_modified
+
+    flag_modified(content, "qa_results")
 
     await db.commit()
     await db.refresh(content)

@@ -31,7 +31,7 @@ from app.models.crawled_page import CrawledPage
 from app.models.page_content import ContentStatus, PageContent
 from app.models.page_keywords import PageKeywords
 from app.models.prompt_log import PromptLog
-from app.services.content_quality import run_quality_checks
+from app.services.quality_pipeline import run_quality_pipeline
 from app.services.content_outline import (
     generate_content_from_outline,
     generate_outline,
@@ -335,7 +335,13 @@ async def run_generate_from_outline(
                 written_content.status = ContentStatus.CHECKING.value
                 await db.commit()
 
-                run_quality_checks(written_content, brand_config, matched_bibles=matched_bibles)
+                await run_quality_pipeline(
+                    content=written_content,
+                    brand_config=brand_config,
+                    primary_keyword=keyword,
+                    content_brief=crawled_page.content_brief,
+                    matched_bibles=matched_bibles,
+                )
 
                 # flag_modified needed for in-place JSONB dict mutation
                 from sqlalchemy.orm.attributes import flag_modified
@@ -884,7 +890,13 @@ async def _process_single_page(
             written_content.status = ContentStatus.CHECKING.value
             await db.commit()
 
-            run_quality_checks(written_content, brand_config, matched_bibles=matched_bibles)
+            await run_quality_pipeline(
+                content=written_content,
+                brand_config=brand_config,
+                primary_keyword=keyword,
+                content_brief=content_brief,
+                matched_bibles=matched_bibles,
+            )
 
             # --- Step 4: Mark complete ---
             written_content.status = ContentStatus.COMPLETE.value

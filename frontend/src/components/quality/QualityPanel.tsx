@@ -2,10 +2,12 @@
 
 import {
   type QaIssue,
+  type ScoreTier,
   CONTENT_CHECK_TYPES,
   CONTENT_CHECK_LABELS,
   BIBLE_CHECK_TYPES,
   BIBLE_CHECK_LABELS,
+  LLM_CHECK_TYPES,
   estimateScoreFromIssues,
   getScoreTier,
 } from './score-utils';
@@ -21,6 +23,7 @@ export interface Tier2Results {
   heading_structure: number;
   cost_usd: number;
   latency_ms: number;
+  error?: string;
 }
 
 export interface RewriteResults {
@@ -39,6 +42,8 @@ export interface RewriteResults {
 export interface QaResults {
   passed: boolean;
   score?: number;
+  score_tier?: string;
+  short_circuited?: boolean;
   issues: QaIssue[];
   checked_at?: string;
   tier2?: Tier2Results;
@@ -57,7 +62,7 @@ export function QualityPanel({ qaResults, onJumpTo }: QualityPanelProps) {
   const isEstimated = qaResults.score === undefined;
   const rawScore = qaResults.score ?? estimateScoreFromIssues(qaResults.issues ?? []);
   const score = Math.max(0, Math.min(100, rawScore));
-  const tier = getScoreTier(score);
+  const tier = (qaResults.score_tier as ScoreTier) ?? getScoreTier(score);
 
   const issues = qaResults.issues ?? [];
   const issuesByType: Record<string, number> = {};
@@ -71,6 +76,11 @@ export function QualityPanel({ qaResults, onJumpTo }: QualityPanelProps) {
   );
 
   const bibleIssueCount = BIBLE_CHECK_TYPES.reduce(
+    (sum, type) => sum + (issuesByType[type] ?? 0),
+    0
+  );
+
+  const llmIssueCount = LLM_CHECK_TYPES.reduce(
     (sum, type) => sum + (issuesByType[type] ?? 0),
     0
   );
@@ -124,15 +134,29 @@ export function QualityPanel({ qaResults, onJumpTo }: QualityPanelProps) {
         </CheckGroup>
       )}
 
+      {qaResults.short_circuited && !qaResults.tier2 && (
+        <div role="status" className="px-4 py-2.5 text-xs text-warm-400 bg-sand-50 border-t border-sand-200">
+          AI evaluation skipped (critical issues found)
+        </div>
+      )}
+
       {qaResults.tier2 && (
         <CheckGroup
           title="AI Evaluation"
-          issueCount={0}
-          defaultOpen={true}
+          issueCount={llmIssueCount}
+          defaultOpen={llmIssueCount > 0 || !!qaResults.tier2}
         >
-          <CheckRow label="Naturalness" count={0} scoreValue={qaResults.tier2.naturalness} />
-          <CheckRow label="Brief Adherence" count={0} scoreValue={qaResults.tier2.brief_adherence} />
-          <CheckRow label="Heading Structure" count={0} scoreValue={qaResults.tier2.heading_structure} />
+          {qaResults.tier2.error ? (
+            <div role="alert" className="px-4 py-2.5 text-xs text-coral-600">
+              AI evaluation error: {qaResults.tier2.error}
+            </div>
+          ) : (
+            <>
+              <CheckRow label="Naturalness" count={0} scoreValue={qaResults.tier2.naturalness} />
+              <CheckRow label="Brief Adherence" count={0} scoreValue={qaResults.tier2.brief_adherence} />
+              <CheckRow label="Heading Structure" count={0} scoreValue={qaResults.tier2.heading_structure} />
+            </>
+          )}
         </CheckGroup>
       )}
 

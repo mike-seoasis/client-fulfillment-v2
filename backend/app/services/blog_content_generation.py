@@ -39,11 +39,9 @@ from app.models.blog import (
     ContentStatus,
 )
 from app.models.brand_config import BrandConfig
-from app.services.content_quality import (
-    QualityResult,
-    run_blog_quality_checks,
-)
+from app.services.content_quality import QualityResult
 from app.services.content_generation import _match_bibles_for_keyword
+from app.services.quality_pipeline import run_quality_pipeline
 from app.services.content_writing import (
     CONTENT_WRITING_MAX_TOKENS,
     CONTENT_WRITING_MODEL,
@@ -621,8 +619,23 @@ async def _process_single_post(
             # Re-load to pick up content changes from link planning's write session
             await db.refresh(blog_post)
 
-            qa_result = _run_blog_quality_checks(blog_post, brand_config, matched_bibles=matched_bibles)
-            blog_post.qa_results = qa_result.to_dict()
+            # Gather field values for quality pipeline
+            blog_fields: dict[str, str] = {}
+            for field_name in BLOG_CONTENT_FIELDS:
+                value = getattr(blog_post, field_name, None)
+                if value:
+                    blog_fields[field_name] = value
+
+            pipeline_result = await run_quality_pipeline(
+                content=None,
+                brand_config=brand_config,
+                primary_keyword=keyword,
+                content_brief=content_brief,
+                is_blog=True,
+                fields=blog_fields,
+                matched_bibles=matched_bibles,
+            )
+            blog_post.qa_results = pipeline_result.to_dict()
 
             # --- Step 5 (Done): Mark complete ---
             blog_post.content_status = ContentStatus.COMPLETE.value
@@ -1087,25 +1100,6 @@ def _extract_json_keys_fallback(text: str) -> dict[str, str] | None:
 
     return result
 
-
-def _run_blog_quality_checks(
-    blog_post: BlogPost,
-    brand_config: dict[str, Any],
-    matched_bibles: list[Any] | None = None,
-) -> QualityResult:
-    """Run deterministic quality checks on blog post content.
-
-    Uses run_blog_quality_checks from content_quality.py which runs all 9
-    standard checks plus 4 blog-specific checks (13 total).
-    """
-    # Gather field values
-    fields: dict[str, str] = {}
-    for field_name in BLOG_CONTENT_FIELDS:
-        value = getattr(blog_post, field_name, None)
-        if value:
-            fields[field_name] = value
-
-    return run_blog_quality_checks(fields, brand_config, matched_bibles=matched_bibles)
 
 
 async def _update_campaign_status(campaign_id: str) -> None:
