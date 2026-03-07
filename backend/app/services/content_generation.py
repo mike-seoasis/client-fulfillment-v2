@@ -109,10 +109,11 @@ async def run_content_pipeline(
         },
     )
 
-    # Load approved pages and brand config in a read-only session
+    # Load approved pages, brand config, and bibles in a read-only session
     async with db_manager.session_factory() as session:
         pages_data = await _load_approved_pages(session, project_id, batch=batch)
         brand_config = await _load_brand_config(session, project_id)
+        project_bibles = await _load_project_bibles(session, project_id)
 
     if not pages_data:
         logger.info(
@@ -174,6 +175,7 @@ async def run_content_pipeline(
                 force_refresh=force_refresh,
                 refresh_briefs=False,  # Briefs already fetched in Phase 1
                 outline_first=outline_first,
+                project_bibles=project_bibles,
             )
 
     tasks = [_process_with_semaphore(pd) for pd in pages_data]
@@ -294,6 +296,9 @@ async def run_generate_from_outline(
             # Load brand config
             brand_config = await _load_brand_config(db, project_id)
 
+            # Load and match bibles
+            project_bibles = await _load_project_bibles(db, project_id)
+
             # Load keyword
             keyword_stmt = select(PageKeywords).where(
                 PageKeywords.crawled_page_id == page_id
@@ -301,6 +306,8 @@ async def run_generate_from_outline(
             kw_result = await db.execute(keyword_stmt)
             page_keywords = kw_result.scalar_one_or_none()
             keyword = page_keywords.primary_keyword if page_keywords else ""
+
+            matched_bibles = _match_bibles_for_keyword(project_bibles, keyword)
 
             # Generate content from outline
             content_result = await generate_content_from_outline(
@@ -310,6 +317,7 @@ async def run_generate_from_outline(
                 brand_config=brand_config,
                 keyword=keyword,
                 outline_json=page_content.outline_json,
+                matched_bibles=matched_bibles,
             )
 
             if not content_result.success:
@@ -327,7 +335,7 @@ async def run_generate_from_outline(
                 written_content.status = ContentStatus.CHECKING.value
                 await db.commit()
 
-                run_quality_checks(written_content, brand_config)
+                run_quality_checks(written_content, brand_config, matched_bibles=matched_bibles)
 
                 # flag_modified needed for in-place JSONB dict mutation
                 from sqlalchemy.orm.attributes import flag_modified
@@ -639,12 +647,77 @@ async def _load_brand_config(
     return config.v2_schema or {}
 
 
+async def _load_project_bibles(
+    db: AsyncSession,
+    project_id: str,
+) -> list[Any]:
+    """Load active vertical bibles for a project, ordered by sort_order.
+
+    Returns empty list if no bibles exist or if the table doesn't exist yet
+    (graceful degradation for environments without the migration applied).
+    """
+    try:
+        from app.models.vertical_bible import VerticalBible
+
+        stmt = (
+            select(VerticalBible)
+            .where(
+                VerticalBible.project_id == project_id,
+                VerticalBible.is_active.is_(True),
+            )
+            .order_by(VerticalBible.sort_order)
+        )
+        result = await db.execute(stmt)
+        return list(result.scalars().all())
+    except (ImportError, Exception) as exc:
+        from sqlalchemy.exc import OperationalError, ProgrammingError
+
+        if isinstance(exc, (ImportError, OperationalError, ProgrammingError)):
+            logger.debug(
+                "Could not load vertical bibles (table may not exist)",
+                extra={"project_id": project_id},
+            )
+            return []
+        raise
+
+
+def _match_bibles_for_keyword(
+    project_bibles: list[Any],
+    keyword: str,
+) -> list[Any]:
+    """Match bibles for a keyword using bidirectional substring matching.
+
+    Matches existing VerticalBibleService.match_bibles algorithm:
+    trigger_lower in keyword_lower OR keyword_lower in trigger_lower.
+
+    Pure function, no DB queries. Returns matched bibles preserving sort order.
+    """
+    if not project_bibles or not keyword:
+        return []
+
+    keyword_lower = keyword.lower().strip()
+    matched: list[Any] = []
+
+    for bible in project_bibles:
+        triggers = getattr(bible, "trigger_keywords", []) or []
+        for trigger in triggers:
+            trigger_lower = str(trigger).lower().strip()
+            if not trigger_lower or len(trigger_lower) < 3:
+                continue
+            if trigger_lower in keyword_lower or keyword_lower in trigger_lower:
+                matched.append(bible)
+                break  # Don't add same bible twice
+
+    return matched
+
+
 async def _process_single_page(
     page_data: dict[str, Any],
     brand_config: dict[str, Any],
     force_refresh: bool,
     refresh_briefs: bool = False,
     outline_first: bool = False,
+    project_bibles: list[Any] | None = None,
 ) -> PipelinePageResult:
     """Process a single page through the brief → write → check pipeline.
 
@@ -734,6 +807,11 @@ async def _process_single_page(
                     db, brand_config, content_brief.competitors, crawled_page.project_id
                 )
 
+            # Match vertical bibles for this keyword
+            matched_bibles = _match_bibles_for_keyword(
+                project_bibles or [], keyword
+            )
+
             # --- Step 2: Write content (or outline) ---
             if outline_first:
                 # Outline-first mode: generate outline, skip quality checks
@@ -743,6 +821,7 @@ async def _process_single_page(
                     content_brief=content_brief,
                     brand_config=brand_config,
                     keyword=keyword,
+                    matched_bibles=matched_bibles,
                 )
 
                 if not outline_result.success:
@@ -778,6 +857,7 @@ async def _process_single_page(
                 content_brief=content_brief,
                 brand_config=brand_config,
                 keyword=keyword,
+                matched_bibles=matched_bibles,
             )
 
             if not writing_result.success:
@@ -804,7 +884,7 @@ async def _process_single_page(
             written_content.status = ContentStatus.CHECKING.value
             await db.commit()
 
-            run_quality_checks(written_content, brand_config)
+            run_quality_checks(written_content, brand_config, matched_bibles=matched_bibles)
 
             # --- Step 4: Mark complete ---
             written_content.status = ContentStatus.COMPLETE.value

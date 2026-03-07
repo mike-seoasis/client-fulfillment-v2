@@ -840,12 +840,35 @@ async def recheck_blog_post_content(
     brand_config_row = brand_result.scalar_one_or_none()
     brand_config = brand_config_row.v2_schema if brand_config_row else {}
 
+    # Load and match bibles for this post's keyword
+    matched_bibles: list = []
+    try:
+        from app.services.blog_content_generation import (
+            _load_project_bibles_for_campaign,
+        )
+        from app.services.content_generation import _match_bibles_for_keyword
+
+        project_bibles = await _load_project_bibles_for_campaign(db, blog_id)
+        if post.primary_keyword:
+            matched_bibles = _match_bibles_for_keyword(
+                project_bibles, post.primary_keyword
+            )
+    except Exception:
+        logger.warning(
+            "Bible loading failed during blog recheck, continuing without bibles",
+            extra={"blog_id": blog_id, "post_id": post_id},
+            exc_info=True,
+        )
+
     # Re-run quality checks
     from app.services.blog_content_generation import _run_blog_quality_checks
 
-    qa_result = _run_blog_quality_checks(post, brand_config or {})
+    qa_result = _run_blog_quality_checks(post, brand_config or {}, matched_bibles=matched_bibles)
     post.qa_results = qa_result.to_dict()
 
+    from sqlalchemy.orm.attributes import flag_modified
+
+    flag_modified(post, "qa_results")
     await db.commit()
     await db.refresh(post)
 

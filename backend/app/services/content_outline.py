@@ -266,6 +266,7 @@ async def generate_outline(
     content_brief: ContentBrief | None,
     brand_config: dict[str, Any],
     keyword: str,
+    matched_bibles: list[Any] | None = None,
 ) -> OutlineResult:
     """Generate a content outline for a page using Claude.
 
@@ -411,6 +412,7 @@ async def generate_content_from_outline(
     brand_config: dict[str, Any],
     keyword: str,
     outline_json: dict[str, Any],
+    matched_bibles: list[Any] | None = None,
 ) -> OutlineContentResult:
     """Generate full content from an approved outline.
 

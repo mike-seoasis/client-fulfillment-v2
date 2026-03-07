@@ -722,9 +722,34 @@ async def recheck_content(
     brand_config_row = brand_result.scalar_one_or_none()
     brand_config = brand_config_row.v2_schema if brand_config_row else {}
 
+    # Load and match bibles for this page's keyword
+    matched_bibles: list = []
+    try:
+        from app.services.content_generation import (
+            _load_project_bibles,
+            _match_bibles_for_keyword,
+        )
+
+        project_bibles = await _load_project_bibles(db, project_id)
+        kw_stmt = select(PageKeywords).where(
+            PageKeywords.crawled_page_id == page_id
+        )
+        kw_result = await db.execute(kw_stmt)
+        page_kw = kw_result.scalar_one_or_none()
+        if page_kw and page_kw.primary_keyword:
+            matched_bibles = _match_bibles_for_keyword(
+                project_bibles, page_kw.primary_keyword
+            )
+    except Exception:
+        logger.warning(
+            "Bible loading failed during recheck, continuing without bibles",
+            extra={"project_id": project_id},
+            exc_info=True,
+        )
+
     # Re-run quality checks (mutates content.qa_results)
     content = page.page_content
-    run_quality_checks(content, brand_config or {})
+    run_quality_checks(content, brand_config or {}, matched_bibles=matched_bibles)
 
     await db.commit()
     await db.refresh(content)

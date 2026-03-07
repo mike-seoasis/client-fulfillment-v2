@@ -164,6 +164,7 @@ def build_content_prompt(
     keyword: str,
     brand_config: dict[str, Any],
     content_brief: ContentBrief | None = None,
+    matched_bibles: list[Any] | None = None,
 ) -> PromptPair:
     """Build system and user prompts for content generation.
 
@@ -177,12 +178,15 @@ def build_content_prompt(
         brand_config: The BrandConfig.v2_schema dict (contains ai_prompt_snippet,
             vocabulary, etc.).
         content_brief: Optional ContentBrief with LSI terms and word count targets.
+        matched_bibles: Optional list of VerticalBible objects matched for this keyword.
 
     Returns:
         PromptPair with system_prompt and user_prompt ready for Claude.
     """
     system_prompt = _build_system_prompt(brand_config)
-    user_prompt = _build_user_prompt(page, keyword, brand_config, content_brief)
+    user_prompt = _build_user_prompt(
+        page, keyword, brand_config, content_brief, matched_bibles=matched_bibles
+    )
     return PromptPair(system_prompt=system_prompt, user_prompt=user_prompt)
 
 
@@ -192,6 +196,7 @@ def build_blog_content_prompt(
     brand_config: dict[str, Any],
     content_brief: ContentBrief | None = None,
     trend_context: dict[str, Any] | None = None,
+    matched_bibles: list[Any] | None = None,
 ) -> PromptPair:
     """Build system and user prompts for blog post content generation.
 
@@ -206,6 +211,7 @@ def build_blog_content_prompt(
             vocabulary, etc.).
         content_brief: Optional ContentBrief with LSI terms and word count targets.
         trend_context: Optional dict with trend research data from Perplexity.
+        matched_bibles: Optional list of VerticalBible objects matched for this keyword.
 
     Returns:
         PromptPair with system_prompt and user_prompt ready for Claude.
@@ -217,6 +223,7 @@ def build_blog_content_prompt(
         brand_config,
         content_brief,
         trend_context=trend_context,
+        matched_bibles=matched_bibles,
     )
     return PromptPair(system_prompt=system_prompt, user_prompt=user_prompt)
 
@@ -344,6 +351,7 @@ def _build_user_prompt(
     keyword: str,
     brand_config: dict[str, Any],
     content_brief: ContentBrief | None,
+    matched_bibles: list[Any] | None = None,
 ) -> str:
     """Build the user prompt with labeled sections.
 
@@ -352,10 +360,11 @@ def _build_user_prompt(
         keyword: Primary target keyword.
         brand_config: The BrandConfig.v2_schema dict.
         content_brief: Optional ContentBrief with LSI terms and word count targets.
+        matched_bibles: Optional list of VerticalBible objects for domain knowledge.
 
     Returns:
         User prompt string with ## Task, ## Page Context, ## SEO Targets,
-        ## Brand Voice, and ## Output Format sections.
+        ## Domain Knowledge, ## Brand Voice, and ## Output Format sections.
     """
     sections: list[str] = []
 
@@ -367,6 +376,11 @@ def _build_user_prompt(
 
     # ## SEO Targets
     sections.append(_build_seo_targets_section(keyword, content_brief, brand_config))
+
+    # ## Domain Knowledge (from matched vertical bibles)
+    domain_knowledge = _build_domain_knowledge_section(matched_bibles)
+    if domain_knowledge:
+        sections.append(domain_knowledge)
 
     # ## Brand Voice
     brand_voice = _build_brand_voice_section(brand_config)
@@ -385,6 +399,7 @@ def _build_blog_user_prompt(
     brand_config: dict[str, Any],
     content_brief: ContentBrief | None,
     trend_context: dict[str, Any] | None = None,
+    matched_bibles: list[Any] | None = None,
 ) -> str:
     """Build the user prompt for blog post content generation.
 
@@ -394,10 +409,12 @@ def _build_blog_user_prompt(
         brand_config: The BrandConfig.v2_schema dict.
         content_brief: Optional ContentBrief with LSI terms and word count targets.
         trend_context: Optional dict with trend research data from Perplexity.
+        matched_bibles: Optional list of VerticalBible objects for domain knowledge.
 
     Returns:
         User prompt string with ## Task, ## Blog Context, ## SEO Targets,
-        ## Freshness, ## Entity Association, ## Brand Voice, and ## Output Format sections.
+        ## Domain Knowledge, ## Freshness, ## Entity Association, ## Brand Voice,
+        and ## Output Format sections.
     """
     sections: list[str] = []
 
@@ -413,6 +430,11 @@ def _build_blog_user_prompt(
 
     # ## SEO Targets (reuse existing function)
     sections.append(_build_seo_targets_section(keyword, content_brief, brand_config))
+
+    # ## Domain Knowledge (from matched vertical bibles)
+    domain_knowledge = _build_domain_knowledge_section(matched_bibles)
+    if domain_knowledge:
+        sections.append(domain_knowledge)
 
     # ## Recent Trends & Data (from Perplexity)
     freshness = _build_freshness_section(trend_context)
@@ -988,6 +1010,56 @@ def _build_brand_voice_section(brand_config: dict[str, Any]) -> str | None:
     return "## Brand Voice\n" + "\n".join(parts)
 
 
+# Maximum characters of bible content_md to inject into prompts
+BIBLE_PROMPT_MAX_CHARS = 8000
+
+
+def _build_domain_knowledge_section(
+    matched_bibles: list[Any] | None,
+) -> str | None:
+    """Build a ## Domain Knowledge section from matched vertical bibles.
+
+    Concatenates content_md from matched bibles (sorted by sort_order),
+    capped at BIBLE_PROMPT_MAX_CHARS to control prompt cost.
+
+    Args:
+        matched_bibles: List of VerticalBible-like objects with content_md
+            and sort_order attributes.
+
+    Returns:
+        Formatted section string or None if no content to inject.
+    """
+    if not matched_bibles:
+        return None
+
+    # Sort by sort_order (lower = higher priority)
+    sorted_bibles = sorted(
+        matched_bibles,
+        key=lambda b: getattr(b, "sort_order", 0),
+    )
+
+    parts: list[str] = []
+    total_chars = 0
+    for bible in sorted_bibles:
+        content = getattr(bible, "content_md", "") or ""
+        if not content.strip():
+            continue
+        remaining = BIBLE_PROMPT_MAX_CHARS - total_chars
+        if remaining <= 0:
+            break
+        if len(content) > remaining:
+            content = content[:remaining] + "\n[...truncated]"
+            parts.append(content)
+            break  # No room for more bibles after truncation
+        parts.append(content)
+        total_chars += len(content)
+
+    if not parts:
+        return None
+
+    return "## Domain Knowledge\n" + "\n\n".join(parts)
+
+
 def _build_output_format_section(
     content_brief: ContentBrief | None = None,
     brand_config: dict[str, Any] | None = None,
@@ -1123,6 +1195,7 @@ async def generate_content(
     content_brief: ContentBrief | None,
     brand_config: dict[str, Any],
     keyword: str,
+    matched_bibles: list[Any] | None = None,
 ) -> ContentWritingResult:
     """Generate content for a page using Claude Sonnet.
 
@@ -1152,7 +1225,10 @@ async def generate_content(
     await db.commit()
 
     # Build prompts
-    prompts = build_content_prompt(crawled_page, keyword, brand_config, content_brief)
+    prompts = build_content_prompt(
+        crawled_page, keyword, brand_config, content_brief,
+        matched_bibles=matched_bibles,
+    )
 
     # Create PromptLog records before calling Claude
     system_log = PromptLog(

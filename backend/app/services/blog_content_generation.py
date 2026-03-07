@@ -43,6 +43,7 @@ from app.services.content_quality import (
     QualityResult,
     run_blog_quality_checks,
 )
+from app.services.content_generation import _match_bibles_for_keyword
 from app.services.content_writing import (
     CONTENT_WRITING_MAX_TOKENS,
     CONTENT_WRITING_MODEL,
@@ -142,10 +143,11 @@ async def run_blog_content_pipeline(
         },
     )
 
-    # Load approved posts and brand config in a read-only session
+    # Load approved posts, brand config, and bibles in a read-only session
     async with db_manager.session_factory() as session:
         posts_data = await _load_approved_posts(session, campaign_id)
         brand_config = await _load_brand_config(session, campaign_id)
+        project_bibles = await _load_project_bibles_for_campaign(session, campaign_id)
 
     if not posts_data:
         logger.info(
@@ -177,6 +179,7 @@ async def run_blog_content_pipeline(
                 brand_config=brand_config,
                 force_refresh=force_refresh,
                 refresh_briefs=refresh_briefs,
+                project_bibles=project_bibles,
             )
 
     tasks = [_process_with_semaphore(pd) for pd in posts_data]
@@ -339,6 +342,49 @@ async def _load_brand_config(
     return config.v2_schema or {}
 
 
+async def _load_project_bibles_for_campaign(
+    db: AsyncSession,
+    campaign_id: str,
+) -> list[Any]:
+    """Load active vertical bibles for the campaign's project.
+
+    Joins BlogCampaign on project_id to VerticalBible. Returns empty list
+    on failure for graceful degradation.
+    """
+    try:
+        from app.models.vertical_bible import VerticalBible
+
+        # Get project_id from campaign first, then query bibles directly
+        proj_stmt = select(BlogCampaign.project_id).where(
+            BlogCampaign.id == campaign_id
+        )
+        proj_result = await db.execute(proj_stmt)
+        project_id = proj_result.scalar_one_or_none()
+        if not project_id:
+            return []
+
+        stmt = (
+            select(VerticalBible)
+            .where(
+                VerticalBible.project_id == project_id,
+                VerticalBible.is_active.is_(True),
+            )
+            .order_by(VerticalBible.sort_order)
+        )
+        result = await db.execute(stmt)
+        return list(result.scalars().all())
+    except (ImportError, Exception) as exc:
+        from sqlalchemy.exc import OperationalError, ProgrammingError
+
+        if isinstance(exc, (ImportError, OperationalError, ProgrammingError)):
+            logger.debug(
+                "Could not load vertical bibles for campaign (table may not exist)",
+                extra={"campaign_id": campaign_id},
+            )
+            return []
+        raise
+
+
 def _humanize_content(content: str) -> str:
     """Apply deterministic find-and-replace to swap AI-sounding words for natural ones.
 
@@ -437,6 +483,7 @@ async def _process_single_post(
     brand_config: dict[str, Any],
     force_refresh: bool,
     refresh_briefs: bool = False,
+    project_bibles: list[Any] | None = None,
 ) -> BlogPipelinePostResult:
     """Process a single blog post through the brief → write → check pipeline.
 
@@ -500,6 +547,11 @@ async def _process_single_post(
                 blog_post.pop_brief = existing_brief
                 await db.flush()
 
+            # Match vertical bibles for this keyword
+            matched_bibles = _match_bibles_for_keyword(
+                project_bibles or [], keyword
+            )
+
             # --- Step 2 (Write): Generate content via Claude + humanize ---
             blog_post.content_status = ContentStatus.WRITING.value
             await db.commit()
@@ -511,6 +563,7 @@ async def _process_single_post(
                 brand_config=brand_config,
                 content_brief=content_brief,
                 trend_context=trend_context,
+                matched_bibles=matched_bibles,
             )
 
             if not write_result["success"]:
@@ -568,7 +621,7 @@ async def _process_single_post(
             # Re-load to pick up content changes from link planning's write session
             await db.refresh(blog_post)
 
-            qa_result = _run_blog_quality_checks(blog_post, brand_config)
+            qa_result = _run_blog_quality_checks(blog_post, brand_config, matched_bibles=matched_bibles)
             blog_post.qa_results = qa_result.to_dict()
 
             # --- Step 5 (Done): Mark complete ---
@@ -781,6 +834,7 @@ async def _generate_blog_content(
     brand_config: dict[str, Any],
     content_brief: Any | None,
     trend_context: dict[str, Any] | None = None,
+    matched_bibles: list[Any] | None = None,
 ) -> dict[str, Any]:
     """Generate blog content via Claude and store on BlogPost.
 
@@ -793,6 +847,7 @@ async def _generate_blog_content(
         brand_config,
         content_brief,
         trend_context=trend_context,
+        matched_bibles=matched_bibles,
     )
 
     # Call Claude
@@ -1036,6 +1091,7 @@ def _extract_json_keys_fallback(text: str) -> dict[str, str] | None:
 def _run_blog_quality_checks(
     blog_post: BlogPost,
     brand_config: dict[str, Any],
+    matched_bibles: list[Any] | None = None,
 ) -> QualityResult:
     """Run deterministic quality checks on blog post content.
 
@@ -1049,7 +1105,7 @@ def _run_blog_quality_checks(
         if value:
             fields[field_name] = value
 
-    return run_blog_quality_checks(fields, brand_config)
+    return run_blog_quality_checks(fields, brand_config, matched_bibles=matched_bibles)
 
 
 async def _update_campaign_status(campaign_id: str) -> None:
