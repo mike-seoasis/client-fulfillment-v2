@@ -742,7 +742,9 @@ async def generate_bible_from_transcript(
     user_prompt = _build_extraction_user_prompt(transcript, vertical_name)
 
     # Call Claude — use the global singleton client (shared circuit breaker
-    # and connection pool) with per-call overrides for model/tokens/timeout
+    # and connection pool) with per-call overrides for model/tokens/timeout.
+    # max_retries=1: this is a long-running expensive call (~60-120s).
+    # Retrying on timeout would triple the wait time with no benefit.
     client = await get_claude()
     result = await client.complete(
         user_prompt=user_prompt,
@@ -751,6 +753,7 @@ async def generate_bible_from_transcript(
         max_tokens=TRANSCRIPT_EXTRACTION_MAX_TOKENS,
         temperature=TRANSCRIPT_EXTRACTION_TEMPERATURE,
         timeout=TRANSCRIPT_EXTRACTION_TIMEOUT,
+        max_retries=1,
     )
 
     if not result.success:

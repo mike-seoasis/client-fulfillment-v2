@@ -275,6 +275,7 @@ class ClaudeClient:
         temperature: float = 0.0,
         model: str | None = None,
         timeout: float | None = None,
+        max_retries: int | None = None,
     ) -> CompletionResult:
         """Send a completion request to Claude.
 
@@ -287,6 +288,8 @@ class ClaudeClient:
             timeout: Per-request HTTP timeout override (seconds). If not set,
                 uses the client-level timeout. Use for long-running requests
                 that need more time than the default (e.g. large token budgets).
+            max_retries: Per-request retry override. Use 1 for expensive
+                long-running calls where retrying on timeout wastes time.
 
         Returns:
             CompletionResult with response text and metadata
@@ -320,7 +323,9 @@ class ClaudeClient:
         if system_prompt:
             request_body["system"] = system_prompt
 
-        for attempt in range(self._max_retries):
+        effective_retries = max_retries if max_retries is not None else self._max_retries
+
+        for attempt in range(effective_retries):
             attempt_start = time.monotonic()
 
             try:
@@ -356,7 +361,7 @@ class ClaudeClient:
 
                     # If we have retry attempts left and Retry-After is reasonable
                     if (
-                        attempt < self._max_retries - 1
+                        attempt < effective_retries - 1
                         and retry_after
                         and retry_after <= 60
                     ):
@@ -406,14 +411,14 @@ class ClaudeClient:
                     )
                     await self._circuit_breaker.record_failure()
 
-                    if attempt < self._max_retries - 1:
+                    if attempt < effective_retries - 1:
                         delay = self._retry_delay * (2**attempt)
                         logger.warning(
                             f"Claude request attempt {attempt + 1} failed, "
                             f"retrying in {delay}s",
                             extra={
                                 "attempt": attempt + 1,
-                                "max_retries": self._max_retries,
+                                "max_retries": effective_retries,
                                 "delay_seconds": delay,
                                 "status_code": response.status_code,
                                 "request_id": request_id,
@@ -517,22 +522,23 @@ class ClaudeClient:
                 )
                 await self._circuit_breaker.record_failure()
 
-                if attempt < self._max_retries - 1:
+                if attempt < effective_retries - 1:
                     delay = self._retry_delay * (2**attempt)
                     logger.warning(
                         f"Claude request attempt {attempt + 1} timed out, "
                         f"retrying in {delay}s",
                         extra={
                             "attempt": attempt + 1,
-                            "max_retries": self._max_retries,
+                            "max_retries": effective_retries,
                             "delay_seconds": delay,
                         },
                     )
                     await asyncio.sleep(delay)
                     continue
 
+                effective_timeout = timeout or self._timeout
                 last_error = ClaudeTimeoutError(
-                    f"Request timed out after {self._timeout}s"
+                    f"Request timed out after {effective_timeout}s"
                 )
 
             except httpx.RequestError as e:
@@ -548,14 +554,14 @@ class ClaudeClient:
                 )
                 await self._circuit_breaker.record_failure()
 
-                if attempt < self._max_retries - 1:
+                if attempt < effective_retries - 1:
                     delay = self._retry_delay * (2**attempt)
                     logger.warning(
                         f"Claude request attempt {attempt + 1} failed, "
                         f"retrying in {delay}s",
                         extra={
                             "attempt": attempt + 1,
-                            "max_retries": self._max_retries,
+                            "max_retries": effective_retries,
                             "delay_seconds": delay,
                             "error": str(e),
                         },

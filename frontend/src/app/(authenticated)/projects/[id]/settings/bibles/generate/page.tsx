@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -48,6 +48,43 @@ function SparklesIcon({ className }: { className?: string }) {
     >
       <path d="M12 3l1.912 5.813a2 2 0 001.275 1.275L21 12l-5.813 1.912a2 2 0 00-1.275 1.275L12 21l-1.912-5.813a2 2 0 00-1.275-1.275L3 12l5.813-1.912a2 2 0 001.275-1.275L12 3z" />
     </svg>
+  );
+}
+
+function ElapsedTimer() {
+  const [elapsed, setElapsed] = useState(0);
+  const startRef = useRef(Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const minutes = Math.floor(elapsed / 60);
+  const seconds = elapsed % 60;
+  const timeStr = minutes > 0
+    ? `${minutes}:${seconds.toString().padStart(2, '0')}`
+    : `${seconds}s`;
+
+  return (
+    <div role="status" aria-live="polite" className="bg-cream-100 border border-cream-500 rounded-sm px-4 py-4">
+      <div className="flex items-center gap-3">
+        <div className="animate-spin rounded-full h-5 w-5 border-2 border-palm-500 border-t-transparent" />
+        <div className="flex-1">
+          <p className="text-sm font-medium text-warm-gray-700">
+            Extracting domain knowledge...
+          </p>
+          <p className="text-xs text-warm-gray-500 mt-0.5">
+            This can take up to 2 minutes for longer transcripts.
+          </p>
+        </div>
+        <span className="text-sm tabular-nums text-warm-gray-400 font-mono">
+          {timeStr}
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -199,21 +236,9 @@ export default function GenerateBiblePage() {
           </div>
         )}
 
-        {/* Loading state */}
+        {/* Loading state with elapsed timer */}
         {generateMutation.isPending && (
-          <div role="status" aria-live="polite" className="bg-cream-100 border border-cream-500 rounded-sm px-4 py-4">
-            <div className="flex items-center gap-3">
-              <div className="animate-spin rounded-full h-5 w-5 border-2 border-palm-500 border-t-transparent" />
-              <div>
-                <p className="text-sm font-medium text-warm-gray-700">
-                  Extracting domain knowledge...
-                </p>
-                <p className="text-xs text-warm-gray-500 mt-0.5">
-                  This usually takes 15-30 seconds depending on transcript length.
-                </p>
-              </div>
-            </div>
-          </div>
+          <ElapsedTimer />
         )}
 
         {/* Submit button */}
