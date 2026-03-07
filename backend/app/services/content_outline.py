@@ -73,8 +73,11 @@ def _build_outline_user_prompt(
     keyword: str,
     content_brief: ContentBrief | None,
     brand_config: dict[str, Any],
+    matched_bibles: list[Any] | None = None,
 ) -> str:
     """Build user prompt for outline generation with POP brief data."""
+    from app.services.content_writing import _build_domain_knowledge_section
+
     sections: list[str] = []
 
     # Task
@@ -139,6 +142,11 @@ def _build_outline_user_prompt(
                 brief_lines.append(f"- {tag}: {target}")
 
         sections.append("\n".join(brief_lines))
+
+    # Domain Knowledge (from matched vertical bibles)
+    domain_knowledge = _build_domain_knowledge_section(matched_bibles)
+    if domain_knowledge:
+        sections.append(domain_knowledge)
 
     # Brand context
     brand_foundation = brand_config.get("brand_foundation", {})
@@ -300,7 +308,8 @@ async def generate_outline(
     # Build prompts
     system_prompt = _build_outline_system_prompt()
     user_prompt = _build_outline_user_prompt(
-        crawled_page, keyword, content_brief, brand_config
+        crawled_page, keyword, content_brief, brand_config,
+        matched_bibles=matched_bibles,
     )
 
     # Create PromptLog records
@@ -445,7 +454,8 @@ async def generate_content_from_outline(
     # Build prompts - use the brand system prompt from content_writing
     system_prompt = _build_system_prompt(brand_config)
     user_prompt = _build_content_from_outline_prompt(
-        crawled_page, keyword, content_brief, outline_json
+        crawled_page, keyword, content_brief, outline_json,
+        matched_bibles=matched_bibles,
     )
 
     # Create PromptLog records
@@ -559,8 +569,11 @@ def _build_content_from_outline_prompt(
     keyword: str,
     content_brief: ContentBrief | None,
     outline_json: dict[str, Any],
+    matched_bibles: list[Any] | None = None,
 ) -> str:
     """Build user prompt for generating content from an approved outline."""
+    from app.services.content_writing import _build_domain_knowledge_section
+
     sections: list[str] = []
 
     # Task
@@ -589,6 +602,11 @@ def _build_content_from_outline_prompt(
         "- Use the keyword_reference terms naturally throughout the content\n"
         "- Address people_also_ask questions within relevant sections"
     )
+
+    # Domain Knowledge (from matched vertical bibles)
+    domain_knowledge = _build_domain_knowledge_section(matched_bibles)
+    if domain_knowledge:
+        sections.append(domain_knowledge)
 
     # LSI terms from brief for density guidance
     if content_brief:
