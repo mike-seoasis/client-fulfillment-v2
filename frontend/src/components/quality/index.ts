@@ -1,9 +1,12 @@
 export { QualityPanel } from './QualityPanel';
-export type { QualityPanelProps, QaResults, Tier2Results, RewriteResults } from './QualityPanel';
+export type { QualityPanelProps, QaResults, Tier2Results, RewriteResults, VersionsData } from './QualityPanel';
 export { ScoreBadge } from './ScoreBadge';
+export { ScoreBar } from './ScoreBar';
 export { CheckGroup } from './CheckGroup';
 export { CheckRow } from './CheckRow';
 export { FlaggedPassages } from './FlaggedPassages';
+export { RewriteBanner } from './RewriteBanner';
+export { VersionDiffModal, wordDiff } from './VersionDiffModal';
 export type { QaIssue, ScoreTier, TierInfo } from './score-utils';
 export {
   estimateScoreFromIssues,

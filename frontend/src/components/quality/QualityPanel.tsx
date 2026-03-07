@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import {
   type QaIssue,
   type ScoreTier,
@@ -15,6 +16,9 @@ import { ScoreBadge } from './ScoreBadge';
 import { CheckGroup } from './CheckGroup';
 import { CheckRow } from './CheckRow';
 import { FlaggedPassages } from './FlaggedPassages';
+import { RewriteBanner } from './RewriteBanner';
+import { VersionDiffModal } from './VersionDiffModal';
+import { ScoreBar } from './ScoreBar';
 
 export interface Tier2Results {
   model: string;
@@ -29,7 +33,7 @@ export interface Tier2Results {
 export interface RewriteResults {
   triggered: boolean;
   original_score: number;
-  fixed_score: number;
+  fixed_score: number | null;
   issues_sent: number;
   issues_resolved: number;
   issues_remaining: number;
@@ -37,6 +41,13 @@ export interface RewriteResults {
   cost_usd: number;
   latency_ms: number;
   kept_version: 'original' | 'fixed';
+  skip_reason?: string;
+  error?: string;
+}
+
+export interface VersionsData {
+  original: { score: number; content_snapshot: Record<string, string> };
+  fixed: { score: number; changes_made: string[] };
 }
 
 export interface QaResults {
@@ -49,14 +60,21 @@ export interface QaResults {
   tier2?: Tier2Results;
   bibles_matched?: string[];
   rewrite?: RewriteResults;
+  versions?: VersionsData;
 }
 
 export interface QualityPanelProps {
   qaResults: QaResults | null;
   onJumpTo?: (context: string) => void;
+  /** Current content fields (for diff modal comparison) */
+  currentFields?: Record<string, string | null>;
+  /** Callback to restore original content before auto-rewrite */
+  onRestoreOriginal?: () => void;
 }
 
-export function QualityPanel({ qaResults, onJumpTo }: QualityPanelProps) {
+export function QualityPanel({ qaResults, onJumpTo, currentFields, onRestoreOriginal }: QualityPanelProps) {
+  const [modalMode, setModalMode] = useState<'diff' | 'original' | null>(null);
+
   if (!qaResults) return null;
 
   const isEstimated = qaResults.score === undefined;
@@ -94,6 +112,12 @@ export function QualityPanel({ qaResults, onJumpTo }: QualityPanelProps) {
 
   const hasBibles = bibleNames.length > 0;
 
+  const modelBadge = qaResults.tier2 && !qaResults.tier2.error ? (
+    <span className="text-xs font-mono text-warm-400 bg-sand-100 px-1.5 py-0.5 rounded-sm">
+      {qaResults.tier2.model}
+    </span>
+  ) : undefined;
+
   return (
     <div className="bg-white rounded-sm border border-sand-400/60 overflow-hidden">
       <ScoreBadge
@@ -102,6 +126,16 @@ export function QualityPanel({ qaResults, onJumpTo }: QualityPanelProps) {
         isEstimated={isEstimated}
         checkedAt={qaResults.checked_at}
       />
+
+      {/* Rewrite Banner — between score badge and check groups */}
+      {qaResults.rewrite?.triggered && (
+        <RewriteBanner
+          rewrite={qaResults.rewrite}
+          versions={qaResults.versions}
+          onViewOriginal={() => setModalMode('original')}
+          onViewDiff={() => setModalMode('diff')}
+        />
+      )}
 
       <CheckGroup
         title="Content Checks"
@@ -144,6 +178,7 @@ export function QualityPanel({ qaResults, onJumpTo }: QualityPanelProps) {
         <CheckGroup
           title="AI Evaluation"
           issueCount={llmIssueCount}
+          badge={modelBadge}
           defaultOpen={llmIssueCount > 0 || !!qaResults.tier2}
         >
           {qaResults.tier2.error ? (
@@ -151,16 +186,57 @@ export function QualityPanel({ qaResults, onJumpTo }: QualityPanelProps) {
               AI evaluation error: {qaResults.tier2.error}
             </div>
           ) : (
-            <>
-              <CheckRow label="Naturalness" count={0} scoreValue={qaResults.tier2.naturalness} />
-              <CheckRow label="Brief Adherence" count={0} scoreValue={qaResults.tier2.brief_adherence} />
-              <CheckRow label="Heading Structure" count={0} scoreValue={qaResults.tier2.heading_structure} />
-            </>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs py-0.5">
+                <span className="text-warm-600">Naturalness</span>
+                <div className="w-28"><ScoreBar value={qaResults.tier2.naturalness} /></div>
+              </div>
+              <div className="flex items-center justify-between text-xs py-0.5">
+                <span className="text-warm-600">Brief Adherence</span>
+                <div className="w-28"><ScoreBar value={qaResults.tier2.brief_adherence} /></div>
+              </div>
+              <div className="flex items-center justify-between text-xs py-0.5">
+                <span className="text-warm-600">Heading Structure</span>
+                <div className="w-28"><ScoreBar value={qaResults.tier2.heading_structure} /></div>
+              </div>
+              {/* Show explanations for low scores */}
+              {qaResults.tier2.naturalness < 0.7 && (
+                <LowScoreNote label="Naturalness" value={qaResults.tier2.naturalness} />
+              )}
+              {qaResults.tier2.brief_adherence < 0.7 && (
+                <LowScoreNote label="Brief Adherence" value={qaResults.tier2.brief_adherence} />
+              )}
+              {qaResults.tier2.heading_structure < 0.7 && (
+                <LowScoreNote label="Heading Structure" value={qaResults.tier2.heading_structure} />
+              )}
+            </div>
           )}
         </CheckGroup>
       )}
 
       <FlaggedPassages issues={issues} onJumpTo={onJumpTo} />
+
+      {/* Version Diff Modal */}
+      {modalMode && qaResults.versions && (
+        <VersionDiffModal
+          versions={qaResults.versions}
+          currentFields={currentFields ?? {}}
+          mode={modalMode}
+          onClose={() => setModalMode(null)}
+          onRestoreOriginal={() => {
+            setModalMode(null);
+            onRestoreOriginal?.();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function LowScoreNote({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="text-xs text-coral-600 bg-coral-50/50 px-2 py-1 rounded-sm" role="note">
+      {label} score is low ({value.toFixed(2)}) — may need manual editing
     </div>
   );
 }

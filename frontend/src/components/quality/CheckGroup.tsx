@@ -5,7 +5,7 @@ import { useState } from 'react';
 interface CheckGroupProps {
   title: string;
   issueCount: number;
-  badge?: string;
+  badge?: React.ReactNode;
   defaultOpen: boolean;
   children: React.ReactNode;
 }
@@ -27,6 +27,7 @@ export function CheckGroup({ title, issueCount, badge, defaultOpen, children }: 
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
+            aria-hidden="true"
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
           </svg>
@@ -45,9 +46,11 @@ export function CheckGroup({ title, issueCount, badge, defaultOpen, children }: 
         </div>
 
         {badge && (
-          <span className="text-xs text-lagoon-600 bg-lagoon-50 px-1.5 py-0.5 rounded-sm font-medium truncate max-w-[140px]">
-            {badge}
-          </span>
+          typeof badge === 'string' ? (
+            <span className="text-xs text-lagoon-600 bg-lagoon-50 px-1.5 py-0.5 rounded-sm font-medium truncate max-w-[140px]">
+              {badge}
+            </span>
+          ) : badge
         )}
       </button>
 

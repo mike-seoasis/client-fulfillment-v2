@@ -590,6 +590,11 @@ export default function BlogContentEditorPage() {
   }, [projectId, blogId, postId, pageTitle, metaDescription, contentHtml, updateContent, recheckContent]);
 
   const qaResults = post?.qa_results as QaResults | null;
+  const currentFields = useMemo(() => ({
+    title: pageTitle,
+    meta_description: metaDescription,
+    content: contentHtml,
+  }), [pageTitle, metaDescription, contentHtml]);
   const hlClasses = highlightVisibilityClasses(hlVisibility);
 
   // Loading state
@@ -727,7 +732,7 @@ export default function BlogContentEditorPage() {
 
         {/* Right Sidebar (~35%) */}
         <div className="w-[340px] flex-shrink-0 space-y-4 sticky top-[72px] max-h-[calc(100vh-140px)] overflow-y-auto pb-4 sidebar-scroll">
-          <QualityPanel qaResults={qaResults} onJumpTo={handleJumpTo} />
+          <QualityPanel qaResults={qaResults} onJumpTo={handleJumpTo} currentFields={currentFields} />
           <ContentStatsCard
             wordCount={totalWordCount}
             headings={headingCounts}

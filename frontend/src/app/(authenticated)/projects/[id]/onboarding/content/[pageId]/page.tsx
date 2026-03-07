@@ -626,7 +626,48 @@ export default function ContentEditorPage() {
     );
   }, [projectId, pageId, pageTitle, metaDescription, topDescription, bottomDescription, updateContent, recheckContent]);
 
+  // Restore original content from before auto-rewrite
+  const handleRestoreOriginal = useCallback(() => {
+    const versions = (content?.qa_results as QaResults | null)?.versions;
+    if (!versions?.original?.content_snapshot) return;
+
+    const snapshot = versions.original.content_snapshot;
+    const restoreData: Record<string, string | null> = {};
+    if (snapshot.page_title !== undefined) { setPageTitle(snapshot.page_title); restoreData.page_title = snapshot.page_title; }
+    if (snapshot.meta_description !== undefined) { setMetaDescription(snapshot.meta_description); restoreData.meta_description = snapshot.meta_description; }
+    if (snapshot.top_description !== undefined) { setTopDescription(snapshot.top_description); restoreData.top_description = snapshot.top_description; }
+    if (snapshot.bottom_description !== undefined) { setBottomDescription(snapshot.bottom_description); restoreData.bottom_description = snapshot.bottom_description; }
+
+    // Save restored content and trigger recheck
+    setSaveStatus({ state: 'saving' });
+    updateContent.mutate(
+      { projectId, pageId, data: restoreData },
+      {
+        onSuccess: () => {
+          // Use snapshot values directly to avoid stale closure over current state
+          lastSavedRef.current = {
+            page_title: snapshot.page_title ?? lastSavedRef.current.page_title,
+            meta_description: snapshot.meta_description ?? lastSavedRef.current.meta_description,
+            top_description: snapshot.top_description ?? lastSavedRef.current.top_description,
+            bottom_description: snapshot.bottom_description ?? lastSavedRef.current.bottom_description,
+          };
+          setSaveStatus({ state: 'saved', at: Date.now() });
+          recheckContent.mutate({ projectId, pageId });
+        },
+        onError: () => {
+          setSaveStatus({ state: 'failed', error: 'Restore failed — click to retry' });
+        },
+      },
+    );
+  }, [content?.qa_results, projectId, pageId, updateContent, recheckContent]);
+
   const qaResults = content?.qa_results as QaResults | null;
+  const currentFields = useMemo(() => ({
+    page_title: pageTitle,
+    meta_description: metaDescription,
+    top_description: topDescription,
+    bottom_description: bottomDescription,
+  }), [pageTitle, metaDescription, topDescription, bottomDescription]);
   const hlClasses = highlightVisibilityClasses(hlVisibility);
 
   // Loading state
@@ -795,7 +836,12 @@ export default function ContentEditorPage() {
 
         {/* Right Sidebar (~35%) */}
         <div className="w-[340px] flex-shrink-0 space-y-4 sticky top-[72px] max-h-[calc(100vh-140px)] overflow-y-auto pb-4 sidebar-scroll">
-          <QualityPanel qaResults={qaResults} onJumpTo={handleJumpTo} />
+          <QualityPanel
+            qaResults={qaResults}
+            onJumpTo={handleJumpTo}
+            currentFields={currentFields}
+            onRestoreOriginal={handleRestoreOriginal}
+          />
           <ContentStatsCard
             wordCount={totalWordCount}
             headings={headings}
