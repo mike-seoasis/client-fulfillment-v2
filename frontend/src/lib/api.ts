@@ -2657,3 +2657,26 @@ export function exportBible(
     `/projects/${projectId}/bibles/${bibleId}/export`
   );
 }
+
+export interface BiblePreviewMatchedPage {
+  page_id: string;
+  url: string;
+  keyword: string;
+  matched_trigger: string;
+}
+
+export interface BiblePreviewResponse {
+  prompt_section: string;
+  matched_pages: BiblePreviewMatchedPage[];
+  total_pages_in_project: number;
+}
+
+/** Get bible preview: prompt injection + matching pages. */
+export function getBiblePreview(
+  projectId: string,
+  bibleId: string
+): Promise<BiblePreviewResponse> {
+  return apiClient.get<BiblePreviewResponse>(
+    `/projects/${projectId}/bibles/${bibleId}/preview`
+  );
+}

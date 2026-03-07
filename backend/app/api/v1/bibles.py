@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_session
 from app.core.logging import get_logger
 from app.schemas.vertical_bible import (
+    BiblePreviewResponse,
     TranscriptExtractionRequest,
     TranscriptExtractionResponse,
     VerticalBibleCreate,
@@ -171,6 +172,21 @@ async def export_bible(
         markdown=markdown,
         filename=f"{bible.slug}.md",
     )
+
+
+@router.get(
+    "/{bible_id}/preview",
+    response_model=BiblePreviewResponse,
+    responses={404: {"description": "Bible not found"}},
+)
+async def preview_bible(
+    project_id: str,
+    bible_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> BiblePreviewResponse:
+    """Preview how a bible appears in prompts and which pages it matches."""
+    bible = await VerticalBibleService.get_bible(db, project_id, bible_id)
+    return await VerticalBibleService.build_preview(db, project_id, bible)
 
 
 @router.post(

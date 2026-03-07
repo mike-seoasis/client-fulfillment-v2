@@ -261,6 +261,27 @@ class BibleMatchResult(BaseModel):
     )
 
 
+class BiblePreviewMatchedPage(BaseModel):
+    """A page that matches this bible's trigger keywords."""
+
+    page_id: str
+    url: str
+    keyword: str
+    matched_trigger: str = Field(description="Which trigger keyword caused the match")
+
+
+class BiblePreviewResponse(BaseModel):
+    """Preview of how a bible will appear in prompts and which pages it matches."""
+
+    prompt_section: str = Field(
+        description="The '## Domain Knowledge' section as it appears in prompts"
+    )
+    matched_pages: list[BiblePreviewMatchedPage] = Field(default_factory=list)
+    total_pages_in_project: int = Field(
+        0, description="Total pages with keywords in the project"
+    )
+
+
 # =============================================================================
 # TRANSCRIPT EXTRACTION SCHEMAS
 # =============================================================================

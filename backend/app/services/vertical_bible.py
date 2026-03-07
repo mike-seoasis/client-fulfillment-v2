@@ -351,6 +351,87 @@ class VerticalBibleService:
 
         return f"---\n{yaml_str}---\n\n{bible.content_md}"
 
+    # ---- PREVIEW ----
+
+    @staticmethod
+    async def build_preview(
+        db: AsyncSession,
+        project_id: str,
+        bible: VerticalBible,
+    ) -> "BiblePreviewResponse":
+        """Build a preview showing prompt injection and matching pages.
+
+        Returns the formatted Domain Knowledge section as it would appear in
+        content generation prompts, plus a list of project pages whose primary
+        keyword matches any of the bible's trigger keywords.
+        """
+        from app.models.crawled_page import CrawledPage
+        from app.models.page_keywords import PageKeywords
+        from app.schemas.vertical_bible import (
+            BiblePreviewMatchedPage,
+            BiblePreviewResponse,
+        )
+
+        # Build prompt section preview
+        content = (bible.content_md or "").strip()
+        if content:
+            prompt_section = f"## Domain Knowledge\n\n{content}"
+        else:
+            prompt_section = "## Domain Knowledge\n\n(No content yet)"
+
+        # Find matching pages
+        trigger_keywords = bible.trigger_keywords or []
+        matched_pages: list[BiblePreviewMatchedPage] = []
+
+        # Count total pages with keywords in the project
+        count_stmt = (
+            select(CrawledPage.id)
+            .join(PageKeywords, PageKeywords.crawled_page_id == CrawledPage.id)
+            .where(CrawledPage.project_id == project_id)
+        )
+        count_result = await db.execute(count_stmt)
+        total_pages = len(count_result.all())
+
+        if trigger_keywords:
+            # Load all pages with keywords for this project
+            stmt = (
+                select(
+                    CrawledPage.id,
+                    CrawledPage.normalized_url,
+                    PageKeywords.primary_keyword,
+                )
+                .join(PageKeywords, PageKeywords.crawled_page_id == CrawledPage.id)
+                .where(CrawledPage.project_id == project_id)
+                .order_by(PageKeywords.primary_keyword)
+            )
+            result = await db.execute(stmt)
+            rows = result.all()
+
+            for page_id, url, keyword in rows:
+                if not keyword:
+                    continue
+                keyword_lower = keyword.strip().lower()
+                for trigger in trigger_keywords:
+                    trigger_lower = trigger.strip().lower()
+                    if not trigger_lower or len(trigger_lower) < 3:
+                        continue
+                    if trigger_lower in keyword_lower or keyword_lower in trigger_lower:
+                        matched_pages.append(
+                            BiblePreviewMatchedPage(
+                                page_id=str(page_id),
+                                url=url,
+                                keyword=keyword,
+                                matched_trigger=trigger,
+                            )
+                        )
+                        break  # One match per page is enough
+
+        return BiblePreviewResponse(
+            prompt_section=prompt_section,
+            matched_pages=matched_pages,
+            total_pages_in_project=total_pages,
+        )
+
     # ---- HELPERS ----
 
     @staticmethod

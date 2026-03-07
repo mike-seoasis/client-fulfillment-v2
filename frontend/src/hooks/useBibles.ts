@@ -21,10 +21,12 @@ import {
   deleteBible,
   importBible,
   exportBible,
+  getBiblePreview,
   type VerticalBible,
   type BibleCreate,
   type BibleUpdate,
   type BibleExportResponse,
+  type BiblePreviewResponse,
 } from '@/lib/api';
 
 // Query keys factory
@@ -32,6 +34,8 @@ export const bibleKeys = {
   list: (projectId: string) => ['projects', projectId, 'bibles'] as const,
   detail: (projectId: string, bibleId: string) =>
     ['projects', projectId, 'bibles', bibleId] as const,
+  preview: (projectId: string, bibleId: string) =>
+    ['projects', projectId, 'bibles', bibleId, 'preview'] as const,
 };
 
 // Mutation input types
@@ -216,5 +220,20 @@ export function useExportBible(): UseMutationResult<
   return useMutation({
     mutationFn: ({ projectId, bibleId }: ExportBibleInput) =>
       exportBible(projectId, bibleId),
+  });
+}
+
+/**
+ * Fetch bible preview (prompt section + matching pages).
+ */
+export function useBiblePreview(
+  projectId: string,
+  bibleId: string,
+  options?: { enabled?: boolean }
+): UseQueryResult<BiblePreviewResponse> {
+  return useQuery({
+    queryKey: bibleKeys.preview(projectId, bibleId),
+    queryFn: () => getBiblePreview(projectId, bibleId),
+    enabled: options?.enabled ?? (!!projectId && !!bibleId),
   });
 }

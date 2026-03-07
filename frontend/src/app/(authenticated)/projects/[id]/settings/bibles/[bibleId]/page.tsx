@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
   useBible,
+  useBiblePreview,
   useCreateBible,
   useUpdateBible,
   useDeleteBible,
@@ -33,12 +34,13 @@ interface BibleFormData {
   qa_rules: BibleQARules;
 }
 
-type TabKey = 'overview' | 'content' | 'qa-rules';
+type TabKey = 'overview' | 'content' | 'qa-rules' | 'preview';
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'overview', label: 'Overview' },
   { key: 'content', label: 'Content' },
   { key: 'qa-rules', label: 'QA Rules' },
+  { key: 'preview', label: 'Preview' },
 ];
 
 function slugify(text: string): string {
@@ -651,6 +653,124 @@ function QARulesTab({
 }
 
 // =============================================================================
+// Preview Tab
+// =============================================================================
+
+function PreviewTab({
+  projectId,
+  bibleId,
+}: {
+  projectId: string;
+  bibleId: string;
+}) {
+  const { data: preview, isLoading, error } = useBiblePreview(projectId, bibleId);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="h-4 bg-cream-300 rounded-sm w-48" />
+        <div className="h-40 bg-cream-200 rounded-sm" />
+        <div className="h-4 bg-cream-300 rounded-sm w-32" />
+        <div className="h-20 bg-cream-200 rounded-sm" />
+      </div>
+    );
+  }
+
+  if (error || !preview) {
+    return (
+      <p className="text-sm text-warm-gray-500">
+        Unable to load preview. Save the bible first.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* Prompt Preview */}
+      <div>
+        <h3 className="text-sm font-medium text-warm-gray-700 mb-2">
+          Prompt Preview
+        </h3>
+        <p className="text-xs text-warm-gray-500 mb-3">
+          This is how domain knowledge appears in the content generation prompt:
+        </p>
+        <pre className="bg-cream-50 border border-cream-400 rounded-sm p-4 text-sm text-warm-gray-800 font-mono whitespace-pre-wrap overflow-x-auto max-h-[400px] overflow-y-auto">
+          {preview.prompt_section}
+        </pre>
+      </div>
+
+      {/* Matching Pages */}
+      <div>
+        <h3 className="text-sm font-medium text-warm-gray-700 mb-2">
+          Matching Pages
+        </h3>
+        {preview.matched_pages.length > 0 ? (
+          <>
+            <p className="text-xs text-warm-gray-500 mb-3">
+              This bible would match{' '}
+              <span className="font-medium text-warm-gray-700">
+                {preview.matched_pages.length}
+              </span>{' '}
+              of {preview.total_pages_in_project} pages with keywords:
+            </p>
+            <div className="border border-cream-300 rounded-sm divide-y divide-cream-200">
+              {preview.matched_pages.map((page) => (
+                <div
+                  key={page.page_id}
+                  className="flex items-center gap-3 px-4 py-2.5"
+                >
+                  <svg
+                    className="w-4 h-4 text-palm-500 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-warm-gray-900 truncate">
+                      {page.keyword}
+                    </p>
+                    <p className="text-xs text-warm-gray-400 truncate">
+                      {page.url}
+                    </p>
+                  </div>
+                  <span className="text-xs text-warm-gray-400 shrink-0">
+                    via &ldquo;{page.matched_trigger}&rdquo;
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : preview.total_pages_in_project > 0 ? (
+          <div className="bg-cream-50 border border-cream-300 rounded-sm px-4 py-6 text-center">
+            <p className="text-sm text-warm-gray-600">
+              No pages match the current trigger keywords.
+            </p>
+            <p className="text-xs text-warm-gray-400 mt-1">
+              {preview.total_pages_in_project} pages with keywords exist in this project.
+              Check the trigger keywords on the Overview tab.
+            </p>
+          </div>
+        ) : (
+          <div className="bg-cream-50 border border-cream-300 rounded-sm px-4 py-6 text-center">
+            <p className="text-sm text-warm-gray-600">
+              No pages with keywords in this project yet.
+            </p>
+            <p className="text-xs text-warm-gray-400 mt-1">
+              Import pages and run keyword research to see matching results here.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
 // Main Editor Page
 // =============================================================================
 
@@ -1045,6 +1165,14 @@ export default function BibleEditorPage() {
           )}
           {activeTab === 'qa-rules' && (
             <QARulesTab form={form} onChange={handleChange} />
+          )}
+          {activeTab === 'preview' && !isNew && (
+            <PreviewTab projectId={projectId} bibleId={bibleId} />
+          )}
+          {activeTab === 'preview' && isNew && (
+            <p className="text-sm text-warm-gray-500">
+              Save the bible first to see the preview.
+            </p>
           )}
         </div>
       </div>
