@@ -38,8 +38,40 @@ from app.services.content_outline import (
 )
 from app.services.content_writing import extract_competitor_brands, generate_content
 from app.services.pop_content_brief import fetch_content_brief
+from app.services.quality_pipeline import PipelineResult as QualityPipelineResult
 
 logger = get_logger(__name__)
+
+
+def _apply_rewrite_results(
+    content: "PageContent",
+    pipeline_result: QualityPipelineResult,
+) -> None:
+    """Apply auto-rewrite results back to content object if fixed version was kept.
+
+    Updates content fields, recomputes word count, and flags modified attributes
+    for SQLAlchemy change detection.
+    """
+    if not pipeline_result.final_fields:
+        return
+    if not pipeline_result.rewrite or pipeline_result.rewrite.get("kept_version") != "fixed":
+        return
+
+    import re
+
+    from sqlalchemy.orm.attributes import flag_modified
+
+    for field_name, value in pipeline_result.final_fields.items():
+        if hasattr(content, field_name):
+            setattr(content, field_name, value)
+            flag_modified(content, field_name)
+
+    # Recompute word count
+    total_words = 0
+    for value in pipeline_result.final_fields.values():
+        text_only = re.sub(r"<[^>]+>", " ", value)
+        total_words += len(text_only.split())
+    content.word_count = total_words
 
 
 @dataclass
@@ -335,13 +367,16 @@ async def run_generate_from_outline(
                 written_content.status = ContentStatus.CHECKING.value
                 await db.commit()
 
-                await run_quality_pipeline(
+                pipeline_result = await run_quality_pipeline(
                     content=written_content,
                     brand_config=brand_config,
                     primary_keyword=keyword,
                     content_brief=crawled_page.content_brief,
                     matched_bibles=matched_bibles,
                 )
+
+                # Apply auto-rewrite results if fixed version was kept
+                _apply_rewrite_results(written_content, pipeline_result)
 
                 # flag_modified needed for in-place JSONB dict mutation
                 from sqlalchemy.orm.attributes import flag_modified
@@ -890,13 +925,16 @@ async def _process_single_page(
             written_content.status = ContentStatus.CHECKING.value
             await db.commit()
 
-            await run_quality_pipeline(
+            pipeline_result = await run_quality_pipeline(
                 content=written_content,
                 brand_config=brand_config,
                 primary_keyword=keyword,
                 content_brief=content_brief,
                 matched_bibles=matched_bibles,
             )
+
+            # Apply auto-rewrite results if fixed version was kept
+            _apply_rewrite_results(written_content, pipeline_result)
 
             # --- Step 4: Mark complete ---
             written_content.status = ContentStatus.COMPLETE.value

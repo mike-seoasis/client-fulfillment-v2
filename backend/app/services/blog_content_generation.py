@@ -635,6 +635,20 @@ async def _process_single_post(
                 fields=blog_fields,
                 matched_bibles=matched_bibles,
             )
+
+            # Apply auto-rewrite results if fixed version was kept
+            if (
+                pipeline_result.final_fields
+                and pipeline_result.rewrite
+                and pipeline_result.rewrite.get("kept_version") == "fixed"
+            ):
+                from sqlalchemy.orm.attributes import flag_modified
+
+                for field_name, value in pipeline_result.final_fields.items():
+                    if hasattr(blog_post, field_name):
+                        setattr(blog_post, field_name, value)
+                        flag_modified(blog_post, field_name)
+
             blog_post.qa_results = pipeline_result.to_dict()
 
             # --- Step 5 (Done): Mark complete ---

@@ -17,9 +17,11 @@ from typing import Any
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.services.content_quality import (
+    CONTENT_FIELDS,
     QualityIssue,
     QualityResult,
     run_blog_quality_checks,
+    run_fields_quality_checks,
     run_quality_checks,
 )
 from app.services.llm_judge import run_llm_judge_checks
@@ -107,6 +109,9 @@ class PipelineResult:
     bibles_matched: list[str] = field(default_factory=list)
     tier2: dict[str, Any] | None = None
     short_circuited: bool = False
+    rewrite: dict[str, Any] | None = None
+    versions: dict[str, Any] | None = None
+    final_fields: dict[str, str] | None = None  # transient, not serialized
 
     def to_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {
@@ -122,6 +127,10 @@ class PipelineResult:
             d["tier2"] = self.tier2
         if self.short_circuited:
             d["short_circuited"] = True
+        if self.rewrite is not None:
+            d["rewrite"] = self.rewrite
+        if self.versions is not None:
+            d["versions"] = self.versions
         return d
 
 
@@ -288,8 +297,272 @@ async def run_quality_pipeline(
         short_circuited=short_circuited,
     )
 
+    # --- Auto-rewrite (if enabled and score below threshold) ---
+    if (
+        settings.quality_auto_rewrite_enabled
+        and score < settings.quality_auto_rewrite_threshold
+    ):
+        # Build fields dict from content object if needed
+        pipeline_fields = fields
+        if pipeline_fields is None and content is not None:
+            pipeline_fields = _extract_fields_from_content(content)
+
+        if pipeline_fields:
+            # Separate Tier 2 issues (carried forward) from Tier 1 issues
+            tier2_issues = [i for i in all_issues if i.type.startswith("llm_")]
+            issue_dicts = [i.to_dict() for i in all_issues]
+
+            rewrite_meta, versions_meta, final_fields, fixed_issues = await _attempt_auto_rewrite(
+                fields=pipeline_fields,
+                issues=issue_dicts,
+                score=score,
+                brand_config=brand,
+                is_blog=is_blog,
+                matched_bibles=matched_bibles,
+                tier2_issues=tier2_issues,
+            )
+
+            result.rewrite = rewrite_meta
+            result.versions = versions_meta
+            result.final_fields = final_fields
+
+            # If fixed version was kept, update the result's score AND issues
+            if rewrite_meta.get("kept_version") == "fixed" and fixed_issues is not None:
+                fixed_score = rewrite_meta["fixed_score"]
+                result.score = fixed_score
+                result.score_tier = _get_score_tier(fixed_score)
+                result.passed = fixed_score == 100
+                result.issues = fixed_issues
+
     # Store in content.qa_results if content object is provided
     if content is not None:
         content.qa_results = result.to_dict()
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Auto-rewrite helpers
+# ---------------------------------------------------------------------------
+
+def _extract_fields_from_content(content: Any) -> dict[str, str]:
+    """Extract content fields as a dict from a PageContent object."""
+    result: dict[str, str] = {}
+    for fname in CONTENT_FIELDS:
+        val = getattr(content, fname, None)
+        if val:
+            result[fname] = val
+    return result
+
+
+async def _attempt_auto_rewrite(
+    fields: dict[str, str],
+    issues: list[dict[str, Any]],
+    score: int,
+    brand_config: dict[str, Any],
+    is_blog: bool,
+    matched_bibles: list[Any] | None,
+    tier2_issues: list[QualityIssue],
+) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, str], list[QualityIssue] | None]:
+    """Attempt a single auto-rewrite pass on content.
+
+    1. Filter to fixable issues
+    2. Call quality_fixer.fix_content()
+    3. Apply fixed fields to content copy
+    4. Re-run Tier 1 + Tier 1b checks
+    5. Re-compute score (carrying forward Tier 2 issues)
+    6. Keep whichever version scores higher
+
+    Returns:
+        Tuple of (rewrite_metadata, versions_metadata, final_fields, fixed_issues).
+        fixed_issues is the combined Tier 1 + Tier 2 issue list from the fixed version,
+        or None if the original version was kept.
+    """
+    from app.services.quality_fixer import filter_fixable_issues, fix_content
+
+    logger.info(
+        "Auto-rewrite triggered",
+        extra={"original_score": score, "total_issues": len(issues)},
+    )
+
+    # Check if there are any fixable issues
+    fixable_issues = filter_fixable_issues(issues)
+    if not fixable_issues:
+        logger.info("No fixable issues found, skipping rewrite")
+        return (
+            {
+                "triggered": True,
+                "original_score": score,
+                "fixed_score": None,
+                "issues_sent": 0,
+                "issues_resolved": 0,
+                "issues_remaining": len(issues),
+                "new_issues_introduced": 0,
+                "cost_usd": 0.0,
+                "latency_ms": 0.0,
+                "kept_version": "original",
+                "skip_reason": "no_fixable_issues",
+            },
+            None,
+            fields,
+            None,
+        )
+
+    # Snapshot original content (only fields that have fixable issues, truncated)
+    _SNAPSHOT_MAX_CHARS = 500
+    fields_with_issues = {
+        issue["field"]
+        for issue in fixable_issues
+        if issue.get("field") in fields
+    }
+    original_snapshot = {
+        fname: fields[fname][:_SNAPSHOT_MAX_CHARS] + ("..." if len(fields[fname]) > _SNAPSHOT_MAX_CHARS else "")
+        for fname in fields_with_issues
+        if fname in fields
+    }
+
+    # Attempt the fix
+    fix_result = await fix_content(
+        fields=fields,
+        issues=issues,
+    )
+
+    if not fix_result.fixed_fields:
+        logger.warning(
+            "Auto-rewrite fix call failed",
+            extra={"error": fix_result.error},
+        )
+        return (
+            {
+                "triggered": True,
+                "original_score": score,
+                "fixed_score": None,
+                "issues_sent": fix_result.issues_sent,
+                "issues_resolved": 0,
+                "issues_remaining": len(issues),
+                "new_issues_introduced": 0,
+                "cost_usd": fix_result.cost_usd,
+                "latency_ms": fix_result.latency_ms,
+                "kept_version": "original",
+                "error": fix_result.error,
+            },
+            None,
+            fields,
+            None,
+        )
+
+    # Apply fixed fields to a copy
+    fixed_fields = dict(fields)
+    for field_name, fixed_content in fix_result.fixed_fields.items():
+        fixed_fields[field_name] = fixed_content
+
+    # Re-run Tier 1 + Tier 1b on fixed content (use matching check function)
+    try:
+        if is_blog:
+            recheck_result = run_blog_quality_checks(
+                fixed_fields, brand_config, matched_bibles=matched_bibles
+            )
+        else:
+            recheck_result = run_fields_quality_checks(
+                fixed_fields, brand_config, matched_bibles=matched_bibles
+            )
+        fixed_tier1_issues = list(recheck_result.issues)
+    except Exception as exc:
+        logger.error(
+            "Re-check after auto-rewrite failed",
+            extra={"error": str(exc)},
+            exc_info=True,
+        )
+        return (
+            {
+                "triggered": True,
+                "original_score": score,
+                "fixed_score": None,
+                "issues_sent": fix_result.issues_sent,
+                "issues_resolved": 0,
+                "issues_remaining": len(issues),
+                "new_issues_introduced": 0,
+                "cost_usd": fix_result.cost_usd,
+                "latency_ms": fix_result.latency_ms,
+                "kept_version": "original",
+                "error": f"Re-check failed: {exc}",
+            },
+            None,
+            fields,
+            None,
+        )
+
+    # Combine fixed Tier 1 issues with original Tier 2 issues, compute score
+    all_fixed_issues = fixed_tier1_issues + tier2_issues
+    fixed_score = _compute_score(all_fixed_issues)
+
+    # Count resolved / remaining / new issues
+    # Use `or ""` for consistent None/empty-string handling across dicts and objects
+    original_fixable_keys = {
+        (i["type"], i.get("field") or "", i.get("context") or "")
+        for i in fixable_issues
+    }
+    fixed_issue_keys = {
+        (i.type, i.field or "", i.context or "")
+        for i in fixed_tier1_issues
+    }
+    original_tier1_keys = {
+        (i["type"], i.get("field") or "", i.get("context") or "")
+        for i in issues
+        if not i.get("type", "").startswith("llm_")
+    }
+
+    issues_resolved = len(original_fixable_keys - fixed_issue_keys)
+    issues_remaining = len(fixed_issue_keys)
+    new_issues = len(fixed_issue_keys - original_tier1_keys)
+
+    # Keep the better version (ties → keep original)
+    if fixed_score > score:
+        kept_version = "fixed"
+        final_fields = fixed_fields
+        kept_issues = all_fixed_issues
+        logger.info(
+            "Auto-rewrite improved score, keeping fixed version",
+            extra={
+                "original_score": score,
+                "fixed_score": fixed_score,
+                "issues_resolved": issues_resolved,
+            },
+        )
+    else:
+        kept_version = "original"
+        final_fields = fields
+        kept_issues = None
+        logger.info(
+            "Auto-rewrite did not improve score, keeping original",
+            extra={
+                "original_score": score,
+                "fixed_score": fixed_score,
+            },
+        )
+
+    rewrite_metadata = {
+        "triggered": True,
+        "original_score": score,
+        "fixed_score": fixed_score,
+        "issues_sent": fix_result.issues_sent,
+        "issues_resolved": issues_resolved,
+        "issues_remaining": issues_remaining,
+        "new_issues_introduced": new_issues,
+        "cost_usd": fix_result.cost_usd,
+        "latency_ms": fix_result.latency_ms,
+        "kept_version": kept_version,
+    }
+
+    versions_metadata = {
+        "original": {
+            "score": score,
+            "content_snapshot": original_snapshot,
+        },
+        "fixed": {
+            "score": fixed_score,
+            "changes_made": fix_result.changes_made,
+        },
+    }
+
+    return rewrite_metadata, versions_metadata, final_fields, kept_issues

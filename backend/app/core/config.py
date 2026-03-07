@@ -457,6 +457,16 @@ class Settings(BaseSettings):
         description="Minimum heading structure score before flagging as issue",
     )
 
+    # Quality auto-rewrite settings
+    quality_auto_rewrite_enabled: bool = Field(
+        default=False,
+        description="Enable automatic content rewriting for low-scoring content (score < threshold)",
+    )
+    quality_auto_rewrite_threshold: int = Field(
+        default=70,
+        description="Quality score below which auto-rewrite is triggered (0-100). Content at or above this score is not rewritten.",
+    )
+
     # Content generation pipeline
     content_generation_concurrency: int = Field(
         default=1,

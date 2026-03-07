@@ -950,6 +950,73 @@ def _check_business_jargon(fields: dict[str, str]) -> list[QualityIssue]:
     return issues
 
 
+def _run_standard_checks(
+    fields: dict[str, str],
+    brand_config: dict[str, Any],
+    matched_bibles: list[Any] | None = None,
+) -> tuple[list[QualityIssue], list[str]]:
+    """Run the 9 standard checks + bible checks on a fields dict.
+
+    Returns:
+        Tuple of (issues, bible_names).
+    """
+    issues: list[QualityIssue] = []
+
+    # Standard checks (1-9)
+    issues.extend(_check_banned_words(fields, brand_config))
+    issues.extend(_check_em_dashes(fields))
+    issues.extend(_check_ai_openers(fields))
+    issues.extend(_check_triplet_lists(fields))
+    issues.extend(_check_rhetorical_questions(fields))
+    issues.extend(_check_tier1_ai_words(fields))
+    issues.extend(_check_tier2_ai_words(fields))
+    issues.extend(_check_negation_contrast(fields))
+    issues.extend(_check_competitor_names(fields, brand_config))
+
+    # Checks 14-17: Bible-driven checks
+    bible_names: list[str] = []
+    if matched_bibles:
+        for bible in matched_bibles:
+            qa_rules = getattr(bible, "qa_rules", None) or {}
+            name = getattr(bible, "name", "Bible")
+            if qa_rules:
+                issues.extend(_check_bible_preferred_terms(fields, qa_rules, name))
+                issues.extend(_check_bible_banned_claims(fields, qa_rules, name))
+                issues.extend(_check_bible_wrong_attribution(fields, qa_rules, name))
+                issues.extend(_check_bible_term_context(fields, qa_rules, name))
+                bible_names.append(name)
+
+    return issues, bible_names
+
+
+def run_fields_quality_checks(
+    fields: dict[str, str],
+    brand_config: dict[str, Any],
+    matched_bibles: list[Any] | None = None,
+) -> QualityResult:
+    """Run the 9 standard quality checks on a fields dict (no blog-specific checks).
+
+    Used for re-checking page content after auto-rewrite, where we need
+    a fields-based check without blog-specific checks 10-13.
+
+    Args:
+        fields: Dict of field_name -> text content to check.
+        brand_config: The BrandConfig.v2_schema dict.
+        matched_bibles: Optional bible objects for domain-specific checks.
+
+    Returns:
+        QualityResult with pass/fail and list of issues.
+    """
+    issues, bible_names = _run_standard_checks(fields, brand_config, matched_bibles)
+
+    return QualityResult(
+        passed=len(issues) == 0,
+        issues=issues,
+        checked_at=datetime.now(UTC).isoformat(),
+        bibles_matched=bible_names,
+    )
+
+
 def run_blog_quality_checks(
     fields: dict[str, str],
     brand_config: dict[str, Any],
@@ -967,37 +1034,13 @@ def run_blog_quality_checks(
     Returns:
         QualityResult with pass/fail and list of issues.
     """
-    issues: list[QualityIssue] = []
-
-    # Standard checks (1-9)
-    issues.extend(_check_banned_words(fields, brand_config))
-    issues.extend(_check_em_dashes(fields))
-    issues.extend(_check_ai_openers(fields))
-    issues.extend(_check_triplet_lists(fields))
-    issues.extend(_check_rhetorical_questions(fields))
-    issues.extend(_check_tier1_ai_words(fields))
-    issues.extend(_check_tier2_ai_words(fields))
-    issues.extend(_check_negation_contrast(fields))
-    issues.extend(_check_competitor_names(fields, brand_config))
+    issues, bible_names = _run_standard_checks(fields, brand_config, matched_bibles)
 
     # Blog-specific checks (10-13)
     issues.extend(_check_tier3_phrases(fields))
     issues.extend(_check_empty_signposts(fields))
     issues.extend(_check_missing_direct_answer(fields))
     issues.extend(_check_business_jargon(fields))
-
-    # Checks 14-17: Bible-driven checks
-    bible_names: list[str] = []
-    if matched_bibles:
-        for bible in matched_bibles:
-            qa_rules = getattr(bible, "qa_rules", None) or {}
-            name = getattr(bible, "name", "Bible")
-            if qa_rules:
-                issues.extend(_check_bible_preferred_terms(fields, qa_rules, name))
-                issues.extend(_check_bible_banned_claims(fields, qa_rules, name))
-                issues.extend(_check_bible_wrong_attribution(fields, qa_rules, name))
-                issues.extend(_check_bible_term_context(fields, qa_rules, name))
-                bible_names.append(name)
 
     return QualityResult(
         passed=len(issues) == 0,

@@ -41,6 +41,15 @@ def _issue(type: str, field: str = "all") -> QualityIssue:
     return QualityIssue(type=type, field=field, description=f"test {type}", context="...")
 
 
+def _mock_settings(**overrides: Any) -> MagicMock:
+    """Create mock settings with required quality pipeline attributes."""
+    settings = MagicMock()
+    settings.quality_tier2_enabled = overrides.get("quality_tier2_enabled", False)
+    settings.quality_auto_rewrite_enabled = overrides.get("quality_auto_rewrite_enabled", False)
+    settings.quality_auto_rewrite_threshold = overrides.get("quality_auto_rewrite_threshold", 70)
+    return settings
+
+
 # ---------------------------------------------------------------------------
 # _compute_score
 # ---------------------------------------------------------------------------
@@ -147,9 +156,7 @@ class TestRunQualityPipeline:
 
     async def test_tier2_disabled(self, mocker: Any) -> None:
         """When tier2 is disabled, only tier1 runs."""
-        mock_settings = MagicMock()
-        mock_settings.quality_tier2_enabled = False
-        mocker.patch("app.services.quality_pipeline.get_settings", return_value=mock_settings)
+        mocker.patch("app.services.quality_pipeline.get_settings", return_value=_mock_settings())
 
         # Mock tier1 returning no issues
         mock_tier1 = QualityResult(passed=True, issues=[], checked_at="2026-01-01T00:00:00", bibles_matched=[])
@@ -166,9 +173,7 @@ class TestRunQualityPipeline:
 
     async def test_short_circuit_on_critical_issues(self, mocker: Any) -> None:
         """Critical tier1 issues should short-circuit tier2."""
-        mock_settings = MagicMock()
-        mock_settings.quality_tier2_enabled = True
-        mocker.patch("app.services.quality_pipeline.get_settings", return_value=mock_settings)
+        mocker.patch("app.services.quality_pipeline.get_settings", return_value=_mock_settings(quality_tier2_enabled=True))
 
         critical_issue = QualityIssue(
             type="tier1_ai_word",
@@ -194,9 +199,7 @@ class TestRunQualityPipeline:
 
     async def test_tier2_failure_returns_tier1_with_error(self, mocker: Any) -> None:
         """If tier2 LLM judge throws, return tier1 results with tier2 error."""
-        mock_settings = MagicMock()
-        mock_settings.quality_tier2_enabled = True
-        mocker.patch("app.services.quality_pipeline.get_settings", return_value=mock_settings)
+        mocker.patch("app.services.quality_pipeline.get_settings", return_value=_mock_settings(quality_tier2_enabled=True))
 
         mock_tier1 = QualityResult(passed=True, issues=[], checked_at="2026-01-01T00:00:00", bibles_matched=[])
         mocker.patch("app.services.quality_pipeline.run_quality_checks", return_value=mock_tier1)
@@ -217,9 +220,7 @@ class TestRunQualityPipeline:
 
     async def test_blog_mode_uses_blog_checks(self, mocker: Any) -> None:
         """When is_blog=True, run_blog_quality_checks is used."""
-        mock_settings = MagicMock()
-        mock_settings.quality_tier2_enabled = False
-        mocker.patch("app.services.quality_pipeline.get_settings", return_value=mock_settings)
+        mocker.patch("app.services.quality_pipeline.get_settings", return_value=_mock_settings())
 
         mock_blog_result = QualityResult(
             passed=False,
@@ -250,9 +251,7 @@ class TestRunQualityPipeline:
 
     async def test_tier2_success_includes_data(self, mocker: Any) -> None:
         """When tier2 succeeds, tier2 data is included in result."""
-        mock_settings = MagicMock()
-        mock_settings.quality_tier2_enabled = True
-        mocker.patch("app.services.quality_pipeline.get_settings", return_value=mock_settings)
+        mocker.patch("app.services.quality_pipeline.get_settings", return_value=_mock_settings(quality_tier2_enabled=True))
 
         mock_tier1 = QualityResult(passed=True, issues=[], checked_at="2026-01-01T00:00:00", bibles_matched=[])
         mocker.patch("app.services.quality_pipeline.run_quality_checks", return_value=mock_tier1)
@@ -288,9 +287,7 @@ class TestRunQualityPipeline:
 
     async def test_no_content_no_fields_fallback(self, mocker: Any) -> None:
         """When neither content nor fields provided, fallback to empty result."""
-        mock_settings = MagicMock()
-        mock_settings.quality_tier2_enabled = False
-        mocker.patch("app.services.quality_pipeline.get_settings", return_value=mock_settings)
+        mocker.patch("app.services.quality_pipeline.get_settings", return_value=_mock_settings())
 
         result = await run_quality_pipeline()
 
@@ -299,9 +296,7 @@ class TestRunQualityPipeline:
 
     async def test_qa_results_stored_on_content(self, mocker: Any) -> None:
         """Pipeline stores results in content.qa_results when content is provided."""
-        mock_settings = MagicMock()
-        mock_settings.quality_tier2_enabled = False
-        mocker.patch("app.services.quality_pipeline.get_settings", return_value=mock_settings)
+        mocker.patch("app.services.quality_pipeline.get_settings", return_value=_mock_settings())
 
         mock_tier1 = QualityResult(passed=True, issues=[], checked_at="2026-01-01T00:00:00", bibles_matched=[])
         mocker.patch("app.services.quality_pipeline.run_quality_checks", return_value=mock_tier1)
@@ -354,3 +349,350 @@ class TestRunQualityPipeline:
         )
         d = result.to_dict()
         assert d["short_circuited"] is True
+
+    async def test_pipeline_result_to_dict_with_rewrite(self) -> None:
+        """PipelineResult.to_dict includes rewrite and versions when set."""
+        result = PipelineResult(
+            passed=True,
+            score=88,
+            score_tier="minor_issues",
+            issues=[],
+            checked_at="2026-01-01T00:00:00",
+            rewrite={
+                "triggered": True,
+                "original_score": 52,
+                "fixed_score": 88,
+                "kept_version": "fixed",
+            },
+            versions={
+                "original": {"score": 52, "content_snapshot": {}},
+                "fixed": {"score": 88, "changes_made": ["change 1"]},
+            },
+            final_fields={"top_description": "<p>Fixed</p>"},
+        )
+        d = result.to_dict()
+        assert d["rewrite"]["triggered"] is True
+        assert d["rewrite"]["kept_version"] == "fixed"
+        assert d["versions"]["original"]["score"] == 52
+        assert d["versions"]["fixed"]["score"] == 88
+        # final_fields is transient, should NOT be in to_dict
+        assert "final_fields" not in d
+
+    async def test_pipeline_result_to_dict_without_rewrite(self) -> None:
+        """Rewrite and versions absent when not set (backward compatible)."""
+        result = PipelineResult(
+            passed=True,
+            score=95,
+            score_tier="publish_ready",
+            issues=[],
+            checked_at="2026-01-01T00:00:00",
+        )
+        d = result.to_dict()
+        assert "rewrite" not in d
+        assert "versions" not in d
+
+    async def test_auto_rewrite_disabled_no_rewrite(self, mocker: Any) -> None:
+        """When auto-rewrite is disabled, no rewrite happens even with low score."""
+        mocker.patch("app.services.quality_pipeline.get_settings", return_value=_mock_settings())
+
+        # Create issues that will produce a low score
+        issues = [
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test", context="..."),
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test2", context="..."),
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test3", context="..."),
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test4", context="..."),
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test5", context="..."),
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test6", context="..."),
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test7", context="..."),
+        ]  # 7 * 5 = 35 deduction, score = 65
+        mock_tier1 = QualityResult(
+            passed=False, issues=issues, checked_at="2026-01-01T00:00:00", bibles_matched=[]
+        )
+        mocker.patch("app.services.quality_pipeline.run_quality_checks", return_value=mock_tier1)
+
+        content = _FakePageContent()
+        result = await run_quality_pipeline(content=content, brand_config={})
+
+        assert result.score == 65
+        assert result.rewrite is None
+        assert result.versions is None
+        assert result.final_fields is None
+
+    async def test_auto_rewrite_enabled_improves_score(self, mocker: Any) -> None:
+        """When auto-rewrite is enabled and fixer improves score, fixed version is kept."""
+        mocker.patch(
+            "app.services.quality_pipeline.get_settings",
+            return_value=_mock_settings(
+                quality_auto_rewrite_enabled=True,
+                quality_auto_rewrite_threshold=70,
+            ),
+        )
+
+        # Original tier1 with fixable issues (score = 65)
+        original_issues = [
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test", context="delve"),
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test2", context="utilize"),
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test3", context="leverage"),
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test4", context="facilitate"),
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test5", context="robust"),
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test6", context="seamless"),
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test7", context="journey"),
+        ]
+        mock_tier1 = QualityResult(
+            passed=False, issues=original_issues, checked_at="2026-01-01T00:00:00", bibles_matched=[]
+        )
+        mocker.patch("app.services.quality_pipeline.run_quality_checks", return_value=mock_tier1)
+
+        # Mock fix_content to return a "fixed" version
+        from app.services.quality_fixer import FixResult
+
+        mock_fix = FixResult(
+            success=True,
+            fixed_fields={"top_description": "<p>Fixed content without AI words</p>"},
+            changes_made=["Replaced AI words"],
+            issues_sent=7,
+            cost_usd=0.01,
+            latency_ms=500,
+        )
+        mocker.patch("app.services.quality_fixer.fix_content", return_value=mock_fix)
+
+        # Mock recheck: fixed version has fewer issues (score = 95)
+        fixed_issues = [
+            QualityIssue(type="tier1_ai_word", field="top_description", description="remaining", context="optimal"),
+        ]
+        mock_recheck = QualityResult(
+            passed=False, issues=fixed_issues, checked_at="2026-01-01T00:00:00", bibles_matched=[]
+        )
+        mocker.patch("app.services.quality_pipeline.run_fields_quality_checks", return_value=mock_recheck)
+
+        content = _FakePageContent()
+        result = await run_quality_pipeline(content=content, brand_config={})
+
+        assert result.rewrite is not None
+        assert result.rewrite["kept_version"] == "fixed"
+        assert result.rewrite["original_score"] == 65
+        assert result.rewrite["fixed_score"] == 95
+        assert result.score == 95
+        assert result.score_tier == "publish_ready"
+        # Issues should be updated to the fixed version's issues
+        assert len(result.issues) == 1
+        assert result.issues[0].context == "optimal"
+        assert result.final_fields is not None
+        assert "top_description" in result.final_fields
+
+    async def test_auto_rewrite_no_improvement_keeps_original(self, mocker: Any) -> None:
+        """When fixer doesn't improve score, original is kept."""
+        mocker.patch(
+            "app.services.quality_pipeline.get_settings",
+            return_value=_mock_settings(
+                quality_auto_rewrite_enabled=True,
+                quality_auto_rewrite_threshold=70,
+            ),
+        )
+
+        original_issues = [
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test", context="delve"),
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test2", context="utilize"),
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test3", context="leverage"),
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test4", context="facilitate"),
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test5", context="robust"),
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test6", context="seamless"),
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test7", context="journey"),
+        ]
+        mock_tier1 = QualityResult(
+            passed=False, issues=original_issues, checked_at="2026-01-01T00:00:00", bibles_matched=[]
+        )
+        mocker.patch("app.services.quality_pipeline.run_quality_checks", return_value=mock_tier1)
+
+        from app.services.quality_fixer import FixResult
+
+        mock_fix = FixResult(
+            success=True,
+            fixed_fields={"top_description": "<p>Made it worse</p>"},
+            changes_made=["Bad rewrite"],
+            issues_sent=7,
+            cost_usd=0.01,
+            latency_ms=500,
+        )
+        mocker.patch("app.services.quality_fixer.fix_content", return_value=mock_fix)
+
+        # Recheck shows more issues (score = 55) — worse than original (65)
+        fixed_issues = [
+            QualityIssue(type="tier1_ai_word", field="top_description", description=f"new{i}", context="...")
+            for i in range(9)
+        ]
+        mock_recheck = QualityResult(
+            passed=False, issues=fixed_issues, checked_at="2026-01-01T00:00:00", bibles_matched=[]
+        )
+        mocker.patch("app.services.quality_pipeline.run_fields_quality_checks", return_value=mock_recheck)
+
+        content = _FakePageContent()
+        result = await run_quality_pipeline(content=content, brand_config={})
+
+        assert result.rewrite is not None
+        assert result.rewrite["kept_version"] == "original"
+        assert result.score == 65  # Original score preserved
+        # Issues should be the ORIGINAL issues (not updated)
+        assert len(result.issues) == 7
+
+    async def test_auto_rewrite_uses_blog_checks_for_blog(self, mocker: Any) -> None:
+        """When is_blog=True, recheck uses run_blog_quality_checks (not run_fields_quality_checks)."""
+        mocker.patch(
+            "app.services.quality_pipeline.get_settings",
+            return_value=_mock_settings(
+                quality_auto_rewrite_enabled=True,
+                quality_auto_rewrite_threshold=70,
+            ),
+        )
+
+        original_issues = [
+            QualityIssue(type="tier1_ai_word", field="content", description=f"test{i}", context=f"word{i}")
+            for i in range(7)
+        ]
+        mock_tier1 = QualityResult(
+            passed=False, issues=original_issues, checked_at="2026-01-01T00:00:00", bibles_matched=[]
+        )
+
+        from app.services.quality_fixer import FixResult
+
+        mock_fix = FixResult(
+            success=True,
+            fixed_fields={"content": "<p>Fixed blog</p>"},
+            changes_made=["Fixed"],
+            issues_sent=7,
+            cost_usd=0.01,
+            latency_ms=500,
+        )
+        mocker.patch("app.services.quality_fixer.fix_content", return_value=mock_fix)
+
+        mock_recheck = QualityResult(
+            passed=True, issues=[], checked_at="2026-01-01T00:00:00", bibles_matched=[]
+        )
+
+        # Use side_effect to return tier1 result first call, recheck result second call
+        blog_mock = mocker.patch(
+            "app.services.quality_pipeline.run_blog_quality_checks",
+            side_effect=[mock_tier1, mock_recheck],
+        )
+        # fields_quality_checks should NOT be called for blogs
+        fields_mock = mocker.patch(
+            "app.services.quality_pipeline.run_fields_quality_checks",
+            return_value=mock_recheck,
+        )
+
+        fields = {"content": "Blog content with AI words delve utilize leverage"}
+        result = await run_quality_pipeline(fields=fields, brand_config={}, is_blog=True)
+
+        # blog_quality_checks called twice: initial + recheck
+        assert blog_mock.call_count == 2
+        # fields_quality_checks should NOT have been called for blog content
+        assert fields_mock.call_count == 0
+
+    async def test_auto_rewrite_partial_fix_accepted(self, mocker: Any) -> None:
+        """Partial fix (success=False but fixed_fields present) is evaluated."""
+        mocker.patch(
+            "app.services.quality_pipeline.get_settings",
+            return_value=_mock_settings(
+                quality_auto_rewrite_enabled=True,
+                quality_auto_rewrite_threshold=70,
+            ),
+        )
+
+        original_issues = [
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test", context="delve"),
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test2", context="utilize"),
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test3", context="leverage"),
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test4", context="facilitate"),
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test5", context="robust"),
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test6", context="seamless"),
+            QualityIssue(type="tier1_ai_word", field="top_description", description="test7", context="journey"),
+        ]
+        mock_tier1 = QualityResult(
+            passed=False, issues=original_issues, checked_at="2026-01-01T00:00:00", bibles_matched=[]
+        )
+        mocker.patch("app.services.quality_pipeline.run_quality_checks", return_value=mock_tier1)
+
+        from app.services.quality_fixer import FixResult
+
+        # Partial fix: success=False but some fields were fixed
+        mock_fix = FixResult(
+            success=False,
+            fixed_fields={"top_description": "<p>Partially fixed</p>"},
+            changes_made=["Fixed some issues"],
+            issues_sent=7,
+            cost_usd=0.01,
+            latency_ms=500,
+            error="Fix failed for bottom_description",
+        )
+        mocker.patch("app.services.quality_fixer.fix_content", return_value=mock_fix)
+
+        # Recheck shows improvement
+        fixed_issues = [
+            QualityIssue(type="tier1_ai_word", field="top_description", description="remaining", context="optimal"),
+        ]
+        mock_recheck = QualityResult(
+            passed=False, issues=fixed_issues, checked_at="2026-01-01T00:00:00", bibles_matched=[]
+        )
+        mocker.patch("app.services.quality_pipeline.run_fields_quality_checks", return_value=mock_recheck)
+
+        content = _FakePageContent()
+        result = await run_quality_pipeline(content=content, brand_config={})
+
+        # Partial fix should still be evaluated and kept if better
+        assert result.rewrite is not None
+        assert result.rewrite["kept_version"] == "fixed"
+        assert result.score == 95  # 100 - 5 (one remaining issue)
+
+    async def test_auto_rewrite_issues_updated_in_qa_results(self, mocker: Any) -> None:
+        """qa_results.issues reflects the fixed version when rewrite kept."""
+        mocker.patch(
+            "app.services.quality_pipeline.get_settings",
+            return_value=_mock_settings(
+                quality_auto_rewrite_enabled=True,
+                quality_auto_rewrite_threshold=70,
+            ),
+        )
+
+        original_issues = [
+            QualityIssue(type="tier1_ai_word", field="top_description", description=f"issue{i}", context=f"word{i}")
+            for i in range(7)
+        ]
+        mock_tier1 = QualityResult(
+            passed=False, issues=original_issues, checked_at="2026-01-01T00:00:00", bibles_matched=[]
+        )
+        mocker.patch("app.services.quality_pipeline.run_quality_checks", return_value=mock_tier1)
+
+        from app.services.quality_fixer import FixResult
+
+        mock_fix = FixResult(
+            success=True,
+            fixed_fields={"top_description": "<p>Fixed</p>"},
+            changes_made=["Fixed all AI words"],
+            issues_sent=7,
+            cost_usd=0.01,
+            latency_ms=500,
+        )
+        mocker.patch("app.services.quality_fixer.fix_content", return_value=mock_fix)
+
+        # Recheck: only 1 issue remains
+        fixed_issues = [
+            QualityIssue(type="em_dash", field="top_description", description="em dash found", context="—"),
+        ]
+        mock_recheck = QualityResult(
+            passed=False, issues=fixed_issues, checked_at="2026-01-01T00:00:00", bibles_matched=[]
+        )
+        mocker.patch("app.services.quality_pipeline.run_fields_quality_checks", return_value=mock_recheck)
+
+        content = _FakePageContent()
+        result = await run_quality_pipeline(content=content, brand_config={})
+
+        # Score and issues should both reflect the fixed version
+        assert result.score == 98  # 100 - 2 (em_dash)
+        assert len(result.issues) == 1
+        assert result.issues[0].type == "em_dash"
+
+        # qa_results on the content object should also be consistent
+        assert content.qa_results is not None
+        assert content.qa_results["score"] == 98
+        assert len(content.qa_results["issues"]) == 1
+        assert content.qa_results["issues"][0]["type"] == "em_dash"

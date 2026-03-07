@@ -756,13 +756,18 @@ async def recheck_content(
     if page_kw and page_kw.primary_keyword:
         primary_keyword = page_kw.primary_keyword
 
-    await run_quality_pipeline(
+    pipeline_result = await run_quality_pipeline(
         content=content,
         brand_config=brand_config or {},
         primary_keyword=primary_keyword,
         content_brief=page.content_brief,
         matched_bibles=matched_bibles,
     )
+
+    # Apply auto-rewrite results if fixed version was kept
+    from app.services.content_generation import _apply_rewrite_results
+
+    _apply_rewrite_results(content, pipeline_result)
 
     from sqlalchemy.orm.attributes import flag_modified
 
