@@ -259,3 +259,38 @@ class BibleMatchResult(BaseModel):
     matched_keywords: list[str] = Field(
         description="Which trigger keywords matched"
     )
+
+
+# =============================================================================
+# TRANSCRIPT EXTRACTION SCHEMAS
+# =============================================================================
+
+
+class TranscriptExtractionRequest(BaseModel):
+    """Request body for generating a bible from a transcript."""
+
+    transcript: str = Field(
+        ...,
+        min_length=50,
+        max_length=100_000,
+        description="Raw transcript text from a domain expert interview",
+    )
+    vertical_name: str = Field(
+        ...,
+        min_length=1,
+        max_length=255,
+        description="Name of the vertical/domain (e.g., 'Tattoo Cartridge Needles')",
+    )
+
+
+class TranscriptExtractionResponse(BaseModel):
+    """Response from transcript extraction -- the created draft bible."""
+
+    id: str
+    name: str
+    slug: str
+    trigger_keywords: list[str]
+    content_md: str
+    qa_rules: dict[str, list]
+    is_active: bool
+    message: str = "Draft bible created. Review and activate when ready."

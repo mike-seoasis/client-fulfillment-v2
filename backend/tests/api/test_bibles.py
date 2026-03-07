@@ -280,3 +280,105 @@ Content without a name."""
 
         assert imported["name"] == bible.name
         assert imported["trigger_keywords"] == bible.trigger_keywords
+
+
+# =============================================================================
+# TRANSCRIPT GENERATION
+# =============================================================================
+
+
+class TestGenerateFromTranscriptEndpoint:
+    """Test POST /projects/{id}/bibles/generate-from-transcript."""
+
+    async def test_success_201(
+        self, async_client: AsyncClient, project: Project, mocker
+    ):
+        """Successful extraction returns 201 with draft bible data."""
+        mock_bible = VerticalBible(
+            id="test-bible-id",
+            project_id=project.id,
+            name="Test Vertical",
+            slug="test-vertical",
+            trigger_keywords=["term1", "term2"],
+            content_md="## Domain Overview\nTest content.",
+            qa_rules={
+                "preferred_terms": [],
+                "banned_claims": [],
+                "feature_attribution": [],
+                "term_context_rules": [],
+            },
+            is_active=False,
+        )
+        mocker.patch(
+            "app.api.v1.bibles.generate_bible_from_transcript",
+            return_value=mock_bible,
+        )
+
+        response = await async_client.post(
+            f"{BASE_URL}/{project.id}/bibles/generate-from-transcript",
+            json={
+                "transcript": "Expert says cartridge needles have membranes for safety." + " " * 50,
+                "vertical_name": "Tattoo Needles",
+            },
+        )
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["name"] == "Test Vertical"
+        assert data["is_active"] is False
+        assert data["message"] == "Draft bible created. Review and activate when ready."
+
+    async def test_empty_transcript_422(
+        self, async_client: AsyncClient, project: Project
+    ):
+        response = await async_client.post(
+            f"{BASE_URL}/{project.id}/bibles/generate-from-transcript",
+            json={"transcript": "", "vertical_name": "Test"},
+        )
+        assert response.status_code == 422
+
+    async def test_transcript_too_short_422(
+        self, async_client: AsyncClient, project: Project
+    ):
+        response = await async_client.post(
+            f"{BASE_URL}/{project.id}/bibles/generate-from-transcript",
+            json={"transcript": "Too short", "vertical_name": "Test"},
+        )
+        assert response.status_code == 422
+
+    async def test_missing_vertical_name_422(
+        self, async_client: AsyncClient, project: Project
+    ):
+        response = await async_client.post(
+            f"{BASE_URL}/{project.id}/bibles/generate-from-transcript",
+            json={"transcript": "A" * 100},
+        )
+        assert response.status_code == 422
+
+    async def test_ai_failure_502(
+        self, async_client: AsyncClient, project: Project, mocker
+    ):
+        mocker.patch(
+            "app.api.v1.bibles.generate_bible_from_transcript",
+            side_effect=RuntimeError("AI extraction failed: timeout"),
+        )
+
+        response = await async_client.post(
+            f"{BASE_URL}/{project.id}/bibles/generate-from-transcript",
+            json={
+                "transcript": "A" * 100,
+                "vertical_name": "Test",
+            },
+        )
+        assert response.status_code == 502
+
+    async def test_project_not_found_404(self, async_client: AsyncClient):
+        fake_id = str(uuid.uuid4())
+        response = await async_client.post(
+            f"{BASE_URL}/{fake_id}/bibles/generate-from-transcript",
+            json={
+                "transcript": "A" * 100,
+                "vertical_name": "Test",
+            },
+        )
+        assert response.status_code == 404

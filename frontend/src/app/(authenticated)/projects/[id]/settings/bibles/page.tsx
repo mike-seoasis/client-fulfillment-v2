@@ -276,7 +276,7 @@ export default function BiblesListPage() {
         </div>
       )}
 
-      {/* Generate from Transcript teaser */}
+      {/* Generate from Transcript */}
       <div className="mt-6 bg-cream-50 rounded-sm border border-cream-300 border-dashed p-6">
         <div className="flex items-center justify-between">
           <div>
@@ -287,9 +287,9 @@ export default function BiblesListPage() {
               Automatically create a bible from a client interview transcript
             </p>
           </div>
-          <Button variant="secondary" disabled>
-            Coming soon
-          </Button>
+          <ButtonLink href={`/projects/${projectId}/settings/bibles/generate`} variant="secondary">
+            Generate from Transcript
+          </ButtonLink>
         </div>
       </div>
 

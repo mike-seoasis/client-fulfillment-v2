@@ -563,3 +563,264 @@ class TestCRUDOperations:
                 db_session, project.id, str(uuid.uuid4())
             )
         assert exc_info.value.status_code == 404
+
+
+# =============================================================================
+# TRANSCRIPT EXTRACTION
+# =============================================================================
+
+import json
+
+from app.integrations.claude import CompletionResult
+from app.services.vertical_bible import (
+    _build_extraction_user_prompt,
+    _validate_qa_rules,
+    _parse_extraction_response,
+    generate_bible_from_transcript,
+)
+
+
+class TestBuildExtractionUserPrompt:
+    """Test _build_extraction_user_prompt."""
+
+    def test_includes_vertical_name(self):
+        prompt = _build_extraction_user_prompt("some transcript", "Tattoo Needles")
+        assert 'about "Tattoo Needles"' in prompt
+
+    def test_includes_transcript(self):
+        prompt = _build_extraction_user_prompt("Expert: membranes prevent backflow", "Test")
+        assert "membranes prevent backflow" in prompt
+
+    def test_includes_json_schema(self):
+        prompt = _build_extraction_user_prompt("test", "Test")
+        assert "trigger_keywords" in prompt
+        assert "content_md" in prompt
+        assert "qa_rules" in prompt
+        assert "preferred_terms" in prompt
+        assert "banned_claims" in prompt
+
+
+class TestValidateQaRules:
+    """Test _validate_qa_rules validation and sanitization."""
+
+    def test_valid_preferred_terms(self):
+        rules = {
+            "preferred_terms": [
+                {"use": "needle grouping", "instead_of": "needle configuration"}
+            ]
+        }
+        result = _validate_qa_rules(rules)
+        assert len(result["preferred_terms"]) == 1
+        assert result["preferred_terms"][0]["use"] == "needle grouping"
+
+    def test_invalid_preferred_term_stripped(self):
+        rules = {
+            "preferred_terms": [
+                {"instead_of": "needle configuration"}  # missing 'use'
+            ]
+        }
+        result = _validate_qa_rules(rules)
+        assert len(result["preferred_terms"]) == 0
+
+    def test_empty_string_values_stripped(self):
+        rules = {
+            "preferred_terms": [
+                {"use": "", "instead_of": "something"}
+            ]
+        }
+        result = _validate_qa_rules(rules)
+        assert len(result["preferred_terms"]) == 0
+
+    def test_valid_banned_claims(self):
+        rules = {
+            "banned_claims": [
+                {"claim": "only brand", "context": "membrane", "reason": "All brands have it"}
+            ]
+        }
+        result = _validate_qa_rules(rules)
+        assert len(result["banned_claims"]) == 1
+
+    def test_valid_feature_attribution(self):
+        rules = {
+            "feature_attribution": [
+                {
+                    "feature": "membrane",
+                    "correct_component": "cartridge needle",
+                    "wrong_components": ["tattoo pen", ""],
+                }
+            ]
+        }
+        result = _validate_qa_rules(rules)
+        assert len(result["feature_attribution"]) == 1
+        assert result["feature_attribution"][0]["wrong_components"] == ["tattoo pen"]
+
+    def test_valid_term_context_rules(self):
+        rules = {
+            "term_context_rules": [
+                {
+                    "term": "membrane",
+                    "correct_context": ["recoil", "protection"],
+                    "wrong_contexts": ["ink savings"],
+                    "explanation": "Membranes prevent backflow",
+                }
+            ]
+        }
+        result = _validate_qa_rules(rules)
+        assert len(result["term_context_rules"]) == 1
+
+    def test_missing_categories_default_to_empty(self):
+        result = _validate_qa_rules({})
+        assert result == {
+            "preferred_terms": [],
+            "banned_claims": [],
+            "feature_attribution": [],
+            "term_context_rules": [],
+        }
+
+    def test_non_dict_input_handled(self):
+        rules = {"preferred_terms": "not a list"}
+        result = _validate_qa_rules(rules)
+        assert result["preferred_terms"] == []
+
+    def test_whitespace_stripped(self):
+        rules = {
+            "preferred_terms": [
+                {"use": "  needle grouping  ", "instead_of": " config "}
+            ]
+        }
+        result = _validate_qa_rules(rules)
+        assert result["preferred_terms"][0]["use"] == "needle grouping"
+        assert result["preferred_terms"][0]["instead_of"] == "config"
+
+
+
+class TestParseExtractionResponse:
+    """Test _parse_extraction_response JSON parsing."""
+
+    def test_valid_json(self):
+        json_str = '{"name": "Test", "slug": "test", "trigger_keywords": []}'
+        result = _parse_extraction_response(json_str)
+        assert result is not None
+        assert result["name"] == "Test"
+
+    def test_json_with_code_fences(self):
+        text = '```json\n{"name": "Test"}\n```'
+        result = _parse_extraction_response(text)
+        assert result is not None
+        assert result["name"] == "Test"
+
+    def test_json_with_surrounding_text(self):
+        text = 'Here is the result:\n{"name": "Test"}\nDone!'
+        result = _parse_extraction_response(text)
+        assert result is not None
+
+    def test_invalid_json_returns_none(self):
+        result = _parse_extraction_response("not json at all")
+        assert result is None
+
+    def test_non_dict_returns_none(self):
+        result = _parse_extraction_response('["list", "not", "dict"]')
+        assert result is None
+
+
+class TestGenerateBibleFromTranscript:
+    """Integration tests for generate_bible_from_transcript."""
+
+    @pytest.mark.asyncio
+    async def test_empty_transcript_raises(self, db_session):
+        with pytest.raises(ValueError, match="empty"):
+            await generate_bible_from_transcript("", "Test", "project-id", db_session)
+
+    @pytest.mark.asyncio
+    async def test_empty_name_raises(self, db_session):
+        with pytest.raises(ValueError, match="Vertical name"):
+            await generate_bible_from_transcript("some text", "", "project-id", db_session)
+
+    @pytest.mark.asyncio
+    async def test_transcript_too_long_raises(self, db_session):
+        long_text = "x" * 100_001
+        with pytest.raises(ValueError, match="maximum length"):
+            await generate_bible_from_transcript(long_text, "Test", "project-id", db_session)
+
+    def _mock_claude(self, mocker, completion_result):
+        """Helper to mock get_claude() returning a client with a given complete() result."""
+        from unittest.mock import AsyncMock
+
+        mock_client = AsyncMock()
+        mock_client.complete.return_value = completion_result
+        mocker.patch(
+            "app.services.vertical_bible.get_claude",
+            return_value=mock_client,
+        )
+        return mock_client
+
+    @pytest.mark.asyncio
+    async def test_successful_extraction(self, db_session, mocker):
+        """Mock Claude and verify the bible is created correctly."""
+        mock_response = json.dumps({
+            "name": "Tattoo Needles",
+            "slug": "tattoo-needles",
+            "trigger_keywords": ["cartridge needle", "membrane"],
+            "content_md": "## Domain Overview\nCartridge needles are...",
+            "qa_rules": {
+                "preferred_terms": [
+                    {"use": "needle grouping", "instead_of": "needle config"}
+                ],
+                "banned_claims": [],
+                "feature_attribution": [],
+                "term_context_rules": [],
+            },
+        })
+
+        self._mock_claude(mocker, CompletionResult(
+            success=True,
+            text=mock_response,
+            input_tokens=1000,
+            output_tokens=500,
+            duration_ms=5000,
+        ))
+
+        bible = await generate_bible_from_transcript(
+            transcript="Expert: cartridge needles have membranes...",
+            vertical_name="Tattoo Needles",
+            project_id="test-project-id",
+            db=db_session,
+        )
+
+        assert bible.name == "Tattoo Needles"
+        assert bible.is_active is False
+        assert len(bible.trigger_keywords) == 2
+        assert len(bible.qa_rules["preferred_terms"]) == 1
+        assert "Domain Overview" in bible.content_md
+
+    @pytest.mark.asyncio
+    async def test_claude_failure_raises_runtime_error(self, db_session, mocker):
+        self._mock_claude(mocker, CompletionResult(
+            success=False,
+            error="Rate limit exceeded",
+        ))
+
+        with pytest.raises(RuntimeError, match="AI extraction failed"):
+            await generate_bible_from_transcript(
+                transcript="some transcript content here",
+                vertical_name="Test",
+                project_id="test-project-id",
+                db=db_session,
+            )
+
+    @pytest.mark.asyncio
+    async def test_unparseable_response_raises(self, db_session, mocker):
+        self._mock_claude(mocker, CompletionResult(
+            success=True,
+            text="This is not JSON at all",
+            input_tokens=100,
+            output_tokens=50,
+        ))
+
+        with pytest.raises(RuntimeError, match="invalid response"):
+            await generate_bible_from_transcript(
+                transcript="some transcript content here",
+                vertical_name="Test",
+                project_id="test-project-id",
+                db=db_session,
+            )

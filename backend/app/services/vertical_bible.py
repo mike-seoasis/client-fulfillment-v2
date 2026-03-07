@@ -4,6 +4,7 @@ Provides CRUD operations, bible matching logic, and markdown import/export
 with YAML frontmatter parsing.
 """
 
+import json
 import re
 import unicodedata
 from typing import Any
@@ -22,6 +23,8 @@ from app.schemas.vertical_bible import (
 )
 
 logger = get_logger(__name__)
+
+from app.integrations.claude import CompletionResult, get_claude
 
 
 def _parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
@@ -405,3 +408,435 @@ class VerticalBibleService:
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Could not generate unique slug for '{slug}'",
         )
+
+
+# =============================================================================
+# TRANSCRIPT EXTRACTION
+# =============================================================================
+
+TRANSCRIPT_EXTRACTION_MODEL = "claude-sonnet-4-5"
+TRANSCRIPT_EXTRACTION_MAX_TOKENS = 8192
+TRANSCRIPT_EXTRACTION_TEMPERATURE = 0.2
+TRANSCRIPT_EXTRACTION_TIMEOUT = 120.0
+TRANSCRIPT_MAX_CHARS = 100_000
+
+EXTRACTION_SYSTEM_PROMPT = """You are a domain knowledge extraction specialist. Your task is to analyze an interview transcript with a domain expert and extract structured knowledge that will be used to:
+1. Train an AI content writer to write accurately about this topic
+2. Create quality assurance rules that catch factual errors in generated content
+
+You must produce a JSON object with the exact schema specified. Be thorough but precise -- every rule you create will be checked against real content, so false positives (rules that trigger on correct content) are worse than missing a rule."""
+
+
+def _build_extraction_user_prompt(transcript: str, vertical_name: str) -> str:
+    """Build the user prompt for transcript extraction."""
+    return f'''## Task
+
+Analyze the following transcript of a domain expert interview about "{vertical_name}" and extract structured knowledge into a bible document.
+
+## Transcript
+
+{transcript}
+
+## Extraction Instructions
+
+From the transcript above, extract:
+
+1. **trigger_keywords**: A list of 5-15 specific terms, product names, or phrases that would indicate a piece of content is about this topic. These should be terms that appear naturally in content about this subject. Be specific -- "cartridge needle" is good, "needle" alone is too broad.
+
+2. **content_md**: A structured markdown document following this exact format:
+
+```markdown
+## Domain Overview
+[2-3 paragraph summary of the domain knowledge from the expert. Write in authoritative third person. Include the key facts, relationships, and context an AI writer would need to write accurately about this topic.]
+
+## Correct Terminology
+| Use This | Not This | Why |
+|----------|----------|-----|
+[Extract preferred terms vs. incorrect/outdated terms mentioned in the transcript. Only include terms the expert explicitly corrected or emphasized.]
+
+## Feature-to-Benefit Mapping
+| Feature | Benefit | How to Write It |
+|---------|---------|-----------------|
+[Extract features and their correct benefits as described by the expert. The "How to Write It" column should be a short example sentence.]
+
+## What NOT to Say
+[Bulleted list of common misconceptions, incorrect claims, or misleading statements the expert warned about. Format each as: "Incorrect claim" -- correct explanation]
+
+## Component Relationships
+[Bulleted list of how components/products relate to each other. Format: "X relates to Y as follows: explanation". Only include relationships the expert explicitly described.]
+```
+
+3. **qa_rules**: Structured rules for automated quality checking. Extract ONLY rules that are clearly supported by the transcript -- do not invent rules the expert didn't discuss.
+
+## Output Format
+
+Return ONLY a valid JSON object with this exact structure. No markdown code fences. No text before or after the JSON.
+
+{{
+  "name": "{vertical_name}",
+  "slug": "[lowercase-hyphenated version of the name]",
+  "trigger_keywords": ["keyword1", "keyword2"],
+  "content_md": "[Full markdown document as specified above]",
+  "qa_rules": {{
+    "preferred_terms": [
+      {{
+        "use": "[correct term]",
+        "instead_of": "[incorrect term]"
+      }}
+    ],
+    "banned_claims": [
+      {{
+        "claim": "[the incorrect claim text to match]",
+        "context": "[the topic/term this relates to]",
+        "reason": "[why this claim is wrong]"
+      }}
+    ],
+    "feature_attribution": [
+      {{
+        "feature": "[the feature name]",
+        "correct_component": "[what component/product this feature belongs to]",
+        "wrong_components": ["component it does NOT belong to"]
+      }}
+    ],
+    "term_context_rules": [
+      {{
+        "term": "[the term]",
+        "correct_context": ["correct associated concept"],
+        "wrong_contexts": ["incorrect associated concept"],
+        "explanation": "[why the wrong context is wrong]"
+      }}
+    ]
+  }}
+}}
+
+Rules for extraction:
+- If the transcript doesn't contain information for a qa_rules category, use an empty array for that category.
+- Do not fabricate rules -- only extract what the expert actually said or clearly implied.
+- The slug should be URL-safe: lowercase, hyphens instead of spaces, no special characters.
+- content_md should be 500-3000 characters. Be comprehensive but not redundant.
+- trigger_keywords should be specific enough to avoid false matches (e.g., "cartridge needle" not just "needle").'''
+
+
+def _validate_qa_rules(raw_rules: dict) -> dict[str, list]:
+    """Validate and sanitize extracted qa_rules against the expected schema.
+
+    Strips any rule entries that don't match expected structure. Returns a
+    validated dict with all four rule categories (empty lists for missing ones).
+    """
+    if not isinstance(raw_rules, dict):
+        return {
+            "preferred_terms": [],
+            "banned_claims": [],
+            "feature_attribution": [],
+            "term_context_rules": [],
+        }
+
+    validated: dict[str, list] = {
+        "preferred_terms": [],
+        "banned_claims": [],
+        "feature_attribution": [],
+        "term_context_rules": [],
+    }
+
+    # Validate preferred_terms
+    preferred_raw = raw_rules.get("preferred_terms", [])
+    if not isinstance(preferred_raw, list):
+        preferred_raw = []
+    for rule in preferred_raw:
+        if (
+            isinstance(rule, dict)
+            and isinstance(rule.get("use"), str)
+            and isinstance(rule.get("instead_of"), str)
+            and rule["use"].strip()
+            and rule["instead_of"].strip()
+        ):
+            validated["preferred_terms"].append({
+                "use": rule["use"].strip(),
+                "instead_of": rule["instead_of"].strip(),
+            })
+        else:
+            logger.warning(
+                "Stripped invalid preferred_term rule",
+                extra={"rule": str(rule)[:200]},
+            )
+
+    # Validate banned_claims
+    banned_raw = raw_rules.get("banned_claims", [])
+    if not isinstance(banned_raw, list):
+        banned_raw = []
+    for rule in banned_raw:
+        if (
+            isinstance(rule, dict)
+            and isinstance(rule.get("claim"), str)
+            and isinstance(rule.get("context"), str)
+            and isinstance(rule.get("reason"), str)
+            and rule["claim"].strip()
+        ):
+            validated["banned_claims"].append({
+                "claim": rule["claim"].strip(),
+                "context": rule["context"].strip(),
+                "reason": rule["reason"].strip(),
+            })
+        else:
+            logger.warning(
+                "Stripped invalid banned_claim rule",
+                extra={"rule": str(rule)[:200]},
+            )
+
+    # Validate feature_attribution
+    feature_raw = raw_rules.get("feature_attribution", [])
+    if not isinstance(feature_raw, list):
+        feature_raw = []
+    for rule in feature_raw:
+        if (
+            isinstance(rule, dict)
+            and isinstance(rule.get("feature"), str)
+            and isinstance(rule.get("correct_component"), str)
+            and isinstance(rule.get("wrong_components"), list)
+            and rule["feature"].strip()
+        ):
+            wrong = [
+                w.strip() for w in rule["wrong_components"]
+                if isinstance(w, str) and w.strip()
+            ]
+            validated["feature_attribution"].append({
+                "feature": rule["feature"].strip(),
+                "correct_component": rule["correct_component"].strip(),
+                "wrong_components": wrong,
+            })
+        else:
+            logger.warning(
+                "Stripped invalid feature_attribution rule",
+                extra={"rule": str(rule)[:200]},
+            )
+
+    # Validate term_context_rules
+    term_raw = raw_rules.get("term_context_rules", [])
+    if not isinstance(term_raw, list):
+        term_raw = []
+    for rule in term_raw:
+        if (
+            isinstance(rule, dict)
+            and isinstance(rule.get("term"), str)
+            and isinstance(rule.get("correct_context"), list)
+            and isinstance(rule.get("wrong_contexts"), list)
+            and isinstance(rule.get("explanation"), str)
+            and rule["term"].strip()
+        ):
+            correct = [
+                c.strip() for c in rule["correct_context"]
+                if isinstance(c, str) and c.strip()
+            ]
+            wrong = [
+                w.strip() for w in rule["wrong_contexts"]
+                if isinstance(w, str) and w.strip()
+            ]
+            validated["term_context_rules"].append({
+                "term": rule["term"].strip(),
+                "correct_context": correct,
+                "wrong_contexts": wrong,
+                "explanation": rule["explanation"].strip(),
+            })
+        else:
+            logger.warning(
+                "Stripped invalid term_context_rule",
+                extra={"rule": str(rule)[:200]},
+            )
+
+    return validated
+
+
+def _parse_extraction_response(text: str) -> dict | None:
+    """Parse Claude's extraction response as JSON.
+
+    Handles markdown code fences, BOM characters, and surrounding text.
+    Returns None if unparseable.
+    """
+    cleaned = text.strip()
+
+    # Strip BOM if present
+    cleaned = cleaned.lstrip("\ufeff")
+
+    # Strip markdown code fences
+    if cleaned.startswith("```"):
+        lines = cleaned.split("\n")
+        lines = lines[1:]  # Remove opening fence
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        cleaned = "\n".join(lines).strip()
+
+    # Try direct parse first
+    try:
+        parsed = json.loads(cleaned)
+        if isinstance(parsed, dict):
+            return parsed
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Try to extract JSON object if surrounded by other text (non-greedy)
+    if not cleaned.startswith("{"):
+        match = re.search(r"\{[\s\S]*?\}", cleaned)
+        if match:
+            try:
+                parsed = json.loads(match.group(0))
+                if isinstance(parsed, dict):
+                    return parsed
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+    # Last resort: find the first { and try progressively larger slices
+    first_brace = cleaned.find("{")
+    if first_brace >= 0:
+        # Find matching closing brace by trying json.loads from the first {
+        substr = cleaned[first_brace:]
+        try:
+            parsed = json.loads(substr)
+            if isinstance(parsed, dict):
+                return parsed
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    return None
+
+
+async def generate_bible_from_transcript(
+    transcript: str,
+    vertical_name: str,
+    project_id: str,
+    db: AsyncSession,
+) -> VerticalBible:
+    """Extract a structured knowledge bible from a domain expert transcript.
+
+    Calls Claude Sonnet to analyze the transcript, extract domain knowledge,
+    terminology rules, and QA rules. Creates the bible in the database with
+    is_active=False (draft state) for operator review.
+
+    Raises:
+        ValueError: If transcript exceeds max length or is empty.
+        RuntimeError: If Claude API call fails or response cannot be parsed.
+    """
+    # Input validation and sanitization
+    transcript = transcript.strip().replace("\x00", "")
+    vertical_name = vertical_name.strip().replace("\x00", "")
+
+    if not transcript:
+        raise ValueError("Transcript cannot be empty")
+    if not vertical_name:
+        raise ValueError("Vertical name cannot be empty")
+    if len(transcript) > TRANSCRIPT_MAX_CHARS:
+        raise ValueError(
+            f"Transcript exceeds maximum length of {TRANSCRIPT_MAX_CHARS:,} characters "
+            f"(received {len(transcript):,}). Try trimming irrelevant sections."
+        )
+
+    logger.info(
+        "Starting bible extraction from transcript",
+        extra={
+            "project_id": project_id,
+            "vertical_name": vertical_name,
+            "transcript_chars": len(transcript),
+        },
+    )
+
+    # Build prompts
+    user_prompt = _build_extraction_user_prompt(transcript, vertical_name)
+
+    # Call Claude — use the global singleton client (shared circuit breaker
+    # and connection pool) with per-call overrides for model/tokens/timeout
+    client = await get_claude()
+    result = await client.complete(
+        user_prompt=user_prompt,
+        system_prompt=EXTRACTION_SYSTEM_PROMPT,
+        model=TRANSCRIPT_EXTRACTION_MODEL,
+        max_tokens=TRANSCRIPT_EXTRACTION_MAX_TOKENS,
+        temperature=TRANSCRIPT_EXTRACTION_TEMPERATURE,
+        timeout=TRANSCRIPT_EXTRACTION_TIMEOUT,
+    )
+
+    if not result.success:
+        logger.error(
+            "Claude API call failed for transcript extraction",
+            extra={
+                "project_id": project_id,
+                "error": result.error,
+                "status_code": result.status_code,
+            },
+        )
+        raise RuntimeError("AI extraction failed. Please try again later.")
+
+    logger.info(
+        "Claude transcript extraction call complete",
+        extra={
+            "project_id": project_id,
+            "input_tokens": result.input_tokens,
+            "output_tokens": result.output_tokens,
+            "duration_ms": round(result.duration_ms),
+        },
+    )
+
+    # Parse JSON response
+    parsed = _parse_extraction_response(result.text or "")
+    if parsed is None:
+        logger.error(
+            "Failed to parse extraction response as JSON",
+            extra={
+                "project_id": project_id,
+                "response_snippet": (result.text or "")[:500],
+            },
+        )
+        raise RuntimeError(
+            "AI extraction returned an invalid response. Please try again."
+        )
+
+    # Validate and sanitize
+    name = parsed.get("name", vertical_name).strip() or vertical_name
+    slug = (
+        parsed.get("slug", "").strip()
+        or VerticalBibleService.generate_slug(vertical_name)
+    )
+    trigger_keywords = [
+        kw.strip() for kw in parsed.get("trigger_keywords", [])
+        if isinstance(kw, str) and kw.strip()
+    ]
+    content_md = parsed.get("content_md", "").strip().replace("\x00", "")
+    raw_qa_rules = parsed.get("qa_rules", {})
+    qa_rules = _validate_qa_rules(raw_qa_rules if isinstance(raw_qa_rules, dict) else {})
+
+    if not content_md:
+        raise RuntimeError(
+            "AI extraction returned empty content. The transcript may not contain "
+            "enough domain-specific information. Please try with a more detailed transcript."
+        )
+
+    # Ensure slug uniqueness within the project (reuse existing service method)
+    slug = await VerticalBibleService._ensure_unique_slug(db, project_id, slug)
+
+    # Create bible as draft (is_active=False)
+    bible = VerticalBible(
+        project_id=project_id,
+        name=name,
+        slug=slug,
+        trigger_keywords=trigger_keywords,
+        content_md=content_md,
+        qa_rules=qa_rules,
+        is_active=False,
+        sort_order=0,
+    )
+    db.add(bible)
+    await db.flush()
+    await db.refresh(bible)
+
+    logger.info(
+        "Bible draft created from transcript extraction",
+        extra={
+            "project_id": project_id,
+            "bible_id": str(bible.id),
+            "name": name,
+            "slug": slug,
+            "keyword_count": len(trigger_keywords),
+            "qa_rule_count": sum(len(v) for v in qa_rules.values()),
+            "content_md_chars": len(content_md),
+        },
+    )
+
+    return bible

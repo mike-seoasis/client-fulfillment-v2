@@ -3,12 +3,14 @@
 REST endpoints for managing vertical knowledge bibles per project.
 """
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
 from app.core.logging import get_logger
 from app.schemas.vertical_bible import (
+    TranscriptExtractionRequest,
+    TranscriptExtractionResponse,
     VerticalBibleCreate,
     VerticalBibleExportResponse,
     VerticalBibleImportRequest,
@@ -17,7 +19,7 @@ from app.schemas.vertical_bible import (
     VerticalBibleUpdate,
 )
 from app.services.project import ProjectService
-from app.services.vertical_bible import VerticalBibleService
+from app.services.vertical_bible import VerticalBibleService, generate_bible_from_transcript
 
 logger = get_logger(__name__)
 
@@ -169,3 +171,52 @@ async def export_bible(
         markdown=markdown,
         filename=f"{bible.slug}.md",
     )
+
+
+@router.post(
+    "/generate-from-transcript",
+    response_model=TranscriptExtractionResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Generate a bible draft from an expert transcript",
+    responses={
+        404: {"description": "Project not found"},
+        422: {"description": "Invalid input"},
+        502: {"description": "AI extraction failed"},
+    },
+)
+async def generate_from_transcript(
+    project_id: str,
+    request: TranscriptExtractionRequest,
+    db: AsyncSession = Depends(get_session),
+) -> TranscriptExtractionResponse:
+    """Extract a structured knowledge bible from a domain expert transcript.
+
+    Uses Claude to analyze the transcript and extract domain knowledge,
+    trigger keywords, and QA rules. The bible is created as a draft
+    (is_active=False) for operator review.
+    """
+    await ProjectService.get_project(db, project_id)
+
+    try:
+        bible = await generate_bible_from_transcript(
+            transcript=request.transcript,
+            vertical_name=request.vertical_name,
+            project_id=project_id,
+            db=db,
+        )
+
+        return TranscriptExtractionResponse(
+            id=str(bible.id),
+            name=bible.name,
+            slug=bible.slug,
+            trigger_keywords=bible.trigger_keywords or [],
+            content_md=bible.content_md or "",
+            qa_rules=bible.qa_rules or {},
+            is_active=bible.is_active,
+        )
+
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+    except RuntimeError as e:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
