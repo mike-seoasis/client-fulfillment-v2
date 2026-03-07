@@ -20,6 +20,7 @@ import {
 import { generateVariations } from '@/lib/keyword-variations';
 import { Button } from '@/components/ui';
 import { useBrandConfig } from '@/hooks/useBrandConfig';
+import { QualityPanel, type QaResults } from '@/components/quality';
 
 // ---------------------------------------------------------------------------
 // Utility helpers
@@ -55,190 +56,6 @@ function WordCounter({ count }: { count: number }) {
   return <span className="text-xs font-mono text-warm-500">{count} words</span>;
 }
 
-interface QaIssue {
-  type: string;
-  field: string;
-  description: string;
-  context: string;
-}
-
-interface QaResults {
-  passed: boolean;
-  issues: QaIssue[];
-  checked_at?: string;
-}
-
-function QualityStatusCard({ qaResults }: { qaResults: QaResults | null }) {
-  if (!qaResults) return null;
-
-  const issueCount = qaResults.issues?.length ?? 0;
-  const passed = qaResults.passed;
-
-  // Build check result summary — group by type to show pass/fail per check category
-  const checkTypes = [
-    'banned_word',
-    'em_dash',
-    'ai_pattern',
-    'triplet_excess',
-    'rhetorical_excess',
-    'tier1_ai_word',
-    'tier2_ai_excess',
-    'negation_contrast',
-    'competitor_name',
-  ];
-  const checkLabels: Record<string, string> = {
-    banned_word: 'Banned Words',
-    em_dash: 'Em Dashes',
-    ai_pattern: 'AI Openers',
-    triplet_excess: 'Triplet Lists',
-    rhetorical_excess: 'Rhetorical Questions',
-    tier1_ai_word: 'Tier 1 AI Words',
-    tier2_ai_excess: 'Tier 2 AI Words',
-    negation_contrast: 'Negation Contrast',
-    competitor_name: 'Competitor Names',
-  };
-
-  const issuesByType: Record<string, number> = {};
-  for (const issue of qaResults.issues ?? []) {
-    issuesByType[issue.type] = (issuesByType[issue.type] ?? 0) + 1;
-  }
-
-  return (
-    <div className="bg-white rounded-sm border border-sand-400/60 overflow-hidden">
-      <div className={`px-4 py-3 border-b ${passed ? 'bg-palm-50 border-palm-100' : 'bg-coral-50 border-coral-100'}`}>
-        <div className="flex items-center gap-2">
-          <div className={`w-5 h-5 rounded-full flex items-center justify-center ${passed ? 'bg-palm-100' : 'bg-coral-100'}`}>
-            {passed ? (
-              <svg className="w-3 h-3 text-palm-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-              </svg>
-            ) : (
-              <svg className="w-3 h-3 text-coral-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-              </svg>
-            )}
-          </div>
-          <span className={`text-sm font-semibold ${passed ? 'text-palm-800' : 'text-coral-800'}`}>
-            {passed ? 'All Checks Passed' : `${issueCount} Issue${issueCount !== 1 ? 's' : ''} Found`}
-          </span>
-        </div>
-      </div>
-
-      <div className="p-4 space-y-2">
-        {checkTypes.map((type) => {
-          const count = issuesByType[type] ?? 0;
-          return (
-            <div key={type} className="flex items-center justify-between text-xs">
-              <span className="text-warm-600">{checkLabels[type] ?? type}</span>
-              {count > 0 ? (
-                <span className="text-coral-600 font-medium">{count} found</span>
-              ) : (
-                <span className="text-palm-600 font-medium">Pass</span>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-const ISSUE_TYPE_LABELS: Record<string, string> = {
-  banned_word: 'Banned Words',
-  em_dash: 'Em Dashes',
-  ai_pattern: 'AI Openers',
-  triplet_excess: 'Triplet Lists',
-  rhetorical_excess: 'Rhetorical Questions',
-  tier1_ai_word: 'Tier 1 AI Words',
-  tier2_ai_excess: 'Tier 2 AI Words',
-  negation_contrast: 'Negation/Contrast',
-  competitor_name: 'Competitor Names',
-};
-
-const FIELD_LABELS: Record<string, string> = {
-  page_title: 'title',
-  meta_description: 'meta',
-  top_description: 'top',
-  bottom_description: 'body',
-};
-
-function FlaggedPassagesCard({
-  issues,
-  onJumpTo,
-}: {
-  issues: QaIssue[];
-  onJumpTo?: (context: string) => void;
-}) {
-  if (!issues || issues.length === 0) return null;
-
-  // Group issues by type
-  const groups: { type: string; label: string; items: QaIssue[] }[] = [];
-  const seen = new Set<string>();
-  for (const issue of issues) {
-    if (!seen.has(issue.type)) {
-      seen.add(issue.type);
-      groups.push({
-        type: issue.type,
-        label: ISSUE_TYPE_LABELS[issue.type] ?? issue.type,
-        items: issues.filter((i) => i.type === issue.type),
-      });
-    }
-  }
-
-  // Clean context for display: strip "..." wrappers
-  const displayContext = (ctx: string) =>
-    ctx.replace(/^\.{3}/, '').replace(/\.{3}$/, '').trim();
-
-  return (
-    <div className="bg-white rounded-sm border border-sand-400/60 overflow-hidden">
-      <div className="px-4 py-3 border-b border-sand-200">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-semibold text-warm-700 uppercase tracking-wider">Flagged Passages</h3>
-          <span className="text-xs font-mono text-coral-600">{issues.length}</span>
-        </div>
-      </div>
-      <div className="divide-y divide-sand-100">
-        {groups.map((group) => (
-          <div key={group.type} className="px-4 py-3">
-            {/* Group header */}
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-xs font-semibold text-warm-800">{group.label}</span>
-              <span className="text-xs font-mono text-coral-500 bg-coral-50 px-1.5 py-0.5 rounded-sm">
-                {group.items.length}
-              </span>
-            </div>
-            {/* Individual instances */}
-            <div className="space-y-1.5">
-              {group.items.map((issue, idx) => {
-                const ctx = displayContext(issue.context);
-                const canJump = onJumpTo && issue.field === 'bottom_description';
-                return (
-                  <div
-                    key={idx}
-                    className={`flex items-start gap-2 text-xs py-1 px-2 rounded-sm ${canJump ? 'hover:bg-sand-50 cursor-pointer group' : ''}`}
-                    onClick={canJump ? () => onJumpTo(issue.context) : undefined}
-                  >
-                    <span className="text-warm-400 font-mono flex-shrink-0 mt-px">
-                      {FIELD_LABELS[issue.field] ?? issue.field}
-                    </span>
-                    <span className="text-warm-600 leading-relaxed min-w-0 truncate" title={ctx}>
-                      {ctx}
-                    </span>
-                    {canJump && (
-                      <span className="text-lagoon-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-px">
-                        &darr;
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 function countParagraphs(html: string | null | undefined): number {
   if (!html) return 0;
@@ -979,8 +796,7 @@ export default function ClusterContentEditorPage() {
 
         {/* Right Sidebar (~35%) */}
         <div className="w-[340px] flex-shrink-0 space-y-4 sticky top-[72px] max-h-[calc(100vh-140px)] overflow-y-auto pb-4 sidebar-scroll">
-          <QualityStatusCard qaResults={qaResults} />
-          <FlaggedPassagesCard issues={qaResults?.issues ?? []} onJumpTo={handleJumpTo} />
+          <QualityPanel qaResults={qaResults} onJumpTo={handleJumpTo} />
           <ContentStatsCard
             wordCount={totalWordCount}
             headings={headings}

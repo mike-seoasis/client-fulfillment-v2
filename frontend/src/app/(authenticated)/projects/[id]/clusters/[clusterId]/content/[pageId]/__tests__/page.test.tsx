@@ -319,9 +319,10 @@ describe('ClusterContentEditorPage', () => {
   // Sidebar content
   // --------------------------------------------------------------------------
   describe('sidebar', () => {
-    it('renders quality status card', () => {
+    it('renders quality panel', () => {
       render(<ClusterContentEditorPage />);
-      expect(screen.getByText('All Checks Passed')).toBeInTheDocument();
+      expect(screen.getByText('Content Checks')).toBeInTheDocument();
+      expect(screen.getByText('Estimated Score')).toBeInTheDocument();
     });
 
     it('renders LSI Terms section', () => {
