@@ -834,7 +834,7 @@ async def generate_bible_from_transcript(
         extra={
             "project_id": project_id,
             "bible_id": str(bible.id),
-            "name": name,
+            "bible_name": name,
             "slug": slug,
             "keyword_count": len(trigger_keywords),
             "qa_rule_count": sum(len(v) for v in qa_rules.values()),
