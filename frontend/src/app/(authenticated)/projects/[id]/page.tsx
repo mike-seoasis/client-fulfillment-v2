@@ -13,6 +13,7 @@ import { useLinkMap, usePlanStatus } from '@/hooks/useLinks';
 import { useRedditConfig, useUpsertRedditConfig } from '@/hooks/useReddit';
 import { Button, ButtonLink, Toast } from '@/components/ui';
 import { PagesTab } from '@/components/PagesTab';
+import { KeywordsTab } from '@/components/KeywordsTab';
 import { useResetOnboarding } from '@/hooks/usePageDeletion';
 
 function LoadingSkeleton() {
@@ -821,11 +822,23 @@ function ProjectDetailContent() {
         >
           Pages
         </button>
+        <button
+          onClick={() => setActiveTab('keywords')}
+          className={`px-4 py-2 text-sm transition-colors ${
+            activeTab === 'keywords'
+              ? 'border-b-2 border-palm-500 font-semibold text-warm-gray-900'
+              : 'text-warm-gray-400 hover:text-warm-gray-600'
+          }`}
+        >
+          Keywords
+        </button>
       </div>
 
       {/* Tab content */}
       {activeTab === 'pages' ? (
         <PagesTab projectId={projectId} />
+      ) : activeTab === 'keywords' ? (
+        <KeywordsTab projectId={projectId} />
       ) : (
       <div className="space-y-6">
         {/* Onboarding section */}
