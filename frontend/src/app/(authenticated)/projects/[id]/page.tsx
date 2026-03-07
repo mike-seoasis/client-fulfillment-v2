@@ -9,6 +9,7 @@ import { useCrawlStatus, getOnboardingStep } from '@/hooks/use-crawl-status';
 import { useOnboardingBatches } from '@/hooks/useOnboardingBatches';
 import { useClusters } from '@/hooks/useClusters';
 import { useBlogCampaigns } from '@/hooks/useBlogs';
+import { useBibles } from '@/hooks/useBibles';
 import { useLinkMap, usePlanStatus } from '@/hooks/useLinks';
 import { useRedditConfig, useUpsertRedditConfig } from '@/hooks/useReddit';
 import { Button, ButtonLink, Toast } from '@/components/ui';
@@ -550,6 +551,11 @@ function ProjectDetailContent() {
   });
   const upsertRedditConfig = useUpsertRedditConfig(projectId);
 
+  // Fetch bibles for Knowledge Bibles link
+  const { data: biblesData } = useBibles(projectId, {
+    enabled: !!projectId && !isLoading && !error,
+  });
+
   // Fetch link status for onboarding scope
   const { data: onboardingLinkMap } = useLinkMap(projectId, 'onboarding');
   const { data: onboardingPlanStatus } = usePlanStatus(projectId, 'onboarding', undefined, true);
@@ -741,6 +747,9 @@ function ProjectDetailContent() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <ButtonLink href={`/projects/${projectId}/settings/bibles`} variant="secondary">
+            Knowledge Bibles{biblesData?.length ? ` (${biblesData.length})` : ''}
+          </ButtonLink>
           {/* Brand config action button */}
           {project.has_brand_config ? (
             <ButtonLink href={`/projects/${projectId}/brand-config`} variant="secondary">Brand Details</ButtonLink>
