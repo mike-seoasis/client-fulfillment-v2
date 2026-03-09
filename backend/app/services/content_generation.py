@@ -339,7 +339,7 @@ async def run_generate_from_outline(
             page_keywords = kw_result.scalar_one_or_none()
             keyword = page_keywords.primary_keyword if page_keywords else ""
 
-            matched_bibles = _match_bibles_for_keyword(project_bibles, keyword)
+            matched_bibles = await _match_bibles_for_keyword(project_bibles, keyword)
 
             # Generate content from outline
             content_result = await generate_content_from_outline(
@@ -737,27 +737,14 @@ async def _load_project_bibles(
         raise
 
 
-def _match_bibles_for_keyword(
+BIBLE_MATCH_MODEL = "claude-haiku-4-5-20251001"
+
+
+def _match_bibles_substring(
     project_bibles: list[Any],
     keyword: str,
 ) -> list[Any]:
-    """Match bibles for a keyword using bidirectional substring matching.
-
-    Matches existing VerticalBibleService.match_bibles algorithm:
-    trigger_lower in keyword_lower OR keyword_lower in trigger_lower.
-
-    Pure function, no DB queries. Returns matched bibles preserving sort order.
-    """
-    if not project_bibles or not keyword:
-        logger.info(
-            "Bible matching skipped (no bibles or no keyword)",
-            extra={
-                "bible_count": len(project_bibles) if project_bibles else 0,
-                "keyword": keyword or "(empty)",
-            },
-        )
-        return []
-
+    """Fast substring matching — used as first pass before LLM fallback."""
     keyword_lower = keyword.lower().strip()
     matched: list[Any] = []
 
@@ -771,13 +758,138 @@ def _match_bibles_for_keyword(
                 matched.append(bible)
                 break  # Don't add same bible twice
 
+    return matched
+
+
+async def _match_bibles_llm(
+    project_bibles: list[Any],
+    keyword: str,
+) -> list[Any]:
+    """Semantic matching via Haiku — cheap, fast fallback when substring fails.
+
+    Sends bible names + trigger keywords to Haiku and asks which are relevant
+    to the page keyword. Returns matched bibles preserving sort order.
+    """
+    from app.integrations.claude import ClaudeClient, get_api_key
+
+    # Build a compact description of each bible for the prompt
+    bible_descriptions: list[str] = []
+    for i, bible in enumerate(project_bibles):
+        name = getattr(bible, "name", f"Bible {i}")
+        triggers = getattr(bible, "trigger_keywords", []) or []
+        triggers_str = ", ".join(str(t) for t in triggers[:20])
+        bible_descriptions.append(f'{i}. "{name}" — triggers: {triggers_str}')
+
+    prompt = (
+        f'Page keyword: "{keyword}"\n\n'
+        "Knowledge bibles:\n"
+        + "\n".join(bible_descriptions)
+        + "\n\n"
+        "Which bibles contain domain knowledge relevant to this page keyword? "
+        "Return ONLY a JSON array of the bible numbers (0-indexed) that match. "
+        "A bible is relevant if its topic area covers the page keyword, even if "
+        "the exact keyword isn't in the trigger list. "
+        "If none are relevant, return []."
+    )
+
+    try:
+        client = ClaudeClient(
+            api_key=get_api_key(),
+            model=BIBLE_MATCH_MODEL,
+            max_tokens=100,
+            timeout=10,
+        )
+        result = await client.complete(
+            user_prompt=prompt,
+            system_prompt="You are a keyword matching assistant. Respond with ONLY a JSON array of integers.",
+            max_tokens=100,
+            temperature=0,
+        )
+
+        text = (result.text or "").strip()
+        # Strip markdown fencing if present
+        if text.startswith("```"):
+            lines = text.split("\n")
+            text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:]).strip()
+
+        indices = json.loads(text)
+        if not isinstance(indices, list):
+            return []
+
+        matched = []
+        for idx in indices:
+            if isinstance(idx, int) and 0 <= idx < len(project_bibles):
+                matched.append(project_bibles[idx])
+
+        logger.info(
+            "LLM bible matching result",
+            extra={
+                "keyword": keyword,
+                "matched_indices": indices,
+                "matched_names": [getattr(b, "name", "?") for b in matched],
+                "model": BIBLE_MATCH_MODEL,
+            },
+        )
+        return matched
+
+    except Exception as exc:
+        logger.warning(
+            "LLM bible matching failed, returning empty",
+            extra={"keyword": keyword, "error": str(exc)},
+        )
+        return []
+
+
+async def _match_bibles_for_keyword(
+    project_bibles: list[Any],
+    keyword: str,
+) -> list[Any]:
+    """Match bibles for a keyword — substring first, LLM fallback.
+
+    1. Try fast bidirectional substring matching
+    2. If no matches, fall back to Haiku for semantic matching
+
+    Returns matched bibles preserving sort order.
+    """
+    if not project_bibles or not keyword:
+        logger.info(
+            "Bible matching skipped (no bibles or no keyword)",
+            extra={
+                "bible_count": len(project_bibles) if project_bibles else 0,
+                "keyword": keyword or "(empty)",
+            },
+        )
+        return []
+
+    # Fast path: substring matching
+    matched = _match_bibles_substring(project_bibles, keyword)
+
+    if matched:
+        logger.info(
+            "Bible matched via substring",
+            extra={
+                "keyword": keyword,
+                "matched_count": len(matched),
+                "matched_names": [getattr(b, "name", "?") for b in matched],
+            },
+        )
+        return matched
+
+    # Slow path: LLM semantic matching
     logger.info(
-        "Bible keyword matching result",
+        "No substring match — falling back to LLM matching",
+        extra={"keyword": keyword, "total_bibles": len(project_bibles)},
+    )
+    matched = await _match_bibles_llm(project_bibles, keyword)
+
+    logger.info(
+        "Bible keyword matching final result",
         extra={
             "keyword": keyword,
             "total_bibles": len(project_bibles),
             "matched_count": len(matched),
             "matched_names": [getattr(b, "name", "?") for b in matched],
+            "method": "llm",
         },
     )
     return matched
@@ -880,7 +992,7 @@ async def _process_single_page(
                 )
 
             # Match vertical bibles for this keyword
-            matched_bibles = _match_bibles_for_keyword(
+            matched_bibles = await _match_bibles_for_keyword(
                 project_bibles or [], keyword
             )
 

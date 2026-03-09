@@ -559,7 +559,7 @@ async def _process_single_post(
                 await db.flush()
 
             # Match vertical bibles for this keyword
-            matched_bibles = _match_bibles_for_keyword(
+            matched_bibles = await _match_bibles_for_keyword(
                 project_bibles or [], keyword
             )
 
