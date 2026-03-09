@@ -9,6 +9,7 @@ import {
   useUpdatePageContent,
   useApprovePageContent,
   useRecheckPageContent,
+  useReviseOutline,
 } from '@/hooks/useContentGeneration';
 import { ContentEditorWithSource } from '@/components/content-editor/ContentEditorWithSource';
 import {
@@ -297,6 +298,7 @@ export default function ContentEditorPage() {
   const updateContent = useUpdatePageContent();
   const approveContent = useApprovePageContent();
   const recheckContent = useRecheckPageContent();
+  const reviseOutlineMutation = useReviseOutline();
   const { data: brandConfig } = useBrandConfig(projectId);
 
   // Find this page's metadata from the status endpoint
@@ -702,10 +704,10 @@ export default function ContentEditorPage() {
 
   if (!content) return null;
 
-  // Show outline editor when outline_status is 'draft' or 'approved',
-  // but NOT if full content has already been generated (status='complete' with content)
-  const hasGeneratedContent = content.status === 'complete' && (content.top_description || content.bottom_description);
-  if ((content.outline_status === 'draft' || content.outline_status === 'approved') && !hasGeneratedContent) {
+  // Show outline editor when outline_status is 'draft' or 'approved'
+  const hasGeneratedContent = content.status === 'complete' && !!(content.top_description || content.bottom_description);
+  const isRevising = (content.outline_status === 'draft' || content.outline_status === 'approved') && hasGeneratedContent;
+  if (content.outline_status === 'draft' || content.outline_status === 'approved') {
     return (
       <OutlineEditor
         content={content}
@@ -714,6 +716,7 @@ export default function ContentEditorPage() {
         pageInfo={pageInfo}
         backUrl={`/projects/${projectId}/onboarding/content`}
         onGenerateRedirectUrl={`/projects/${projectId}/onboarding/content`}
+        isRevising={isRevising}
       />
     );
   }
@@ -889,6 +892,19 @@ export default function ContentEditorPage() {
 
           {/* Right: Actions */}
           <div className="flex items-center gap-3">
+            {content.outline_json && (content.outline_status === 'used' || content.outline_status === null) && (
+              <button
+                type="button"
+                onClick={() => reviseOutlineMutation.mutate({ projectId, pageId })}
+                disabled={reviseOutlineMutation.isPending}
+                className="px-4 py-2 text-sm font-medium text-lagoon-600 bg-lagoon-50 hover:bg-lagoon-100 border border-lagoon-200 rounded-sm transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                {reviseOutlineMutation.isPending ? 'Opening...' : 'Revise Outline'}
+              </button>
+            )}
             <button
               type="button"
               onClick={handleRecheck}

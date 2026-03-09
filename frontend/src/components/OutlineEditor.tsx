@@ -55,6 +55,7 @@ export function OutlineEditor({
   pageInfo,
   backUrl,
   onGenerateRedirectUrl,
+  isRevising = false,
 }: {
   content: { outline_json: any; outline_status: string | null; google_doc_url?: string | null; [key: string]: any };
   projectId: string;
@@ -64,6 +65,8 @@ export function OutlineEditor({
   backUrl: string;
   /** URL to navigate to after triggering "Generate Full Copy" */
   onGenerateRedirectUrl: string;
+  /** True when revising an outline that already has generated content */
+  isRevising?: boolean;
 }) {
   const router = useRouter();
   const updateOutlineMutation = useUpdateOutline();
@@ -276,6 +279,18 @@ export function OutlineEditor({
           </div>
         </div>
       </div>
+
+      {/* Revision warning */}
+      {isRevising && (
+        <div className="mb-4 px-4 py-3 bg-coral-50 border border-coral-200 rounded-sm flex items-center gap-2.5">
+          <svg className="w-4 h-4 text-coral-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+          </svg>
+          <p className="text-sm text-coral-700">
+            Regenerating content from this outline will replace the current content.
+          </p>
+        </div>
+      )}
 
       {/* Two-column layout */}
       <div className="flex gap-6 items-start">

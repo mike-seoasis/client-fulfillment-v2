@@ -952,6 +952,70 @@ async def approve_outline(
 
 
 @router.post(
+    "/{project_id}/pages/{page_id}/revise-outline",
+    response_model=PageContentResponse,
+)
+async def revise_outline(
+    project_id: str,
+    page_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> PageContentResponse:
+    """Reset outline_status to 'draft' so the user can edit and regenerate.
+
+    Requires: page has outline_json AND content has already been generated.
+    Returns 400 if no outline exists or content hasn't been generated.
+    Returns 404 if page or PageContent not found.
+    """
+    await ProjectService.get_project(db, project_id)
+
+    stmt = (
+        select(CrawledPage)
+        .where(
+            CrawledPage.id == page_id,
+            CrawledPage.project_id == project_id,
+        )
+        .options(
+            selectinload(CrawledPage.page_content),
+            selectinload(CrawledPage.content_brief),
+        )
+    )
+    result = await db.execute(stmt)
+    page = result.scalar_one_or_none()
+
+    if not page:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Page {page_id} not found in project {project_id}",
+        )
+
+    if not page.page_content:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Content has not been generated yet for this page",
+        )
+
+    content = page.page_content
+
+    if not content.outline_json:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No outline exists for this page",
+        )
+
+    content.outline_status = "draft"
+
+    await db.commit()
+    await db.refresh(content)
+
+    logger.info(
+        "Outline revision started",
+        extra={"project_id": project_id, "page_id": page_id},
+    )
+
+    return _build_page_content_response(page)
+
+
+@router.post(
     "/{project_id}/pages/{page_id}/export-outline",
     response_model=ExportOutlineResponse,
 )

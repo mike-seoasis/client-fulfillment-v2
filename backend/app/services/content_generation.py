@@ -385,9 +385,9 @@ async def run_generate_from_outline(
 
                 written_content.status = ContentStatus.COMPLETE.value
                 written_content.generation_completed_at = datetime.now(UTC)
-                # Clear outline_status so the frontend shows the content
-                # review view instead of the outline editor
-                written_content.outline_status = None
+                # Mark outline as 'used' so the frontend can offer a
+                # "Revise Outline" button instead of hiding it completely
+                written_content.outline_status = "used"
                 await db.commit()
 
             logger.info(
@@ -408,7 +408,7 @@ async def run_generate_from_outline(
                 .where(
                     CrawledPage.project_id == project_id,
                     PageContent.status == ContentStatus.COMPLETE.value,
-                    PageContent.outline_status.is_(None),
+                    PageContent.outline_status.in_([None, "used"]),
                     PageContent.bottom_description.isnot(None),
                 )
             )

@@ -25,6 +25,7 @@ import {
   bulkApproveContent,
   updateOutline,
   approveOutline,
+  reviseOutline,
   generateFromOutline,
   exportOutline,
   type ContentGenerationTriggerResponse,
@@ -352,6 +353,36 @@ export function useApproveOutline(): UseMutationResult<
       projectId: string;
       pageId: string;
     }) => approveOutline(projectId, pageId),
+    onSuccess: (_data, { projectId, pageId }) => {
+      queryClient.invalidateQueries({
+        queryKey: contentGenerationKeys.pageContent(projectId, pageId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: contentGenerationKeys.status(projectId),
+      });
+    },
+  });
+}
+
+/**
+ * Mutation hook to revise an outline (reset to draft for editing).
+ * Invalidates both page content and generation status queries on success.
+ */
+export function useReviseOutline(): UseMutationResult<
+  PageContentResponse,
+  Error,
+  { projectId: string; pageId: string }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      pageId,
+    }: {
+      projectId: string;
+      pageId: string;
+    }) => reviseOutline(projectId, pageId),
     onSuccess: (_data, { projectId, pageId }) => {
       queryClient.invalidateQueries({
         queryKey: contentGenerationKeys.pageContent(projectId, pageId),

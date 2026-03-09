@@ -617,6 +617,19 @@ export function generateFromOutline(
 }
 
 /**
+ * Revise an outline — resets outline_status to 'draft' so the user can
+ * edit and re-approve before regenerating content.
+ */
+export function reviseOutline(
+  projectId: string,
+  pageId: string
+): Promise<PageContentResponse> {
+  return apiClient.post<PageContentResponse>(
+    `/projects/${projectId}/pages/${pageId}/revise-outline`
+  );
+}
+
+/**
  * Export an outline to a formatted Google Doc.
  * Idempotent — returns existing doc URL if already exported.
  * Pass force=true to re-export (creates a new doc).
