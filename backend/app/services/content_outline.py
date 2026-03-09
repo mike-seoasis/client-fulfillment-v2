@@ -644,7 +644,19 @@ REQUIRED_CONTENT_KEYS = {"page_title", "meta_description", "top_description", "b
 
 
 def _parse_content_from_outline_json(text: str) -> dict[str, str] | None:
-    """Parse Claude's content response as JSON with 4 required keys."""
+    """Parse Claude's content response as JSON with 4 required keys.
+
+    Uses the same 3-attempt strategy as content_writing._parse_content_json:
+    1. Direct parse
+    2. Repair control characters (unescaped newlines/tabs in JSON strings)
+    3. Regex-based key extraction fallback (handles unescaped quotes in HTML)
+    """
+    from app.services.content_writing import (
+        _extract_json_keys_fallback,
+        _repair_json_control_chars,
+        _try_json_loads,
+    )
+
     cleaned = text.strip()
 
     # Strip markdown code fences
@@ -661,15 +673,36 @@ def _parse_content_from_outline_json(text: str) -> dict[str, str] | None:
         if match:
             cleaned = match.group(0)
 
-    try:
-        parsed = json.loads(cleaned)
-        if isinstance(parsed, dict) and REQUIRED_CONTENT_KEYS.issubset(parsed.keys()):
-            return {k: str(v) for k, v in parsed.items() if k in REQUIRED_CONTENT_KEYS}
-    except (json.JSONDecodeError, ValueError):
-        pass
+    # Attempt 1: direct parse
+    parsed = _try_json_loads(cleaned)
 
-    logger.warning(
-        "Failed to parse content-from-outline JSON",
-        extra={"snippet": cleaned[:300], "length": len(cleaned)},
-    )
-    return None
+    # Attempt 2: fix control characters inside JSON string values
+    if parsed is None:
+        repaired = _repair_json_control_chars(cleaned)
+        parsed = _try_json_loads(repaired)
+
+    # Attempt 3: extract each key's value using regex boundaries
+    if parsed is None:
+        parsed = _extract_json_keys_fallback(cleaned, REQUIRED_CONTENT_KEYS)
+
+    if parsed is None:
+        logger.warning(
+            "All JSON parse strategies failed for outline content",
+            extra={"snippet": cleaned[:300], "length": len(cleaned)},
+        )
+        return None
+
+    if not isinstance(parsed, dict):
+        return None
+
+    if not REQUIRED_CONTENT_KEYS.issubset(parsed.keys()):
+        logger.warning(
+            "Parsed JSON missing required keys for outline content",
+            extra={
+                "found_keys": list(parsed.keys()),
+                "required": list(REQUIRED_CONTENT_KEYS),
+            },
+        )
+        return None
+
+    return {k: str(v) for k, v in parsed.items() if k in REQUIRED_CONTENT_KEYS}

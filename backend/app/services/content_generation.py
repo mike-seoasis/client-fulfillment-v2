@@ -709,7 +709,22 @@ async def _load_project_bibles(
             .order_by(VerticalBible.sort_order)
         )
         result = await db.execute(stmt)
-        return list(result.scalars().all())
+        bibles = list(result.scalars().all())
+        logger.info(
+            "Loaded vertical bibles for project",
+            extra={
+                "project_id": project_id,
+                "bible_count": len(bibles),
+                "bible_names": [b.name for b in bibles],
+                "bible_triggers": {
+                    b.name: (b.trigger_keywords or []) for b in bibles
+                },
+                "bible_content_lengths": {
+                    b.name: len(b.content_md or "") for b in bibles
+                },
+            },
+        )
+        return bibles
     except (ImportError, Exception) as exc:
         from sqlalchemy.exc import OperationalError, ProgrammingError
 
@@ -734,6 +749,13 @@ def _match_bibles_for_keyword(
     Pure function, no DB queries. Returns matched bibles preserving sort order.
     """
     if not project_bibles or not keyword:
+        logger.info(
+            "Bible matching skipped (no bibles or no keyword)",
+            extra={
+                "bible_count": len(project_bibles) if project_bibles else 0,
+                "keyword": keyword or "(empty)",
+            },
+        )
         return []
 
     keyword_lower = keyword.lower().strip()
@@ -749,6 +771,15 @@ def _match_bibles_for_keyword(
                 matched.append(bible)
                 break  # Don't add same bible twice
 
+    logger.info(
+        "Bible keyword matching result",
+        extra={
+            "keyword": keyword,
+            "total_bibles": len(project_bibles),
+            "matched_count": len(matched),
+            "matched_names": [getattr(b, "name", "?") for b in matched],
+        },
+    )
     return matched
 
 

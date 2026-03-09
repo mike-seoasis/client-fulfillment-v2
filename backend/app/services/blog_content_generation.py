@@ -370,7 +370,20 @@ async def _load_project_bibles_for_campaign(
             .order_by(VerticalBible.sort_order)
         )
         result = await db.execute(stmt)
-        return list(result.scalars().all())
+        bibles = list(result.scalars().all())
+        logger.info(
+            "Loaded vertical bibles for campaign",
+            extra={
+                "campaign_id": campaign_id,
+                "project_id": project_id,
+                "bible_count": len(bibles),
+                "bible_names": [b.name for b in bibles],
+                "bible_triggers": {
+                    b.name: (b.trigger_keywords or []) for b in bibles
+                },
+            },
+        )
+        return bibles
     except (ImportError, Exception) as exc:
         from sqlalchemy.exc import OperationalError, ProgrammingError
 

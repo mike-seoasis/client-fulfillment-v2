@@ -1030,6 +1030,7 @@ def _build_domain_knowledge_section(
         Formatted section string or None if no content to inject.
     """
     if not matched_bibles:
+        logger.info("No matched bibles — skipping domain knowledge section")
         return None
 
     # Sort by sort_order (lower = higher priority)
@@ -1043,6 +1044,10 @@ def _build_domain_knowledge_section(
     for bible in sorted_bibles:
         content = getattr(bible, "content_md", "") or ""
         if not content.strip():
+            logger.warning(
+                "Bible has empty content_md, skipping",
+                extra={"bible_name": getattr(bible, "name", "?")},
+            )
             continue
         remaining = BIBLE_PROMPT_MAX_CHARS - total_chars
         if remaining <= 0:
@@ -1055,9 +1060,18 @@ def _build_domain_knowledge_section(
         total_chars += len(content)
 
     if not parts:
+        logger.warning("All matched bibles had empty content_md")
         return None
 
-    return "## Domain Knowledge\n" + "\n\n".join(parts)
+    section = "## Domain Knowledge\n" + "\n\n".join(parts)
+    logger.info(
+        "Injecting domain knowledge section into prompt",
+        extra={
+            "bible_count": len(parts),
+            "total_chars": len(section),
+        },
+    )
+    return section
 
 
 def _build_output_format_section(
