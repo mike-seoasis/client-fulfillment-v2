@@ -630,6 +630,19 @@ export function reviseOutline(
 }
 
 /**
+ * Cancel an outline revision — resets outline_status back to null so the
+ * user can view their previously generated content without regenerating.
+ */
+export function cancelOutlineRevision(
+  projectId: string,
+  pageId: string
+): Promise<PageContentResponse> {
+  return apiClient.post<PageContentResponse>(
+    `/projects/${projectId}/pages/${pageId}/cancel-outline-revision`
+  );
+}
+
+/**
  * Export an outline to a formatted Google Doc.
  * Idempotent — returns existing doc URL if already exported.
  * Pass force=true to re-export (creates a new doc).

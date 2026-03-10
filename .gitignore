@@ -48,3 +48,4 @@ Thumbs.db
 .beads/*.lock
 .beads/*.log
 .beads/events.jsonl
+google-service-account.json

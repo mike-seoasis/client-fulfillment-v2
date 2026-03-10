@@ -1,0 +1,5 @@
+[    8785ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://be-client-fulfillment-v2-staging.up.railway.app/api/v1/projects/457f476c-3e06-4152-9838-2d84f266add3/reddit/config:0
+[   13228ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://be-client-fulfillment-v2-staging.up.railway.app/api/v1/projects/457f476c-3e06-4152-9838-2d84f266add3/shopify/status:0
+[   14391ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://be-client-fulfillment-v2-staging.up.railway.app/api/v1/projects/457f476c-3e06-4152-9838-2d84f266add3/shopify/status:0
+[   16486ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://be-client-fulfillment-v2-staging.up.railway.app/api/v1/projects/457f476c-3e06-4152-9838-2d84f266add3/shopify/status:0
+[   20651ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://be-client-fulfillment-v2-staging.up.railway.app/api/v1/projects/457f476c-3e06-4152-9838-2d84f266add3/shopify/status:0

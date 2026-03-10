@@ -405,6 +405,7 @@ VALID_SECTION_NAMES = [
     "examples_bank",
     "competitor_context",
     "ai_prompt_snippet",
+    "content_limits",
 ]
 
 

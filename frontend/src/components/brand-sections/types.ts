@@ -294,6 +294,14 @@ export interface AIPromptSnippetData {
   always_include?: string[];
 }
 
+// Content Limits types
+export interface ContentLimitsData {
+  collection_max_words?: number | null;
+  blog_max_words?: number | null;
+  /** @deprecated Legacy field, use collection_max_words */
+  max_word_count?: number | null;
+}
+
 // Base props for all section components
 export interface BaseSectionProps {
   isEditing?: boolean;

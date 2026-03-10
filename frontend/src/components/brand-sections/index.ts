@@ -8,6 +8,7 @@ export { VocabularySection } from './VocabularySection';
 export { TrustElementsSection } from './TrustElementsSection';
 export { CompetitorContextSection } from './CompetitorContextSection';
 export { AIPromptSection } from './AIPromptSection';
+export { ContentLimitsSection } from './ContentLimitsSection';
 
 // Shared components
 export { SectionCard, InfoRow, BulletList, TagList, EmptySection } from './SectionCard';

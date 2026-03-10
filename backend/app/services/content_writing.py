@@ -142,6 +142,7 @@ def _get_word_count_override(brand_config: dict[str, Any]) -> int | None:
     """Extract max_word_count from brand_config.content_limits if set.
 
     Returns None if not configured (POP data drives the target).
+    Legacy fallback — prefer _get_effective_word_limit for new callers.
     """
     limits = brand_config.get("content_limits")
     if isinstance(limits, dict):
@@ -149,6 +150,45 @@ def _get_word_count_override(brand_config: dict[str, Any]) -> int | None:
         if isinstance(val, (int, float)) and val > 0:
             return int(val)
     return None
+
+
+def _get_effective_word_limit(
+    brand_config: dict[str, Any],
+    content_type: str = "collection",
+) -> int | None:
+    """Resolve effective word limit for content generation.
+
+    Priority: brand_config per-type override → global env var → None.
+
+    Args:
+        brand_config: The BrandConfig.v2_schema dict.
+        content_type: "collection" or "blog".
+
+    Returns:
+        Max word count or None if uncapped.
+    """
+    from app.core.config import get_settings
+
+    limits = brand_config.get("content_limits")
+    if isinstance(limits, dict):
+        key = "collection_max_words" if content_type == "collection" else "blog_max_words"
+        val = limits.get(key)
+        if isinstance(val, (int, float)) and val > 0:
+            return int(val)
+        # Legacy fallback for collection pages
+        if content_type == "collection":
+            val = limits.get("max_word_count")
+            if isinstance(val, (int, float)) and val > 0:
+                return int(val)
+
+    # Fall back to global env var
+    settings = get_settings()
+    global_val = (
+        settings.collection_max_words
+        if content_type == "collection"
+        else settings.blog_max_words
+    )
+    return global_val
 
 
 @dataclass
@@ -452,7 +492,7 @@ def _build_blog_user_prompt(
         sections.append(brand_voice)
 
     # ## Output Format (blog-specific: 3 fields, content-type-adapted)
-    sections.append(_build_blog_output_format_section(content_brief, keyword=keyword))
+    sections.append(_build_blog_output_format_section(content_brief, keyword=keyword, brand_config=brand_config))
 
     return "\n\n".join(sections)
 
@@ -587,6 +627,7 @@ def _detect_content_type(keyword: str) -> str:
 def _build_blog_output_format_section(
     content_brief: ContentBrief | None = None,
     keyword: str = "",
+    brand_config: dict[str, Any] | None = None,
 ) -> str:
     """Build the ## Output Format section for blog posts (3-field JSON).
 
@@ -696,6 +737,14 @@ def _build_blog_output_format_section(
             "Use semantic HTML only (h2, h3, p, ul, ol, li, table, thead, tbody, tr, th, td tags). No inline styles. No div wrappers. No class attributes.",
         ]
     )
+
+    # Inject blog word limit if configured
+    max_words = _get_effective_word_limit(brand_config or {}, "blog") if brand_config else None
+    if max_words:
+        lines.append("")
+        lines.append(
+            f"**Article word count target: ~{max_words} words. Do not exceed this.**"
+        )
 
     return "\n".join(lines)
 
@@ -1122,14 +1171,13 @@ def _build_output_format_section(
 
 def _build_bottom_description_spec(
     content_brief: ContentBrief | None,
-    brand_config: dict[str, Any] | None = None,  # noqa: ARG001
+    brand_config: dict[str, Any] | None = None,
 ) -> str:
     """Build the bottom_description field spec from POP heading data.
 
     Uses the *minimum* heading counts from POP (capped at reasonable maxima)
-    so the content stays lean. Word count is intentionally omitted — content
-    length should be a natural consequence of the heading structure and term
-    targets, not an arbitrary number driven by SERP competitors.
+    so the content stays lean. When a word limit is configured (via brand_config
+    or global env var), an explicit cap is included in the prompt.
     """
     # Reasonable caps to prevent bloated pages
     H2_CAP = 8
@@ -1149,6 +1197,13 @@ def _build_bottom_description_spec(
             elif "h3 tag total" in tag:
                 h3_count = min(max(1, h.get("min", 4)), H3_CAP)
 
+    # Resolve word limit
+    max_words = _get_effective_word_limit(brand_config or {}, "collection") if brand_config else None
+    # Scale per-paragraph cap if limit is tight
+    para_cap = 120
+    if max_words and max_words < 600:
+        para_cap = max(40, max_words // (h2_count + h3_count))
+
     lines = [
         "- **bottom_description** (HTML)",
         "",
@@ -1159,17 +1214,23 @@ def _build_bottom_description_spec(
         "  Follow this pattern:",
         "",
         "  <h2>[Section Topic, Title Case, Max 7 Words]</h2>",
-        "  <p>[Benefits-focused. Address the reader directly. 120 words max.]</p>",
+        f"  <p>[Benefits-focused. Address the reader directly. {para_cap} words max.]</p>",
         "",
         "  <h3>[Subtopic, Title Case, Max 7 Words]</h3>",
-        "  <p>[Specific details and differentiators. 120 words max.]</p>",
+        f"  <p>[Specific details and differentiators. {para_cap} words max.]</p>",
         "",
         "  ...repeat pattern for all sections...",
         "",
         "  End with a clear call to action in the final paragraph.",
-        "  Brevity is valued. Not every paragraph needs the full 120 words.",
+        "  Brevity is valued. Not every paragraph needs the full word cap.",
         "  Write just enough to cover each topic and incorporate the target terms.",
     ]
+
+    if max_words:
+        lines.append("")
+        lines.append(
+            f"  **Word count limit: ~{max_words} words for bottom_description. Do not exceed this.**"
+        )
 
     return "\n".join(lines)
 

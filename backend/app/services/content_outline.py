@@ -456,6 +456,7 @@ async def generate_content_from_outline(
     user_prompt = _build_content_from_outline_prompt(
         crawled_page, keyword, content_brief, outline_json,
         matched_bibles=matched_bibles,
+        brand_config=brand_config,
     )
 
     # Create PromptLog records
@@ -570,9 +571,10 @@ def _build_content_from_outline_prompt(
     content_brief: ContentBrief | None,
     outline_json: dict[str, Any],
     matched_bibles: list[Any] | None = None,
+    brand_config: dict[str, Any] | None = None,
 ) -> str:
     """Build user prompt for generating content from an approved outline."""
-    from app.services.content_writing import _build_domain_knowledge_section
+    from app.services.content_writing import _build_domain_knowledge_section, _get_effective_word_limit
 
     sections: list[str] = []
 
@@ -624,18 +626,28 @@ def _build_content_from_outline_prompt(
             )
 
     # Output format
-    sections.append(
-        '## Output Format\n'
-        'Respond with ONLY a raw JSON object (no markdown fencing) with these exact keys:\n'
-        '{\n'
-        '  "page_title": "SEO-optimized page title (50-60 chars)",\n'
-        '  "meta_description": "Compelling meta description (150-160 chars)",\n'
-        '  "top_description": "Above-the-fold intro paragraph (plain text, 2-4 sentences)",\n'
+    output_lines = [
+        '## Output Format',
+        'Respond with ONLY a raw JSON object (no markdown fencing) with these exact keys:',
+        '{',
+        '  "page_title": "SEO-optimized page title (50-60 chars)",',
+        '  "meta_description": "Compelling meta description (150-160 chars)",',
+        '  "top_description": "Above-the-fold intro paragraph (plain text, 2-4 sentences)",',
         '  "bottom_description": "Full HTML content following the outline structure. '
         'Use <h2>, <h3>, <p>, <ul>, <li>, <strong> tags. '
-        'Follow the outline sections in order."\n'
-        '}'
-    )
+        'Follow the outline sections in order."',
+        '}',
+    ]
+
+    # Inject word limit if configured
+    max_words = _get_effective_word_limit(brand_config or {}, "collection") if brand_config else None
+    if max_words:
+        output_lines.append("")
+        output_lines.append(
+            f"**Word count limit: ~{max_words} words for bottom_description. Do not exceed this.**"
+        )
+
+    sections.append("\n".join(output_lines))
 
     return "\n\n".join(sections)
 

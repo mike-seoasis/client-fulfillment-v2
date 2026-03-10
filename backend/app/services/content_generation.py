@@ -342,6 +342,18 @@ async def run_generate_from_outline(
             matched_bibles = await _match_bibles_for_keyword(project_bibles, keyword)
 
             # Generate content from outline
+            outline_headlines = [
+                s.get("headline", "?") for s in (page_content.outline_json or {}).get("section_details", [])
+            ]
+            logger.info(
+                "Generating from outline — headlines being sent to LLM",
+                extra={
+                    "page_id": page_id,
+                    "keyword": keyword,
+                    "outline_headlines": outline_headlines,
+                    "section_count": len(outline_headlines),
+                },
+            )
             content_result = await generate_content_from_outline(
                 db=db,
                 crawled_page=crawled_page,

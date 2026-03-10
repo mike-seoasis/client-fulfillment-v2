@@ -467,6 +467,16 @@ class Settings(BaseSettings):
         description="Quality score below which auto-rewrite is triggered (0-100). Content at or above this score is not rewritten.",
     )
 
+    # Content word count limits (global defaults, overridable per-project via brand config)
+    collection_max_words: int | None = Field(
+        default=None,
+        description="Global max word count for collection page bottom_description",
+    )
+    blog_max_words: int | None = Field(
+        default=None,
+        description="Global max word count for blog post content field",
+    )
+
     # Content generation pipeline
     content_generation_concurrency: int = Field(
         default=1,
