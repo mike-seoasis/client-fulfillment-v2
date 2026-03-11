@@ -598,7 +598,7 @@ Rules for extraction:
 - trigger_keywords should be specific enough to avoid false matches (e.g., "cartridge needle" not just "needle").'''
 
 
-def _validate_qa_rules(raw_rules: dict[str, Any]) -> dict[str, list[str]]:
+def _validate_qa_rules(raw_rules: dict[str, Any]) -> dict[str, list[Any]]:
     """Validate and sanitize extracted qa_rules against the expected schema.
 
     Strips any rule entries that don't match expected structure. Returns a
@@ -612,7 +612,7 @@ def _validate_qa_rules(raw_rules: dict[str, Any]) -> dict[str, list[str]]:
             "term_context_rules": [],
         }
 
-    validated: dict[str, list[str]] = {
+    validated: dict[str, list[Any]] = {
         "preferred_terms": [],
         "banned_claims": [],
         "feature_attribution": [],

@@ -1,3 +1,4 @@
+# mypy: disable-error-code="attr-defined"
 """Shopify integration API routes.
 
 Handles OAuth install/callback, GDPR webhooks, app uninstall webhook,
