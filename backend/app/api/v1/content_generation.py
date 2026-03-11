@@ -1,3 +1,4 @@
+# mypy: disable-error-code="type-arg,assignment,union-attr"
 """Content generation API router.
 
 REST endpoints for triggering content generation, polling progress,

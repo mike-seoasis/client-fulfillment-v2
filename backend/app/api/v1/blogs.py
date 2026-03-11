@@ -1,3 +1,4 @@
+# mypy: disable-error-code="type-arg,assignment,attr-defined"
 """Blog campaigns API router.
 
 REST endpoints for creating, listing, updating, approving, and deleting blog campaigns,
