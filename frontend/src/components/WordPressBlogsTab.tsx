@@ -87,16 +87,20 @@ export function WordPressBlogsTab({ projectId }: { projectId: string }) {
     setRestored(true);
   }, [storageKey]);
 
-  // Auto-detect step from database when projectId is available
-  const status = useWPStatus(wpProjectId, restored && !!wpProjectId);
+  // Auto-detect step from database on initial load only
+  const [initialStepSet, setInitialStepSet] = useState(false);
+  const status = useWPStatus(wpProjectId, restored && !!wpProjectId && !initialStepSet);
 
   useEffect(() => {
+    if (initialStepSet) return;
     if (status.data && restored) {
       setStep(status.data.current_step);
+      setInitialStepSet(true);
     } else if (restored && !wpProjectId) {
       setStep(1);
+      setInitialStepSet(true);
     }
-  }, [status.data, restored, wpProjectId]);
+  }, [status.data, restored, wpProjectId, initialStepSet]);
 
   // Persist state on changes (step is NOT persisted — derived from DB)
   const persistState = useCallback(() => {

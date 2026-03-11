@@ -92,17 +92,20 @@ export default function WordPressLinkerPage() {
     setRestored(true);
   }, []);
 
-  // Auto-detect step from database when projectId is available
-  const status = useWPStatus(projectId, restored && !!projectId);
+  // Auto-detect step from database on initial load only
+  const [initialStepSet, setInitialStepSet] = useState(false);
+  const status = useWPStatus(projectId, restored && !!projectId && !initialStepSet);
 
   useEffect(() => {
+    if (initialStepSet) return;
     if (status.data && restored) {
       setStep(status.data.current_step);
+      setInitialStepSet(true);
     } else if (restored && !projectId) {
-      // No project yet — need to connect first
       setStep(1);
+      setInitialStepSet(true);
     }
-  }, [status.data, restored, projectId]);
+  }, [status.data, restored, projectId, initialStepSet]);
 
   // Persist state on changes (step is NOT persisted — derived from DB)
   const persistState = useCallback(() => {

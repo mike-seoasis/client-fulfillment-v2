@@ -820,6 +820,52 @@ async def step5_plan_links(
     _wp_progress[job_id] = progress
 
     try:
+        # Clear existing WP blog links before re-planning to avoid duplicates
+        delete_stmt = (
+            InternalLink.__table__.delete()
+            .where(
+                InternalLink.source_page_id.in_(
+                    select(CrawledPage.id).where(
+                        CrawledPage.project_id == project_id,
+                        CrawledPage.source == "wordpress",
+                    )
+                )
+            )
+        )
+        del_result = await db.execute(delete_stmt)
+        if del_result.rowcount:  # type: ignore[union-attr]
+            logger.info(f"Cleared {del_result.rowcount} old WP blog links before re-planning")  # type: ignore[union-attr]
+
+        # Also reset page_content.bottom_description for WP pages so fresh
+        # content gets generated with new links
+        reset_content_stmt = (
+            PageContent.__table__.update()
+            .where(
+                PageContent.crawled_page_id.in_(
+                    select(CrawledPage.id).where(
+                        CrawledPage.project_id == project_id,
+                        CrawledPage.source == "wordpress",
+                    )
+                )
+            )
+            .values(bottom_description=CrawledPage.__table__.c.body_content)
+        )
+        # Simpler approach: reload original content from body_content
+        wp_pages_stmt = select(CrawledPage.id, CrawledPage.body_content).where(
+            CrawledPage.project_id == project_id,
+            CrawledPage.source == "wordpress",
+        )
+        wp_pages_for_reset = (await db.execute(wp_pages_stmt)).all()
+        for page_id_val, body in wp_pages_for_reset:
+            content_update = (
+                PageContent.__table__.update()
+                .where(PageContent.crawled_page_id == page_id_val)
+                .values(bottom_description=body)
+            )
+            await db.execute(content_update)
+
+        await db.flush()
+
         # Detect whether project has collection pages
         # (onboarding pages + cluster pages with approved content)
         coll_count_stmt = (
