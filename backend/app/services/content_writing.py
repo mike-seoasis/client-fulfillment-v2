@@ -760,12 +760,26 @@ def _build_blog_output_format_section(
 
 
 def _build_task_section(keyword: str) -> str:
-    """Build the ## Task section."""
+    """Build the ## Task + ## Brevity Rules section."""
     return (
         f"## Task\n"
         f"Generate SEO-optimized content for a collection page targeting "
         f'the keyword "{keyword}". Produce all 4 content fields in a single '
-        f"JSON response."
+        f"JSON response.\n"
+        f"\n"
+        f"## Brevity Rules\n"
+        f"This is a collection page, not a blog. Shoppers want to scan and buy, "
+        f"not read. Write like a product expert giving a quick verbal summary, "
+        f"not like a copywriter padding a word count.\n"
+        f"\n"
+        f"- One idea per sentence. One to two sentences per paragraph. No exceptions.\n"
+        f"- If a point can be made in fewer words, use fewer words.\n"
+        f'- No filler: no transitions ("Furthermore..."), no restatements, '
+        f'no generic benefit claims ("high-quality ingredients").\n'
+        f"- Weave related question answers into body sections in 1 sentence each.\n"
+        f"- Do NOT create a separate FAQ section.\n"
+        f"- Aim for 300-400 words in bottom_description. "
+        f"If you can cover all target terms in fewer words, do that."
     )
 
 
