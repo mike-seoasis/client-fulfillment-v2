@@ -313,6 +313,7 @@ export function useBulkApproveContent(): UseMutationResult<
 export function useUpdateOutline(): UseMutationResult<
   PageContentResponse,
   Error,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   { projectId: string; pageId: string; outlineJson: any }
 > {
   const queryClient = useQueryClient();
@@ -325,6 +326,7 @@ export function useUpdateOutline(): UseMutationResult<
     }: {
       projectId: string;
       pageId: string;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       outlineJson: any;
     }) => updateOutline(projectId, pageId, { outline_json: outlineJson }),
     onSuccess: (data, { projectId, pageId }) => {

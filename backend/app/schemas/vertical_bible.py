@@ -255,9 +255,7 @@ class BibleMatchResult(BaseModel):
     bible_id: str
     bible_name: str
     bible_slug: str
-    matched_keywords: list[str] = Field(
-        description="Which trigger keywords matched"
-    )
+    matched_keywords: list[str] = Field(description="Which trigger keywords matched")
 
 
 class BiblePreviewMatchedPage(BaseModel):

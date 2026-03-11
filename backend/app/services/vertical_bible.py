@@ -631,10 +631,12 @@ def _validate_qa_rules(raw_rules: dict) -> dict[str, list]:
             and rule["use"].strip()
             and rule["instead_of"].strip()
         ):
-            validated["preferred_terms"].append({
-                "use": rule["use"].strip(),
-                "instead_of": rule["instead_of"].strip(),
-            })
+            validated["preferred_terms"].append(
+                {
+                    "use": rule["use"].strip(),
+                    "instead_of": rule["instead_of"].strip(),
+                }
+            )
         else:
             logger.warning(
                 "Stripped invalid preferred_term rule",
@@ -653,11 +655,13 @@ def _validate_qa_rules(raw_rules: dict) -> dict[str, list]:
             and isinstance(rule.get("reason"), str)
             and rule["claim"].strip()
         ):
-            validated["banned_claims"].append({
-                "claim": rule["claim"].strip(),
-                "context": rule["context"].strip(),
-                "reason": rule["reason"].strip(),
-            })
+            validated["banned_claims"].append(
+                {
+                    "claim": rule["claim"].strip(),
+                    "context": rule["context"].strip(),
+                    "reason": rule["reason"].strip(),
+                }
+            )
         else:
             logger.warning(
                 "Stripped invalid banned_claim rule",
@@ -677,14 +681,17 @@ def _validate_qa_rules(raw_rules: dict) -> dict[str, list]:
             and rule["feature"].strip()
         ):
             wrong = [
-                w.strip() for w in rule["wrong_components"]
+                w.strip()
+                for w in rule["wrong_components"]
                 if isinstance(w, str) and w.strip()
             ]
-            validated["feature_attribution"].append({
-                "feature": rule["feature"].strip(),
-                "correct_component": rule["correct_component"].strip(),
-                "wrong_components": wrong,
-            })
+            validated["feature_attribution"].append(
+                {
+                    "feature": rule["feature"].strip(),
+                    "correct_component": rule["correct_component"].strip(),
+                    "wrong_components": wrong,
+                }
+            )
         else:
             logger.warning(
                 "Stripped invalid feature_attribution rule",
@@ -705,19 +712,23 @@ def _validate_qa_rules(raw_rules: dict) -> dict[str, list]:
             and rule["term"].strip()
         ):
             correct = [
-                c.strip() for c in rule["correct_context"]
+                c.strip()
+                for c in rule["correct_context"]
                 if isinstance(c, str) and c.strip()
             ]
             wrong = [
-                w.strip() for w in rule["wrong_contexts"]
+                w.strip()
+                for w in rule["wrong_contexts"]
                 if isinstance(w, str) and w.strip()
             ]
-            validated["term_context_rules"].append({
-                "term": rule["term"].strip(),
-                "correct_context": correct,
-                "wrong_contexts": wrong,
-                "explanation": rule["explanation"].strip(),
-            })
+            validated["term_context_rules"].append(
+                {
+                    "term": rule["term"].strip(),
+                    "correct_context": correct,
+                    "wrong_contexts": wrong,
+                    "explanation": rule["explanation"].strip(),
+                }
+            )
         else:
             logger.warning(
                 "Stripped invalid term_context_rule",
@@ -874,17 +885,19 @@ async def generate_bible_from_transcript(
 
     # Validate and sanitize
     name = parsed.get("name", vertical_name).strip() or vertical_name
-    slug = (
-        parsed.get("slug", "").strip()
-        or VerticalBibleService.generate_slug(vertical_name)
+    slug = parsed.get("slug", "").strip() or VerticalBibleService.generate_slug(
+        vertical_name
     )
     trigger_keywords = [
-        kw.strip() for kw in parsed.get("trigger_keywords", [])
+        kw.strip()
+        for kw in parsed.get("trigger_keywords", [])
         if isinstance(kw, str) and kw.strip()
     ]
     content_md = parsed.get("content_md", "").strip().replace("\x00", "")
     raw_qa_rules = parsed.get("qa_rules", {})
-    qa_rules = _validate_qa_rules(raw_qa_rules if isinstance(raw_qa_rules, dict) else {})
+    qa_rules = _validate_qa_rules(
+        raw_qa_rules if isinstance(raw_qa_rules, dict) else {}
+    )
 
     if not content_md:
         raise RuntimeError(

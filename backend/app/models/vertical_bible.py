@@ -121,4 +121,6 @@ class VerticalBible(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<VerticalBible(id={self.id!r}, name={self.name!r}, slug={self.slug!r})>"
+        return (
+            f"<VerticalBible(id={self.id!r}, name={self.name!r}, slug={self.slug!r})>"
+        )

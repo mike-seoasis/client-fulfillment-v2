@@ -732,9 +732,7 @@ async def recheck_content(
         )
 
         project_bibles = await _load_project_bibles(db, project_id)
-        kw_stmt = select(PageKeywords).where(
-            PageKeywords.crawled_page_id == page_id
-        )
+        kw_stmt = select(PageKeywords).where(PageKeywords.crawled_page_id == page_id)
         kw_result = await db.execute(kw_stmt)
         page_kw = kw_result.scalar_one_or_none()
         if page_kw and page_kw.primary_keyword:
@@ -1087,7 +1085,9 @@ async def cancel_outline_revision(
 async def export_outline(
     project_id: str,
     page_id: str,
-    force: bool = Query(False, description="Re-export even if a Google Doc already exists"),
+    force: bool = Query(
+        False, description="Re-export even if a Google Doc already exists"
+    ),
     db: AsyncSession = Depends(get_session),
 ) -> ExportOutlineResponse:
     """Export a page outline to a formatted Google Doc.

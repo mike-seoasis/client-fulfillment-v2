@@ -377,9 +377,7 @@ async def _load_project_bibles_for_campaign(
                 "project_id": project_id,
                 "bible_count": len(bibles),
                 "bible_names": [b.name for b in bibles],
-                "bible_triggers": {
-                    b.name: (b.trigger_keywords or []) for b in bibles
-                },
+                "bible_triggers": {b.name: (b.trigger_keywords or []) for b in bibles},
             },
         )
         return bibles
@@ -1125,7 +1123,6 @@ def _extract_json_keys_fallback(text: str) -> dict[str, str] | None:
         result[key] = value
 
     return result
-
 
 
 async def _update_campaign_status(campaign_id: str) -> None:

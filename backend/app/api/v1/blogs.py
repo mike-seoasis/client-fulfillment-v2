@@ -863,7 +863,9 @@ async def recheck_blog_post_content(
     # Re-run quality checks
     from app.services.blog_content_generation import _run_blog_quality_checks
 
-    qa_result = _run_blog_quality_checks(post, brand_config or {}, matched_bibles=matched_bibles)
+    qa_result = _run_blog_quality_checks(
+        post, brand_config or {}, matched_bibles=matched_bibles
+    )
     post.qa_results = qa_result.to_dict()
 
     from sqlalchemy.orm.attributes import flag_modified

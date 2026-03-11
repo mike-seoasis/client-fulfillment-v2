@@ -54,7 +54,10 @@ def _apply_rewrite_results(
     """
     if not pipeline_result.final_fields:
         return
-    if not pipeline_result.rewrite or pipeline_result.rewrite.get("kept_version") != "fixed":
+    if (
+        not pipeline_result.rewrite
+        or pipeline_result.rewrite.get("kept_version") != "fixed"
+    ):
         return
 
     import re
@@ -343,7 +346,8 @@ async def run_generate_from_outline(
 
             # Generate content from outline
             outline_headlines = [
-                s.get("headline", "?") for s in (page_content.outline_json or {}).get("section_details", [])
+                s.get("headline", "?")
+                for s in (page_content.outline_json or {}).get("section_details", [])
             ]
             logger.info(
                 "Generating from outline — headlines being sent to LLM",
@@ -728,9 +732,7 @@ async def _load_project_bibles(
                 "project_id": project_id,
                 "bible_count": len(bibles),
                 "bible_names": [b.name for b in bibles],
-                "bible_triggers": {
-                    b.name: (b.trigger_keywords or []) for b in bibles
-                },
+                "bible_triggers": {b.name: (b.trigger_keywords or []) for b in bibles},
                 "bible_content_lengths": {
                     b.name: len(b.content_md or "") for b in bibles
                 },
@@ -794,9 +796,7 @@ async def _match_bibles_llm(
 
     prompt = (
         f'Page keyword: "{keyword}"\n\n'
-        "Knowledge bibles:\n"
-        + "\n".join(bible_descriptions)
-        + "\n\n"
+        "Knowledge bibles:\n" + "\n".join(bible_descriptions) + "\n\n"
         "Which bibles contain domain knowledge relevant to this page keyword? "
         "Return ONLY a JSON array of the bible numbers (0-indexed) that match. "
         "A bible is relevant if its topic area covers the page keyword, even if "
@@ -822,7 +822,9 @@ async def _match_bibles_llm(
         # Strip markdown fencing if present
         if text.startswith("```"):
             lines = text.split("\n")
-            text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:]).strip()
+            text = "\n".join(
+                lines[1:-1] if lines[-1].strip() == "```" else lines[1:]
+            ).strip()
 
         indices = json.loads(text)
         if not isinstance(indices, list):
@@ -1035,7 +1037,9 @@ async def _process_single_page(
                         "page_id": page_id,
                         "url": url,
                         "sections": len(
-                            (outline_result.outline_json or {}).get("section_details", [])
+                            (outline_result.outline_json or {}).get(
+                                "section_details", []
+                            )
                         ),
                     },
                 )
