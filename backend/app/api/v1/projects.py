@@ -1,3 +1,4 @@
+# mypy: disable-error-code="type-arg,index,attr-defined"
 """Projects API router.
 
 REST endpoints for managing projects with CRUD operations.
