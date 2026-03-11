@@ -292,13 +292,35 @@ async def step3_analyze(
     _wp_progress[job_id] = progress
 
     try:
-        # Load all pages for the project
-        stmt = select(CrawledPage).where(
-            CrawledPage.project_id == project_id,
-            CrawledPage.source == "wordpress",
+        # Load WP pages that DON'T already have keyword data (skip re-analysis)
+        stmt = (
+            select(CrawledPage)
+            .outerjoin(PageKeywords, PageKeywords.crawled_page_id == CrawledPage.id)
+            .where(
+                CrawledPage.project_id == project_id,
+                CrawledPage.source == "wordpress",
+                PageKeywords.id.is_(None),  # No keyword record yet
+            )
         )
         result = await db.execute(stmt)
         pages = list(result.scalars().all())
+
+        # Count already-analyzed for reporting
+        total_stmt = select(func.count()).where(
+            CrawledPage.project_id == project_id,
+            CrawledPage.source == "wordpress",
+        )
+        total_count = (await db.execute(total_stmt)).scalar() or 0
+        already_done = total_count - len(pages)
+
+        if already_done > 0:
+            logger.info(f"Skipping {already_done} already-analyzed pages, analyzing {len(pages)} new")
+
+        if not pages:
+            progress["status"] = "complete"
+            progress["result"] = {"analyzed": 0, "skipped": already_done, "total": total_count}
+            return cast(dict[str, Any], progress["result"])
+
         progress["total"] = len(pages)
 
         semaphore = asyncio.Semaphore(POP_SEMAPHORE_LIMIT)
