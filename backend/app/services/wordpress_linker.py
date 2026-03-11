@@ -1169,85 +1169,58 @@ def _build_silo_graph_with_collections(
             }
         )
 
-    # Find collection pages that share labels OR keywords with this silo's WP posts.
-    # Two matching strategies:
-    #   1. Label overlap: collection page labels ∩ silo labels
-    #   2. Keyword match: collection page title/URL contains silo label keywords
-    #      (catches cluster pages with empty labels like "hydrogen-water-machine")
+    # Include ALL collection pages in every silo graph. Every blog post
+    # should have the opportunity to link to store/product pages regardless
+    # of silo topic. Relevance is handled by edge weights (label overlap
+    # and keyword similarity), not by inclusion/exclusion.
     silo_labels: set[str] = set()
     for node in wp_nodes:
         silo_labels.update(node.get("labels", []))
 
-    # Build keyword tokens from silo labels for fuzzy matching
-    # e.g. "hydrogen-water-products" → {"hydrogen", "water", "products"}
+    # Build keyword tokens from silo labels for edge weight scoring
     silo_keywords: set[str] = set()
     for label in silo_labels:
         silo_keywords.update(label.lower().replace("-", " ").split())
-    # Remove common stop words that cause false matches
     silo_keywords -= {"products", "the", "and", "for", "with", "best", "top"}
 
     coll_nodes: list[dict[str, Any]] = []
-    matched_ids: set[str] = set()
-
     for coll_page in collection_pages:
         page_labels = set(coll_page.labels or [])
         has_label_overlap = bool(page_labels & silo_labels)
 
-        # Keyword match: check if collection page title/URL contains
-        # significant words from silo labels (at least 2 keyword hits)
-        has_keyword_match = False
-        if not has_label_overlap and silo_keywords:
+        # Keyword relevance: how many silo keywords appear in page title/URL
+        keyword_hits = 0
+        if silo_keywords:
             page_text = (
                 (coll_page.title or "").lower()
                 + " "
                 + (coll_page.normalized_url or "").lower().replace("-", " ")
             )
             keyword_hits = sum(1 for kw in silo_keywords if kw in page_text)
-            has_keyword_match = keyword_hits >= 2
 
-        if has_label_overlap or has_keyword_match:
-            coll_nodes.append(
-                {
-                    "page_id": coll_page.id,
-                    "keyword": coll_page.title or coll_page.normalized_url,
-                    "url": coll_page.normalized_url,
-                    "labels": coll_page.labels or [],
-                    "is_priority": bool(
-                        coll_page.category
-                        and coll_page.category.lower() in ("collection", "product")
-                    ),
-                    "source": "collection",
-                    "_match": "label" if has_label_overlap else "keyword",
-                }
-            )
-            matched_ids.add(coll_page.id)
-
-    if coll_nodes:
-        label_matched = sum(1 for n in coll_nodes if n.get("_match") == "label")
-        keyword_matched = sum(1 for n in coll_nodes if n.get("_match") == "keyword")
-        logger.info(
-            f"Silo matched {len(coll_nodes)} collection pages "
-            f"({label_matched} by label, {keyword_matched} by keyword)"
-        )
-
-    # Fallback: if no collection pages matched at all, add the
-    # "main" collection page (shortest URL = likely homepage/root collection)
-    # so every silo gets at least one collection link target.
-    if not coll_nodes and collection_pages:
-        fallback = min(collection_pages, key=lambda p: len(p.normalized_url))
         coll_nodes.append(
             {
-                "page_id": fallback.id,
-                "keyword": fallback.title or fallback.normalized_url,
-                "url": fallback.normalized_url,
-                "labels": fallback.labels or [],
-                "is_priority": True,  # Treat fallback as priority target
+                "page_id": coll_page.id,
+                "keyword": coll_page.title or coll_page.normalized_url,
+                "url": coll_page.normalized_url,
+                "labels": coll_page.labels or [],
+                "is_priority": bool(
+                    coll_page.category
+                    and coll_page.category.lower() in ("collection", "product")
+                ),
                 "source": "collection",
+                "_label_overlap": len(page_labels & silo_labels),
+                "_keyword_hits": keyword_hits,
             }
         )
-        logger.info(
-            f"Silo has no label or keyword overlap with collections — using fallback: {fallback.normalized_url}"
-        )
+
+    label_matched = sum(1 for n in coll_nodes if n["_label_overlap"] > 0)
+    keyword_matched = sum(1 for n in coll_nodes if n["_label_overlap"] == 0 and n["_keyword_hits"] >= 2)
+    logger.info(
+        f"Silo '{silo_labels}' includes {len(coll_nodes)} collection pages "
+        f"({label_matched} label overlap, {keyword_matched} keyword match, "
+        f"{len(coll_nodes) - label_matched - keyword_matched} baseline)"
+    )
 
     all_nodes = wp_nodes + coll_nodes
 
@@ -1267,43 +1240,32 @@ def _build_silo_graph_with_collections(
             }
         )
 
-    # WP → collection edges (one-directional)
+    # WP → collection edges (one-directional, ALL collection pages included)
     # Weight hierarchy:
-    #   - Label overlap count (strongest signal)
-    #   - Keyword-matched pages get weight=2 (relevant by title/URL)
-    #   - Priority/fallback pages get weight=1 (weakest but reachable)
+    #   - Label overlap count (strongest — direct silo match)
+    #   - Keyword hits >= 2: weight=2 (topically relevant by title/URL)
+    #   - Baseline: weight=1 (every collection page is reachable)
     for wp_node in wp_nodes:
         wp_labels = set(wp_node.get("labels", []))
         for coll_node in coll_nodes:
             coll_labels = set(coll_node.get("labels", []))
-            overlap = len(wp_labels & coll_labels)
-            if overlap > 0:
-                edges.append(
-                    {
-                        "source": wp_node["page_id"],
-                        "target": coll_node["page_id"],
-                        "weight": overlap,
-                    }
-                )
-            elif coll_node.get("_match") == "keyword":
-                # Keyword-matched: relevant by title/URL, decent weight
-                edges.append(
-                    {
-                        "source": wp_node["page_id"],
-                        "target": coll_node["page_id"],
-                        "weight": 2,
-                    }
-                )
-            elif coll_node.get("is_priority"):
-                # Fallback: create edge with minimum weight so this target
-                # is reachable even without label overlap
-                edges.append(
-                    {
-                        "source": wp_node["page_id"],
-                        "target": coll_node["page_id"],
-                        "weight": 1,
-                    }
-                )
+            label_overlap = len(wp_labels & coll_labels)
+            keyword_hits = coll_node.get("_keyword_hits", 0)
+
+            if label_overlap > 0:
+                weight = label_overlap + 1  # label match is strongest
+            elif keyword_hits >= 2:
+                weight = 2  # keyword relevance
+            else:
+                weight = 1  # baseline — still reachable
+
+            edges.append(
+                {
+                    "source": wp_node["page_id"],
+                    "target": coll_node["page_id"],
+                    "weight": weight,
+                }
+            )
 
     return {"pages": all_nodes, "edges": edges}
 
@@ -1357,11 +1319,15 @@ def select_targets_wp_with_collections(
             result[page_id] = []
             continue
 
-        # Split budget: reserve slots for collection targets
+        # Guarantee at least 1 collection link per blog post (the whole point
+        # is driving traffic from blog → store). Use up to half the budget.
         collection_targets_available = [
             tid for tid in neighbors if pages_by_id[tid].get("source") == "collection"
         ]
-        collection_budget = min(len(collection_targets_available), max(1, budget // 2))
+        collection_budget = min(
+            len(collection_targets_available),
+            max(1, budget // 2),
+        ) if collection_targets_available else 0
 
         total_inbound = sum(inbound_counts.values())
         page_count = len(graph["pages"])
@@ -1377,11 +1343,13 @@ def select_targets_wp_with_collections(
             diversity_penalty = max(0.0, excess_inbound * 0.5)
 
             if target_page.get("source") == "collection":
-                # Collection page — boost score
+                # Collection page — boost score. Use reduced diversity penalty
+                # since collection pages are *supposed* to accumulate many inbound links.
+                coll_diversity_penalty = max(0.0, excess_inbound * 0.1)
                 priority_bonus = (
                     PRIORITY_BONUS if target_page.get("is_priority") else 0.0
                 )
-                score = overlap + COLLECTION_BONUS + priority_bonus - diversity_penalty
+                score = overlap + COLLECTION_BONUS + priority_bonus - coll_diversity_penalty
                 scored_collection.append((score, target_id))
             else:
                 # Sibling blog post
