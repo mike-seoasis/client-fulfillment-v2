@@ -39,9 +39,7 @@ from app.models.blog import (
     ContentStatus,
 )
 from app.models.brand_config import BrandConfig
-from app.services.content_quality import QualityResult
 from app.services.content_generation import _match_bibles_for_keyword
-from app.services.quality_pipeline import run_quality_pipeline
 from app.services.content_writing import (
     CONTENT_WRITING_MAX_TOKENS,
     CONTENT_WRITING_MODEL,
@@ -49,6 +47,7 @@ from app.services.content_writing import (
     CONTENT_WRITING_TIMEOUT,
     build_blog_content_prompt,
 )
+from app.services.quality_pipeline import run_quality_pipeline
 
 logger = get_logger(__name__)
 
@@ -673,7 +672,7 @@ async def _process_single_post(
                 extra={
                     "post_id": post_id,
                     "keyword": keyword[:50],
-                    "qa_passed": qa_result.passed,
+                    "qa_passed": pipeline_result.passed,
                 },
             )
 

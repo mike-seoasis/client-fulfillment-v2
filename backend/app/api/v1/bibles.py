@@ -20,7 +20,10 @@ from app.schemas.vertical_bible import (
     VerticalBibleUpdate,
 )
 from app.services.project import ProjectService
-from app.services.vertical_bible import VerticalBibleService, generate_bible_from_transcript
+from app.services.vertical_bible import (
+    VerticalBibleService,
+    generate_bible_from_transcript,
+)
 
 logger = get_logger(__name__)
 
