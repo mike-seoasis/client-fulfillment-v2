@@ -15,6 +15,7 @@ import { useRedditConfig, useUpsertRedditConfig } from '@/hooks/useReddit';
 import { Button, ButtonLink, Toast } from '@/components/ui';
 import { PagesTab } from '@/components/PagesTab';
 import { KeywordsTab } from '@/components/KeywordsTab';
+import { WordPressBlogsTab } from '@/components/WordPressBlogsTab';
 import { useResetOnboarding } from '@/hooks/usePageDeletion';
 
 function LoadingSkeleton() {
@@ -840,6 +841,16 @@ function ProjectDetailContent() {
         >
           Keywords
         </button>
+        <button
+          onClick={() => setActiveTab('wordpress')}
+          className={`px-4 py-2 text-sm transition-colors ${
+            activeTab === 'wordpress'
+              ? 'border-b-2 border-palm-500 font-semibold text-warm-gray-900'
+              : 'text-warm-gray-400 hover:text-warm-gray-600'
+          }`}
+        >
+          WordPress Blogs
+        </button>
       </div>
 
       {/* Tab content */}
@@ -847,6 +858,8 @@ function ProjectDetailContent() {
         <PagesTab projectId={projectId} />
       ) : activeTab === 'keywords' ? (
         <KeywordsTab projectId={projectId} />
+      ) : activeTab === 'wordpress' ? (
+        <WordPressBlogsTab projectId={projectId} />
       ) : (
       <div className="space-y-6">
         {/* Onboarding section */}
