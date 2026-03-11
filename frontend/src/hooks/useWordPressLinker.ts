@@ -23,6 +23,7 @@ import {
   wpPlanLinks,
   wpGetReview,
   wpExport,
+  wpDownloadCsv,
   wpGetExportablePosts,
   wpListLinkableProjects,
   type WPConnectResponse,
@@ -202,6 +203,19 @@ export function useWPExportablePosts(
     queryKey: wpKeys.exportable(projectId || ''),
     queryFn: () => wpGetExportablePosts(projectId!),
     enabled: (enabled ?? true) && !!projectId,
+  });
+}
+
+/**
+ * Download CSV for WP All Import.
+ */
+export function useWPDownloadCsv(): UseMutationResult<
+  void,
+  Error,
+  { projectId: string; pageIds?: string[] }
+> {
+  return useMutation({
+    mutationFn: ({ projectId, pageIds }) => wpDownloadCsv(projectId, pageIds),
   });
 }
 

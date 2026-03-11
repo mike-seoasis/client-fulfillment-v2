@@ -4,9 +4,13 @@ REST endpoints for the 7-step WordPress linking wizard:
 Connect → Import → Analyze → Label → Plan → Review → Export.
 """
 
+import csv
+import io
+from typing import Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import db_manager, get_session
@@ -451,6 +455,73 @@ async def list_exportable_posts(
         )
         for row in rows
     ]
+
+
+@router.get("/export-csv/{project_id}")
+async def export_csv(
+    project_id: str,
+    page_ids: Optional[str] = Query(None, description="Comma-separated page IDs to export"),
+    db: AsyncSession = Depends(get_session),
+) -> StreamingResponse:
+    """Download a CSV file for WP All Import to update existing posts.
+
+    CSV columns: id (WP post ID), post_title, post_content (updated HTML with links).
+    """
+    from sqlalchemy import select
+    from sqlalchemy.orm import joinedload
+
+    from app.models.crawled_page import CrawledPage
+    from app.models.page_content import PageContent
+
+    stmt = (
+        select(CrawledPage)
+        .options(joinedload(CrawledPage.page_content))
+        .where(
+            CrawledPage.project_id == project_id,
+            CrawledPage.source == "wordpress",
+            CrawledPage.raw_url.isnot(None),
+        )
+    )
+    result = await db.execute(stmt)
+    pages = list(result.unique().scalars().all())
+
+    # Filter by page_ids if provided
+    if page_ids:
+        id_set = set(page_ids.split(","))
+        pages = [p for p in pages if p.id in id_set]
+
+    # Filter to pages with updated content
+    pages = [
+        p for p in pages
+        if p.page_content and p.page_content.bottom_description
+    ]
+
+    if not pages:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No exportable posts found",
+        )
+
+    # Build CSV in memory
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["id", "post_title", "post_content"])
+
+    for page in pages:
+        wp_post_id = page.raw_url or ""
+        title = page.title or ""
+        content = page.page_content.bottom_description or ""
+        writer.writerow([wp_post_id, title, content])
+
+    output.seek(0)
+
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="wp-export-{project_id[:8]}.csv"'
+        },
+    )
 
 
 @router.post(

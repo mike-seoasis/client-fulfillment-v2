@@ -2408,6 +2408,34 @@ export function wpGetExportablePosts(
   );
 }
 
+/** Download CSV for WP All Import. Triggers browser file download. */
+export async function wpDownloadCsv(
+  projectId: string,
+  pageIds?: string[]
+): Promise<void> {
+  const params = new URLSearchParams();
+  if (pageIds && pageIds.length > 0) {
+    params.set("page_ids", pageIds.join(","));
+  }
+  const qs = params.toString() ? `?${params.toString()}` : "";
+  const url = `${API_BASE_URL}/wordpress/export-csv/${projectId}${qs}`;
+
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    throw new Error(`Export failed: ${resp.status}`);
+  }
+
+  const blob = await resp.blob();
+  const downloadUrl = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = downloadUrl;
+  a.download = `wp-export-${projectId.slice(0, 8)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(downloadUrl);
+}
+
 /** Start export to WordPress (returns 202 with job_id). */
 export function wpExport(
   projectId: string,
