@@ -155,7 +155,7 @@ export default function GenerateBiblePage() {
           Generate Bible from Transcript
         </h1>
         <p className="text-warm-gray-500 text-sm">
-          Paste a domain expert interview and we'll extract structured
+          Paste a domain expert interview and we&apos;ll extract structured
           knowledge for content generation and quality checking.
         </p>
       </div>

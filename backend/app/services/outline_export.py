@@ -81,7 +81,7 @@ async def export_outline_to_google(
         if existing_doc_id:
             # Re-export: clear existing doc and re-populate
             doc_id = existing_doc_id
-            doc_url = page_content.google_doc_url  # type: ignore[assignment]
+            doc_url = str(page_content.google_doc_url)
             clear_google_doc(doc_id)
             format_outline_doc(doc_id, outline, project_name)
             logger.info(
@@ -106,7 +106,7 @@ async def export_outline_to_google(
                 crawled_page.normalized_url,
                 keyword,
                 action,
-                doc_url,
+                doc_url or "",
                 datetime.now(UTC).strftime("%Y-%m-%d %H:%M"),
             ],
         )

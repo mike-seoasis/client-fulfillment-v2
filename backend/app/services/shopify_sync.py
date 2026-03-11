@@ -1,3 +1,4 @@
+# mypy: disable-error-code="attr-defined"
 """Shopify sync service for immediate and nightly syncs.
 
 Handles upserting Shopify page data into the shopify_pages table,

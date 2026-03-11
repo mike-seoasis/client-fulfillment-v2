@@ -533,7 +533,6 @@ function ProjectDetailContent() {
     enabled: !!projectId && !isLoading && !error,
   });
   const latestIncompleteBatch = batches?.find(b => b.pipeline_status !== 'complete');
-  const latestBatch = batches && batches.length > 0 ? batches[batches.length - 1] : null;
 
   // Fetch clusters for New Content section
   const { data: clusters } = useClusters(projectId, {

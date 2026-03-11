@@ -309,6 +309,6 @@ class TranscriptExtractionResponse(BaseModel):
     slug: str
     trigger_keywords: list[str]
     content_md: str
-    qa_rules: dict[str, list]
+    qa_rules: dict[str, list[str]]
     is_active: bool
     message: str = "Draft bible created. Review and activate when ready."
