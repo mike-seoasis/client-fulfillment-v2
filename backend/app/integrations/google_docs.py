@@ -42,7 +42,7 @@ def get_credentials() -> Credentials:
     json_str = settings.google_service_account_json
     if json_str:
         info = json.loads(json_str)
-        return Credentials.from_service_account_info(info, scopes=_SCOPES)
+        return Credentials.from_service_account_info(info, scopes=_SCOPES)  # type: ignore[no-untyped-call,no-any-return]
 
     # Fall back to file path (local development)
     key_path = Path(settings.google_service_account_path)
@@ -54,7 +54,7 @@ def get_credentials() -> Credentials:
             f"Google service account key not found: {key_path}. "
             "Set GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_PATH."
         )
-    return Credentials.from_service_account_file(str(key_path), scopes=_SCOPES)
+    return Credentials.from_service_account_file(str(key_path), scopes=_SCOPES)  # type: ignore[no-untyped-call,no-any-return]
 
 
 def _docs_service() -> Any:

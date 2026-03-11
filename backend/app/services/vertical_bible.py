@@ -9,7 +9,7 @@ import re
 import unicodedata
 from typing import Any
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -598,7 +598,7 @@ Rules for extraction:
 - trigger_keywords should be specific enough to avoid false matches (e.g., "cartridge needle" not just "needle").'''
 
 
-def _validate_qa_rules(raw_rules: dict) -> dict[str, list]:
+def _validate_qa_rules(raw_rules: dict[str, Any]) -> dict[str, list[str]]:
     """Validate and sanitize extracted qa_rules against the expected schema.
 
     Strips any rule entries that don't match expected structure. Returns a
@@ -612,7 +612,7 @@ def _validate_qa_rules(raw_rules: dict) -> dict[str, list]:
             "term_context_rules": [],
         }
 
-    validated: dict[str, list] = {
+    validated: dict[str, list[str]] = {
         "preferred_terms": [],
         "banned_claims": [],
         "feature_attribution": [],
@@ -738,7 +738,7 @@ def _validate_qa_rules(raw_rules: dict) -> dict[str, list]:
     return validated
 
 
-def _parse_extraction_response(text: str) -> dict | None:
+def _parse_extraction_response(text: str) -> dict[str, Any] | None:
     """Parse Claude's extraction response as JSON.
 
     Handles markdown code fences, BOM characters, and surrounding text.
