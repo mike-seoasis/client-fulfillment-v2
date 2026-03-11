@@ -15,16 +15,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
+from app.integrations.claude import get_claude
 from app.models.vertical_bible import VerticalBible
 from app.schemas.vertical_bible import (
+    BiblePreviewResponse,
     QARulesSchema,
     VerticalBibleCreate,
     VerticalBibleUpdate,
 )
 
 logger = get_logger(__name__)
-
-from app.integrations.claude import CompletionResult, get_claude
 
 
 def _parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:

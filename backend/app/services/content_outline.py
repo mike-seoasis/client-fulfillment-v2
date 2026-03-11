@@ -135,7 +135,7 @@ def _build_outline_user_prompt(
         # Heading Structure Targets
         heading_targets = content_brief.heading_targets or []
         if heading_targets:
-            brief_lines.append(f"\n### Heading Structure Targets")
+            brief_lines.append("\n### Heading Structure Targets")
             for h in heading_targets:
                 tag = h.get("tag", "")
                 target = h.get("target", 0)
@@ -574,7 +574,10 @@ def _build_content_from_outline_prompt(
     brand_config: dict[str, Any] | None = None,
 ) -> str:
     """Build user prompt for generating content from an approved outline."""
-    from app.services.content_writing import _build_domain_knowledge_section, _get_effective_word_limit
+    from app.services.content_writing import (
+        _build_domain_knowledge_section,
+        _get_effective_word_limit,
+    )
 
     sections: list[str] = []
 

@@ -33,8 +33,8 @@ from app.schemas.content_generation import (
     PageGenerationStatusItem,
     PromptLogResponse,
 )
-from app.services.quality_pipeline import run_quality_pipeline
 from app.services.project import ProjectService
+from app.services.quality_pipeline import run_quality_pipeline
 
 logger = get_logger(__name__)
 

@@ -6,7 +6,15 @@ REST endpoints for managing projects with CRUD operations.
 from datetime import datetime
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    Response,
+    status,
+)
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -567,8 +575,6 @@ async def list_onboarding_batches(
 
     Returns batch number, page counts, pipeline status, and creation timestamp.
     """
-    from app.models.page_content import PageContent
-    from app.models.page_keywords import PageKeywords as PK
 
     await ProjectService.get_project(db, project_id)
 
@@ -615,11 +621,9 @@ async def list_onboarding_batches(
             p.status in ("pending", "crawling") for p in batch_pages
         )
         all_crawled = all(p.status == "completed" for p in batch_pages)
-        has_keywords = any(p.keywords and p.keywords.primary_keyword for p in batch_pages)
         all_have_keywords = all(
             p.keywords and p.keywords.primary_keyword for p in batch_pages
         )
-        has_content = any(p.page_content for p in batch_pages)
         all_approved_content = all(
             p.page_content and p.page_content.is_approved for p in batch_pages
         )

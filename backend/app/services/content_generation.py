@@ -31,7 +31,6 @@ from app.models.crawled_page import CrawledPage
 from app.models.page_content import ContentStatus, PageContent
 from app.models.page_keywords import PageKeywords
 from app.models.prompt_log import PromptLog
-from app.services.quality_pipeline import run_quality_pipeline
 from app.services.content_outline import (
     generate_content_from_outline,
     generate_outline,
@@ -39,6 +38,7 @@ from app.services.content_outline import (
 from app.services.content_writing import extract_competitor_brands, generate_content
 from app.services.pop_content_brief import fetch_content_brief
 from app.services.quality_pipeline import PipelineResult as QualityPipelineResult
+from app.services.quality_pipeline import run_quality_pipeline
 
 logger = get_logger(__name__)
 
