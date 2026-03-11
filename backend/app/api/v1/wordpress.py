@@ -15,6 +15,7 @@ from app.schemas.wordpress import (
     WPAnalyzeRequest,
     WPConnectRequest,
     WPConnectResponse,
+    WPExportablePost,
     WPExportRequest,
     WPImportRequest,
     WPImportResponse,
@@ -405,6 +406,53 @@ async def get_review(
 # =============================================================================
 
 
+@router.get("/exportable/{project_id}", response_model=list[WPExportablePost])
+async def list_exportable_posts(
+    project_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> list[WPExportablePost]:
+    """List posts eligible for export (have updated content with links)."""
+    from sqlalchemy import func, select
+
+    from app.models.crawled_page import CrawledPage
+    from app.models.internal_link import InternalLink
+    from app.models.page_content import PageContent
+
+    # Load WP pages with content
+    stmt = (
+        select(
+            CrawledPage.id,
+            CrawledPage.title,
+            CrawledPage.normalized_url,
+            func.count(InternalLink.id).label("link_count"),
+        )
+        .outerjoin(PageContent, PageContent.crawled_page_id == CrawledPage.id)
+        .outerjoin(
+            InternalLink, InternalLink.source_page_id == CrawledPage.id
+        )
+        .where(
+            CrawledPage.project_id == project_id,
+            CrawledPage.source == "wordpress",
+            CrawledPage.raw_url.isnot(None),
+            PageContent.bottom_description.isnot(None),
+        )
+        .group_by(CrawledPage.id, CrawledPage.title, CrawledPage.normalized_url)
+        .order_by(CrawledPage.title)
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    return [
+        WPExportablePost(
+            page_id=row[0],
+            title=row[1] or "Untitled",
+            url=row[2],
+            link_count=row[3],
+        )
+        for row in rows
+    ]
+
+
 @router.post(
     "/export",
     response_model=WPProgressResponse,
@@ -426,6 +474,7 @@ async def export_posts(
                 username=body.username,
                 app_password=body.app_password,
                 job_id=job_id,
+                page_ids=body.page_ids,
                 title_filter=body.title_filter,
             )
 

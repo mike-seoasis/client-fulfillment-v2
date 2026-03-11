@@ -11,6 +11,7 @@ import {
   useWPPlan,
   useWPReview,
   useWPExport,
+  useWPExportablePosts,
   useWPLinkableProjects,
 } from "@/hooks/useWordPressLinker";
 
@@ -210,7 +211,6 @@ export default function WordPressLinkerPage() {
             siteUrl={siteUrl}
             username={username}
             appPassword={appPassword}
-            titleFilter={titleFilter}
             activeJobId={activeJobId}
             setActiveJobId={setActiveJobId}
           />
@@ -1084,7 +1084,6 @@ function ExportStep({
   siteUrl,
   username,
   appPassword,
-  titleFilter,
   activeJobId,
   setActiveJobId,
 }: {
@@ -1092,21 +1091,45 @@ function ExportStep({
   siteUrl: string;
   username: string;
   appPassword: string;
-  titleFilter: string;
   activeJobId: string | null;
   setActiveJobId: (v: string | null) => void;
 }) {
   const exportMutation = useWPExport();
   const progress = useWPProgress(activeJobId);
+  const exportablePosts = useWPExportablePosts(projectId);
   const [started, setStarted] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const posts = exportablePosts.data || [];
+
+  const togglePost = (pageId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(pageId)) {
+        next.delete(pageId);
+      } else {
+        next.add(pageId);
+      }
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selectedIds.size === posts.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(posts.map((p) => p.page_id)));
+    }
+  };
 
   const handleExport = () => {
-    const filter = titleFilter.trim()
-      ? titleFilter.split(",").map((t) => t.trim()).filter(Boolean)
-      : undefined;
+    const pageIds =
+      selectedIds.size > 0 && selectedIds.size < posts.length
+        ? Array.from(selectedIds)
+        : undefined; // undefined = export all
 
     exportMutation.mutate(
-      { projectId, siteUrl, username, appPassword, titleFilter: filter },
+      { projectId, siteUrl, username, appPassword, pageIds },
       {
         onSuccess: (data) => {
           setActiveJobId(data.job_id);
@@ -1128,48 +1151,104 @@ function ExportStep({
           Export to WordPress
         </h2>
         <p className="mt-1 text-sm text-warm-gray-500">
-          Push the updated content (with injected internal links) back to
-          WordPress.
+          Select posts to push back to WordPress, or export all at once.
         </p>
       </div>
 
-      <div className="max-w-md space-y-4">
-        {titleFilter && (
-          <p className="text-xs text-warm-gray-500">
-            Title filter active: {titleFilter}
-          </p>
-        )}
+      {/* Post selector */}
+      {!started && (
+        <div className="space-y-3">
+          {exportablePosts.isLoading && (
+            <p className="text-sm text-warm-gray-500">Loading posts...</p>
+          )}
 
-        {!started && (
+          {posts.length > 0 && (
+            <>
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 text-sm text-warm-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.size === posts.length}
+                    onChange={toggleAll}
+                    className="rounded-sm border-sand-400 text-palm-500 focus:ring-palm-400"
+                  />
+                  Select all ({posts.length} posts)
+                </label>
+                {selectedIds.size > 0 && selectedIds.size < posts.length && (
+                  <span className="text-xs text-warm-gray-500">
+                    {selectedIds.size} selected
+                  </span>
+                )}
+              </div>
+
+              <div className="max-h-80 overflow-y-auto rounded-sm border border-sand-300 divide-y divide-sand-200">
+                {posts.map((post) => (
+                  <label
+                    key={post.page_id}
+                    className="flex items-center gap-3 px-3 py-2 hover:bg-sand-50 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(post.page_id)}
+                      onChange={() => togglePost(post.page_id)}
+                      className="rounded-sm border-sand-400 text-palm-500 focus:ring-palm-400"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-warm-gray-900 truncate">
+                        {post.title}
+                      </p>
+                      <p className="text-xs text-warm-gray-500 truncate">
+                        {post.url}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-xs text-warm-gray-400">
+                      {post.link_count} {post.link_count === 1 ? "link" : "links"}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
+
+          {posts.length === 0 && !exportablePosts.isLoading && (
+            <p className="text-sm text-warm-gray-500">
+              No posts with updated content found.
+            </p>
+          )}
+
           <button
             onClick={handleExport}
-            disabled={exportMutation.isPending}
+            disabled={exportMutation.isPending || posts.length === 0}
             className="rounded-sm bg-palm-500 px-4 py-2 text-sm font-medium text-white hover:bg-palm-600 disabled:opacity-50"
           >
-            {exportMutation.isPending ? "Starting..." : "Export to WordPress"}
+            {exportMutation.isPending
+              ? "Starting..."
+              : selectedIds.size > 0 && selectedIds.size < posts.length
+                ? `Export ${selectedIds.size} Selected`
+                : "Export All"}
           </button>
-        )}
+        </div>
+      )}
 
-        {activeJobId && progress.data && !isComplete && (
-          <ProgressBar
-            label={progress.data.step_label}
-            current={progress.data.current}
-            total={progress.data.total}
-            status={progress.data.status}
-            error={progress.data.error}
-          />
-        )}
+      {activeJobId && progress.data && !isComplete && (
+        <ProgressBar
+          label={progress.data.step_label}
+          current={progress.data.current}
+          total={progress.data.total}
+          status={progress.data.status}
+          error={progress.data.error}
+        />
+      )}
 
-        {isComplete && result && (
-          <div className="rounded-sm border border-palm-200 bg-palm-50 p-4">
-            <h3 className="font-medium text-palm-800">Export Complete</h3>
-            <p className="mt-1 text-sm text-palm-700">
-              {result.exported} posts updated successfully.
-              {result.failed ? ` ${result.failed} failed.` : ""}
-            </p>
-          </div>
-        )}
-      </div>
+      {isComplete && result && (
+        <div className="rounded-sm border border-palm-200 bg-palm-50 p-4">
+          <h3 className="font-medium text-palm-800">Export Complete</h3>
+          <p className="mt-1 text-sm text-palm-700">
+            {result.exported} posts updated successfully.
+            {result.failed ? ` ${result.failed} failed.` : ""}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

@@ -23,12 +23,14 @@ import {
   wpPlanLinks,
   wpGetReview,
   wpExport,
+  wpGetExportablePosts,
   wpListLinkableProjects,
   type WPConnectResponse,
   type WPImportResponse,
   type WPProgressResponse,
   type WPLabelReviewResponse,
   type WPReviewResponse,
+  type WPExportablePost,
   type WPProjectOption,
 } from '@/lib/api';
 
@@ -37,6 +39,7 @@ export const wpKeys = {
   progress: (jobId: string) => ['wp', 'progress', jobId] as const,
   labels: (projectId: string) => ['wp', 'labels', projectId] as const,
   review: (projectId: string) => ['wp', 'review', projectId] as const,
+  exportable: (projectId: string) => ['wp', 'exportable', projectId] as const,
   linkableProjects: () => ['wp', 'linkable-projects'] as const,
 };
 
@@ -55,7 +58,7 @@ interface ImportInput extends ConnectInput {
 
 interface ExportInput extends ConnectInput {
   projectId: string;
-  titleFilter?: string[];
+  pageIds?: string[];
 }
 
 /**
@@ -189,6 +192,20 @@ export function useWPReview(
 }
 
 /**
+ * Fetch posts eligible for export.
+ */
+export function useWPExportablePosts(
+  projectId: string | null,
+  enabled?: boolean
+): UseQueryResult<WPExportablePost[]> {
+  return useQuery({
+    queryKey: wpKeys.exportable(projectId || ''),
+    queryFn: () => wpGetExportablePosts(projectId!),
+    enabled: (enabled ?? true) && !!projectId,
+  });
+}
+
+/**
  * Export modified content back to WordPress.
  */
 export function useWPExport(): UseMutationResult<
@@ -202,8 +219,8 @@ export function useWPExport(): UseMutationResult<
       siteUrl,
       username,
       appPassword,
-      titleFilter,
+      pageIds,
     }: ExportInput) =>
-      wpExport(projectId, siteUrl, username, appPassword, titleFilter),
+      wpExport(projectId, siteUrl, username, appPassword, pageIds),
   });
 }

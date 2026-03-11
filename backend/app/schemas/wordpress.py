@@ -165,6 +165,15 @@ class WPReviewResponse(BaseModel):
 # =============================================================================
 
 
+class WPExportablePost(BaseModel):
+    """A post eligible for export (has updated content with links)."""
+
+    page_id: str = Field(..., description="CrawledPage UUID")
+    title: str = Field(..., description="Post title")
+    url: str = Field(..., description="Post URL")
+    link_count: int = Field(0, description="Number of links injected into this post")
+
+
 class WPExportRequest(BaseModel):
     """Request to export modified content back to WordPress."""
 
@@ -172,9 +181,13 @@ class WPExportRequest(BaseModel):
     site_url: str = Field(..., description="WordPress site URL")
     username: str = Field(..., description="WordPress username")
     app_password: str = Field(..., description="WordPress application password")
+    page_ids: list[str] | None = Field(
+        None,
+        description="Optional list of page IDs to export (if None, exports all)",
+    )
     title_filter: list[str] | None = Field(
         None,
-        description="Optional title filter to export only specific posts",
+        description="Optional title filter to export only specific posts (deprecated, use page_ids)",
     )
 
 

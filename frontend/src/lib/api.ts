@@ -1815,6 +1815,13 @@ export interface WPReviewResponse {
   validation_pass_rate: number;
 }
 
+export interface WPExportablePost {
+  page_id: string;
+  title: string;
+  url: string;
+  link_count: number;
+}
+
 // =============================================================================
 // REDDIT PROJECT DASHBOARD TYPES
 // =============================================================================
@@ -2392,20 +2399,29 @@ export function wpGetReview(projectId: string): Promise<WPReviewResponse> {
   return apiClient.get<WPReviewResponse>(`/wordpress/review/${projectId}`);
 }
 
+/** Get list of posts eligible for export. */
+export function wpGetExportablePosts(
+  projectId: string
+): Promise<WPExportablePost[]> {
+  return apiClient.get<WPExportablePost[]>(
+    `/wordpress/exportable/${projectId}`
+  );
+}
+
 /** Start export to WordPress (returns 202 with job_id). */
 export function wpExport(
   projectId: string,
   siteUrl: string,
   username: string,
   appPassword: string,
-  titleFilter?: string[]
+  pageIds?: string[]
 ): Promise<WPProgressResponse> {
   return apiClient.post<WPProgressResponse>("/wordpress/export", {
     project_id: projectId,
     site_url: siteUrl,
     username,
     app_password: appPassword,
-    title_filter: titleFilter || null,
+    page_ids: pageIds || null,
   });
 }
 

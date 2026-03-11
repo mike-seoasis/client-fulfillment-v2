@@ -490,12 +490,21 @@ async def _generate_blog_taxonomy(
             if op.labels:
                 existing_labels.update(op.labels)
         if existing_labels:
+            sorted_labels = sorted(existing_labels)
+            labels_json = json.dumps(
+                [
+                    {"name": label, "description": "Existing collection/product page label — INCLUDE VERBATIM"}
+                    for label in sorted_labels
+                ],
+                indent=2,
+            )
             onboarding_labels_section = f"""
 
-IMPORTANT: This blog exists alongside collection/product pages that already use these labels:
-{", ".join(sorted(existing_labels))}
+REQUIRED EXISTING LABELS — you MUST include ALL of the following labels in your taxonomy output exactly as written (same spelling, same casing). These labels are already used by collection/product pages. Including them verbatim enables cross-linking between blog posts and collection pages.
 
-You MUST reuse these existing labels where they are topically relevant to blog posts. This creates label overlap between blog posts and collection pages, which enables cross-linking. You may also create new labels for blog topics not covered by existing labels."""
+{labels_json}
+
+Your output MUST contain every label listed above. You MAY add additional new labels for blog topics not covered by the existing labels, but the existing labels above must appear in your output word-for-word."""
 
     user_prompt = f"""Analyze these {len(pages)} blog posts and generate a taxonomy of topic labels for internal linking silos:
 
@@ -1120,7 +1129,7 @@ def _build_silo_graph_with_collections(
     coll_nodes: list[dict[str, Any]] = []
     for coll_page in collection_pages:
         page_labels = set(coll_page.labels or [])
-        if page_labels & silo_labels:  # Only include if there's label overlap
+        if page_labels & silo_labels:  # Include if there's label overlap
             coll_nodes.append(
                 {
                     "page_id": coll_page.id,
@@ -1134,6 +1143,25 @@ def _build_silo_graph_with_collections(
                     "source": "collection",
                 }
             )
+
+    # Fallback: if no collection pages matched by label overlap, add the
+    # "main" collection page (shortest URL = likely homepage/root collection)
+    # so every silo gets at least one collection link target.
+    if not coll_nodes and collection_pages:
+        fallback = min(collection_pages, key=lambda p: len(p.normalized_url))
+        coll_nodes.append(
+            {
+                "page_id": fallback.id,
+                "keyword": fallback.title or fallback.normalized_url,
+                "url": fallback.normalized_url,
+                "labels": fallback.labels or [],
+                "is_priority": True,  # Treat fallback as priority target
+                "source": "collection",
+            }
+        )
+        logger.info(
+            f"Silo has no label overlap with collections — using fallback: {fallback.normalized_url}"
+        )
 
     all_nodes = wp_nodes + coll_nodes
 
@@ -1154,6 +1182,8 @@ def _build_silo_graph_with_collections(
         )
 
     # WP → collection edges (one-directional)
+    # For fallback collection nodes (no label overlap), create edges with
+    # weight=1 so every WP post can still link to the collection page.
     for wp_node in wp_nodes:
         wp_labels = set(wp_node.get("labels", []))
         for coll_node in coll_nodes:
@@ -1165,6 +1195,16 @@ def _build_silo_graph_with_collections(
                         "source": wp_node["page_id"],
                         "target": coll_node["page_id"],
                         "weight": overlap,
+                    }
+                )
+            elif coll_node.get("is_priority"):
+                # Fallback: create edge with minimum weight so this target
+                # is reachable even without label overlap
+                edges.append(
+                    {
+                        "source": wp_node["page_id"],
+                        "target": coll_node["page_id"],
+                        "weight": 1,
                     }
                 )
 
@@ -1292,6 +1332,28 @@ def select_targets_wp_with_collections(
                 }
             )
             inbound_counts[target_id] += 1
+
+        # Intra-silo guarantee: if no sibling blog links were selected
+        # and there are available blog targets, force at least one
+        has_blog_target = any(t.get("source") == "wordpress" for t in targets)
+        if not has_blog_target and scored_blog:
+            _, best_blog_id = scored_blog[0]
+            # Check it wasn't already added (shouldn't be, but safety check)
+            already_added = {t["page_id"] for t in targets}
+            if best_blog_id not in already_added:
+                best_blog_page = pages_by_id[best_blog_id]
+                targets.append(
+                    {
+                        "page_id": best_blog_id,
+                        "keyword": best_blog_page["keyword"],
+                        "url": best_blog_page["url"],
+                        "is_priority": best_blog_page.get("is_priority", False),
+                        "label_overlap": neighbors[best_blog_id],
+                        "score": scored_blog[0][0],
+                        "source": "wordpress",
+                    }
+                )
+                inbound_counts[best_blog_id] += 1
 
         result[page_id] = targets
 
@@ -1639,6 +1701,7 @@ async def step7_export(
     username: str,
     app_password: str,
     job_id: str,
+    page_ids: list[str] | None = None,
     title_filter: list[str] | None = None,
 ) -> dict[str, Any]:
     """Push updated content back to WordPress."""
@@ -1664,8 +1727,11 @@ async def step7_export(
         result = await db.execute(stmt)
         pages = list(result.unique().scalars().all())
 
-        # Apply title filter
-        if title_filter:
+        # Apply page_ids filter (preferred) or title filter (legacy)
+        if page_ids:
+            page_id_set = set(page_ids)
+            pages = [p for p in pages if p.id in page_id_set]
+        elif title_filter:
             pages = [
                 p
                 for p in pages
