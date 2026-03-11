@@ -31,6 +31,7 @@ from app.schemas.wordpress import (
     WPProjectOption,
     WPReviewGroup,
     WPReviewResponse,
+    WPStatusResponse,
     WPTaxonomyLabel,
 )
 from app.services.wordpress_linker import (
@@ -135,6 +136,110 @@ async def list_linkable_projects(
         )
         for row in rows
     ]
+
+
+# =============================================================================
+# STATUS (auto-detect wizard step)
+# =============================================================================
+
+
+@router.get("/status/{project_id}", response_model=WPStatusResponse)
+async def get_status(
+    project_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> WPStatusResponse:
+    """Detect which wizard step a project is at based on database state."""
+    from sqlalchemy import func, select
+
+    from app.models.crawled_page import CrawledPage
+    from app.models.internal_link import InternalLink
+    from app.models.keyword_cluster import KeywordCluster
+    from app.models.page_keywords import PageKeywords
+
+    # Count WordPress posts
+    wp_count_stmt = select(func.count()).where(
+        CrawledPage.project_id == project_id,
+        CrawledPage.source == "wordpress",
+    )
+    wp_posts_count = (await db.execute(wp_count_stmt)).scalar() or 0
+
+    if wp_posts_count == 0:
+        return WPStatusResponse(project_id=project_id, current_step=1)
+
+    # Count analyzed posts (have keyword data)
+    analyzed_stmt = (
+        select(func.count())
+        .select_from(PageKeywords)
+        .join(CrawledPage, PageKeywords.crawled_page_id == CrawledPage.id)
+        .where(
+            CrawledPage.project_id == project_id,
+            CrawledPage.source == "wordpress",
+            PageKeywords.primary_keyword.isnot(None),
+        )
+    )
+    analyzed_count = (await db.execute(analyzed_stmt)).scalar() or 0
+
+    if analyzed_count == 0:
+        return WPStatusResponse(
+            project_id=project_id,
+            current_step=3,  # Import done, analyze next
+            wp_posts_count=wp_posts_count,
+        )
+
+    # Count labeled posts
+    labeled_stmt = select(func.count()).where(
+        CrawledPage.project_id == project_id,
+        CrawledPage.source == "wordpress",
+        CrawledPage.labels.isnot(None),  # type: ignore[union-attr]
+    )
+    labeled_count = (await db.execute(labeled_stmt)).scalar() or 0
+
+    if labeled_count == 0:
+        return WPStatusResponse(
+            project_id=project_id,
+            current_step=4,  # Analyze done, label next
+            wp_posts_count=wp_posts_count,
+            analyzed_count=analyzed_count,
+        )
+
+    # Count silo groups
+    silo_stmt = select(func.count()).where(
+        KeywordCluster.project_id == project_id,
+    )
+    silo_groups = (await db.execute(silo_stmt)).scalar() or 0
+
+    # Count internal links for blog scope
+    links_stmt = (
+        select(func.count())
+        .select_from(InternalLink)
+        .join(CrawledPage, InternalLink.source_page_id == CrawledPage.id)
+        .where(
+            CrawledPage.project_id == project_id,
+            CrawledPage.source == "wordpress",
+        )
+    )
+    links_count = (await db.execute(links_stmt)).scalar() or 0
+
+    if links_count == 0:
+        return WPStatusResponse(
+            project_id=project_id,
+            current_step=5,  # Label done, plan next
+            wp_posts_count=wp_posts_count,
+            analyzed_count=analyzed_count,
+            labeled_count=labeled_count,
+            silo_groups=silo_groups,
+        )
+
+    # Links exist → review/export ready
+    return WPStatusResponse(
+        project_id=project_id,
+        current_step=7,  # Skip review, go to export (review is read-only)
+        wp_posts_count=wp_posts_count,
+        analyzed_count=analyzed_count,
+        labeled_count=labeled_count,
+        links_count=links_count,
+        silo_groups=silo_groups,
+    )
 
 
 # =============================================================================

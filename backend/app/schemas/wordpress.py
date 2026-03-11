@@ -208,6 +208,25 @@ class WPProjectOption(BaseModel):
 
 
 # =============================================================================
+# STATUS (wizard step detection)
+# =============================================================================
+
+
+class WPStatusResponse(BaseModel):
+    """Current wizard progress for a project, based on database state."""
+
+    project_id: str = Field(..., description="Project UUID")
+    current_step: int = Field(
+        1, description="Furthest completed step + 1 (where to resume)"
+    )
+    wp_posts_count: int = Field(0, description="Number of WordPress posts imported")
+    analyzed_count: int = Field(0, description="Posts with POP keyword data")
+    labeled_count: int = Field(0, description="Posts with labels assigned")
+    links_count: int = Field(0, description="Internal links planned")
+    silo_groups: int = Field(0, description="Number of silo groups")
+
+
+# =============================================================================
 # PROGRESS (shared across steps)
 # =============================================================================
 

@@ -1822,6 +1822,16 @@ export interface WPExportablePost {
   link_count: number;
 }
 
+export interface WPStatusResponse {
+  project_id: string;
+  current_step: number;
+  wp_posts_count: number;
+  analyzed_count: number;
+  labeled_count: number;
+  links_count: number;
+  silo_groups: number;
+}
+
 // =============================================================================
 // REDDIT PROJECT DASHBOARD TYPES
 // =============================================================================
@@ -2340,6 +2350,11 @@ export function wpConnect(
 /** List projects with onboarding pages (for project picker). */
 export function wpListLinkableProjects(): Promise<WPProjectOption[]> {
   return apiClient.get<WPProjectOption[]>("/wordpress/projects");
+}
+
+/** Get wizard status for a project (auto-detect completed steps). */
+export function wpGetStatus(projectId: string): Promise<WPStatusResponse> {
+  return apiClient.get<WPStatusResponse>(`/wordpress/status/${projectId}`);
 }
 
 /** Import WP posts (returns 202 with job_id). */

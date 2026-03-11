@@ -12,6 +12,7 @@ import {
   useWPReview,
   useWPDownloadCsv,
   useWPExportablePosts,
+  useWPStatus,
 } from "@/hooks/useWordPressLinker";
 
 // Step definitions
@@ -25,8 +26,7 @@ const STEPS = [
   { id: 7, label: "Export" },
 ] as const;
 
-interface WPSessionState {
-  step: number;
+interface WPPersistedState {
   siteUrl: string;
   username: string;
   appPassword: string;
@@ -36,17 +36,17 @@ interface WPSessionState {
   postStatus: string;
 }
 
-function saveSession(key: string, state: WPSessionState) {
+function savePersisted(key: string, state: WPPersistedState) {
   try {
-    sessionStorage.setItem(key, JSON.stringify(state));
+    localStorage.setItem(key, JSON.stringify(state));
   } catch {
-    // sessionStorage unavailable
+    // localStorage unavailable
   }
 }
 
-function loadSession(key: string): WPSessionState | null {
+function loadPersisted(key: string): WPPersistedState | null {
   try {
-    const raw = sessionStorage.getItem(key);
+    const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -58,7 +58,7 @@ function loadSession(key: string): WPSessionState | null {
 // =============================================================================
 
 export function WordPressBlogsTab({ projectId }: { projectId: string }) {
-  const sessionKey = `wp-linker-state-${projectId}`;
+  const storageKey = `wp-linker-state-${projectId}`;
 
   const [step, setStep] = useState(1);
   const [siteUrl, setSiteUrl] = useState("");
@@ -72,11 +72,10 @@ export function WordPressBlogsTab({ projectId }: { projectId: string }) {
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [restored, setRestored] = useState(false);
 
-  // Restore session on mount
+  // Restore persisted state on mount
   useEffect(() => {
-    const saved = loadSession(sessionKey);
+    const saved = loadPersisted(storageKey);
     if (saved) {
-      setStep(saved.step);
       setSiteUrl(saved.siteUrl);
       setUsername(saved.username);
       setAppPassword(saved.appPassword);
@@ -86,13 +85,23 @@ export function WordPressBlogsTab({ projectId }: { projectId: string }) {
       setPostStatus(saved.postStatus);
     }
     setRestored(true);
-  }, [sessionKey]);
+  }, [storageKey]);
 
-  // Persist session on state changes
-  const persistSession = useCallback(() => {
+  // Auto-detect step from database when projectId is available
+  const status = useWPStatus(wpProjectId, restored && !!wpProjectId);
+
+  useEffect(() => {
+    if (status.data && restored) {
+      setStep(status.data.current_step);
+    } else if (restored && !wpProjectId) {
+      setStep(1);
+    }
+  }, [status.data, restored, wpProjectId]);
+
+  // Persist state on changes (step is NOT persisted — derived from DB)
+  const persistState = useCallback(() => {
     if (!restored) return;
-    saveSession(sessionKey, {
-      step,
+    savePersisted(storageKey, {
       siteUrl,
       username,
       appPassword,
@@ -101,13 +110,13 @@ export function WordPressBlogsTab({ projectId }: { projectId: string }) {
       titleFilter,
       postStatus,
     });
-  }, [restored, sessionKey, step, siteUrl, username, appPassword, wpProjectId, totalPosts, titleFilter, postStatus]);
+  }, [restored, storageKey, siteUrl, username, appPassword, wpProjectId, totalPosts, titleFilter, postStatus]);
 
   useEffect(() => {
-    persistSession();
-  }, [persistSession]);
+    persistState();
+  }, [persistState]);
 
-  if (!restored) {
+  if (!restored || (wpProjectId && status.isLoading)) {
     return (
       <div className="flex items-center gap-2 py-12 text-sm text-warm-gray-500">
         <div className="h-4 w-4 animate-spin rounded-full border-2 border-palm-500 border-t-transparent" />
@@ -118,7 +127,7 @@ export function WordPressBlogsTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-6">
-      <StepIndicator currentStep={step} />
+      <StepIndicator currentStep={step} onStepClick={setStep} />
 
       <div className="rounded-sm border border-sand-500 bg-white p-6 shadow-sm">
         {step === 1 && (
@@ -197,32 +206,47 @@ export function WordPressBlogsTab({ projectId }: { projectId: string }) {
 // STEP INDICATOR
 // =============================================================================
 
-function StepIndicator({ currentStep }: { currentStep: number }) {
+function StepIndicator({
+  currentStep,
+  onStepClick,
+}: {
+  currentStep: number;
+  onStepClick?: (step: number) => void;
+}) {
   return (
     <nav className="flex items-center gap-1">
-      {STEPS.map((s, i) => (
-        <div key={s.id} className="flex items-center">
-          <div
-            className={`flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-xs font-medium transition-colors ${
-              s.id === currentStep
-                ? "bg-palm-500 text-white"
-                : s.id < currentStep
-                  ? "bg-palm-100 text-palm-700"
-                  : "bg-sand-200 text-warm-gray-400"
-            }`}
-          >
-            <span className="font-mono">{s.id}</span>
-            <span>{s.label}</span>
+      {STEPS.map((s, i) => {
+        const isCompleted = s.id < currentStep;
+        const isCurrent = s.id === currentStep;
+        const canClick = isCompleted && onStepClick;
+
+        return (
+          <div key={s.id} className="flex items-center">
+            <button
+              type="button"
+              onClick={() => canClick && onStepClick(s.id)}
+              disabled={!canClick}
+              className={`flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-xs font-medium transition-colors ${
+                isCurrent
+                  ? "bg-palm-500 text-white"
+                  : isCompleted
+                    ? "bg-palm-100 text-palm-700 hover:bg-palm-200 cursor-pointer"
+                    : "bg-sand-200 text-warm-gray-400"
+              } disabled:cursor-default`}
+            >
+              <span className="font-mono">{s.id}</span>
+              <span>{s.label}</span>
+            </button>
+            {i < STEPS.length - 1 && (
+              <div
+                className={`mx-1 h-px w-4 ${
+                  s.id < currentStep ? "bg-palm-300" : "bg-sand-300"
+                }`}
+              />
+            )}
           </div>
-          {i < STEPS.length - 1 && (
-            <div
-              className={`mx-1 h-px w-4 ${
-                s.id < currentStep ? "bg-palm-300" : "bg-sand-300"
-              }`}
-            />
-          )}
-        </div>
-      ))}
+        );
+      })}
     </nav>
   );
 }

@@ -26,6 +26,7 @@ import {
   wpDownloadCsv,
   wpGetExportablePosts,
   wpListLinkableProjects,
+  wpGetStatus,
   type WPConnectResponse,
   type WPImportResponse,
   type WPProgressResponse,
@@ -33,6 +34,7 @@ import {
   type WPReviewResponse,
   type WPExportablePost,
   type WPProjectOption,
+  type WPStatusResponse,
 } from '@/lib/api';
 
 // Query keys
@@ -42,6 +44,7 @@ export const wpKeys = {
   review: (projectId: string) => ['wp', 'review', projectId] as const,
   exportable: (projectId: string) => ['wp', 'exportable', projectId] as const,
   linkableProjects: () => ['wp', 'linkable-projects'] as const,
+  status: (projectId: string) => ['wp', 'status', projectId] as const,
 };
 
 // Mutation input types
@@ -100,6 +103,20 @@ export function useWPLinkableProjects(
     queryKey: wpKeys.linkableProjects(),
     queryFn: () => wpListLinkableProjects(),
     enabled: enabled ?? true,
+  });
+}
+
+/**
+ * Fetch wizard status for a project (auto-detect completed steps).
+ */
+export function useWPStatus(
+  projectId: string | null,
+  enabled?: boolean,
+): UseQueryResult<WPStatusResponse> {
+  return useQuery({
+    queryKey: wpKeys.status(projectId || ''),
+    queryFn: () => wpGetStatus(projectId!),
+    enabled: (enabled ?? true) && !!projectId,
   });
 }
 

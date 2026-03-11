@@ -13,6 +13,7 @@ import {
   useWPDownloadCsv,
   useWPExportablePosts,
   useWPLinkableProjects,
+  useWPStatus,
 } from "@/hooks/useWordPressLinker";
 
 // Step definitions
@@ -26,11 +27,10 @@ const STEPS = [
   { id: 7, label: "Export" },
 ] as const;
 
-// Session storage key
-const WP_SESSION_KEY = "wp-linker-state";
+// Persistent storage key (localStorage survives tab close)
+const WP_STORAGE_KEY = "wp-linker-state";
 
-interface WPSessionState {
-  step: number;
+interface WPPersistedState {
   siteUrl: string;
   username: string;
   appPassword: string;
@@ -41,17 +41,17 @@ interface WPSessionState {
   existingProjectId: string | null;
 }
 
-function saveSession(state: WPSessionState) {
+function savePersisted(state: WPPersistedState) {
   try {
-    sessionStorage.setItem(WP_SESSION_KEY, JSON.stringify(state));
+    localStorage.setItem(WP_STORAGE_KEY, JSON.stringify(state));
   } catch {
-    // sessionStorage unavailable (SSR, private browsing quota)
+    // localStorage unavailable
   }
 }
 
-function loadSession(): WPSessionState | null {
+function loadPersisted(): WPPersistedState | null {
   try {
-    const raw = sessionStorage.getItem(WP_SESSION_KEY);
+    const raw = localStorage.getItem(WP_STORAGE_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -61,7 +61,7 @@ function loadSession(): WPSessionState | null {
 export default function WordPressLinkerPage() {
   const [step, setStep] = useState(1);
 
-  // Credentials (persisted in sessionStorage — cleared when tab closes)
+  // Credentials (persisted in localStorage — survives tab close)
   const [siteUrl, setSiteUrl] = useState("");
   const [username, setUsername] = useState("");
   const [appPassword, setAppPassword] = useState("");
@@ -76,11 +76,10 @@ export default function WordPressLinkerPage() {
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [restored, setRestored] = useState(false);
 
-  // Restore session on mount
+  // Restore persisted state on mount
   useEffect(() => {
-    const saved = loadSession();
+    const saved = loadPersisted();
     if (saved) {
-      setStep(saved.step);
       setSiteUrl(saved.siteUrl);
       setUsername(saved.username);
       setAppPassword(saved.appPassword);
@@ -93,11 +92,22 @@ export default function WordPressLinkerPage() {
     setRestored(true);
   }, []);
 
-  // Persist session on state changes
-  const persistSession = useCallback(() => {
+  // Auto-detect step from database when projectId is available
+  const status = useWPStatus(projectId, restored && !!projectId);
+
+  useEffect(() => {
+    if (status.data && restored) {
+      setStep(status.data.current_step);
+    } else if (restored && !projectId) {
+      // No project yet — need to connect first
+      setStep(1);
+    }
+  }, [status.data, restored, projectId]);
+
+  // Persist state on changes (step is NOT persisted — derived from DB)
+  const persistState = useCallback(() => {
     if (!restored) return;
-    saveSession({
-      step,
+    savePersisted({
       siteUrl,
       username,
       appPassword,
@@ -107,14 +117,14 @@ export default function WordPressLinkerPage() {
       postStatus,
       existingProjectId,
     });
-  }, [restored, step, siteUrl, username, appPassword, projectId, totalPosts, titleFilter, postStatus, existingProjectId]);
+  }, [restored, siteUrl, username, appPassword, projectId, totalPosts, titleFilter, postStatus, existingProjectId]);
 
   useEffect(() => {
-    persistSession();
-  }, [persistSession]);
+    persistState();
+  }, [persistState]);
 
-  // Don't render until session is restored (prevents flash of step 1)
-  if (!restored) {
+  // Don't render until state is restored and status is resolved
+  if (!restored || (projectId && status.isLoading)) {
     return (
       <div className="flex items-center gap-2 py-12 text-sm text-warm-gray-500">
         <div className="h-4 w-4 animate-spin rounded-full border-2 border-palm-500 border-t-transparent" />
@@ -136,7 +146,7 @@ export default function WordPressLinkerPage() {
       </div>
 
       {/* Step indicator */}
-      <StepIndicator currentStep={step} />
+      <StepIndicator currentStep={step} onStepClick={setStep} />
 
       {/* Step content */}
       <div className="rounded-sm border border-sand-500 bg-white p-6 shadow-sm">
@@ -217,32 +227,47 @@ export default function WordPressLinkerPage() {
 // STEP INDICATOR
 // =============================================================================
 
-function StepIndicator({ currentStep }: { currentStep: number }) {
+function StepIndicator({
+  currentStep,
+  onStepClick,
+}: {
+  currentStep: number;
+  onStepClick?: (step: number) => void;
+}) {
   return (
     <nav className="flex items-center gap-1">
-      {STEPS.map((s, i) => (
-        <div key={s.id} className="flex items-center">
-          <div
-            className={`flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-xs font-medium transition-colors ${
-              s.id === currentStep
-                ? "bg-palm-500 text-white"
-                : s.id < currentStep
-                  ? "bg-palm-100 text-palm-700"
-                  : "bg-sand-200 text-warm-gray-400"
-            }`}
-          >
-            <span className="font-mono">{s.id}</span>
-            <span>{s.label}</span>
+      {STEPS.map((s, i) => {
+        const isCompleted = s.id < currentStep;
+        const isCurrent = s.id === currentStep;
+        const canClick = isCompleted && onStepClick;
+
+        return (
+          <div key={s.id} className="flex items-center">
+            <button
+              type="button"
+              onClick={() => canClick && onStepClick(s.id)}
+              disabled={!canClick}
+              className={`flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-xs font-medium transition-colors ${
+                isCurrent
+                  ? "bg-palm-500 text-white"
+                  : isCompleted
+                    ? "bg-palm-100 text-palm-700 hover:bg-palm-200 cursor-pointer"
+                    : "bg-sand-200 text-warm-gray-400"
+              } disabled:cursor-default`}
+            >
+              <span className="font-mono">{s.id}</span>
+              <span>{s.label}</span>
+            </button>
+            {i < STEPS.length - 1 && (
+              <div
+                className={`mx-1 h-px w-4 ${
+                  s.id < currentStep ? "bg-palm-300" : "bg-sand-300"
+                }`}
+              />
+            )}
           </div>
-          {i < STEPS.length - 1 && (
-            <div
-              className={`mx-1 h-px w-4 ${
-                s.id < currentStep ? "bg-palm-300" : "bg-sand-300"
-              }`}
-            />
-          )}
-        </div>
-      ))}
+        );
+      })}
     </nav>
   );
 }
