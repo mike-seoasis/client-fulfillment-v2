@@ -197,8 +197,26 @@ async def step2_import(
             db.add(project)
             await db.flush()
 
-        # Create CrawledPage + PageContent for each post
-        for i, post in enumerate(posts):
+        # Load existing WP page URLs for this project to skip duplicates
+        existing_stmt = select(CrawledPage.normalized_url).where(
+            CrawledPage.project_id == project.id,
+            CrawledPage.source == "wordpress",
+        )
+        existing_result = await db.execute(existing_stmt)
+        existing_urls: set[str] = {row[0] for row in existing_result.all()}
+
+        new_posts = [p for p in posts if p.url not in existing_urls]
+        skipped = len(posts) - len(new_posts)
+
+        if skipped > 0:
+            logger.info(
+                f"Skipping {skipped} already-imported posts, importing {len(new_posts)} new"
+            )
+
+        progress["total"] = len(new_posts)
+
+        # Create CrawledPage + PageContent for each NEW post
+        for i, post in enumerate(new_posts):
             page = CrawledPage(
                 project_id=project.id,
                 normalized_url=post.url,
@@ -228,13 +246,21 @@ async def step2_import(
 
         await db.commit()
 
-        result = {"project_id": project.id, "posts_imported": len(posts)}
+        result = {
+            "project_id": project.id,
+            "posts_imported": len(new_posts),
+            "posts_skipped": skipped,
+        }
         progress["status"] = "complete"
         progress["result"] = result
 
         logger.info(
             "WordPress import complete",
-            extra={"project_id": project.id, "posts": len(posts)},
+            extra={
+                "project_id": project.id,
+                "imported": len(new_posts),
+                "skipped": skipped,
+            },
         )
         return result
 
