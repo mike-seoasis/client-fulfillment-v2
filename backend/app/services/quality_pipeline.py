@@ -206,9 +206,7 @@ async def run_quality_pipeline(
             fields, brand, matched_bibles=matched_bibles
         )
     elif content is not None:
-        tier1_result = run_quality_checks(
-            content, brand, matched_bibles=matched_bibles
-        )
+        tier1_result = run_quality_checks(content, brand, matched_bibles=matched_bibles)
     else:
         # Fallback — empty check
         tier1_result = QualityResult(
@@ -225,9 +223,7 @@ async def run_quality_pipeline(
     # --- Tier 2: LLM judge (optional) ---
     if settings.quality_tier2_enabled:
         # Check for critical issues -> short-circuit
-        has_critical = any(
-            issue.type in CRITICAL_ISSUE_TYPES for issue in all_issues
-        )
+        has_critical = any(issue.type in CRITICAL_ISSUE_TYPES for issue in all_issues)
 
         if has_critical:
             short_circuited = True
@@ -312,7 +308,12 @@ async def run_quality_pipeline(
             tier2_issues = [i for i in all_issues if i.type.startswith("llm_")]
             issue_dicts = [i.to_dict() for i in all_issues]
 
-            rewrite_meta, versions_meta, final_fields, fixed_issues = await _attempt_auto_rewrite(
+            (
+                rewrite_meta,
+                versions_meta,
+                final_fields,
+                fixed_issues,
+            ) = await _attempt_auto_rewrite(
                 fields=pipeline_fields,
                 issues=issue_dicts,
                 score=score,
@@ -345,6 +346,7 @@ async def run_quality_pipeline(
 # Auto-rewrite helpers
 # ---------------------------------------------------------------------------
 
+
 def _extract_fields_from_content(content: Any) -> dict[str, str]:
     """Extract content fields as a dict from a PageContent object."""
     result: dict[str, str] = {}
@@ -363,7 +365,9 @@ async def _attempt_auto_rewrite(
     is_blog: bool,
     matched_bibles: list[Any] | None,
     tier2_issues: list[QualityIssue],
-) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, str], list[QualityIssue] | None]:
+) -> tuple[
+    dict[str, Any], dict[str, Any] | None, dict[str, str], list[QualityIssue] | None
+]:
     """Attempt a single auto-rewrite pass on content.
 
     1. Filter to fixable issues
@@ -411,12 +415,11 @@ async def _attempt_auto_rewrite(
     # Snapshot original content (only fields that have fixable issues, truncated)
     _SNAPSHOT_MAX_CHARS = 500
     fields_with_issues = {
-        issue["field"]
-        for issue in fixable_issues
-        if issue.get("field") in fields
+        issue["field"] for issue in fixable_issues if issue.get("field") in fields
     }
     original_snapshot = {
-        fname: fields[fname][:_SNAPSHOT_MAX_CHARS] + ("..." if len(fields[fname]) > _SNAPSHOT_MAX_CHARS else "")
+        fname: fields[fname][:_SNAPSHOT_MAX_CHARS]
+        + ("..." if len(fields[fname]) > _SNAPSHOT_MAX_CHARS else "")
         for fname in fields_with_issues
         if fname in fields
     }
@@ -503,8 +506,7 @@ async def _attempt_auto_rewrite(
         for i in fixable_issues
     }
     fixed_issue_keys = {
-        (i.type, i.field or "", i.context or "")
-        for i in fixed_tier1_issues
+        (i.type, i.field or "", i.context or "") for i in fixed_tier1_issues
     }
     original_tier1_keys = {
         (i["type"], i.get("field") or "", i.get("context") or "")

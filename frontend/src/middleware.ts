@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getAuth } from "@/lib/auth/server";
 
-export default async function middleware(request: NextRequest) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export default async function middleware(_request: NextRequest) {
   // TEMPORARY: Auth disabled while Neon Auth Google OAuth is being configured.
   // Remove this block and uncomment the auth logic below once ready.
   return NextResponse.next();

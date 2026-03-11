@@ -497,8 +497,7 @@ async def run_llm_judge_checks(
 
     # Accumulate cost from all judges
     total_cost = sum(
-        r.cost_usd
-        for r in [naturalness_result, adherence_result, heading_result]
+        r.cost_usd for r in [naturalness_result, adherence_result, heading_result]
     )
 
     # Check for any errors

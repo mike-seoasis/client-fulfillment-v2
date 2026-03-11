@@ -410,6 +410,7 @@ export interface ContentBulkApproveResponse {
 
 /** Request to update an outline draft. */
 export interface OutlineUpdateRequest {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   outline_json: any;
 }
 
@@ -433,6 +434,7 @@ export interface PageContentResponse {
   brief: ContentBriefData | null;
   generation_started_at: string | null;
   generation_completed_at: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   outline_json: any | null;
   outline_status: string | null;
   google_doc_url: string | null;

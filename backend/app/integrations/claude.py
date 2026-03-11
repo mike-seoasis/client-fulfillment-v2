@@ -323,7 +323,9 @@ class ClaudeClient:
         if system_prompt:
             request_body["system"] = system_prompt
 
-        effective_retries = max_retries if max_retries is not None else self._max_retries
+        effective_retries = (
+            max_retries if max_retries is not None else self._max_retries
+        )
 
         for attempt in range(effective_retries):
             attempt_start = time.monotonic()

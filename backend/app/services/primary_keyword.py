@@ -1208,9 +1208,7 @@ Example: [{{"keyword": "keyword one", "relevance_score": 0.95}}, {{"keyword": "k
                     )
                 )
                 all_kw_result = await db.execute(all_kw_stmt)
-                existing_keywords = [
-                    kw for kw in all_kw_result.scalars().all() if kw
-                ]
+                existing_keywords = [kw for kw in all_kw_result.scalars().all() if kw]
                 self.add_used_keywords(existing_keywords)
 
             total_pages = len(pages)

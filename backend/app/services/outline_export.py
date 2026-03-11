@@ -97,7 +97,9 @@ async def export_outline_to_google(
 
         # Log to tracking sheet
         sheet_id, _sheet_url = find_or_create_sheet(project_name, folder_id)
-        action = "re-exported" if existing_doc_id else page_content.outline_status or "draft"
+        action = (
+            "re-exported" if existing_doc_id else page_content.outline_status or "draft"
+        )
         append_sheet_row(
             sheet_id,
             [

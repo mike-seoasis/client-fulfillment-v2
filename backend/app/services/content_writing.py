@@ -171,7 +171,9 @@ def _get_effective_word_limit(
 
     limits = brand_config.get("content_limits")
     if isinstance(limits, dict):
-        key = "collection_max_words" if content_type == "collection" else "blog_max_words"
+        key = (
+            "collection_max_words" if content_type == "collection" else "blog_max_words"
+        )
         val = limits.get(key)
         if isinstance(val, (int, float)) and val > 0:
             return int(val)
@@ -287,7 +289,9 @@ def _build_system_prompt(
     full_prompt = ""
     if isinstance(ai_snippet, dict):
         # Use prompt_override if set, otherwise fall back to generated full_prompt
-        full_prompt = ai_snippet.get("prompt_override", "").strip() or ai_snippet.get("full_prompt", "")
+        full_prompt = ai_snippet.get("prompt_override", "").strip() or ai_snippet.get(
+            "full_prompt", ""
+        )
 
     if content_type == "blog":
         # Extract brand identity for the role description
@@ -492,7 +496,11 @@ def _build_blog_user_prompt(
         sections.append(brand_voice)
 
     # ## Output Format (blog-specific: 3 fields, content-type-adapted)
-    sections.append(_build_blog_output_format_section(content_brief, keyword=keyword, brand_config=brand_config))
+    sections.append(
+        _build_blog_output_format_section(
+            content_brief, keyword=keyword, brand_config=brand_config
+        )
+    )
 
     return "\n\n".join(sections)
 
@@ -739,7 +747,9 @@ def _build_blog_output_format_section(
     )
 
     # Inject blog word limit if configured
-    max_words = _get_effective_word_limit(brand_config or {}, "blog") if brand_config else None
+    max_words = (
+        _get_effective_word_limit(brand_config or {}, "blog") if brand_config else None
+    )
     if max_words:
         lines.append("")
         lines.append(
@@ -1198,7 +1208,11 @@ def _build_bottom_description_spec(
                 h3_count = min(max(1, h.get("min", 4)), H3_CAP)
 
     # Resolve word limit
-    max_words = _get_effective_word_limit(brand_config or {}, "collection") if brand_config else None
+    max_words = (
+        _get_effective_word_limit(brand_config or {}, "collection")
+        if brand_config
+        else None
+    )
     # Scale per-paragraph cap if limit is tight
     para_cap = 120
     if max_words and max_words < 600:
@@ -1301,7 +1315,10 @@ async def generate_content(
 
     # Build prompts
     prompts = build_content_prompt(
-        crawled_page, keyword, brand_config, content_brief,
+        crawled_page,
+        keyword,
+        brand_config,
+        content_brief,
         matched_bibles=matched_bibles,
     )
 

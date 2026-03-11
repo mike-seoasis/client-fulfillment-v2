@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { wordDiff, type DiffSegment } from '../VersionDiffModal';
+import { wordDiff } from '../VersionDiffModal';
 
 describe('wordDiff', () => {
   it('returns empty array for two empty strings', () => {

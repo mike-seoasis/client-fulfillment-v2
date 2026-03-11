@@ -85,11 +85,15 @@ def create_google_doc(title: str, folder_id: str) -> tuple[str, str]:
         "mimeType": "application/vnd.google-apps.document",
         "parents": [folder_id],
     }
-    file = drive.files().create(
-        body=file_metadata,
-        fields="id,webViewLink",
-        supportsAllDrives=True,
-    ).execute()
+    file = (
+        drive.files()
+        .create(
+            body=file_metadata,
+            fields="id,webViewLink",
+            supportsAllDrives=True,
+        )
+        .execute()
+    )
     doc_id: str = file["id"]
     doc_url: str = file["webViewLink"]
     logger.info("Created Google Doc", extra={"doc_id": doc_id, "title": title})
@@ -135,7 +139,9 @@ def format_outline_doc(
         keywords = outline_json.get("keywords", [])
 
     # Build competitor list from top_ranked_results or flat "competitors"
-    raw_competitors = outline_json.get("top_ranked_results") or outline_json.get("competitors", [])
+    raw_competitors = outline_json.get("top_ranked_results") or outline_json.get(
+        "competitors", []
+    )
     competitors: list[str] = []
     for c in raw_competitors:
         if isinstance(c, dict):
@@ -155,38 +161,42 @@ def format_outline_doc(
 
     def insert_text(text: str) -> int:
         nonlocal idx
-        requests.append({
-            "insertText": {"location": {"index": idx}, "text": text}
-        })
+        requests.append({"insertText": {"location": {"index": idx}, "text": text}})
         length = len(text)
         idx += length
         return length
 
     def style_range(start: int, end: int, style: dict[str, Any], fields: str) -> None:
-        requests.append({
-            "updateTextStyle": {
-                "range": {"startIndex": start, "endIndex": end},
-                "textStyle": style,
-                "fields": fields,
+        requests.append(
+            {
+                "updateTextStyle": {
+                    "range": {"startIndex": start, "endIndex": end},
+                    "textStyle": style,
+                    "fields": fields,
+                }
             }
-        })
+        )
 
     def heading_style(start: int, end: int, heading: str) -> None:
-        requests.append({
-            "updateParagraphStyle": {
-                "range": {"startIndex": start, "endIndex": end},
-                "paragraphStyle": {"namedStyleType": heading},
-                "fields": "namedStyleType",
+        requests.append(
+            {
+                "updateParagraphStyle": {
+                    "range": {"startIndex": start, "endIndex": end},
+                    "paragraphStyle": {"namedStyleType": heading},
+                    "fields": "namedStyleType",
+                }
             }
-        })
+        )
 
     def bullet_style(start: int, end: int) -> None:
-        requests.append({
-            "createParagraphBullets": {
-                "range": {"startIndex": start, "endIndex": end},
-                "bulletPreset": "BULLET_DISC_CIRCLE_SQUARE",
+        requests.append(
+            {
+                "createParagraphBullets": {
+                    "range": {"startIndex": start, "endIndex": end},
+                    "bulletPreset": "BULLET_DISC_CIRCLE_SQUARE",
+                }
             }
-        })
+        )
 
     # --- Title ---
     title_text = f"{project_name} — {page_name} Outline\n"
@@ -235,7 +245,12 @@ def format_outline_doc(
             style_range(
                 note_start,
                 idx,
-                {"italic": True, "foregroundColor": {"color": {"rgbColor": {"red": 0.6, "green": 0.4, "blue": 0.0}}}},
+                {
+                    "italic": True,
+                    "foregroundColor": {
+                        "color": {"rgbColor": {"red": 0.6, "green": 0.4, "blue": 0.0}}
+                    },
+                },
                 "italic,foregroundColor",
             )
 
@@ -348,9 +363,7 @@ def share_doc(doc_id: str, role: str = "reader", share_type: str = "anyone") -> 
 # ---------------------------------------------------------------------------
 
 
-def find_or_create_sheet(
-    project_name: str, folder_id: str
-) -> tuple[str, str]:
+def find_or_create_sheet(project_name: str, folder_id: str) -> tuple[str, str]:
     """Find or create a tracking spreadsheet for this project.
 
     Searches the folder for an existing sheet named
@@ -369,12 +382,16 @@ def find_or_create_sheet(
         f"and mimeType = 'application/vnd.google-apps.spreadsheet' "
         f"and trashed = false"
     )
-    results = drive.files().list(
-        q=query,
-        fields="files(id,webViewLink)",
-        includeItemsFromAllDrives=True,
-        supportsAllDrives=True,
-    ).execute()
+    results = (
+        drive.files()
+        .list(
+            q=query,
+            fields="files(id,webViewLink)",
+            includeItemsFromAllDrives=True,
+            supportsAllDrives=True,
+        )
+        .execute()
+    )
     files = results.get("files", [])
 
     if files:
@@ -389,11 +406,15 @@ def find_or_create_sheet(
         "mimeType": "application/vnd.google-apps.spreadsheet",
         "parents": [folder_id],
     }
-    file = drive.files().create(
-        body=file_metadata,
-        fields="id,webViewLink",
-        supportsAllDrives=True,
-    ).execute()
+    file = (
+        drive.files()
+        .create(
+            body=file_metadata,
+            fields="id,webViewLink",
+            supportsAllDrives=True,
+        )
+        .execute()
+    )
     sheet_id = file["id"]
     sheet_url = file["webViewLink"]
 
@@ -404,7 +425,15 @@ def find_or_create_sheet(
         range="Sheet1!A1:E1",
         valueInputOption="RAW",
         body={
-            "values": [["Page URL", "Keyword", "Outline Status", "Google Doc URL", "Export Date"]]
+            "values": [
+                [
+                    "Page URL",
+                    "Keyword",
+                    "Outline Status",
+                    "Google Doc URL",
+                    "Export Date",
+                ]
+            ]
         },
     ).execute()
 
@@ -420,9 +449,7 @@ def find_or_create_sheet(
                             "startRowIndex": 0,
                             "endRowIndex": 1,
                         },
-                        "cell": {
-                            "userEnteredFormat": {"textFormat": {"bold": True}}
-                        },
+                        "cell": {"userEnteredFormat": {"textFormat": {"bold": True}}},
                         "fields": "userEnteredFormat.textFormat.bold",
                     }
                 }
@@ -430,7 +457,9 @@ def find_or_create_sheet(
         },
     ).execute()
 
-    logger.info("Created tracker sheet", extra={"sheet_id": sheet_id, "sheet_name": sheet_name})
+    logger.info(
+        "Created tracker sheet", extra={"sheet_id": sheet_id, "sheet_name": sheet_name}
+    )
     return sheet_id, sheet_url
 
 

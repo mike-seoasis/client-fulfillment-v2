@@ -58,6 +58,7 @@ export function OutlineEditor({
   onGenerateRedirectUrl,
   isRevising = false,
 }: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   content: { outline_json: any; outline_status: string | null; google_doc_url?: string | null; [key: string]: any };
   projectId: string;
   pageId: string;
@@ -129,6 +130,7 @@ export function OutlineEditor({
     setIsDirty(true);
   }, []);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updateSectionDetail = useCallback((index: number, field: keyof OutlineSectionDetail, value: any) => {
     setOutline((prev) => {
       const details = [...(prev.section_details ?? [])];

@@ -267,8 +267,24 @@ def _split_sentences(text: str) -> list[str]:
     plain = _strip_html_tags(text)
     # Common abbreviations that should not trigger a sentence split
     _ABBREVS = (
-        "Dr", "Mr", "Mrs", "Ms", "Prof", "Sr", "Jr", "Inc", "Ltd", "Corp",
-        "vs", "etc", "approx", "dept", "est", "govt", "e\\.g", "i\\.e",
+        "Dr",
+        "Mr",
+        "Mrs",
+        "Ms",
+        "Prof",
+        "Sr",
+        "Jr",
+        "Inc",
+        "Ltd",
+        "Corp",
+        "vs",
+        "etc",
+        "approx",
+        "dept",
+        "est",
+        "govt",
+        "e\\.g",
+        "i\\.e",
     )
     abbrev_pattern = (
         r"(?:"
@@ -278,10 +294,19 @@ def _split_sentences(text: str) -> list[str]:
     )
     # Replace abbreviation dots with a placeholder
     placeholder = "\x00"
-    protected = re.sub(abbrev_pattern, lambda m: m.group().replace(".", placeholder), plain, flags=re.IGNORECASE)
+    protected = re.sub(
+        abbrev_pattern,
+        lambda m: m.group().replace(".", placeholder),
+        plain,
+        flags=re.IGNORECASE,
+    )
     parts = re.split(r"(?<=[.!?])\s+", protected)
     # Restore placeholders
-    return [s.replace(placeholder, ".").strip() for s in parts if s.replace(placeholder, ".").strip()]
+    return [
+        s.replace(placeholder, ".").strip()
+        for s in parts
+        if s.replace(placeholder, ".").strip()
+    ]
 
 
 def _check_banned_words(
@@ -637,9 +662,7 @@ def _check_bible_banned_claims(
                             type="bible_banned_claim",
                             field=field_name,
                             description=desc,
-                            context=_extract_context(
-                                text, match.start(), match.end()
-                            ),
+                            context=_extract_context(text, match.start(), match.end()),
                         )
                     )
 
@@ -668,7 +691,11 @@ def _check_bible_wrong_attribution(
         feature = entry.get("feature", "")
         correct = entry.get("correct_component", "")
         wrong_components = entry.get("wrong_components", [])
-        if not feature or not isinstance(feature, str) or not isinstance(wrong_components, list):
+        if (
+            not feature
+            or not isinstance(feature, str)
+            or not isinstance(wrong_components, list)
+        ):
             continue
 
         for field_name, text in fields.items():
@@ -716,14 +743,16 @@ def _check_bible_term_context(
         term = entry.get("term", "")
         wrong_contexts = entry.get("wrong_contexts", [])
         explanation = entry.get("explanation", "")
-        if not term or not isinstance(term, str) or not isinstance(wrong_contexts, list):
+        if (
+            not term
+            or not isinstance(term, str)
+            or not isinstance(wrong_contexts, list)
+        ):
             continue
 
         for field_name, text in fields.items():
             for sentence in _split_sentences(text):
-                if not re.search(
-                    _word_boundary_pattern(term), sentence, re.IGNORECASE
-                ):
+                if not re.search(_word_boundary_pattern(term), sentence, re.IGNORECASE):
                     continue
                 for ctx in wrong_contexts:
                     if not isinstance(ctx, str) or not ctx:

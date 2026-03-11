@@ -82,7 +82,7 @@ def _build_outline_user_prompt(
 
     # Task
     sections.append(
-        f'## Task\nCreate a detailed content outline for a collection page targeting '
+        f"## Task\nCreate a detailed content outline for a collection page targeting "
         f'the keyword "{keyword}". Produce a JSON response following the exact schema below.'
     )
 
@@ -106,7 +106,9 @@ def _build_outline_user_prompt(
                 phrase = term.get("phrase", "")
                 avg_count = term.get("averageCount", 0)
                 weight = term.get("weight", 0)
-                brief_lines.append(f"- {phrase} (target count: {avg_count}, weight: {weight})")
+                brief_lines.append(
+                    f"- {phrase} (target count: {avg_count}, weight: {weight})"
+                )
 
         # Keyword Variations
         variations = content_brief.related_searches or []
@@ -160,10 +162,10 @@ def _build_outline_user_prompt(
     # Output schema
     today = datetime.now(UTC).strftime("%Y-%m-%d")
     sections.append(
-        '## Output Format\n'
-        'Respond with ONLY a raw JSON object (no markdown fencing). Use this exact schema:\n'
-        '```\n'
-        '{\n'
+        "## Output Format\n"
+        "Respond with ONLY a raw JSON object (no markdown fencing). Use this exact schema:\n"
+        "```\n"
+        "{\n"
         f'  "page_name": "Descriptive page name",\n'
         f'  "primary_keyword": "{keyword}",\n'
         '  "secondary_keywords": ["keyword2", "keyword3"],\n'
@@ -172,29 +174,29 @@ def _build_outline_user_prompt(
         '  "keyword_reference": {\n'
         '    "lsi_terms": [{"term": "example term", "target_count": 3}],\n'
         '    "keyword_variations": [{"variation": "example variation", "verbatim_required": true}]\n'
-        '  },\n'
+        "  },\n"
         '  "people_also_ask": ["Question 1", "Question 2"],\n'
         '  "top_ranked_results": [{"url": "https://...", "title": "...", "word_count": 1200}],\n'
         '  "page_progression": [\n'
         '    {"order": 1, "question_answered": "What question does this section answer?", "label": "section-label", "tag": "h2", "headline": "Section Headline"}\n'
-        '  ],\n'
+        "  ],\n"
         '  "section_details": [\n'
-        '    {\n'
+        "    {\n"
         '      "label": "section-label",\n'
         '      "tag": "h2",\n'
         '      "headline": "Section Headline",\n'
         '      "purpose": "One sentence describing section purpose",\n'
         '      "key_points": ["Point 1", "Point 2", "Point 3"],\n'
         '      "client_notes": ""\n'
-        '    }\n'
-        '  ]\n'
-        '}\n'
-        '```\n\n'
-        'IMPORTANT:\n'
-        '- keyword_reference, people_also_ask, and top_ranked_results should be populated from the SEO Research Data above\n'
-        '- page_progression and section_details are YOUR strategic recommendations\n'
-        '- Each section_details entry must have a matching page_progression entry\n'
-        '- Labels should be kebab-case slugs\n'
+        "    }\n"
+        "  ]\n"
+        "}\n"
+        "```\n\n"
+        "IMPORTANT:\n"
+        "- keyword_reference, people_also_ask, and top_ranked_results should be populated from the SEO Research Data above\n"
+        "- page_progression and section_details are YOUR strategic recommendations\n"
+        "- Each section_details entry must have a matching page_progression entry\n"
+        "- Labels should be kebab-case slugs\n"
         '- client_notes must ALWAYS be an empty string "" — this field is reserved for human input\n'
     )
 
@@ -246,7 +248,9 @@ def _parse_outline_json(text: str) -> dict[str, Any] | None:
     # Try direct parse first
     try:
         parsed = json.loads(cleaned)
-        if isinstance(parsed, dict) and ("section_details" in parsed or "page_progression" in parsed):
+        if isinstance(parsed, dict) and (
+            "section_details" in parsed or "page_progression" in parsed
+        ):
             return parsed
     except (json.JSONDecodeError, ValueError):
         pass
@@ -256,7 +260,9 @@ def _parse_outline_json(text: str) -> dict[str, Any] | None:
     if json_block:
         try:
             parsed = json.loads(json_block)
-            if isinstance(parsed, dict) and ("section_details" in parsed or "page_progression" in parsed):
+            if isinstance(parsed, dict) and (
+                "section_details" in parsed or "page_progression" in parsed
+            ):
                 return parsed
         except (json.JSONDecodeError, ValueError):
             pass
@@ -308,7 +314,10 @@ async def generate_outline(
     # Build prompts
     system_prompt = _build_outline_system_prompt()
     user_prompt = _build_outline_user_prompt(
-        crawled_page, keyword, content_brief, brand_config,
+        crawled_page,
+        keyword,
+        content_brief,
+        brand_config,
         matched_bibles=matched_bibles,
     )
 
@@ -382,7 +391,9 @@ async def generate_outline(
         page_content.status = ContentStatus.FAILED.value
         page_content.outline_status = None  # Clear generating state on failure
         page_content.generation_completed_at = datetime.now(UTC)
-        page_content.qa_results = {"error": "Failed to parse outline JSON from Claude response"}
+        page_content.qa_results = {
+            "error": "Failed to parse outline JSON from Claude response"
+        }
         await db.commit()
         return OutlineResult(
             success=False,
@@ -454,7 +465,10 @@ async def generate_content_from_outline(
     # Build prompts - use the brand system prompt from content_writing
     system_prompt = _build_system_prompt(brand_config)
     user_prompt = _build_content_from_outline_prompt(
-        crawled_page, keyword, content_brief, outline_json,
+        crawled_page,
+        keyword,
+        content_brief,
+        outline_json,
         matched_bibles=matched_bibles,
         brand_config=brand_config,
     )
@@ -527,7 +541,9 @@ async def generate_content_from_outline(
     if parsed is None:
         page_content.status = ContentStatus.FAILED.value
         page_content.generation_completed_at = datetime.now(UTC)
-        page_content.qa_results = {"error": "Failed to parse content JSON from Claude response"}
+        page_content.qa_results = {
+            "error": "Failed to parse content JSON from Claude response"
+        }
         await db.commit()
         return OutlineContentResult(
             success=False,
@@ -583,10 +599,10 @@ def _build_content_from_outline_prompt(
 
     # Task
     sections.append(
-        f'## Task\n'
+        f"## Task\n"
         f'Generate SEO-optimized collection page content for the keyword "{keyword}". '
-        f'Follow the approved outline below as your structural blueprint. '
-        f'Produce all 4 content fields in a single JSON response.'
+        f"Follow the approved outline below as your structural blueprint. "
+        f"Produce all 4 content fields in a single JSON response."
     )
 
     # Page context
@@ -630,20 +646,24 @@ def _build_content_from_outline_prompt(
 
     # Output format
     output_lines = [
-        '## Output Format',
-        'Respond with ONLY a raw JSON object (no markdown fencing) with these exact keys:',
-        '{',
+        "## Output Format",
+        "Respond with ONLY a raw JSON object (no markdown fencing) with these exact keys:",
+        "{",
         '  "page_title": "SEO-optimized page title (50-60 chars)",',
         '  "meta_description": "Compelling meta description (150-160 chars)",',
         '  "top_description": "Above-the-fold intro paragraph (plain text, 2-4 sentences)",',
         '  "bottom_description": "Full HTML content following the outline structure. '
-        'Use <h2>, <h3>, <p>, <ul>, <li>, <strong> tags. '
+        "Use <h2>, <h3>, <p>, <ul>, <li>, <strong> tags. "
         'Follow the outline sections in order."',
-        '}',
+        "}",
     ]
 
     # Inject word limit if configured
-    max_words = _get_effective_word_limit(brand_config or {}, "collection") if brand_config else None
+    max_words = (
+        _get_effective_word_limit(brand_config or {}, "collection")
+        if brand_config
+        else None
+    )
     if max_words:
         output_lines.append("")
         output_lines.append(
@@ -655,7 +675,12 @@ def _build_content_from_outline_prompt(
     return "\n\n".join(sections)
 
 
-REQUIRED_CONTENT_KEYS = {"page_title", "meta_description", "top_description", "bottom_description"}
+REQUIRED_CONTENT_KEYS = {
+    "page_title",
+    "meta_description",
+    "top_description",
+    "bottom_description",
+}
 
 
 def _parse_content_from_outline_json(text: str) -> dict[str, str] | None:

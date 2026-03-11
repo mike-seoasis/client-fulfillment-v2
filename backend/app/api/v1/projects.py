@@ -611,9 +611,7 @@ async def list_onboarding_batches(
         batch_pages = batches[batch_num]
         total = len(batch_pages)
         completed = sum(
-            1
-            for p in batch_pages
-            if p.page_content and p.page_content.is_approved
+            1 for p in batch_pages if p.page_content and p.page_content.is_approved
         )
 
         # Determine pipeline status
@@ -1259,7 +1257,9 @@ async def _generate_keywords_background(
             )
 
             # Run generation for the project
-            result = await keyword_service.generate_for_project(project_id, db, batch=batch)
+            result = await keyword_service.generate_for_project(
+                project_id, db, batch=batch
+            )
 
             logger.info(
                 "Background keyword generation completed",
@@ -2115,12 +2115,9 @@ async def bulk_delete_pages(
             detail=f"Project {project_id} not found",
         )
 
-    stmt = (
-        delete(CrawledPage)
-        .where(
-            CrawledPage.project_id == project_id,
-            CrawledPage.id.in_(data.page_ids),
-        )
+    stmt = delete(CrawledPage).where(
+        CrawledPage.project_id == project_id,
+        CrawledPage.id.in_(data.page_ids),
     )
     result = await db.execute(stmt)
     await db.commit()
@@ -2158,12 +2155,9 @@ async def reset_onboarding_pages(
             detail=f"Project {project_id} not found",
         )
 
-    stmt = (
-        delete(CrawledPage)
-        .where(
-            CrawledPage.project_id == project_id,
-            CrawledPage.source == "onboarding",
-        )
+    stmt = delete(CrawledPage).where(
+        CrawledPage.project_id == project_id,
+        CrawledPage.source == "onboarding",
     )
     result = await db.execute(stmt)
     await db.commit()
