@@ -33,7 +33,7 @@ from app.schemas.content_generation import (
     PageGenerationStatusItem,
     PromptLogResponse,
 )
-from app.services.content_quality import run_quality_checks
+from app.services.quality_pipeline import run_quality_pipeline
 from app.services.project import ProjectService
 
 logger = get_logger(__name__)
@@ -722,9 +722,56 @@ async def recheck_content(
     brand_config_row = brand_result.scalar_one_or_none()
     brand_config = brand_config_row.v2_schema if brand_config_row else {}
 
+    # Load and match bibles for this page's keyword
+    matched_bibles: list = []
+    page_kw = None
+    try:
+        from app.services.content_generation import (
+            _load_project_bibles,
+            _match_bibles_for_keyword,
+        )
+
+        project_bibles = await _load_project_bibles(db, project_id)
+        kw_stmt = select(PageKeywords).where(
+            PageKeywords.crawled_page_id == page_id
+        )
+        kw_result = await db.execute(kw_stmt)
+        page_kw = kw_result.scalar_one_or_none()
+        if page_kw and page_kw.primary_keyword:
+            matched_bibles = _match_bibles_for_keyword(
+                project_bibles, page_kw.primary_keyword
+            )
+    except Exception:
+        logger.warning(
+            "Bible loading failed during recheck, continuing without bibles",
+            extra={"project_id": project_id},
+            exc_info=True,
+        )
+
     # Re-run quality checks (mutates content.qa_results)
     content = page.page_content
-    run_quality_checks(content, brand_config or {})
+
+    # Need keyword for Tier 2 brief adherence
+    primary_keyword = ""
+    if page_kw and page_kw.primary_keyword:
+        primary_keyword = page_kw.primary_keyword
+
+    pipeline_result = await run_quality_pipeline(
+        content=content,
+        brand_config=brand_config or {},
+        primary_keyword=primary_keyword,
+        content_brief=page.content_brief,
+        matched_bibles=matched_bibles,
+    )
+
+    # Apply auto-rewrite results if fixed version was kept
+    from app.services.content_generation import _apply_rewrite_results
+
+    _apply_rewrite_results(content, pipeline_result)
+
+    from sqlalchemy.orm.attributes import flag_modified
+
+    flag_modified(content, "qa_results")
 
     await db.commit()
     await db.refresh(content)
@@ -898,6 +945,135 @@ async def approve_outline(
 
     logger.info(
         "Outline approved",
+        extra={"project_id": project_id, "page_id": page_id},
+    )
+
+    return _build_page_content_response(page)
+
+
+@router.post(
+    "/{project_id}/pages/{page_id}/revise-outline",
+    response_model=PageContentResponse,
+)
+async def revise_outline(
+    project_id: str,
+    page_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> PageContentResponse:
+    """Reset outline_status to 'draft' so the user can edit and regenerate.
+
+    Requires: page has outline_json AND content has already been generated.
+    Returns 400 if no outline exists or content hasn't been generated.
+    Returns 404 if page or PageContent not found.
+    """
+    await ProjectService.get_project(db, project_id)
+
+    stmt = (
+        select(CrawledPage)
+        .where(
+            CrawledPage.id == page_id,
+            CrawledPage.project_id == project_id,
+        )
+        .options(
+            selectinload(CrawledPage.page_content),
+            selectinload(CrawledPage.content_brief),
+        )
+    )
+    result = await db.execute(stmt)
+    page = result.scalar_one_or_none()
+
+    if not page:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Page {page_id} not found in project {project_id}",
+        )
+
+    if not page.page_content:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Content has not been generated yet for this page",
+        )
+
+    content = page.page_content
+
+    if not content.outline_json:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No outline exists for this page",
+        )
+
+    content.outline_status = "draft"
+
+    await db.commit()
+    await db.refresh(content)
+
+    logger.info(
+        "Outline revision started",
+        extra={"project_id": project_id, "page_id": page_id},
+    )
+
+    return _build_page_content_response(page)
+
+
+@router.post(
+    "/{project_id}/pages/{page_id}/cancel-outline-revision",
+    response_model=PageContentResponse,
+)
+async def cancel_outline_revision(
+    project_id: str,
+    page_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> PageContentResponse:
+    """Cancel an outline revision — reset outline_status back to null.
+
+    Only valid when outline_status is 'draft' or 'approved' AND
+    generated content already exists (top/bottom description).
+    This lets the user go back to viewing their previously generated content
+    without needing to regenerate.
+    """
+    await ProjectService.get_project(db, project_id)
+
+    stmt = (
+        select(CrawledPage)
+        .where(
+            CrawledPage.id == page_id,
+            CrawledPage.project_id == project_id,
+        )
+        .options(
+            selectinload(CrawledPage.page_content),
+            selectinload(CrawledPage.content_brief),
+        )
+    )
+    result = await db.execute(stmt)
+    page = result.scalar_one_or_none()
+
+    if not page:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Page {page_id} not found in project {project_id}",
+        )
+
+    if not page.page_content:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Content has not been generated yet for this page",
+        )
+
+    content = page.page_content
+
+    if not (content.top_description or content.bottom_description):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No generated content exists to return to",
+        )
+
+    content.outline_status = None
+
+    await db.commit()
+    await db.refresh(content)
+
+    logger.info(
+        "Outline revision cancelled — returning to generated content",
         extra={"project_id": project_id, "page_id": page_id},
     )
 

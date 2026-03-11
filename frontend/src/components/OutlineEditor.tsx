@@ -8,6 +8,7 @@ import {
   useApproveOutline,
   useGenerateFromOutline,
   useExportOutline,
+  useCancelOutlineRevision,
 } from '@/hooks/useContentGeneration';
 
 // ---------------------------------------------------------------------------
@@ -55,6 +56,7 @@ export function OutlineEditor({
   pageInfo,
   backUrl,
   onGenerateRedirectUrl,
+  isRevising = false,
 }: {
   content: { outline_json: any; outline_status: string | null; google_doc_url?: string | null; [key: string]: any };
   projectId: string;
@@ -64,12 +66,15 @@ export function OutlineEditor({
   backUrl: string;
   /** URL to navigate to after triggering "Generate Full Copy" */
   onGenerateRedirectUrl: string;
+  /** True when revising an outline that already has generated content */
+  isRevising?: boolean;
 }) {
   const router = useRouter();
   const updateOutlineMutation = useUpdateOutline();
   const approveOutlineMutation = useApproveOutline();
   const generateFromOutlineMutation = useGenerateFromOutline();
   const exportOutlineMutation = useExportOutline();
+  const cancelRevisionMutation = useCancelOutlineRevision();
 
   // Local outline state
   const [outline, setOutline] = useState<OutlineData>(() => content.outline_json ?? {});
@@ -112,10 +117,14 @@ export function OutlineEditor({
   const updateSectionHeadline = useCallback((index: number, headline: string) => {
     setOutline((prev) => {
       const progression = [...(prev.page_progression ?? [])];
+      const details = [...(prev.section_details ?? [])];
       if (progression[index]) {
         progression[index] = { ...progression[index], headline };
       }
-      return { ...prev, page_progression: progression };
+      if (details[index]) {
+        details[index] = { ...details[index], headline };
+      }
+      return { ...prev, page_progression: progression, section_details: details };
     });
     setIsDirty(true);
   }, []);
@@ -123,10 +132,31 @@ export function OutlineEditor({
   const updateSectionDetail = useCallback((index: number, field: keyof OutlineSectionDetail, value: any) => {
     setOutline((prev) => {
       const details = [...(prev.section_details ?? [])];
+      const progression = [...(prev.page_progression ?? [])];
       if (details[index]) {
         details[index] = { ...details[index], [field]: value };
       }
-      return { ...prev, section_details: details };
+      // Keep headline in sync across both arrays
+      if (field === 'headline' && progression[index]) {
+        progression[index] = { ...progression[index], headline: value as string };
+      }
+      return { ...prev, section_details: details, page_progression: progression };
+    });
+    setIsDirty(true);
+  }, []);
+
+  // Remove a section from both parallel arrays
+  const removeSection = useCallback((index: number) => {
+    setOutline((prev) => {
+      const progression = [...(prev.page_progression ?? [])];
+      const details = [...(prev.section_details ?? [])];
+      if (progression.length <= 1) return prev; // guard: keep at least 1 section
+      progression.splice(index, 1);
+      progression.forEach((s, i) => { s.order = i + 1; });
+      if (details.length > index) {
+        details.splice(index, 1);
+      }
+      return { ...prev, page_progression: progression, section_details: details };
     });
     setIsDirty(true);
   }, []);
@@ -277,6 +307,31 @@ export function OutlineEditor({
         </div>
       </div>
 
+      {/* Revision warning with cancel option */}
+      {isRevising && (
+        <div className="mb-4 px-4 py-3 bg-coral-50 border border-coral-200 rounded-sm flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5">
+            <svg className="w-4 h-4 text-coral-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+            <p className="text-sm text-coral-700">
+              Regenerating content from this outline will replace the current content.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => cancelRevisionMutation.mutate({ projectId, pageId })}
+            disabled={cancelRevisionMutation.isPending}
+            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-warm-700 bg-white hover:bg-sand-50 border border-sand-400 rounded-sm transition-colors disabled:opacity-50"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+            </svg>
+            {cancelRevisionMutation.isPending ? 'Returning...' : 'Back to Content'}
+          </button>
+        </div>
+      )}
+
       {/* Two-column layout */}
       <div className="flex gap-6 items-start">
         {/* Left column: Editable sections */}
@@ -319,6 +374,9 @@ export function OutlineEditor({
                     <button type="button" onClick={() => moveSection(index, 'down')} disabled={index === progression.length - 1} className="p-1 text-warm-400 hover:text-warm-600 disabled:opacity-30" title="Move down">
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
                     </button>
+                    <button type="button" onClick={() => removeSection(index)} disabled={progression.length <= 1} className="p-1 text-warm-400 hover:text-coral-500 disabled:opacity-30 transition-colors" title="Delete section">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
                   </div>
                 </div>
               ))}
@@ -331,10 +389,13 @@ export function OutlineEditor({
               const sectionLabel = progression[index]?.headline ?? `Section ${index + 1}`;
               const sectionTag = progression[index]?.tag ?? 'h2';
               return (
-                <div key={index} className="bg-white rounded-sm border border-sand-500 p-5">
+                <div key={index} className="bg-white rounded-sm border border-sand-500 p-5 group/card">
                   <div className="flex items-center gap-2 mb-4">
                     <span className="text-xs font-mono text-warm-400 px-1.5 py-0.5 bg-sand-100 rounded-sm">{sectionTag}</span>
-                    <h3 className="text-sm font-semibold text-warm-800">{sectionLabel}</h3>
+                    <h3 className="text-sm font-semibold text-warm-800 flex-1">{sectionLabel}</h3>
+                    <button type="button" onClick={() => removeSection(index)} disabled={details.length <= 1} className="p-1 text-warm-400 hover:text-coral-500 disabled:opacity-30 opacity-0 group-hover/card:opacity-100 transition-all" title="Delete section">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
                   </div>
                   <div className="mb-3">
                     <label className="text-xs font-medium text-warm-600 mb-1 block">Headline</label>

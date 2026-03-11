@@ -73,8 +73,11 @@ def _build_outline_user_prompt(
     keyword: str,
     content_brief: ContentBrief | None,
     brand_config: dict[str, Any],
+    matched_bibles: list[Any] | None = None,
 ) -> str:
     """Build user prompt for outline generation with POP brief data."""
+    from app.services.content_writing import _build_domain_knowledge_section
+
     sections: list[str] = []
 
     # Task
@@ -139,6 +142,11 @@ def _build_outline_user_prompt(
                 brief_lines.append(f"- {tag}: {target}")
 
         sections.append("\n".join(brief_lines))
+
+    # Domain Knowledge (from matched vertical bibles)
+    domain_knowledge = _build_domain_knowledge_section(matched_bibles)
+    if domain_knowledge:
+        sections.append(domain_knowledge)
 
     # Brand context
     brand_foundation = brand_config.get("brand_foundation", {})
@@ -266,6 +274,7 @@ async def generate_outline(
     content_brief: ContentBrief | None,
     brand_config: dict[str, Any],
     keyword: str,
+    matched_bibles: list[Any] | None = None,
 ) -> OutlineResult:
     """Generate a content outline for a page using Claude.
 
@@ -299,7 +308,8 @@ async def generate_outline(
     # Build prompts
     system_prompt = _build_outline_system_prompt()
     user_prompt = _build_outline_user_prompt(
-        crawled_page, keyword, content_brief, brand_config
+        crawled_page, keyword, content_brief, brand_config,
+        matched_bibles=matched_bibles,
     )
 
     # Create PromptLog records
@@ -411,6 +421,7 @@ async def generate_content_from_outline(
     brand_config: dict[str, Any],
     keyword: str,
     outline_json: dict[str, Any],
+    matched_bibles: list[Any] | None = None,
 ) -> OutlineContentResult:
     """Generate full content from an approved outline.
 
@@ -443,7 +454,9 @@ async def generate_content_from_outline(
     # Build prompts - use the brand system prompt from content_writing
     system_prompt = _build_system_prompt(brand_config)
     user_prompt = _build_content_from_outline_prompt(
-        crawled_page, keyword, content_brief, outline_json
+        crawled_page, keyword, content_brief, outline_json,
+        matched_bibles=matched_bibles,
+        brand_config=brand_config,
     )
 
     # Create PromptLog records
@@ -557,8 +570,12 @@ def _build_content_from_outline_prompt(
     keyword: str,
     content_brief: ContentBrief | None,
     outline_json: dict[str, Any],
+    matched_bibles: list[Any] | None = None,
+    brand_config: dict[str, Any] | None = None,
 ) -> str:
     """Build user prompt for generating content from an approved outline."""
+    from app.services.content_writing import _build_domain_knowledge_section, _get_effective_word_limit
+
     sections: list[str] = []
 
     # Task
@@ -588,6 +605,11 @@ def _build_content_from_outline_prompt(
         "- Address people_also_ask questions within relevant sections"
     )
 
+    # Domain Knowledge (from matched vertical bibles)
+    domain_knowledge = _build_domain_knowledge_section(matched_bibles)
+    if domain_knowledge:
+        sections.append(domain_knowledge)
+
     # LSI terms from brief for density guidance
     if content_brief:
         lsi_terms = content_brief.lsi_terms or []
@@ -604,18 +626,28 @@ def _build_content_from_outline_prompt(
             )
 
     # Output format
-    sections.append(
-        '## Output Format\n'
-        'Respond with ONLY a raw JSON object (no markdown fencing) with these exact keys:\n'
-        '{\n'
-        '  "page_title": "SEO-optimized page title (50-60 chars)",\n'
-        '  "meta_description": "Compelling meta description (150-160 chars)",\n'
-        '  "top_description": "Above-the-fold intro paragraph (plain text, 2-4 sentences)",\n'
+    output_lines = [
+        '## Output Format',
+        'Respond with ONLY a raw JSON object (no markdown fencing) with these exact keys:',
+        '{',
+        '  "page_title": "SEO-optimized page title (50-60 chars)",',
+        '  "meta_description": "Compelling meta description (150-160 chars)",',
+        '  "top_description": "Above-the-fold intro paragraph (plain text, 2-4 sentences)",',
         '  "bottom_description": "Full HTML content following the outline structure. '
         'Use <h2>, <h3>, <p>, <ul>, <li>, <strong> tags. '
-        'Follow the outline sections in order."\n'
-        '}'
-    )
+        'Follow the outline sections in order."',
+        '}',
+    ]
+
+    # Inject word limit if configured
+    max_words = _get_effective_word_limit(brand_config or {}, "collection") if brand_config else None
+    if max_words:
+        output_lines.append("")
+        output_lines.append(
+            f"**Word count limit: ~{max_words} words for bottom_description. Do not exceed this.**"
+        )
+
+    sections.append("\n".join(output_lines))
 
     return "\n\n".join(sections)
 
@@ -624,7 +656,19 @@ REQUIRED_CONTENT_KEYS = {"page_title", "meta_description", "top_description", "b
 
 
 def _parse_content_from_outline_json(text: str) -> dict[str, str] | None:
-    """Parse Claude's content response as JSON with 4 required keys."""
+    """Parse Claude's content response as JSON with 4 required keys.
+
+    Uses the same 3-attempt strategy as content_writing._parse_content_json:
+    1. Direct parse
+    2. Repair control characters (unescaped newlines/tabs in JSON strings)
+    3. Regex-based key extraction fallback (handles unescaped quotes in HTML)
+    """
+    from app.services.content_writing import (
+        _extract_json_keys_fallback,
+        _repair_json_control_chars,
+        _try_json_loads,
+    )
+
     cleaned = text.strip()
 
     # Strip markdown code fences
@@ -641,15 +685,36 @@ def _parse_content_from_outline_json(text: str) -> dict[str, str] | None:
         if match:
             cleaned = match.group(0)
 
-    try:
-        parsed = json.loads(cleaned)
-        if isinstance(parsed, dict) and REQUIRED_CONTENT_KEYS.issubset(parsed.keys()):
-            return {k: str(v) for k, v in parsed.items() if k in REQUIRED_CONTENT_KEYS}
-    except (json.JSONDecodeError, ValueError):
-        pass
+    # Attempt 1: direct parse
+    parsed = _try_json_loads(cleaned)
 
-    logger.warning(
-        "Failed to parse content-from-outline JSON",
-        extra={"snippet": cleaned[:300], "length": len(cleaned)},
-    )
-    return None
+    # Attempt 2: fix control characters inside JSON string values
+    if parsed is None:
+        repaired = _repair_json_control_chars(cleaned)
+        parsed = _try_json_loads(repaired)
+
+    # Attempt 3: extract each key's value using regex boundaries
+    if parsed is None:
+        parsed = _extract_json_keys_fallback(cleaned, REQUIRED_CONTENT_KEYS)
+
+    if parsed is None:
+        logger.warning(
+            "All JSON parse strategies failed for outline content",
+            extra={"snippet": cleaned[:300], "length": len(cleaned)},
+        )
+        return None
+
+    if not isinstance(parsed, dict):
+        return None
+
+    if not REQUIRED_CONTENT_KEYS.issubset(parsed.keys()):
+        logger.warning(
+            "Parsed JSON missing required keys for outline content",
+            extra={
+                "found_keys": list(parsed.keys()),
+                "required": list(REQUIRED_CONTENT_KEYS),
+            },
+        )
+        return None
+
+    return {k: str(v) for k, v in parsed.items() if k in REQUIRED_CONTENT_KEYS}

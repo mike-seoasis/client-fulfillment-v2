@@ -31,15 +31,47 @@ from app.models.crawled_page import CrawledPage
 from app.models.page_content import ContentStatus, PageContent
 from app.models.page_keywords import PageKeywords
 from app.models.prompt_log import PromptLog
-from app.services.content_quality import run_quality_checks
+from app.services.quality_pipeline import run_quality_pipeline
 from app.services.content_outline import (
     generate_content_from_outline,
     generate_outline,
 )
 from app.services.content_writing import extract_competitor_brands, generate_content
 from app.services.pop_content_brief import fetch_content_brief
+from app.services.quality_pipeline import PipelineResult as QualityPipelineResult
 
 logger = get_logger(__name__)
+
+
+def _apply_rewrite_results(
+    content: "PageContent",
+    pipeline_result: QualityPipelineResult,
+) -> None:
+    """Apply auto-rewrite results back to content object if fixed version was kept.
+
+    Updates content fields, recomputes word count, and flags modified attributes
+    for SQLAlchemy change detection.
+    """
+    if not pipeline_result.final_fields:
+        return
+    if not pipeline_result.rewrite or pipeline_result.rewrite.get("kept_version") != "fixed":
+        return
+
+    import re
+
+    from sqlalchemy.orm.attributes import flag_modified
+
+    for field_name, value in pipeline_result.final_fields.items():
+        if hasattr(content, field_name):
+            setattr(content, field_name, value)
+            flag_modified(content, field_name)
+
+    # Recompute word count
+    total_words = 0
+    for value in pipeline_result.final_fields.values():
+        text_only = re.sub(r"<[^>]+>", " ", value)
+        total_words += len(text_only.split())
+    content.word_count = total_words
 
 
 @dataclass
@@ -109,10 +141,11 @@ async def run_content_pipeline(
         },
     )
 
-    # Load approved pages and brand config in a read-only session
+    # Load approved pages, brand config, and bibles in a read-only session
     async with db_manager.session_factory() as session:
         pages_data = await _load_approved_pages(session, project_id, batch=batch)
         brand_config = await _load_brand_config(session, project_id)
+        project_bibles = await _load_project_bibles(session, project_id)
 
     if not pages_data:
         logger.info(
@@ -174,6 +207,7 @@ async def run_content_pipeline(
                 force_refresh=force_refresh,
                 refresh_briefs=False,  # Briefs already fetched in Phase 1
                 outline_first=outline_first,
+                project_bibles=project_bibles,
             )
 
     tasks = [_process_with_semaphore(pd) for pd in pages_data]
@@ -294,6 +328,9 @@ async def run_generate_from_outline(
             # Load brand config
             brand_config = await _load_brand_config(db, project_id)
 
+            # Load and match bibles
+            project_bibles = await _load_project_bibles(db, project_id)
+
             # Load keyword
             keyword_stmt = select(PageKeywords).where(
                 PageKeywords.crawled_page_id == page_id
@@ -302,7 +339,21 @@ async def run_generate_from_outline(
             page_keywords = kw_result.scalar_one_or_none()
             keyword = page_keywords.primary_keyword if page_keywords else ""
 
+            matched_bibles = await _match_bibles_for_keyword(project_bibles, keyword)
+
             # Generate content from outline
+            outline_headlines = [
+                s.get("headline", "?") for s in (page_content.outline_json or {}).get("section_details", [])
+            ]
+            logger.info(
+                "Generating from outline — headlines being sent to LLM",
+                extra={
+                    "page_id": page_id,
+                    "keyword": keyword,
+                    "outline_headlines": outline_headlines,
+                    "section_count": len(outline_headlines),
+                },
+            )
             content_result = await generate_content_from_outline(
                 db=db,
                 crawled_page=crawled_page,
@@ -310,6 +361,7 @@ async def run_generate_from_outline(
                 brand_config=brand_config,
                 keyword=keyword,
                 outline_json=page_content.outline_json,
+                matched_bibles=matched_bibles,
             )
 
             if not content_result.success:
@@ -327,7 +379,16 @@ async def run_generate_from_outline(
                 written_content.status = ContentStatus.CHECKING.value
                 await db.commit()
 
-                run_quality_checks(written_content, brand_config)
+                pipeline_result = await run_quality_pipeline(
+                    content=written_content,
+                    brand_config=brand_config,
+                    primary_keyword=keyword,
+                    content_brief=crawled_page.content_brief,
+                    matched_bibles=matched_bibles,
+                )
+
+                # Apply auto-rewrite results if fixed version was kept
+                _apply_rewrite_results(written_content, pipeline_result)
 
                 # flag_modified needed for in-place JSONB dict mutation
                 from sqlalchemy.orm.attributes import flag_modified
@@ -336,9 +397,9 @@ async def run_generate_from_outline(
 
                 written_content.status = ContentStatus.COMPLETE.value
                 written_content.generation_completed_at = datetime.now(UTC)
-                # Clear outline_status so the frontend shows the content
-                # review view instead of the outline editor
-                written_content.outline_status = None
+                # Mark outline as 'used' so the frontend can offer a
+                # "Revise Outline" button instead of hiding it completely
+                written_content.outline_status = "used"
                 await db.commit()
 
             logger.info(
@@ -359,7 +420,7 @@ async def run_generate_from_outline(
                 .where(
                     CrawledPage.project_id == project_id,
                     PageContent.status == ContentStatus.COMPLETE.value,
-                    PageContent.outline_status.is_(None),
+                    PageContent.outline_status.in_([None, "used"]),
                     PageContent.bottom_description.isnot(None),
                 )
             )
@@ -639,12 +700,220 @@ async def _load_brand_config(
     return config.v2_schema or {}
 
 
+async def _load_project_bibles(
+    db: AsyncSession,
+    project_id: str,
+) -> list[Any]:
+    """Load active vertical bibles for a project, ordered by sort_order.
+
+    Returns empty list if no bibles exist or if the table doesn't exist yet
+    (graceful degradation for environments without the migration applied).
+    """
+    try:
+        from app.models.vertical_bible import VerticalBible
+
+        stmt = (
+            select(VerticalBible)
+            .where(
+                VerticalBible.project_id == project_id,
+                VerticalBible.is_active.is_(True),
+            )
+            .order_by(VerticalBible.sort_order)
+        )
+        result = await db.execute(stmt)
+        bibles = list(result.scalars().all())
+        logger.info(
+            "Loaded vertical bibles for project",
+            extra={
+                "project_id": project_id,
+                "bible_count": len(bibles),
+                "bible_names": [b.name for b in bibles],
+                "bible_triggers": {
+                    b.name: (b.trigger_keywords or []) for b in bibles
+                },
+                "bible_content_lengths": {
+                    b.name: len(b.content_md or "") for b in bibles
+                },
+            },
+        )
+        return bibles
+    except (ImportError, Exception) as exc:
+        from sqlalchemy.exc import OperationalError, ProgrammingError
+
+        if isinstance(exc, (ImportError, OperationalError, ProgrammingError)):
+            logger.debug(
+                "Could not load vertical bibles (table may not exist)",
+                extra={"project_id": project_id},
+            )
+            return []
+        raise
+
+
+BIBLE_MATCH_MODEL = "claude-haiku-4-5-20251001"
+
+
+def _match_bibles_substring(
+    project_bibles: list[Any],
+    keyword: str,
+) -> list[Any]:
+    """Fast substring matching — used as first pass before LLM fallback."""
+    keyword_lower = keyword.lower().strip()
+    matched: list[Any] = []
+
+    for bible in project_bibles:
+        triggers = getattr(bible, "trigger_keywords", []) or []
+        for trigger in triggers:
+            trigger_lower = str(trigger).lower().strip()
+            if not trigger_lower or len(trigger_lower) < 3:
+                continue
+            if trigger_lower in keyword_lower or keyword_lower in trigger_lower:
+                matched.append(bible)
+                break  # Don't add same bible twice
+
+    return matched
+
+
+async def _match_bibles_llm(
+    project_bibles: list[Any],
+    keyword: str,
+) -> list[Any]:
+    """Semantic matching via Haiku — cheap, fast fallback when substring fails.
+
+    Sends bible names + trigger keywords to Haiku and asks which are relevant
+    to the page keyword. Returns matched bibles preserving sort order.
+    """
+    from app.integrations.claude import ClaudeClient, get_api_key
+
+    # Build a compact description of each bible for the prompt
+    bible_descriptions: list[str] = []
+    for i, bible in enumerate(project_bibles):
+        name = getattr(bible, "name", f"Bible {i}")
+        triggers = getattr(bible, "trigger_keywords", []) or []
+        triggers_str = ", ".join(str(t) for t in triggers[:20])
+        bible_descriptions.append(f'{i}. "{name}" — triggers: {triggers_str}')
+
+    prompt = (
+        f'Page keyword: "{keyword}"\n\n'
+        "Knowledge bibles:\n"
+        + "\n".join(bible_descriptions)
+        + "\n\n"
+        "Which bibles contain domain knowledge relevant to this page keyword? "
+        "Return ONLY a JSON array of the bible numbers (0-indexed) that match. "
+        "A bible is relevant if its topic area covers the page keyword, even if "
+        "the exact keyword isn't in the trigger list. "
+        "If none are relevant, return []."
+    )
+
+    try:
+        client = ClaudeClient(
+            api_key=get_api_key(),
+            model=BIBLE_MATCH_MODEL,
+            max_tokens=100,
+            timeout=10,
+        )
+        result = await client.complete(
+            user_prompt=prompt,
+            system_prompt="You are a keyword matching assistant. Respond with ONLY a JSON array of integers.",
+            max_tokens=100,
+            temperature=0,
+        )
+
+        text = (result.text or "").strip()
+        # Strip markdown fencing if present
+        if text.startswith("```"):
+            lines = text.split("\n")
+            text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:]).strip()
+
+        indices = json.loads(text)
+        if not isinstance(indices, list):
+            return []
+
+        matched = []
+        for idx in indices:
+            if isinstance(idx, int) and 0 <= idx < len(project_bibles):
+                matched.append(project_bibles[idx])
+
+        logger.info(
+            "LLM bible matching result",
+            extra={
+                "keyword": keyword,
+                "matched_indices": indices,
+                "matched_names": [getattr(b, "name", "?") for b in matched],
+                "model": BIBLE_MATCH_MODEL,
+            },
+        )
+        return matched
+
+    except Exception as exc:
+        logger.warning(
+            "LLM bible matching failed, returning empty",
+            extra={"keyword": keyword, "error": str(exc)},
+        )
+        return []
+
+
+async def _match_bibles_for_keyword(
+    project_bibles: list[Any],
+    keyword: str,
+) -> list[Any]:
+    """Match bibles for a keyword — substring first, LLM fallback.
+
+    1. Try fast bidirectional substring matching
+    2. If no matches, fall back to Haiku for semantic matching
+
+    Returns matched bibles preserving sort order.
+    """
+    if not project_bibles or not keyword:
+        logger.info(
+            "Bible matching skipped (no bibles or no keyword)",
+            extra={
+                "bible_count": len(project_bibles) if project_bibles else 0,
+                "keyword": keyword or "(empty)",
+            },
+        )
+        return []
+
+    # Fast path: substring matching
+    matched = _match_bibles_substring(project_bibles, keyword)
+
+    if matched:
+        logger.info(
+            "Bible matched via substring",
+            extra={
+                "keyword": keyword,
+                "matched_count": len(matched),
+                "matched_names": [getattr(b, "name", "?") for b in matched],
+            },
+        )
+        return matched
+
+    # Slow path: LLM semantic matching
+    logger.info(
+        "No substring match — falling back to LLM matching",
+        extra={"keyword": keyword, "total_bibles": len(project_bibles)},
+    )
+    matched = await _match_bibles_llm(project_bibles, keyword)
+
+    logger.info(
+        "Bible keyword matching final result",
+        extra={
+            "keyword": keyword,
+            "total_bibles": len(project_bibles),
+            "matched_count": len(matched),
+            "matched_names": [getattr(b, "name", "?") for b in matched],
+            "method": "llm",
+        },
+    )
+    return matched
+
+
 async def _process_single_page(
     page_data: dict[str, Any],
     brand_config: dict[str, Any],
     force_refresh: bool,
     refresh_briefs: bool = False,
     outline_first: bool = False,
+    project_bibles: list[Any] | None = None,
 ) -> PipelinePageResult:
     """Process a single page through the brief → write → check pipeline.
 
@@ -734,6 +1003,11 @@ async def _process_single_page(
                     db, brand_config, content_brief.competitors, crawled_page.project_id
                 )
 
+            # Match vertical bibles for this keyword
+            matched_bibles = await _match_bibles_for_keyword(
+                project_bibles or [], keyword
+            )
+
             # --- Step 2: Write content (or outline) ---
             if outline_first:
                 # Outline-first mode: generate outline, skip quality checks
@@ -743,6 +1017,7 @@ async def _process_single_page(
                     content_brief=content_brief,
                     brand_config=brand_config,
                     keyword=keyword,
+                    matched_bibles=matched_bibles,
                 )
 
                 if not outline_result.success:
@@ -778,6 +1053,7 @@ async def _process_single_page(
                 content_brief=content_brief,
                 brand_config=brand_config,
                 keyword=keyword,
+                matched_bibles=matched_bibles,
             )
 
             if not writing_result.success:
@@ -804,7 +1080,16 @@ async def _process_single_page(
             written_content.status = ContentStatus.CHECKING.value
             await db.commit()
 
-            run_quality_checks(written_content, brand_config)
+            pipeline_result = await run_quality_pipeline(
+                content=written_content,
+                brand_config=brand_config,
+                primary_keyword=keyword,
+                content_brief=content_brief,
+                matched_bibles=matched_bibles,
+            )
+
+            # Apply auto-rewrite results if fixed version was kept
+            _apply_rewrite_results(written_content, pipeline_result)
 
             # --- Step 4: Mark complete ---
             written_content.status = ContentStatus.COMPLETE.value

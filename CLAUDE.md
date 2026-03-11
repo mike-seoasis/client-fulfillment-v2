@@ -78,8 +78,8 @@ This project is being rebuilt using vertical slices. Each slice is a complete fe
 
 At the start of EVERY session:
 1. Read `V2_REBUILD_PLAN.md` — Check current status, where we are
-2. Read relevant section of `FEATURE_SPEC.md` — Feature details for current slice
-3. Read relevant section of `WIREFRAMES.md` — UI reference for current slice
+2. Read relevant section of `docs/FEATURE_SPEC.md` — Feature details for current slice
+3. Read relevant section of `docs/wireframes/WIREFRAMES.md` — UI reference for current slice
 4. Tell the user: "We're on Phase X, Slice Y. Last session we completed Z. Next up is W."
 
 If user says "Let's continue" — follow this protocol automatically.
@@ -122,8 +122,8 @@ Each slice uses OpenSpec for planning and Ralph TUI for execution:
 Before writing any code for a new slice, verify:
 - [ ] Previous slice is complete and archived
 - [ ] V2_REBUILD_PLAN.md status is current
-- [ ] You've read the relevant FEATURE_SPEC.md section
-- [ ] You've read the relevant WIREFRAMES.md section
+- [ ] You've read the relevant docs/FEATURE_SPEC.md section
+- [ ] You've read the relevant docs/wireframes/WIREFRAMES.md section
 - [ ] Branch created: `feature/slice-X-[name]`
 
 ### Post-Flight Checklist (After Completing Any Slice)

@@ -21,9 +21,11 @@ from app.models.page_content import ContentStatus, PageContent
 from app.models.project import Project
 from app.models.prompt_log import PromptLog
 from app.services.content_writing import (
+    BIBLE_PROMPT_MAX_CHARS,
     PromptPair,
     _apply_parsed_content,
     _build_blog_output_format_section,
+    _build_domain_knowledge_section,
     _build_entity_association_section,
     _build_freshness_section,
     _detect_content_type,
@@ -927,3 +929,91 @@ class TestBlogOutputFormatContentType:
         """Guide (default) type doesn't add an extra Content Type section."""
         result = _build_blog_output_format_section(None, keyword="boot care guide")
         assert "Content Type:" not in result
+
+
+# ---------------------------------------------------------------------------
+# _build_domain_knowledge_section tests (Bible prompt injection)
+# ---------------------------------------------------------------------------
+
+
+class _FakeBible:
+    """Stand-in for VerticalBible with all attributes the pipeline accesses."""
+
+    def __init__(
+        self,
+        content_md: str = "",
+        sort_order: int = 0,
+        name: str = "Test",
+        qa_rules: dict | None = None,
+        trigger_keywords: list[str] | None = None,
+        is_active: bool = True,
+    ) -> None:
+        self.content_md = content_md
+        self.sort_order = sort_order
+        self.name = name
+        self.qa_rules = qa_rules or {}
+        self.trigger_keywords = trigger_keywords or []
+        self.is_active = is_active
+
+
+class TestBuildDomainKnowledgeSection:
+    """Tests for _build_domain_knowledge_section."""
+
+    def test_returns_none_for_no_bibles(self) -> None:
+        assert _build_domain_knowledge_section(None) is None
+        assert _build_domain_knowledge_section([]) is None
+
+    def test_returns_none_for_empty_content(self) -> None:
+        bible = _FakeBible(content_md="")
+        assert _build_domain_knowledge_section([bible]) is None
+
+    def test_single_bible(self) -> None:
+        bible = _FakeBible(content_md="Tattoo needles come in various sizes.")
+        result = _build_domain_knowledge_section([bible])
+        assert result is not None
+        assert "## Domain Knowledge" in result
+        assert "Tattoo needles" in result
+
+    def test_multiple_bibles_concatenated_by_sort_order(self) -> None:
+        bible_a = _FakeBible(content_md="First bible content.", sort_order=1)
+        bible_b = _FakeBible(content_md="Second bible content.", sort_order=0)
+        result = _build_domain_knowledge_section([bible_a, bible_b])
+        assert result is not None
+        # bible_b (sort_order=0) should come first
+        idx_second = result.index("Second bible")
+        idx_first = result.index("First bible")
+        assert idx_second < idx_first
+
+    def test_truncation_at_max_chars(self) -> None:
+        # Create content that exceeds the limit
+        long_content = "x" * (BIBLE_PROMPT_MAX_CHARS + 100)
+        bible = _FakeBible(content_md=long_content)
+        result = _build_domain_knowledge_section([bible])
+        assert result is not None
+        assert "[...truncated]" in result
+        # The domain knowledge portion (after header) should be ≤ max + truncation marker
+        content_part = result.replace("## Domain Knowledge\n", "")
+        assert len(content_part) <= BIBLE_PROMPT_MAX_CHARS + len("\n[...truncated]") + 10
+
+    def test_truncation_second_bible_excluded_after_first_truncated(self) -> None:
+        """When first bible is truncated, second bible should not appear."""
+        bible_a = _FakeBible(
+            content_md="a" * (BIBLE_PROMPT_MAX_CHARS + 100),
+            sort_order=0,
+        )
+        bible_b = _FakeBible(
+            content_md="SECOND BIBLE CONTENT",
+            sort_order=1,
+        )
+        result = _build_domain_knowledge_section([bible_a, bible_b])
+        assert result is not None
+        assert "[...truncated]" in result
+        assert "SECOND BIBLE CONTENT" not in result
+
+    def test_whitespace_only_bible_skipped(self) -> None:
+        """Bible with whitespace-only content_md should be skipped."""
+        bible_a = _FakeBible(content_md="   \n   ", sort_order=0)
+        bible_b = _FakeBible(content_md="Real content here.", sort_order=1)
+        result = _build_domain_knowledge_section([bible_a, bible_b])
+        assert result is not None
+        assert "Real content here." in result

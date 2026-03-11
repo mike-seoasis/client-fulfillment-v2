@@ -11,5 +11,6 @@ export { VocabularyEditor, type VocabularyEditorProps } from './VocabularyEditor
 export { TrustElementsEditor, type TrustElementsEditorProps } from './TrustElementsEditor';
 export { CompetitorContextEditor, type CompetitorContextEditorProps } from './CompetitorContextEditor';
 export { AIPromptEditor, type AIPromptEditorProps } from './AIPromptEditor';
+export { ContentLimitsEditor, type ContentLimitsEditorProps } from './ContentLimitsEditor';
 export { SectionEditorSwitch, type SectionEditorSwitchProps, type SectionKey, type SectionData } from './SectionEditorSwitch';
 export { useEditorKeyboardShortcuts, type UseEditorKeyboardShortcutsOptions } from './useEditorKeyboardShortcuts';

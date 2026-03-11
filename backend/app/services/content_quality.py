@@ -122,17 +122,23 @@ class QualityResult:
     passed: bool
     issues: list[QualityIssue] = field(default_factory=list)
     checked_at: str = ""
+    bibles_matched: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "passed": self.passed,
             "issues": [issue.to_dict() for issue in self.issues],
             "checked_at": self.checked_at,
         }
+        if self.bibles_matched:
+            d["bibles_matched"] = self.bibles_matched
+        return d
 
 
 def run_quality_checks(
-    content: PageContent, brand_config: dict[str, Any]
+    content: PageContent,
+    brand_config: dict[str, Any],
+    matched_bibles: list[Any] | None = None,
 ) -> QualityResult:
     """Run all deterministic quality checks on generated content.
 
@@ -187,10 +193,24 @@ def run_quality_checks(
     # Check 9: Competitor brand names
     issues.extend(_check_competitor_names(fields, brand_config))
 
+    # Checks 14-17: Bible-driven checks
+    bible_names: list[str] = []
+    if matched_bibles:
+        for bible in matched_bibles:
+            qa_rules = getattr(bible, "qa_rules", None) or {}
+            name = getattr(bible, "name", "Bible")
+            if qa_rules:
+                issues.extend(_check_bible_preferred_terms(fields, qa_rules, name))
+                issues.extend(_check_bible_banned_claims(fields, qa_rules, name))
+                issues.extend(_check_bible_wrong_attribution(fields, qa_rules, name))
+                issues.extend(_check_bible_term_context(fields, qa_rules, name))
+                bible_names.append(name)
+
     result = QualityResult(
         passed=len(issues) == 0,
         issues=issues,
         checked_at=datetime.now(UTC).isoformat(),
+        bibles_matched=bible_names,
     )
 
     # Store in PageContent.qa_results
@@ -209,6 +229,19 @@ def _get_content_fields(content: PageContent) -> dict[str, str]:
     return result
 
 
+def _word_boundary_pattern(term: str) -> str:
+    """Build a regex pattern with correct word boundaries for the given term.
+
+    Standard \\b only works at word-character boundaries. For terms that start
+    or end with non-word characters (e.g., C++, .NET, Node.js), we use
+    lookahead/lookbehind assertions instead.
+    """
+    escaped = re.escape(term)
+    prefix = r"\b" if re.match(r"\w", term) else r"(?<!\w)"
+    suffix = r"\b" if re.search(r"\w$", term) else r"(?!\w)"
+    return prefix + escaped + suffix
+
+
 def _strip_html_tags(text: str) -> str:
     """Strip HTML tags from text for clean context strings."""
     return re.sub(r"<[^>]+>", " ", text).replace("  ", " ").strip()
@@ -220,6 +253,35 @@ def _extract_context(text: str, start: int, end: int, pad: int = 30) -> str:
     ctx_end = min(len(text), end + pad)
     raw = text[ctx_start:ctx_end].strip()
     return f"...{_strip_html_tags(raw)}..."
+
+
+def _split_sentences(text: str) -> list[str]:
+    """Split text into sentences after stripping HTML tags.
+
+    Uses punctuation boundaries (.!?) to split, but avoids splitting on
+    common abbreviations (Dr., Mr., Mrs., Ms., Inc., Ltd., Jr., Sr., vs.,
+    e.g., i.e., U.S., etc.) and single uppercase initials (A. B. Smith).
+
+    Returns non-empty sentences.
+    """
+    plain = _strip_html_tags(text)
+    # Common abbreviations that should not trigger a sentence split
+    _ABBREVS = (
+        "Dr", "Mr", "Mrs", "Ms", "Prof", "Sr", "Jr", "Inc", "Ltd", "Corp",
+        "vs", "etc", "approx", "dept", "est", "govt", "e\\.g", "i\\.e",
+    )
+    abbrev_pattern = (
+        r"(?:"
+        + "|".join(rf"(?<!\w){a}\." for a in _ABBREVS)
+        + r"|(?<=[A-Z])\.(?=\s+[A-Z]\.)"  # single-letter initials like U.S.A.
+        + r")"
+    )
+    # Replace abbreviation dots with a placeholder
+    placeholder = "\x00"
+    protected = re.sub(abbrev_pattern, lambda m: m.group().replace(".", placeholder), plain, flags=re.IGNORECASE)
+    parts = re.split(r"(?<=[.!?])\s+", protected)
+    # Restore placeholders
+    return [s.replace(placeholder, ".").strip() for s in parts if s.replace(placeholder, ".").strip()]
 
 
 def _check_banned_words(
@@ -471,6 +533,221 @@ def _check_competitor_names(
 
 
 # ---------------------------------------------------------------------------
+# Bible-driven quality checks (14-17)
+# ---------------------------------------------------------------------------
+
+
+def _check_bible_preferred_terms(
+    fields: dict[str, str],
+    qa_rules: dict[str, Any],
+    bible_name: str,
+) -> list[QualityIssue]:
+    """Check 14: Flag deprecated terms that should use preferred alternatives.
+
+    qa_rules key: preferred_terms — list of {use, instead_of} dicts.
+    Matches word-boundary, case-insensitive.
+    """
+    issues: list[QualityIssue] = []
+    preferred_terms = qa_rules.get("preferred_terms")
+    if not isinstance(preferred_terms, list):
+        return issues
+
+    for entry in preferred_terms:
+        if not isinstance(entry, dict):
+            continue
+        use = entry.get("use", "")
+        instead_of = entry.get("instead_of", "")
+        if not use or not instead_of or not isinstance(instead_of, str):
+            continue
+
+        pattern = re.compile(_word_boundary_pattern(instead_of), re.IGNORECASE)
+        for field_name, text in fields.items():
+            for match in pattern.finditer(text):
+                issues.append(
+                    QualityIssue(
+                        type="bible_preferred_term",
+                        field=field_name,
+                        description=(
+                            f'[{bible_name}] Use "{use}" instead of "{instead_of}"'
+                        ),
+                        context=_extract_context(text, match.start(), match.end()),
+                    )
+                )
+
+    return issues
+
+
+def _check_bible_banned_claims(
+    fields: dict[str, str],
+    qa_rules: dict[str, Any],
+    bible_name: str,
+) -> list[QualityIssue]:
+    """Check 15: Flag banned claims that should not appear in content.
+
+    qa_rules key: banned_claims — list of {claim, context, reason} dicts.
+    If context is provided, both claim and context must appear in the same sentence.
+    If no context, flag the claim anywhere.
+    """
+    issues: list[QualityIssue] = []
+    banned_claims = qa_rules.get("banned_claims")
+    if not isinstance(banned_claims, list):
+        return issues
+
+    for entry in banned_claims:
+        if not isinstance(entry, dict):
+            continue
+        claim = entry.get("claim", "")
+        if not claim or not isinstance(claim, str):
+            continue
+        context_word = entry.get("context", "")
+        if not isinstance(context_word, str):
+            context_word = ""
+        reason = entry.get("reason", "")
+
+        claim_pattern = re.compile(re.escape(claim), re.IGNORECASE)
+
+        for field_name, text in fields.items():
+            if context_word:
+                # Same-sentence co-occurrence (substring match on context —
+                # intentionally not word-boundary to allow plural forms
+                # like "needle" matching "needles")
+                for sentence in _split_sentences(text):
+                    if claim_pattern.search(sentence) and re.search(
+                        re.escape(context_word), sentence, re.IGNORECASE
+                    ):
+                        desc = f'[{bible_name}] Banned claim "{claim}" near "{context_word}"'
+                        if reason:
+                            desc += f" — {reason}"
+                        issues.append(
+                            QualityIssue(
+                                type="bible_banned_claim",
+                                field=field_name,
+                                description=desc,
+                                context=f"...{sentence[:80]}...",
+                            )
+                        )
+            else:
+                # Flag claim anywhere
+                for match in claim_pattern.finditer(text):
+                    desc = f'[{bible_name}] Banned claim "{claim}"'
+                    if reason:
+                        desc += f" — {reason}"
+                    issues.append(
+                        QualityIssue(
+                            type="bible_banned_claim",
+                            field=field_name,
+                            description=desc,
+                            context=_extract_context(
+                                text, match.start(), match.end()
+                            ),
+                        )
+                    )
+
+    return issues
+
+
+def _check_bible_wrong_attribution(
+    fields: dict[str, str],
+    qa_rules: dict[str, Any],
+    bible_name: str,
+) -> list[QualityIssue]:
+    """Check 16: Flag wrong product/feature attribution.
+
+    qa_rules key: feature_attribution — list of
+    {feature, correct_component, wrong_components} dicts.
+    Flags when feature and any wrong_component appear in the same sentence.
+    """
+    issues: list[QualityIssue] = []
+    attributions = qa_rules.get("feature_attribution")
+    if not isinstance(attributions, list):
+        return issues
+
+    for entry in attributions:
+        if not isinstance(entry, dict):
+            continue
+        feature = entry.get("feature", "")
+        correct = entry.get("correct_component", "")
+        wrong_components = entry.get("wrong_components", [])
+        if not feature or not isinstance(feature, str) or not isinstance(wrong_components, list):
+            continue
+
+        for field_name, text in fields.items():
+            for sentence in _split_sentences(text):
+                if not re.search(re.escape(feature), sentence, re.IGNORECASE):
+                    continue
+                for wrong in wrong_components:
+                    if not isinstance(wrong, str) or not wrong:
+                        continue
+                    if re.search(re.escape(wrong), sentence, re.IGNORECASE):
+                        issues.append(
+                            QualityIssue(
+                                type="bible_wrong_attribution",
+                                field=field_name,
+                                description=(
+                                    f'[{bible_name}] "{feature}" belongs to '
+                                    f'"{correct}", not "{wrong}"'
+                                ),
+                                context=f"...{sentence[:80]}...",
+                            )
+                        )
+
+    return issues
+
+
+def _check_bible_term_context(
+    fields: dict[str, str],
+    qa_rules: dict[str, Any],
+    bible_name: str,
+) -> list[QualityIssue]:
+    """Check 17: Flag terms used in wrong context.
+
+    qa_rules key: term_context_rules — list of
+    {term, wrong_contexts, explanation} dicts.
+    Flags when term and any wrong_context appear in the same sentence.
+    """
+    issues: list[QualityIssue] = []
+    rules = qa_rules.get("term_context_rules")
+    if not isinstance(rules, list):
+        return issues
+
+    for entry in rules:
+        if not isinstance(entry, dict):
+            continue
+        term = entry.get("term", "")
+        wrong_contexts = entry.get("wrong_contexts", [])
+        explanation = entry.get("explanation", "")
+        if not term or not isinstance(term, str) or not isinstance(wrong_contexts, list):
+            continue
+
+        for field_name, text in fields.items():
+            for sentence in _split_sentences(text):
+                if not re.search(
+                    _word_boundary_pattern(term), sentence, re.IGNORECASE
+                ):
+                    continue
+                for ctx in wrong_contexts:
+                    if not isinstance(ctx, str) or not ctx:
+                        continue
+                    if re.search(re.escape(ctx), sentence, re.IGNORECASE):
+                        desc = (
+                            f'[{bible_name}] "{term}" used in wrong context '
+                            f'near "{ctx}"'
+                        )
+                        if explanation:
+                            desc += f" — {explanation}"
+                        issues.append(
+                            QualityIssue(
+                                type="bible_term_context",
+                                field=field_name,
+                                description=desc,
+                                context=f"...{sentence[:80]}...",
+                            )
+                        )
+
+    return issues
+
+
+# ---------------------------------------------------------------------------
 # Blog-specific quality checks (Skill Bible integration)
 # ---------------------------------------------------------------------------
 
@@ -673,21 +950,15 @@ def _check_business_jargon(fields: dict[str, str]) -> list[QualityIssue]:
     return issues
 
 
-def run_blog_quality_checks(
+def _run_standard_checks(
     fields: dict[str, str],
     brand_config: dict[str, Any],
-) -> QualityResult:
-    """Run all quality checks including blog-specific checks.
-
-    Runs the 9 standard checks plus 4 blog-specific checks (13 total).
-    Designed to be called from blog_content_generation.py.
-
-    Args:
-        fields: Dict of field_name -> text content to check.
-        brand_config: The BrandConfig.v2_schema dict.
+    matched_bibles: list[Any] | None = None,
+) -> tuple[list[QualityIssue], list[str]]:
+    """Run the 9 standard checks + bible checks on a fields dict.
 
     Returns:
-        QualityResult with pass/fail and list of issues.
+        Tuple of (issues, bible_names).
     """
     issues: list[QualityIssue] = []
 
@@ -702,6 +973,69 @@ def run_blog_quality_checks(
     issues.extend(_check_negation_contrast(fields))
     issues.extend(_check_competitor_names(fields, brand_config))
 
+    # Checks 14-17: Bible-driven checks
+    bible_names: list[str] = []
+    if matched_bibles:
+        for bible in matched_bibles:
+            qa_rules = getattr(bible, "qa_rules", None) or {}
+            name = getattr(bible, "name", "Bible")
+            if qa_rules:
+                issues.extend(_check_bible_preferred_terms(fields, qa_rules, name))
+                issues.extend(_check_bible_banned_claims(fields, qa_rules, name))
+                issues.extend(_check_bible_wrong_attribution(fields, qa_rules, name))
+                issues.extend(_check_bible_term_context(fields, qa_rules, name))
+                bible_names.append(name)
+
+    return issues, bible_names
+
+
+def run_fields_quality_checks(
+    fields: dict[str, str],
+    brand_config: dict[str, Any],
+    matched_bibles: list[Any] | None = None,
+) -> QualityResult:
+    """Run the 9 standard quality checks on a fields dict (no blog-specific checks).
+
+    Used for re-checking page content after auto-rewrite, where we need
+    a fields-based check without blog-specific checks 10-13.
+
+    Args:
+        fields: Dict of field_name -> text content to check.
+        brand_config: The BrandConfig.v2_schema dict.
+        matched_bibles: Optional bible objects for domain-specific checks.
+
+    Returns:
+        QualityResult with pass/fail and list of issues.
+    """
+    issues, bible_names = _run_standard_checks(fields, brand_config, matched_bibles)
+
+    return QualityResult(
+        passed=len(issues) == 0,
+        issues=issues,
+        checked_at=datetime.now(UTC).isoformat(),
+        bibles_matched=bible_names,
+    )
+
+
+def run_blog_quality_checks(
+    fields: dict[str, str],
+    brand_config: dict[str, Any],
+    matched_bibles: list[Any] | None = None,
+) -> QualityResult:
+    """Run all quality checks including blog-specific checks.
+
+    Runs the 9 standard checks plus 4 blog-specific checks (13 total).
+    Designed to be called from blog_content_generation.py.
+
+    Args:
+        fields: Dict of field_name -> text content to check.
+        brand_config: The BrandConfig.v2_schema dict.
+
+    Returns:
+        QualityResult with pass/fail and list of issues.
+    """
+    issues, bible_names = _run_standard_checks(fields, brand_config, matched_bibles)
+
     # Blog-specific checks (10-13)
     issues.extend(_check_tier3_phrases(fields))
     issues.extend(_check_empty_signposts(fields))
@@ -712,4 +1046,5 @@ def run_blog_quality_checks(
         passed=len(issues) == 0,
         issues=issues,
         checked_at=datetime.now(UTC).isoformat(),
+        bibles_matched=bible_names,
     )

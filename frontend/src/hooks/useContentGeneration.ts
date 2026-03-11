@@ -25,6 +25,8 @@ import {
   bulkApproveContent,
   updateOutline,
   approveOutline,
+  reviseOutline,
+  cancelOutlineRevision,
   generateFromOutline,
   exportOutline,
   type ContentGenerationTriggerResponse,
@@ -325,17 +327,19 @@ export function useUpdateOutline(): UseMutationResult<
       pageId: string;
       outlineJson: any;
     }) => updateOutline(projectId, pageId, { outline_json: outlineJson }),
-    onSuccess: (_data, { projectId, pageId }) => {
-      queryClient.invalidateQueries({
-        queryKey: contentGenerationKeys.pageContent(projectId, pageId),
-      });
+    onSuccess: (data, { projectId, pageId }) => {
+      // Set cache directly from response to avoid stale-data race with invalidation
+      queryClient.setQueryData(
+        contentGenerationKeys.pageContent(projectId, pageId),
+        data,
+      );
     },
   });
 }
 
 /**
  * Mutation hook to approve an outline.
- * Invalidates both the page content and generation status queries on success.
+ * Sets cache directly from response to avoid stale outline race condition.
  */
 export function useApproveOutline(): UseMutationResult<
   PageContentResponse,
@@ -352,10 +356,74 @@ export function useApproveOutline(): UseMutationResult<
       projectId: string;
       pageId: string;
     }) => approveOutline(projectId, pageId),
+    onSuccess: (data, { projectId, pageId }) => {
+      // Set cache directly from response to avoid stale-data race
+      queryClient.setQueryData(
+        contentGenerationKeys.pageContent(projectId, pageId),
+        data,
+      );
+      queryClient.invalidateQueries({
+        queryKey: contentGenerationKeys.status(projectId),
+      });
+    },
+  });
+}
+
+/**
+ * Mutation hook to revise an outline (reset to draft for editing).
+ * Invalidates both page content and generation status queries on success.
+ */
+export function useReviseOutline(): UseMutationResult<
+  PageContentResponse,
+  Error,
+  { projectId: string; pageId: string }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      pageId,
+    }: {
+      projectId: string;
+      pageId: string;
+    }) => reviseOutline(projectId, pageId),
     onSuccess: (_data, { projectId, pageId }) => {
       queryClient.invalidateQueries({
         queryKey: contentGenerationKeys.pageContent(projectId, pageId),
       });
+      queryClient.invalidateQueries({
+        queryKey: contentGenerationKeys.status(projectId),
+      });
+    },
+  });
+}
+
+/**
+ * Mutation hook to cancel an outline revision — resets outline_status to null
+ * so the user can return to viewing their previously generated content.
+ * Sets cache directly from response to avoid stale-data race.
+ */
+export function useCancelOutlineRevision(): UseMutationResult<
+  PageContentResponse,
+  Error,
+  { projectId: string; pageId: string }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      pageId,
+    }: {
+      projectId: string;
+      pageId: string;
+    }) => cancelOutlineRevision(projectId, pageId),
+    onSuccess: (data, { projectId, pageId }) => {
+      queryClient.setQueryData(
+        contentGenerationKeys.pageContent(projectId, pageId),
+        data,
+      );
       queryClient.invalidateQueries({
         queryKey: contentGenerationKeys.status(projectId),
       });

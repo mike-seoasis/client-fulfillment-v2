@@ -20,6 +20,7 @@ import {
   TrustElementsSection,
   CompetitorContextSection,
   AIPromptSection,
+  ContentLimitsSection,
 } from '@/components/brand-sections';
 import { SectionEditorSwitch, type SectionData } from '@/components/brand-sections/editors';
 
@@ -171,6 +172,8 @@ function SectionContent({ sectionKey, v2Schema, isEditing, isSaving, onSave, onC
       return <CompetitorContextSection data={sectionData as Parameters<typeof CompetitorContextSection>[0]['data']} />;
     case 'ai_prompt_snippet':
       return <AIPromptSection data={sectionData as Parameters<typeof AIPromptSection>[0]['data']} />;
+    case 'content_limits':
+      return <ContentLimitsSection data={sectionData as Parameters<typeof ContentLimitsSection>[0]['data']} />;
     default:
       return <div className="text-warm-gray-500 text-sm">Unknown section</div>;
   }

@@ -1,0 +1,5818 @@
+{
+  "id": 1813378,
+  "lsi": [
+    {
+      "signal": "H3",
+      "target": 6,
+      "comment": "Increase the number of LSI terms in your H3s by 6",
+      "editedCount": 0,
+      "competitorsMax": 8,
+      "competitorsMin": 6,
+      "variationsTrueMax": "",
+      "targetVariationCnt": 0,
+      "featuredCompetitorsMax": "",
+      "featuredCompetitorsMin": "",
+      "competitor1VariationCnt": "",
+      "competitorsVariationsAvg": 6.38,
+      "featuredCompetitorsComment": "",
+      "featuredCompetitorsVariationsAvg": "",
+      "variationsTrueMaxRecommendations": ""
+    },
+    {
+      "signal": "H4",
+      "target": 3,
+      "comment": "Increase the number of LSI terms in your H4s by 2",
+      "editedCount": 0,
+      "competitorsMax": 3,
+      "competitorsMin": 2,
+      "variationsTrueMax": "",
+      "targetVariationCnt": 0,
+      "featuredCompetitorsMax": "",
+      "featuredCompetitorsMin": "",
+      "competitor1VariationCnt": "",
+      "competitorsVariationsAvg": 2.88,
+      "featuredCompetitorsComment": "",
+      "featuredCompetitorsVariationsAvg": "",
+      "variationsTrueMaxRecommendations": ""
+    },
+    {
+      "signal": "Paragraph Text",
+      "target": 425,
+      "comment": "Increase the number of LSI terms in your Paragraph Text by 464",
+      "editedCount": 0,
+      "competitorsMax": 1047,
+      "competitorsMin": 464,
+      "variationsTrueMax": "",
+      "targetVariationCnt": 0,
+      "featuredCompetitorsMax": "",
+      "featuredCompetitorsMin": "",
+      "competitor1VariationCnt": "",
+      "competitorsVariationsAvg": 424.75,
+      "featuredCompetitorsComment": "",
+      "featuredCompetitorsVariationsAvg": "",
+      "variationsTrueMaxRecommendations": ""
+    },
+    {
+      "signal": "Anchor Text",
+      "target": 27,
+      "comment": "Increase the number of LSI terms in your Anchor Text by 16",
+      "editedCount": 0,
+      "competitorsMax": 27,
+      "competitorsMin": 16,
+      "variationsTrueMax": "",
+      "targetVariationCnt": 0,
+      "featuredCompetitorsMax": "",
+      "featuredCompetitorsMin": "",
+      "competitor1VariationCnt": "",
+      "competitorsVariationsAvg": 27.38,
+      "featuredCompetitorsComment": "",
+      "featuredCompetitorsVariationsAvg": "",
+      "variationsTrueMaxRecommendations": ""
+    },
+    {
+      "signal": "Image alt",
+      "target": 7,
+      "comment": "Increase the number of LSI terms in your Image Alts by 4",
+      "editedCount": 0,
+      "competitorsMax": 7,
+      "competitorsMin": 0,
+      "variationsTrueMax": "",
+      "targetVariationCnt": 0,
+      "featuredCompetitorsMax": "",
+      "featuredCompetitorsMin": "",
+      "competitor1VariationCnt": "",
+      "competitorsVariationsAvg": 6.75,
+      "featuredCompetitorsComment": "",
+      "featuredCompetitorsVariationsAvg": "",
+      "variationsTrueMaxRecommendations": ""
+    }
+  ],
+  "url": "https://www.bronsonvitamins.com/collections/vitamin-d-supplements",
+  "status": "SUCCESS",
+  "keyword": "vitamin d3 supplements",
+  "createdAt": "2026-02-06 22:21:38",
+  "date_done": "2026-02-06 22:21:37",
+  "ipAddress": "2600:4040:b5ab:5000:d10:fc6a:5a62:d5e5",
+  "prepareId": 32161,
+  "tagCounts": [
+    {
+      "max": 1,
+      "min": 1,
+      "mean": 1.0,
+      "comment": "Use 1 H1 Tag in your page",
+      "tagLabel": "H1 Tag Total",
+      "signalCnt": 0
+    },
+    {
+      "max": 22,
+      "min": 7,
+      "mean": 11.57,
+      "comment": "Use 12 H2 Tag in your page",
+      "tagLabel": "H2 Tag Total",
+      "signalCnt": 0
+    },
+    {
+      "max": 22,
+      "min": 6,
+      "mean": 16.0,
+      "comment": "Use 16 H3 Tag in your page",
+      "tagLabel": "H3 Tag Total",
+      "signalCnt": 0
+    },
+    {
+      "max": 9,
+      "min": 2,
+      "mean": 5.5,
+      "comment": "Use 6 H4 Tag in your page",
+      "tagLabel": "H4 Tag Total",
+      "signalCnt": 0
+    },
+    {
+      "max": 0,
+      "min": 0,
+      "mean": 0.0,
+      "comment": "Do not use any H5 Tag in your page",
+      "tagLabel": "H5 Tag Total",
+      "signalCnt": 0
+    },
+    {
+      "max": 0,
+      "min": 0,
+      "mean": 0.0,
+      "comment": "Do not use any H6 Tag in your page",
+      "tagLabel": "H6 Tag Total",
+      "signalCnt": 0
+    },
+    {
+      "max": 187,
+      "min": 76,
+      "mean": 123.75,
+      "comment": "Use 124 Paragraph Text Tag in your page",
+      "tagLabel": "Paragraph Text Tag Total",
+      "signalCnt": 0
+    },
+    {
+      "max": 375,
+      "min": 51,
+      "mean": 149.43,
+      "comment": "Use 149 Anchor Text Tag in your page",
+      "tagLabel": "Anchor Text Tag Total",
+      "signalCnt": 0
+    },
+    {
+      "max": 3,
+      "min": 0,
+      "mean": 20.83,
+      "comment": "Use 21 Image File in your page",
+      "tagLabel": "Image File total",
+      "signalCnt": 0
+    },
+    {
+      "max": 96,
+      "min": 0,
+      "mean": 26.75,
+      "comment": "Use 27 Image Alt Tag in your page",
+      "tagLabel": "Image Alt Tag Total",
+      "signalCnt": 0
+    },
+    {
+      "max": 36,
+      "min": 9,
+      "mean": 20.4,
+      "comment": "Use 20 Bold Tag in your page",
+      "tagLabel": "Bold Tag Total",
+      "signalCnt": 0
+    },
+    {
+      "max": 9,
+      "min": 3,
+      "mean": 5.75,
+      "comment": "Use 6 Italic Tag in your page",
+      "tagLabel": "Italic Tag Total",
+      "signalCnt": 0
+    },
+    {
+      "max": 0,
+      "min": 0,
+      "mean": 0.0,
+      "comment": "Do not use any Video File in your page",
+      "tagLabel": "Video File Total",
+      "signalCnt": 0
+    },
+    {
+      "max": 0,
+      "min": 0,
+      "mean": 0.29,
+      "comment": "Do not use any Ordered List in your page",
+      "tagLabel": "Ordered List Total",
+      "signalCnt": 0
+    },
+    {
+      "max": 0,
+      "min": 0,
+      "mean": 0.0,
+      "comment": "Do not use any Ordered List Items in your page",
+      "tagLabel": "Ordered List Items Total",
+      "signalCnt": 0
+    },
+    {
+      "max": 2,
+      "min": 1,
+      "mean": 11.6,
+      "comment": "Use 12 Unordered List in your page",
+      "tagLabel": "Unordered List Total",
+      "signalCnt": 0
+    },
+    {
+      "max": 72,
+      "min": 35,
+      "mean": 55.0,
+      "comment": "Use 55 Unordered List Items in your page",
+      "tagLabel": "Unordered List Items Total",
+      "signalCnt": 0
+    },
+    {
+      "max": 1,
+      "min": 0,
+      "mean": 0.33,
+      "comment": "Do not use any Table in your page",
+      "tagLabel": "Table Total",
+      "signalCnt": 0
+    },
+    {
+      "max": 0,
+      "min": 0,
+      "mean": 0.0,
+      "comment": "Do not use any Table Items in your page",
+      "tagLabel": "Table Items Total",
+      "signalCnt": 0
+    },
+    {
+      "max": 3,
+      "min": 1,
+      "mean": 1.33,
+      "comment": "Use 1 Form in your page",
+      "tagLabel": "Form Total",
+      "signalCnt": 0
+    },
+    {
+      "max": 1,
+      "min": 0,
+      "mean": 0.67,
+      "comment": "Use 1 iFrame in your page",
+      "tagLabel": "iFrame Total",
+      "signalCnt": 0
+    },
+    {
+      "max": 1,
+      "min": 1,
+      "mean": 1,
+      "comment": "Add FAQ section to your target page",
+      "tagLabel": "Frequently Asked Questions",
+      "signalCnt": 0
+    },
+    {
+      "max": 1,
+      "min": 1,
+      "mean": 1,
+      "comment": "Add Table of content section to your target page",
+      "tagLabel": "Table of content",
+      "signalCnt": 0
+    }
+  ],
+  "wordCount": {
+    "target": 2421,
+    "current": 0
+  },
+  "lsaPhrases": [
+    {
+      "phrase": "mayo clinic",
+      "weight": 0.2615106641429258,
+      "targetCount": 0,
+      "averageCount": 5
+    },
+    {
+      "phrase": "cleveland clinic",
+      "weight": 0.16731338139074103,
+      "targetCount": 0,
+      "averageCount": 3
+    },
+    {
+      "phrase": "harvard",
+      "weight": 0.13536974240073266,
+      "targetCount": 0,
+      "averageCount": 2
+    },
+    {
+      "phrase": "vitamin d3",
+      "weight": 0.1301051056878032,
+      "targetCount": 18,
+      "averageCount": 11
+    },
+    {
+      "phrase": "product",
+      "weight": 0.08306643142475885,
+      "targetCount": 11,
+      "averageCount": 2
+    },
+    {
+      "phrase": "symptoms",
+      "weight": 0.07409957033476465,
+      "targetCount": 0,
+      "averageCount": 4
+    },
+    {
+      "phrase": "buy",
+      "weight": 0.07153585814025419,
+      "targetCount": 0,
+      "averageCount": 3
+    },
+    {
+      "phrase": "levels",
+      "weight": 0.0712843955496558,
+      "targetCount": 0,
+      "averageCount": 24
+    },
+    {
+      "phrase": "omega",
+      "weight": 0.07111032386653279,
+      "targetCount": 2,
+      "averageCount": 3
+    },
+    {
+      "phrase": "risk",
+      "weight": 0.06877669605741642,
+      "targetCount": 0,
+      "averageCount": 25
+    },
+    {
+      "phrase": "supplementation",
+      "weight": 0.06787963894501053,
+      "targetCount": 0,
+      "averageCount": 23
+    },
+    {
+      "phrase": "medicine",
+      "weight": 0.06753793434702829,
+      "targetCount": 0,
+      "averageCount": 9
+    },
+    {
+      "phrase": "gummies",
+      "weight": 0.0650220482044477,
+      "targetCount": 0,
+      "averageCount": 3
+    },
+    {
+      "phrase": "taking",
+      "weight": 0.06412945888058345,
+      "targetCount": 0,
+      "averageCount": 6
+    },
+    {
+      "phrase": "skin",
+      "weight": 0.0627051015549507,
+      "targetCount": 9,
+      "averageCount": 9
+    },
+    {
+      "phrase": "cancer",
+      "weight": 0.05627569847141481,
+      "targetCount": 0,
+      "averageCount": 28
+    },
+    {
+      "phrase": "bones",
+      "weight": 0.03618279186254422,
+      "targetCount": 0,
+      "averageCount": 4
+    }
+  ],
+  "variations": [
+    {
+      "signal": "H3",
+      "target": 0,
+      "comment": "Increase the number of variations of your keyword in your H3s by 1",
+      "editedCount": 0,
+      "competitorsMax": 1,
+      "competitorsMin": 0,
+      "variationsTrueMax": "",
+      "targetVariationCnt": 0,
+      "featuredCompetitorsMax": "",
+      "featuredCompetitorsMin": "",
+      "competitor1VariationCnt": "",
+      "competitorsVariationsAvg": 0.38,
+      "featuredCompetitorsComment": "",
+      "featuredCompetitorsVariationsAvg": "",
+      "variationsTrueMaxRecommendations": ""
+    },
+    {
+      "signal": "H4",
+      "target": 1,
+      "comment": "Increase the number of variations of your keyword in your H4s by 1",
+      "editedCount": 0,
+      "competitorsMax": 1,
+      "competitorsMin": 1,
+      "variationsTrueMax": "",
+      "targetVariationCnt": 0,
+      "featuredCompetitorsMax": "",
+      "featuredCompetitorsMin": "",
+      "competitor1VariationCnt": "",
+      "competitorsVariationsAvg": 0.5,
+      "featuredCompetitorsComment": "",
+      "featuredCompetitorsVariationsAvg": "",
+      "variationsTrueMaxRecommendations": ""
+    },
+    {
+      "signal": "Paragraph Text",
+      "target": 74,
+      "comment": "Increase the number of variations of your keyword in your Paragraph Text by 97",
+      "editedCount": 0,
+      "competitorsMax": 139,
+      "competitorsMin": 97,
+      "variationsTrueMax": "",
+      "targetVariationCnt": 0,
+      "featuredCompetitorsMax": "",
+      "featuredCompetitorsMin": "",
+      "competitor1VariationCnt": "",
+      "competitorsVariationsAvg": 74.25,
+      "featuredCompetitorsComment": "",
+      "featuredCompetitorsVariationsAvg": "",
+      "variationsTrueMaxRecommendations": ""
+    },
+    {
+      "signal": "Anchor Text",
+      "target": 5,
+      "comment": "Increase the number of variations of your keyword in your Anchor Text by 7",
+      "editedCount": 0,
+      "competitorsMax": 10,
+      "competitorsMin": 7,
+      "variationsTrueMax": "",
+      "targetVariationCnt": 0,
+      "featuredCompetitorsMax": "",
+      "featuredCompetitorsMin": "",
+      "competitor1VariationCnt": "",
+      "competitorsVariationsAvg": 4.75,
+      "featuredCompetitorsComment": "",
+      "featuredCompetitorsVariationsAvg": "",
+      "variationsTrueMaxRecommendations": ""
+    },
+    {
+      "signal": "Image alt",
+      "target": 2,
+      "comment": "Increase the number of variations of your keyword in your Image Alts by 1",
+      "editedCount": 0,
+      "competitorsMax": 2,
+      "competitorsMin": 0,
+      "variationsTrueMax": "",
+      "targetVariationCnt": 0,
+      "featuredCompetitorsMax": "",
+      "featuredCompetitorsMin": "",
+      "competitor1VariationCnt": "",
+      "competitorsVariationsAvg": 2.5,
+      "featuredCompetitorsComment": "",
+      "featuredCompetitorsVariationsAvg": "",
+      "variationsTrueMaxRecommendations": ""
+    }
+  ],
+  "competitors": [
+    {
+      "id": 15322026,
+      "url": "https://www.mayoclinic.org/drugs-supplements-vitamin-d/art-20363792",
+      "name": null,
+      "runId": 1813378,
+      "title": "Vitamin D - Mayo Clinic",
+      "h2Texts": [
+        "Research",
+        "Education",
+        "Overview",
+        "What the research says",
+        "Our take",
+        "Safety and side effects",
+        "Interactions",
+        "More information",
+        "From Mayo Clinic to your inbox",
+        "Advertisement",
+        "Mayo Clinic Press",
+        "Advertisement",
+        "Fuel groundbreaking medical research!",
+        "About Mayo Clinic",
+        "Medical Professionals",
+        "Businesses",
+        "Students",
+        "Researchers",
+        "International Patients",
+        "Charitable Care & Financial Assistance",
+        "Follow Mayo Clinic",
+        "Get the Mayo Clinic app"
+      ],
+      "h3Texts": [
+        "Advertising & Sponsorship"
+      ],
+      "isFirst": 0,
+      "isFocus": 0,
+      "isValid": 1,
+      "createdAt": "2026-02-06 22:21:45",
+      "pageScore": null,
+      "schemaTypes": [
+        {
+          "type": "Webpage",
+          "count": 1
+        },
+        {
+          "type": "Breadcrumblist",
+          "count": 1
+        }
+      ],
+      "headingsTree": [
+        {
+          "tag": "h2",
+          "text": "Research",
+          "children": []
+        },
+        {
+          "tag": "h2",
+          "text": "Education",
+          "children": []
+        },
+        {
+          "tag": "h1",
+          "text": "Vitamin D",
+          "children": [
+            {
+              "tag": "h2",
+              "text": "Overview",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "What the research says",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Our take",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Safety and side effects",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Interactions",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "More information",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "From Mayo Clinic to your inbox",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Advertisement",
+              "children": [
+                {
+                  "tag": "h3",
+                  "text": "Advertising & Sponsorship",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "tag": "h2",
+              "text": "Mayo Clinic Press",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Advertisement",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Fuel groundbreaking medical research!",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "About Mayo Clinic",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "MedicalProfessionals",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Businesses",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Students",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Researchers",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "InternationalPatients",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Charitable Care & FinancialAssistance",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Follow Mayo Clinic",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Get the Mayo Clinic app",
+              "children": []
+            }
+          ]
+        }
+      ],
+      "rawLsiCounts": {
+        "a": 26,
+        "b": 1,
+        "i": 0,
+        "p": 153,
+        "h1": 1,
+        "h2": 5,
+        "h3": 0,
+        "h4": 0,
+        "h5": 0,
+        "h6": 0,
+        "bold": 1,
+        "html": 2840,
+        "h2_h3": 5,
+        "h2_h6": 5,
+        "h4_h6": 0,
+        "title": 2,
+        "strong": 0,
+        "img_alt": 2,
+        "plain_text": 0,
+        "word_count": 1802,
+        "meta_keywords": 0,
+        "figure_caption": 0,
+        "image_file_names": 0,
+        "meta_description": 0,
+        "open_graph_title": 0,
+        "source_code_urls": 0,
+        "rdf_schema_format": 0,
+        "twitter_card_title": 0,
+        "json_ld_schema_format": 3,
+        "open_graph_description": 0,
+        "microdata_schema_format": 0,
+        "twitter_card_description": 0
+      },
+      "rawTagCounts": [
+        [
+          "H1 Tag Total",
+          "h1",
+          1,
+          1,
+          1,
+          1.0,
+          0.0,
+          1.0
+        ],
+        [
+          "H2 Tag Total",
+          "h2",
+          22,
+          22,
+          22,
+          22.0,
+          0.0,
+          22.0
+        ],
+        [
+          "H3 Tag Total",
+          "h3",
+          1,
+          1,
+          1,
+          1.0,
+          0.0,
+          1.0
+        ],
+        [
+          "H4 Tag Total",
+          "h4",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "H5 Tag Total",
+          "h5",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "H6 Tag Total",
+          "h6",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Paragraph Text Tag Total",
+          "p",
+          19,
+          19,
+          19,
+          19.0,
+          0.0,
+          19.0
+        ],
+        [
+          "Anchor Text Tag Total",
+          "a",
+          148,
+          148,
+          148,
+          148.0,
+          0.0,
+          148.0
+        ],
+        [
+          "Image File total",
+          "img",
+          10,
+          10,
+          10,
+          10.0,
+          0.0,
+          10.0
+        ],
+        [
+          "Image Alt Tag Total",
+          "img_alt",
+          10,
+          10,
+          10,
+          10.0,
+          0.0,
+          10.0
+        ],
+        [
+          "Bold Tag Total",
+          "bold",
+          21,
+          21,
+          21,
+          21.0,
+          0.0,
+          21.0
+        ],
+        [
+          "Italic Tag Total",
+          "i",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Video File Total",
+          "video",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Ordered List Total",
+          "ol",
+          1,
+          0,
+          0,
+          1.0,
+          0.0,
+          1.0
+        ],
+        [
+          "Ordered List Items Total",
+          "oli",
+          4,
+          4,
+          4,
+          4.0,
+          0.0,
+          4.0
+        ],
+        [
+          "Unordered List Total",
+          "ul",
+          6,
+          1,
+          2,
+          6.0,
+          0.0,
+          6.0
+        ],
+        [
+          "Unordered List Items Total",
+          "uli",
+          35,
+          35,
+          35,
+          35.0,
+          0.0,
+          35.0
+        ],
+        [
+          "Table Total",
+          "table",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Table Items Total",
+          "td",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Form Total",
+          "form",
+          1,
+          1,
+          1,
+          1.0,
+          0.0,
+          1.0
+        ],
+        [
+          "iFrame Total",
+          "iframe",
+          1,
+          1,
+          1,
+          1.0,
+          0.0,
+          1.0
+        ],
+        [
+          "Frequently Asked Questions",
+          "faq",
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          "Table of content",
+          "table of content",
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "nlpSchemaData": {},
+      "urlSourceCode": "",
+      "eatSchemaTypes": {},
+      "rawKeywordCounts": {
+        "a": 0,
+        "b": 0,
+        "i": 0,
+        "p": 0,
+        "h1": 0,
+        "h2": 0,
+        "h3": 0,
+        "h4": 0,
+        "h5": 0,
+        "h6": 0,
+        "bold": 0,
+        "html": 0,
+        "h2_h3": 0,
+        "h2_h6": 0,
+        "h4_h6": 0,
+        "title": 0,
+        "strong": 0,
+        "img_alt": 0,
+        "word_count": 1802,
+        "meta_keywords": 0,
+        "figure_caption": 0,
+        "image_file_names": 0,
+        "meta_description": 0,
+        "open_graph_title": 0,
+        "source_code_urls": 0,
+        "rdf_schema_format": 0,
+        "twitter_card_title": 0,
+        "json_ld_schema_format": 0,
+        "open_graph_description": 0,
+        "microdata_schema_format": 0,
+        "twitter_card_description": 0
+      },
+      "rawVariationsCounts": {
+        "a": 3,
+        "b": 0,
+        "i": 0,
+        "p": 52,
+        "h1": 0,
+        "h2": 0,
+        "h3": 0,
+        "h4": 0,
+        "h5": 0,
+        "h6": 0,
+        "bold": 0,
+        "html": 1145,
+        "h2_h3": 0,
+        "h2_h6": 0,
+        "h4_h6": 0,
+        "title": 0,
+        "strong": 0,
+        "img_alt": 0,
+        "plain_text": 0,
+        "word_count": 1802,
+        "meta_keywords": 0,
+        "figure_caption": 0,
+        "image_file_names": 0,
+        "meta_description": 0,
+        "open_graph_title": 0,
+        "source_code_urls": 0,
+        "rdf_schema_format": 0,
+        "twitter_card_title": 0,
+        "json_ld_schema_format": 3,
+        "open_graph_description": 0,
+        "microdata_schema_format": 0,
+        "twitter_card_description": 0
+      }
+    },
+    {
+      "id": 15322027,
+      "url": "https://ods.od.nih.gov/factsheets/VitaminD-HealthProfessional/",
+      "name": null,
+      "runId": 1813378,
+      "title": "Office of Dietary Supplements - Vitamin D",
+      "h2Texts": [
+        "Table of Contents",
+        "Introduction",
+        "Recommended Intakes",
+        "Sources of Vitamin D",
+        "Vitamin D Intakes and Status",
+        "Vitamin D Deficiency",
+        "Groups at Risk of Vitamin D Inadequacy",
+        "Vitamin D and Health",
+        "Health Risks from Excessive Vitamin D",
+        "Interactions with Medications",
+        "Vitamin D and Healthful Diets",
+        "References",
+        "Disclaimer"
+      ],
+      "h3Texts": [
+        "Assessing vitamin D status",
+        "Food",
+        "Sun exposure",
+        "Dietary supplements",
+        "Breastfed infants",
+        "Older adults",
+        "People with limited sun exposure",
+        "People with dark skin",
+        "People with conditions that limit fat absorption",
+        "People with obesity or who have undergone gastric bypass surgery",
+        "Bone health and osteoporosis",
+        "Cancer",
+        "Cardiovascular disease",
+        "Depression",
+        "Multiple sclerosis",
+        "Type 2 diabetes",
+        "Weight loss",
+        "Orlistat",
+        "Statins",
+        "Steroids",
+        "Thiazide diuretics",
+        "Top"
+      ],
+      "isFirst": 0,
+      "isFocus": 0,
+      "isValid": 1,
+      "createdAt": "2026-02-06 22:21:48",
+      "pageScore": null,
+      "schemaTypes": [],
+      "headingsTree": [
+        {
+          "tag": "h1",
+          "text": "Vitamin D",
+          "children": [
+            {
+              "tag": "h2",
+              "text": "Table of Contents",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Introduction",
+              "children": [
+                {
+                  "tag": "h3",
+                  "text": "Assessing vitamin D status",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "tag": "h2",
+              "text": "Recommended Intakes",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Sources of Vitamin D",
+              "children": [
+                {
+                  "tag": "h3",
+                  "text": "Food",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Sun exposure",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Dietary supplements",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "tag": "h2",
+              "text": "Vitamin D Intakes and Status",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Vitamin D Deficiency",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Groups at Risk of Vitamin D Inadequacy",
+              "children": [
+                {
+                  "tag": "h3",
+                  "text": "Breastfed infants",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Older adults",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "People with limited sun exposure",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "People with dark skin",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "People with conditions that limit fat absorption",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "People with obesity or who have undergone gastric bypass surgery",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "tag": "h2",
+              "text": "Vitamin D and Health",
+              "children": [
+                {
+                  "tag": "h3",
+                  "text": "Bone health and osteoporosis",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Cancer",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Cardiovascular disease",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Depression",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Multiple sclerosis",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Type 2 diabetes",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Weight loss",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "tag": "h2",
+              "text": "Health Risks from Excessive Vitamin D",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Interactions with Medications",
+              "children": [
+                {
+                  "tag": "h3",
+                  "text": "Orlistat",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Statins",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Steroids",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Thiazide diuretics",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "tag": "h2",
+              "text": "Vitamin D and Healthful Diets",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "References",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Disclaimer",
+              "children": [
+                {
+                  "tag": "h3",
+                  "text": "Top",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "rawLsiCounts": {
+        "a": 39,
+        "b": 0,
+        "i": 1,
+        "p": 1575,
+        "h1": 1,
+        "h2": 9,
+        "h3": 3,
+        "h4": 11,
+        "h5": 0,
+        "h6": 0,
+        "bold": 0,
+        "html": 1653,
+        "h2_h3": 12,
+        "h2_h6": 23,
+        "h4_h6": 11,
+        "title": 1,
+        "strong": 0,
+        "img_alt": 0,
+        "plain_text": 0,
+        "word_count": 27916,
+        "meta_keywords": 0,
+        "figure_caption": 0,
+        "image_file_names": 0,
+        "meta_description": 0,
+        "open_graph_title": 0,
+        "source_code_urls": 0,
+        "rdf_schema_format": 0,
+        "twitter_card_title": 0,
+        "json_ld_schema_format": 0,
+        "open_graph_description": 0,
+        "microdata_schema_format": 0,
+        "twitter_card_description": 0
+      },
+      "rawTagCounts": [
+        [
+          "H1 Tag Total",
+          "h1",
+          1,
+          1,
+          1,
+          1.0,
+          0.0,
+          1.0
+        ],
+        [
+          "H2 Tag Total",
+          "h2",
+          13,
+          13,
+          13,
+          13.0,
+          0.0,
+          13.0
+        ],
+        [
+          "H3 Tag Total",
+          "h3",
+          22,
+          22,
+          22,
+          22.0,
+          0.0,
+          22.0
+        ],
+        [
+          "H4 Tag Total",
+          "h4",
+          11,
+          11,
+          11,
+          11.0,
+          0.0,
+          11.0
+        ],
+        [
+          "H5 Tag Total",
+          "h5",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "H6 Tag Total",
+          "h6",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Paragraph Text Tag Total",
+          "p",
+          148,
+          148,
+          148,
+          148.0,
+          0.0,
+          148.0
+        ],
+        [
+          "Anchor Text Tag Total",
+          "a",
+          834,
+          834,
+          834,
+          834.0,
+          0.0,
+          834.0
+        ],
+        [
+          "Image File total",
+          "img",
+          45,
+          45,
+          45,
+          45.0,
+          0.0,
+          45.0
+        ],
+        [
+          "Image Alt Tag Total",
+          "img_alt",
+          40,
+          40,
+          40,
+          40.0,
+          0.0,
+          40.0
+        ],
+        [
+          "Bold Tag Total",
+          "bold",
+          6,
+          6,
+          6,
+          6.0,
+          0.0,
+          6.0
+        ],
+        [
+          "Italic Tag Total",
+          "i",
+          7,
+          7,
+          7,
+          7.0,
+          0.0,
+          7.0
+        ],
+        [
+          "Video File Total",
+          "video",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Ordered List Total",
+          "ol",
+          1,
+          0,
+          0,
+          1.0,
+          0.0,
+          1.0
+        ],
+        [
+          "Ordered List Items Total",
+          "oli",
+          179,
+          179,
+          179,
+          179.0,
+          0.0,
+          179.0
+        ],
+        [
+          "Unordered List Total",
+          "ul",
+          12,
+          1,
+          2,
+          12.0,
+          0.0,
+          12.0
+        ],
+        [
+          "Unordered List Items Total",
+          "uli",
+          67,
+          67,
+          67,
+          67.0,
+          0.0,
+          67.0
+        ],
+        [
+          "Table Total",
+          "table",
+          4,
+          4,
+          4,
+          4.0,
+          0.0,
+          4.0
+        ],
+        [
+          "Table Items Total",
+          "td",
+          223,
+          223,
+          223,
+          223.0,
+          0.0,
+          223.0
+        ],
+        [
+          "Form Total",
+          "form",
+          1,
+          1,
+          1,
+          1.0,
+          0.0,
+          1.0
+        ],
+        [
+          "iFrame Total",
+          "iframe",
+          1,
+          1,
+          1,
+          1.0,
+          0.0,
+          1.0
+        ],
+        [
+          "Frequently Asked Questions",
+          "faq",
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          "Table of content",
+          "table of content",
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      ],
+      "nlpSchemaData": {},
+      "urlSourceCode": "",
+      "eatSchemaTypes": {},
+      "rawKeywordCounts": {
+        "a": 0,
+        "b": 0,
+        "i": 0,
+        "p": 0,
+        "h1": 0,
+        "h2": 0,
+        "h3": 0,
+        "h4": 0,
+        "h5": 0,
+        "h6": 0,
+        "bold": 0,
+        "html": 0,
+        "h2_h3": 0,
+        "h2_h6": 0,
+        "h4_h6": 0,
+        "title": 0,
+        "strong": 0,
+        "img_alt": 0,
+        "word_count": 27916,
+        "meta_keywords": 0,
+        "figure_caption": 0,
+        "image_file_names": 0,
+        "meta_description": 0,
+        "open_graph_title": 0,
+        "source_code_urls": 0,
+        "rdf_schema_format": 0,
+        "twitter_card_title": 0,
+        "json_ld_schema_format": 0,
+        "open_graph_description": 0,
+        "microdata_schema_format": 0,
+        "twitter_card_description": 0
+      },
+      "rawVariationsCounts": {
+        "a": 14,
+        "b": 0,
+        "i": 2,
+        "p": 273,
+        "h1": 0,
+        "h2": 0,
+        "h3": 2,
+        "h4": 3,
+        "h5": 0,
+        "h6": 0,
+        "bold": 0,
+        "html": 307,
+        "h2_h3": 2,
+        "h2_h6": 5,
+        "h4_h6": 3,
+        "title": 0,
+        "strong": 0,
+        "img_alt": 13,
+        "plain_text": 0,
+        "word_count": 27916,
+        "meta_keywords": 0,
+        "figure_caption": 0,
+        "image_file_names": 0,
+        "meta_description": 0,
+        "open_graph_title": 0,
+        "source_code_urls": 0,
+        "rdf_schema_format": 0,
+        "twitter_card_title": 0,
+        "json_ld_schema_format": 0,
+        "open_graph_description": 0,
+        "microdata_schema_format": 0,
+        "twitter_card_description": 0
+      }
+    },
+    {
+      "id": 15322030,
+      "url": "https://www.naturemade.com/collections/vitamin-d?srsltid=AfmBOooiNG7hbDsLg0F-DLze3wM17X1yqmiPeNXb8I27zbO_aq2CvnG5",
+      "name": null,
+      "runId": 1813378,
+      "title": "Buy Vitamin D Supplements Online | Nature Made®",
+      "h2Texts": [
+        "Your Cart",
+        "Item added to your cart",
+        "Give your immune system a head start†",
+        "Want to know more?",
+        "What is Vitamin D?",
+        "Who should take a Vitamin D supplement?",
+        "What is Vitamin D good for?",
+        "How do I know if I need to supplement with Vitamin D?",
+        "How does Vitamin D help the immune system?",
+        "Where does Vitamin D come from?",
+        "How much Vitamin D should I take per day?",
+        "Why is Vitamin D important as we age?",
+        "Why Do I Want Subscribe & Save?",
+        "Explore More",
+        "Your Choices Regarding Cookies",
+        "Help"
+      ],
+      "h3Texts": [
+        "You May Also Like",
+        "You May Also Like",
+        "Vitamin D",
+        "Nature Made® Wellblends™ with Vitamin D",
+        "Triple Flex with Vitamin D",
+        "Cookie List"
+      ],
+      "isFirst": 0,
+      "isFocus": 0,
+      "isValid": 1,
+      "createdAt": "2026-02-06 22:21:54",
+      "pageScore": null,
+      "schemaTypes": [
+        {
+          "type": "Organization",
+          "count": 1
+        }
+      ],
+      "headingsTree": [
+        {
+          "tag": "h2",
+          "text": "Your Cart",
+          "children": [
+            {
+              "tag": "h3",
+              "text": "You May Also Like",
+              "children": []
+            }
+          ]
+        },
+        {
+          "tag": "h2",
+          "text": "Item added to your cart",
+          "children": [
+            {
+              "tag": "h3",
+              "text": "You May Also Like",
+              "children": []
+            }
+          ]
+        },
+        {
+          "tag": "h1",
+          "text": "Vitamin D Supplements",
+          "children": []
+        },
+        {
+          "tag": "h1",
+          "text": "Vitamin D Supplements",
+          "children": []
+        },
+        {
+          "tag": "h1",
+          "text": "Vitamin D Supplements",
+          "children": [
+            {
+              "tag": "h2",
+              "text": "Give your immune system a head start†",
+              "children": [
+                {
+                  "tag": "h3",
+                  "text": "Vitamin D",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Nature Made® Wellblends™ with Vitamin D",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Triple Flex with Vitamin D",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "tag": "h2",
+              "text": "Want to know more?",
+              "children": []
+            }
+          ]
+        },
+        {
+          "tag": "h1",
+          "text": "Stay on top of your wellness†",
+          "children": [
+            {
+              "tag": "h2",
+              "text": "What is Vitamin D?",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Who should take a Vitamin D supplement?",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "What is Vitamin D good for?",
+              "children": []
+            }
+          ]
+        },
+        {
+          "tag": "h1",
+          "text": "Vitamin D FAQsVIEW ALL FAQView all FAQ on Vitamin D FAQs",
+          "children": [
+            {
+              "tag": "h2",
+              "text": "How do I know if I need to supplement with Vitamin D?",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "How does Vitamin D help the immune system?",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Where does Vitamin D come from?",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "How much Vitamin D should I take per day?",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Why is Vitamin D important as we age?",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Why Do I Want Subscribe & Save?",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Explore More",
+              "children": []
+            }
+          ]
+        },
+        {
+          "tag": "h1",
+          "text": "Vitamin D Supplement Health Benefits",
+          "children": [
+            {
+              "tag": "h2",
+              "text": "Your Choices Regarding Cookies",
+              "children": [
+                {
+                  "tag": "h3",
+                  "text": "Cookie List",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "tag": "h2",
+              "text": "Help",
+              "children": []
+            }
+          ]
+        }
+      ],
+      "rawLsiCounts": {
+        "a": 103,
+        "b": 0,
+        "i": 0,
+        "p": 256,
+        "h1": 6,
+        "h2": 10,
+        "h3": 3,
+        "h4": 0,
+        "h5": 0,
+        "h6": 0,
+        "bold": 0,
+        "html": 1391,
+        "h2_h3": 13,
+        "h2_h6": 13,
+        "h4_h6": 0,
+        "title": 2,
+        "strong": 0,
+        "img_alt": 36,
+        "plain_text": 0,
+        "word_count": 4141,
+        "meta_keywords": 0,
+        "figure_caption": 0,
+        "image_file_names": 0,
+        "meta_description": 0,
+        "open_graph_title": 0,
+        "source_code_urls": 0,
+        "rdf_schema_format": 0,
+        "twitter_card_title": 0,
+        "json_ld_schema_format": 0,
+        "open_graph_description": 0,
+        "microdata_schema_format": 0,
+        "twitter_card_description": 0
+      },
+      "rawTagCounts": [
+        [
+          "H1 Tag Total",
+          "h1",
+          6,
+          6,
+          6,
+          6.0,
+          0.0,
+          6.0
+        ],
+        [
+          "H2 Tag Total",
+          "h2",
+          16,
+          16,
+          16,
+          16.0,
+          0.0,
+          16.0
+        ],
+        [
+          "H3 Tag Total",
+          "h3",
+          6,
+          6,
+          6,
+          6.0,
+          0.0,
+          6.0
+        ],
+        [
+          "H4 Tag Total",
+          "h4",
+          9,
+          9,
+          9,
+          9.0,
+          0.0,
+          9.0
+        ],
+        [
+          "H5 Tag Total",
+          "h5",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "H6 Tag Total",
+          "h6",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Paragraph Text Tag Total",
+          "p",
+          187,
+          187,
+          187,
+          187.0,
+          0.0,
+          187.0
+        ],
+        [
+          "Anchor Text Tag Total",
+          "a",
+          375,
+          375,
+          375,
+          375.0,
+          0.0,
+          375.0
+        ],
+        [
+          "Image File total",
+          "img",
+          96,
+          96,
+          96,
+          96.0,
+          0.0,
+          96.0
+        ],
+        [
+          "Image Alt Tag Total",
+          "img_alt",
+          96,
+          96,
+          96,
+          96.0,
+          0.0,
+          96.0
+        ],
+        [
+          "Bold Tag Total",
+          "bold",
+          16,
+          16,
+          16,
+          16.0,
+          0.0,
+          16.0
+        ],
+        [
+          "Italic Tag Total",
+          "i",
+          3,
+          3,
+          3,
+          3.0,
+          0.0,
+          3.0
+        ],
+        [
+          "Video File Total",
+          "video",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Ordered List Total",
+          "ol",
+          10,
+          0,
+          0,
+          10.0,
+          0.0,
+          10.0
+        ],
+        [
+          "Ordered List Items Total",
+          "oli",
+          42,
+          42,
+          42,
+          42.0,
+          0.0,
+          42.0
+        ],
+        [
+          "Unordered List Total",
+          "ul",
+          12,
+          1,
+          2,
+          12.0,
+          0.0,
+          12.0
+        ],
+        [
+          "Unordered List Items Total",
+          "uli",
+          46,
+          46,
+          46,
+          46.0,
+          0.0,
+          46.0
+        ],
+        [
+          "Table Total",
+          "table",
+          1,
+          1,
+          1,
+          1.0,
+          0.0,
+          1.0
+        ],
+        [
+          "Table Items Total",
+          "td",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Form Total",
+          "form",
+          3,
+          3,
+          3,
+          3.0,
+          0.0,
+          3.0
+        ],
+        [
+          "iFrame Total",
+          "iframe",
+          5,
+          5,
+          5,
+          5.0,
+          0.0,
+          5.0
+        ],
+        [
+          "Frequently Asked Questions",
+          "faq",
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          "Table of content",
+          "table of content",
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "nlpSchemaData": {},
+      "urlSourceCode": "",
+      "eatSchemaTypes": {},
+      "rawKeywordCounts": {
+        "a": 0,
+        "b": 0,
+        "i": 0,
+        "p": 0,
+        "h1": 0,
+        "h2": 0,
+        "h3": 0,
+        "h4": 0,
+        "h5": 0,
+        "h6": 0,
+        "bold": 0,
+        "html": 0,
+        "h2_h3": 0,
+        "h2_h6": 0,
+        "h4_h6": 0,
+        "title": 0,
+        "strong": 0,
+        "img_alt": 0,
+        "word_count": 4141,
+        "meta_keywords": 0,
+        "figure_caption": 0,
+        "image_file_names": 0,
+        "meta_description": 0,
+        "open_graph_title": 0,
+        "source_code_urls": 0,
+        "rdf_schema_format": 0,
+        "twitter_card_title": 0,
+        "json_ld_schema_format": 0,
+        "open_graph_description": 0,
+        "microdata_schema_format": 0,
+        "twitter_card_description": 0
+      },
+      "rawVariationsCounts": {
+        "a": 8,
+        "b": 0,
+        "i": 0,
+        "p": 49,
+        "h1": 3,
+        "h2": 0,
+        "h3": 0,
+        "h4": 0,
+        "h5": 0,
+        "h6": 0,
+        "bold": 0,
+        "html": 287,
+        "h2_h3": 0,
+        "h2_h6": 0,
+        "h4_h6": 0,
+        "title": 1,
+        "strong": 0,
+        "img_alt": 6,
+        "plain_text": 0,
+        "word_count": 4141,
+        "meta_keywords": 0,
+        "figure_caption": 0,
+        "image_file_names": 0,
+        "meta_description": 0,
+        "open_graph_title": 0,
+        "source_code_urls": 0,
+        "rdf_schema_format": 0,
+        "twitter_card_title": 0,
+        "json_ld_schema_format": 0,
+        "open_graph_description": 0,
+        "microdata_schema_format": 0,
+        "twitter_card_description": 0
+      }
+    },
+    {
+      "id": 15322031,
+      "url": "https://www.health.harvard.edu/staying-healthy/taking-too-much-vitamin-d-can-cloud-its-benefits-and-create-health-risks",
+      "name": null,
+      "runId": 1813378,
+      "title": "Taking too much vitamin D can cloud its benefits and create health risks - Harvard Health",
+      "h2Texts": [
+        "Main Content",
+        "Helpful Links",
+        "Some people are overdoing it in search of better health.",
+        "Disclaimer:",
+        "Related Topics",
+        "Making Sense of Vitamins and Minerals: Choosing the foods and nutrients you need to stay healthy",
+        "Free Healthbeat Signup",
+        "Footer"
+      ],
+      "h3Texts": [
+        "Vitamin D and your health",
+        "Looking for the link",
+        "Vitamin D benefits and warnings",
+        "Be smart about D",
+        "Retina scan may provide clues to early heart disease",
+        "What to know about heart palpitations",
+        "The best test to measure your diabetes risk",
+        "My Account",
+        "Order Now",
+        "More"
+      ],
+      "isFirst": 0,
+      "isFocus": 0,
+      "isValid": 1,
+      "createdAt": "2026-02-06 22:21:55",
+      "pageScore": null,
+      "schemaTypes": [
+        {
+          "type": "Organization",
+          "count": 1
+        },
+        {
+          "type": "Website",
+          "count": 1
+        },
+        {
+          "type": "Webpage",
+          "count": 1
+        }
+      ],
+      "headingsTree": [
+        {
+          "tag": "h2",
+          "text": "Main Content",
+          "children": []
+        },
+        {
+          "tag": "h2",
+          "text": "Helpful Links",
+          "children": []
+        },
+        {
+          "tag": "h1",
+          "text": "Taking too much vitamin D can cloud its benefits and create health risks",
+          "children": [
+            {
+              "tag": "h2",
+              "text": "Some people are overdoing it in search of better health.",
+              "children": [
+                {
+                  "tag": "h3",
+                  "text": "Vitamin D and your health",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Looking for the link",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Vitamin D benefits and warnings",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Be smart about D",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "tag": "h2",
+              "text": "Disclaimer:",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Related Topics",
+              "children": [
+                {
+                  "tag": "h3",
+                  "text": "Retina scan may provide clues to early heart disease",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "What to know about heart palpitations",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "The best test to measure your diabetes risk",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "tag": "h2",
+              "text": "Making Sense of Vitamins and Minerals: Choosing the foods and nutrients you need to stay healthy",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Free Healthbeat Signup",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Footer",
+              "children": [
+                {
+                  "tag": "h3",
+                  "text": "My Account",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Order Now",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "More",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "rawLsiCounts": {
+        "a": 16,
+        "b": 0,
+        "i": 0,
+        "p": 117,
+        "h1": 2,
+        "h2": 0,
+        "h3": 3,
+        "h4": 4,
+        "h5": 0,
+        "h6": 0,
+        "bold": 6,
+        "html": 397,
+        "h2_h3": 3,
+        "h2_h6": 7,
+        "h4_h6": 4,
+        "title": 3,
+        "strong": 6,
+        "img_alt": 8,
+        "plain_text": 0,
+        "word_count": 2264,
+        "meta_keywords": 0,
+        "figure_caption": 0,
+        "image_file_names": 6,
+        "meta_description": 0,
+        "open_graph_title": 0,
+        "source_code_urls": 0,
+        "rdf_schema_format": 0,
+        "twitter_card_title": 0,
+        "json_ld_schema_format": 35,
+        "open_graph_description": 0,
+        "microdata_schema_format": 0,
+        "twitter_card_description": 0
+      },
+      "rawTagCounts": [
+        [
+          "H1 Tag Total",
+          "h1",
+          1,
+          1,
+          1,
+          1.0,
+          0.0,
+          1.0
+        ],
+        [
+          "H2 Tag Total",
+          "h2",
+          8,
+          8,
+          8,
+          8.0,
+          0.0,
+          8.0
+        ],
+        [
+          "H3 Tag Total",
+          "h3",
+          10,
+          10,
+          10,
+          10.0,
+          0.0,
+          10.0
+        ],
+        [
+          "H4 Tag Total",
+          "h4",
+          2,
+          2,
+          2,
+          2.0,
+          0.0,
+          2.0
+        ],
+        [
+          "H5 Tag Total",
+          "h5",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "H6 Tag Total",
+          "h6",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Paragraph Text Tag Total",
+          "p",
+          84,
+          84,
+          84,
+          84.0,
+          0.0,
+          84.0
+        ],
+        [
+          "Anchor Text Tag Total",
+          "a",
+          98,
+          98,
+          98,
+          98.0,
+          0.0,
+          98.0
+        ],
+        [
+          "Image File total",
+          "img",
+          33,
+          33,
+          33,
+          33.0,
+          0.0,
+          33.0
+        ],
+        [
+          "Image Alt Tag Total",
+          "img_alt",
+          33,
+          33,
+          33,
+          33.0,
+          0.0,
+          33.0
+        ],
+        [
+          "Bold Tag Total",
+          "bold",
+          20,
+          20,
+          20,
+          20.0,
+          0.0,
+          20.0
+        ],
+        [
+          "Italic Tag Total",
+          "i",
+          4,
+          4,
+          4,
+          4.0,
+          0.0,
+          4.0
+        ],
+        [
+          "Video File Total",
+          "video",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Ordered List Total",
+          "ol",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Ordered List Items Total",
+          "oli",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Unordered List Total",
+          "ul",
+          3,
+          1,
+          2,
+          3.0,
+          0.0,
+          3.0
+        ],
+        [
+          "Unordered List Items Total",
+          "uli",
+          11,
+          11,
+          11,
+          11.0,
+          0.0,
+          11.0
+        ],
+        [
+          "Table Total",
+          "table",
+          2,
+          2,
+          2,
+          2.0,
+          0.0,
+          2.0
+        ],
+        [
+          "Table Items Total",
+          "td",
+          21,
+          21,
+          21,
+          21.0,
+          0.0,
+          21.0
+        ],
+        [
+          "Form Total",
+          "form",
+          5,
+          5,
+          5,
+          5.0,
+          0.0,
+          5.0
+        ],
+        [
+          "iFrame Total",
+          "iframe",
+          1,
+          1,
+          1,
+          1.0,
+          0.0,
+          1.0
+        ],
+        [
+          "Frequently Asked Questions",
+          "faq",
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          "Table of content",
+          "table of content",
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "nlpSchemaData": {},
+      "urlSourceCode": "",
+      "eatSchemaTypes": {},
+      "rawKeywordCounts": {
+        "a": 0,
+        "b": 0,
+        "i": 0,
+        "p": 0,
+        "h1": 0,
+        "h2": 0,
+        "h3": 0,
+        "h4": 0,
+        "h5": 0,
+        "h6": 0,
+        "bold": 0,
+        "html": 0,
+        "h2_h3": 0,
+        "h2_h6": 0,
+        "h4_h6": 0,
+        "title": 0,
+        "strong": 0,
+        "img_alt": 0,
+        "word_count": 2264,
+        "meta_keywords": 0,
+        "figure_caption": 0,
+        "image_file_names": 0,
+        "meta_description": 0,
+        "open_graph_title": 0,
+        "source_code_urls": 0,
+        "rdf_schema_format": 0,
+        "twitter_card_title": 0,
+        "json_ld_schema_format": 0,
+        "open_graph_description": 0,
+        "microdata_schema_format": 0,
+        "twitter_card_description": 0
+      },
+      "rawVariationsCounts": {
+        "a": 3,
+        "b": 0,
+        "i": 0,
+        "p": 26,
+        "h1": 0,
+        "h2": 0,
+        "h3": 0,
+        "h4": 0,
+        "h5": 0,
+        "h6": 0,
+        "bold": 0,
+        "html": 42,
+        "h2_h3": 0,
+        "h2_h6": 0,
+        "h4_h6": 0,
+        "title": 0,
+        "strong": 0,
+        "img_alt": 1,
+        "plain_text": 0,
+        "word_count": 2264,
+        "meta_keywords": 0,
+        "figure_caption": 0,
+        "image_file_names": 0,
+        "meta_description": 0,
+        "open_graph_title": 0,
+        "source_code_urls": 0,
+        "rdf_schema_format": 0,
+        "twitter_card_title": 0,
+        "json_ld_schema_format": 1,
+        "open_graph_description": 0,
+        "microdata_schema_format": 0,
+        "twitter_card_description": 0
+      }
+    },
+    {
+      "id": 15322032,
+      "url": "https://www.nhs.uk/conditions/vitamins-and-minerals/vitamin-d/",
+      "name": null,
+      "runId": 1813378,
+      "title": "Vitamin D - NHS",
+      "h2Texts": [
+        "Cookies on the NHS website",
+        "Contents",
+        "Good sources of vitamin D",
+        "How much vitamin D do I need?",
+        "Should I take a vitamin D supplement?",
+        "What happens if I take too much vitamin D?",
+        "Support links"
+      ],
+      "h3Texts": [
+        "Advice for adults and children over 4 years old",
+        "People at risk of vitamin D deficiency",
+        "Advice for infants and young children"
+      ],
+      "isFirst": 0,
+      "isFocus": 0,
+      "isValid": 1,
+      "createdAt": "2026-02-06 22:21:56",
+      "pageScore": null,
+      "schemaTypes": [
+        {
+          "type": "Medicalwebpage",
+          "count": 1
+        }
+      ],
+      "headingsTree": [
+        {
+          "tag": "h2",
+          "text": "Cookies on the NHS website",
+          "children": []
+        },
+        {
+          "tag": "h1",
+          "text": "Vitamin D-Vitamins and minerals",
+          "children": [
+            {
+              "tag": "h2",
+              "text": "Contents",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Good sources of vitamin D",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "How much vitamin D do I need?",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Should I take a vitamin D supplement?",
+              "children": [
+                {
+                  "tag": "h3",
+                  "text": "Advice for adults and children over 4 years old",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "People at risk of vitamin D deficiency",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Advice for infants and young children",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "tag": "h2",
+              "text": "What happens if I take too much vitamin D?",
+              "children": []
+            },
+            {
+              "tag": "h2",
+              "text": "Support links",
+              "children": []
+            }
+          ]
+        }
+      ],
+      "rawLsiCounts": {
+        "a": 6,
+        "b": 1,
+        "i": 0,
+        "p": 71,
+        "h1": 1,
+        "h2": 4,
+        "h3": 3,
+        "h4": 0,
+        "h5": 0,
+        "h6": 0,
+        "bold": 1,
+        "html": 111,
+        "h2_h3": 7,
+        "h2_h6": 7,
+        "h4_h6": 0,
+        "title": 1,
+        "strong": 0,
+        "img_alt": 0,
+        "plain_text": 0,
+        "word_count": 1279,
+        "meta_keywords": 0,
+        "figure_caption": 0,
+        "image_file_names": 0,
+        "meta_description": 0,
+        "open_graph_title": 0,
+        "source_code_urls": 0,
+        "rdf_schema_format": 0,
+        "twitter_card_title": 0,
+        "json_ld_schema_format": 17,
+        "open_graph_description": 0,
+        "microdata_schema_format": 0,
+        "twitter_card_description": 0
+      },
+      "rawTagCounts": [
+        [
+          "H1 Tag Total",
+          "h1",
+          1,
+          1,
+          1,
+          1.0,
+          0.0,
+          1.0
+        ],
+        [
+          "H2 Tag Total",
+          "h2",
+          7,
+          7,
+          7,
+          7.0,
+          0.0,
+          7.0
+        ],
+        [
+          "H3 Tag Total",
+          "h3",
+          3,
+          3,
+          3,
+          3.0,
+          0.0,
+          3.0
+        ],
+        [
+          "H4 Tag Total",
+          "h4",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "H5 Tag Total",
+          "h5",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "H6 Tag Total",
+          "h6",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Paragraph Text Tag Total",
+          "p",
+          45,
+          45,
+          45,
+          45.0,
+          0.0,
+          45.0
+        ],
+        [
+          "Anchor Text Tag Total",
+          "a",
+          51,
+          51,
+          51,
+          51.0,
+          0.0,
+          51.0
+        ],
+        [
+          "Image File total",
+          "img",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Image Alt Tag Total",
+          "img_alt",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Bold Tag Total",
+          "bold",
+          1,
+          1,
+          1,
+          1.0,
+          0.0,
+          1.0
+        ],
+        [
+          "Italic Tag Total",
+          "i",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Video File Total",
+          "video",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Ordered List Total",
+          "ol",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Ordered List Items Total",
+          "oli",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Unordered List Total",
+          "ul",
+          8,
+          1,
+          2,
+          8.0,
+          0.0,
+          8.0
+        ],
+        [
+          "Unordered List Items Total",
+          "uli",
+          33,
+          33,
+          33,
+          33.0,
+          0.0,
+          33.0
+        ],
+        [
+          "Table Total",
+          "table",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Table Items Total",
+          "td",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Form Total",
+          "form",
+          1,
+          1,
+          1,
+          1.0,
+          0.0,
+          1.0
+        ],
+        [
+          "iFrame Total",
+          "iframe",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Frequently Asked Questions",
+          "faq",
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          "Table of content",
+          "table of content",
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "nlpSchemaData": {},
+      "urlSourceCode": "",
+      "eatSchemaTypes": {},
+      "rawKeywordCounts": {
+        "a": 0,
+        "b": 0,
+        "i": 0,
+        "p": 0,
+        "h1": 0,
+        "h2": 0,
+        "h3": 0,
+        "h4": 0,
+        "h5": 0,
+        "h6": 0,
+        "bold": 0,
+        "html": 0,
+        "h2_h3": 0,
+        "h2_h6": 0,
+        "h4_h6": 0,
+        "title": 0,
+        "strong": 0,
+        "img_alt": 0,
+        "word_count": 1279,
+        "meta_keywords": 0,
+        "figure_caption": 0,
+        "image_file_names": 0,
+        "meta_description": 0,
+        "open_graph_title": 0,
+        "source_code_urls": 0,
+        "rdf_schema_format": 0,
+        "twitter_card_title": 0,
+        "json_ld_schema_format": 0,
+        "open_graph_description": 0,
+        "microdata_schema_format": 0,
+        "twitter_card_description": 0
+      },
+      "rawVariationsCounts": {
+        "a": 1,
+        "b": 5,
+        "i": 0,
+        "p": 23,
+        "h1": 0,
+        "h2": 0,
+        "h3": 0,
+        "h4": 0,
+        "h5": 0,
+        "h6": 0,
+        "bold": 5,
+        "html": 97,
+        "h2_h3": 0,
+        "h2_h6": 0,
+        "h4_h6": 0,
+        "title": 0,
+        "strong": 0,
+        "img_alt": 0,
+        "plain_text": 0,
+        "word_count": 1279,
+        "meta_keywords": 0,
+        "figure_caption": 0,
+        "image_file_names": 0,
+        "meta_description": 0,
+        "open_graph_title": 0,
+        "source_code_urls": 0,
+        "rdf_schema_format": 0,
+        "twitter_card_title": 0,
+        "json_ld_schema_format": 2,
+        "open_graph_description": 0,
+        "microdata_schema_format": 0,
+        "twitter_card_description": 0
+      }
+    },
+    {
+      "id": 15322034,
+      "url": "https://my.clevelandclinic.org/health/diseases/15050-vitamin-d-vitamin-d-deficiency",
+      "name": null,
+      "runId": 1813378,
+      "title": "Vitamin D Deficiency: Causes, Symptoms & Treatment",
+      "h2Texts": [
+        "Overview",
+        "Symptoms and Causes",
+        "Diagnosis and Tests",
+        "Management and Treatment",
+        "Outlook / Prognosis",
+        "Prevention",
+        "Living With",
+        "Additional Common Questions"
+      ],
+      "h3Texts": [
+        "What is vitamin D deficiency?",
+        "Why is vitamin D so important?",
+        "Who does vitamin D deficiency affect?",
+        "How common is vitamin D deficiency?",
+        "What are the signs and symptoms of vitamin D deficiency?",
+        "What causes vitamin D deficiency?",
+        "How is vitamin D deficiency diagnosed?",
+        "How is vitamin D deficiency treated?",
+        "What are the possible complications of vitamin D deficiency?",
+        "Who is most at risk for vitamin D deficiency?",
+        "How can I prevent vitamin D deficiency?",
+        "When should I see my healthcare provider about vitamin D deficiency?",
+        "Can you ever have too much vitamin D?",
+        "A note from Cleveland Clinic",
+        "Experts You Can Trust",
+        "References",
+        "References",
+        "Care at Cleveland Clinic",
+        "Subscribe to Cleveland Clinic Health Essentials",
+        "Actions",
+        "About Cleveland Clinic",
+        "Subscribe to Cleveland Clinic Health Essentials"
+      ],
+      "isFirst": 0,
+      "isFocus": 0,
+      "isValid": 1,
+      "createdAt": "2026-02-06 22:21:56",
+      "pageScore": null,
+      "schemaTypes": [
+        {
+          "type": "Videoobject",
+          "count": 1
+        }
+      ],
+      "headingsTree": [
+        {
+          "tag": "h1",
+          "text": "Vitamin D Deficiency",
+          "children": [
+            {
+              "tag": "h2",
+              "text": "Overview",
+              "children": [
+                {
+                  "tag": "h3",
+                  "text": "What is vitamin D deficiency?",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Why is vitamin D so important?",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Who does vitamin D deficiency affect?",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "How common is vitamin D deficiency?",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "tag": "h2",
+              "text": "Symptoms and Causes",
+              "children": [
+                {
+                  "tag": "h3",
+                  "text": "What are the signs and symptoms of vitamin D deficiency?",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "What causes vitamin D deficiency?",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "tag": "h2",
+              "text": "Diagnosis and Tests",
+              "children": [
+                {
+                  "tag": "h3",
+                  "text": "How is vitamin D deficiency diagnosed?",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "tag": "h2",
+              "text": "Management and Treatment",
+              "children": [
+                {
+                  "tag": "h3",
+                  "text": "How is vitamin D deficiency treated?",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "tag": "h2",
+              "text": "Outlook / Prognosis",
+              "children": [
+                {
+                  "tag": "h3",
+                  "text": "What are the possible complications of vitamin D deficiency?",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "tag": "h2",
+              "text": "Prevention",
+              "children": [
+                {
+                  "tag": "h3",
+                  "text": "Who is most at risk for vitamin D deficiency?",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "How can I prevent vitamin D deficiency?",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "tag": "h2",
+              "text": "Living With",
+              "children": [
+                {
+                  "tag": "h3",
+                  "text": "When should I see my healthcare provider about vitamin D deficiency?",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "tag": "h2",
+              "text": "Additional Common Questions",
+              "children": [
+                {
+                  "tag": "h3",
+                  "text": "Can you ever have too much vitamin D?",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "A note from Cleveland Clinic",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Experts You Can Trust",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "References",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "References",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Care at Cleveland Clinic",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Subscribe to Cleveland Clinic Health Essentials",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Actions",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "About Cleveland Clinic",
+                  "children": []
+                },
+                {
+                  "tag": "h3",
+                  "text": "Subscribe to Cleveland Clinic Health Essentials",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "rawLsiCounts": {
+        "a": 8,
+        "b": 0,
+        "i": 0,
+        "p": 201,
+        "h1": 2,
+        "h2": 1,
+        "h3": 31,
+        "h4": 6,
+        "h5": 0,
+        "h6": 0,
+        "bold": 1,
+        "html": 705,
+        "h2_h3": 32,
+        "h2_h6": 38,
+        "h4_h6": 6,
+        "title": 3,
+        "strong": 1,
+        "img_alt": 3,
+        "plain_text": 0,
+        "word_count": 2617,
+        "meta_keywords": 0,
+        "figure_caption": 5,
+        "image_file_names": 2,
+        "meta_description": 0,
+        "open_graph_title": 0,
+        "source_code_urls": 0,
+        "rdf_schema_format": 0,
+        "twitter_card_title": 0,
+        "json_ld_schema_format": 18,
+        "open_graph_description": 0,
+        "microdata_schema_format": 12,
+        "twitter_card_description": 0
+      },
+      "rawTagCounts": [
+        [
+          "H1 Tag Total",
+          "h1",
+          1,
+          1,
+          1,
+          1.0,
+          0.0,
+          1.0
+        ],
+        [
+          "H2 Tag Total",
+          "h2",
+          8,
+          8,
+          8,
+          8.0,
+          0.0,
+          8.0
+        ],
+        [
+          "H3 Tag Total",
+          "h3",
+          22,
+          22,
+          22,
+          22.0,
+          0.0,
+          22.0
+        ],
+        [
+          "H4 Tag Total",
+          "h4",
+          4,
+          4,
+          4,
+          4.0,
+          0.0,
+          4.0
+        ],
+        [
+          "H5 Tag Total",
+          "h5",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "H6 Tag Total",
+          "h6",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Paragraph Text Tag Total",
+          "p",
+          76,
+          76,
+          76,
+          76.0,
+          0.0,
+          76.0
+        ],
+        [
+          "Anchor Text Tag Total",
+          "a",
+          140,
+          140,
+          140,
+          140.0,
+          0.0,
+          140.0
+        ],
+        [
+          "Image File total",
+          "img",
+          15,
+          15,
+          15,
+          15.0,
+          0.0,
+          15.0
+        ],
+        [
+          "Image Alt Tag Total",
+          "img_alt",
+          15,
+          15,
+          15,
+          15.0,
+          0.0,
+          15.0
+        ],
+        [
+          "Bold Tag Total",
+          "bold",
+          9,
+          9,
+          9,
+          9.0,
+          0.0,
+          9.0
+        ],
+        [
+          "Italic Tag Total",
+          "i",
+          9,
+          9,
+          9,
+          9.0,
+          0.0,
+          9.0
+        ],
+        [
+          "Video File Total",
+          "video",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Ordered List Total",
+          "ol",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Ordered List Items Total",
+          "oli",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Unordered List Total",
+          "ul",
+          13,
+          1,
+          2,
+          13.0,
+          0.0,
+          13.0
+        ],
+        [
+          "Unordered List Items Total",
+          "uli",
+          55,
+          55,
+          55,
+          55.0,
+          0.0,
+          55.0
+        ],
+        [
+          "Table Total",
+          "table",
+          1,
+          1,
+          1,
+          1.0,
+          0.0,
+          1.0
+        ],
+        [
+          "Table Items Total",
+          "td",
+          23,
+          23,
+          23,
+          23.0,
+          0.0,
+          23.0
+        ],
+        [
+          "Form Total",
+          "form",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "iFrame Total",
+          "iframe",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Frequently Asked Questions",
+          "faq",
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          "Table of content",
+          "table of content",
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "nlpSchemaData": {},
+      "urlSourceCode": "",
+      "eatSchemaTypes": {},
+      "rawKeywordCounts": {
+        "a": 0,
+        "b": 0,
+        "i": 0,
+        "p": 0,
+        "h1": 0,
+        "h2": 0,
+        "h3": 0,
+        "h4": 0,
+        "h5": 0,
+        "h6": 0,
+        "bold": 0,
+        "html": 0,
+        "h2_h3": 0,
+        "h2_h6": 0,
+        "h4_h6": 0,
+        "title": 0,
+        "strong": 0,
+        "img_alt": 0,
+        "word_count": 2617,
+        "meta_keywords": 0,
+        "figure_caption": 0,
+        "image_file_names": 0,
+        "meta_description": 0,
+        "open_graph_title": 0,
+        "source_code_urls": 0,
+        "rdf_schema_format": 0,
+        "twitter_card_title": 0,
+        "json_ld_schema_format": 0,
+        "open_graph_description": 0,
+        "microdata_schema_format": 0,
+        "twitter_card_description": 0
+      },
+      "rawVariationsCounts": {
+        "a": 1,
+        "b": 0,
+        "i": 0,
+        "p": 48,
+        "h1": 0,
+        "h2": 0,
+        "h3": 0,
+        "h4": 0,
+        "h5": 0,
+        "h6": 0,
+        "bold": 0,
+        "html": 214,
+        "h2_h3": 0,
+        "h2_h6": 0,
+        "h4_h6": 0,
+        "title": 0,
+        "strong": 0,
+        "img_alt": 0,
+        "plain_text": 0,
+        "word_count": 2617,
+        "meta_keywords": 0,
+        "figure_caption": 0,
+        "image_file_names": 0,
+        "meta_description": 0,
+        "open_graph_title": 0,
+        "source_code_urls": 0,
+        "rdf_schema_format": 0,
+        "twitter_card_title": 0,
+        "json_ld_schema_format": 1,
+        "open_graph_description": 0,
+        "microdata_schema_format": 0,
+        "twitter_card_description": 0
+      }
+    },
+    {
+      "id": 15322035,
+      "url": "https://www.nordic.com/products/vitamin-d3-k2/?srsltid=AfmBOoq7mYiGU426URgyEZssyb1fUmXm2wJFlb1_9Uv9czReFaBT8hff",
+      "name": null,
+      "runId": 1813378,
+      "title": "D3+K2 Soft Gel Vitamins | Nordic Naturals",
+      "h2Texts": [
+        "Quality Matters"
+      ],
+      "h3Texts": [],
+      "isFirst": 0,
+      "isFocus": 0,
+      "isValid": 1,
+      "createdAt": "2026-02-06 22:21:57",
+      "pageScore": null,
+      "schemaTypes": [],
+      "headingsTree": [
+        {
+          "tag": "h1",
+          "text": "Vitamin D3+K2",
+          "children": [
+            {
+              "tag": "h2",
+              "text": "Quality Matters",
+              "children": []
+            }
+          ]
+        }
+      ],
+      "rawLsiCounts": {
+        "a": 5,
+        "b": 0,
+        "i": 0,
+        "p": 17,
+        "h1": 2,
+        "h2": 0,
+        "h3": 0,
+        "h4": 0,
+        "h5": 0,
+        "h6": 0,
+        "bold": 0,
+        "html": 294,
+        "h2_h3": 0,
+        "h2_h6": 0,
+        "h4_h6": 0,
+        "title": 0,
+        "strong": 0,
+        "img_alt": 5,
+        "plain_text": 0,
+        "word_count": 525,
+        "meta_keywords": 0,
+        "figure_caption": 0,
+        "image_file_names": 0,
+        "meta_description": 0,
+        "open_graph_title": 0,
+        "source_code_urls": 0,
+        "rdf_schema_format": 0,
+        "twitter_card_title": 0,
+        "json_ld_schema_format": 0,
+        "open_graph_description": 0,
+        "microdata_schema_format": 0,
+        "twitter_card_description": 0
+      },
+      "rawTagCounts": [
+        [
+          "H1 Tag Total",
+          "h1",
+          1,
+          1,
+          1,
+          1.0,
+          0.0,
+          1.0
+        ],
+        [
+          "H2 Tag Total",
+          "h2",
+          1,
+          1,
+          1,
+          1.0,
+          0.0,
+          1.0
+        ],
+        [
+          "H3 Tag Total",
+          "h3",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "H4 Tag Total",
+          "h4",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "H5 Tag Total",
+          "h5",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "H6 Tag Total",
+          "h6",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Paragraph Text Tag Total",
+          "p",
+          7,
+          7,
+          7,
+          7.0,
+          0.0,
+          7.0
+        ],
+        [
+          "Anchor Text Tag Total",
+          "a",
+          59,
+          59,
+          59,
+          59.0,
+          0.0,
+          59.0
+        ],
+        [
+          "Image File total",
+          "img",
+          10,
+          10,
+          10,
+          10.0,
+          0.0,
+          10.0
+        ],
+        [
+          "Image Alt Tag Total",
+          "img_alt",
+          10,
+          10,
+          10,
+          10.0,
+          0.0,
+          10.0
+        ],
+        [
+          "Bold Tag Total",
+          "bold",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Italic Tag Total",
+          "i",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Video File Total",
+          "video",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Ordered List Total",
+          "ol",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Ordered List Items Total",
+          "oli",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Unordered List Total",
+          "ul",
+          5,
+          1,
+          2,
+          5.0,
+          0.0,
+          5.0
+        ],
+        [
+          "Unordered List Items Total",
+          "uli",
+          26,
+          26,
+          26,
+          26.0,
+          0.0,
+          26.0
+        ],
+        [
+          "Table Total",
+          "table",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Table Items Total",
+          "td",
+          0,
+          0,
+          0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          "Form Total",
+          "form",
+          1,
+          1,
+          1,
+          1.0,
+          0.0,
+          1.0
+        ],
+        [
+          "iFrame Total",
+          "iframe",
+          1,
+          1,
+          1,
+          1.0,
+          0.0,
+          1.0
+        ],
+        [
+          "Frequently Asked Questions",
+          "faq",
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          "Table of content",
+          "table of content",
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "nlpSchemaData": {},
+      "urlSourceCode": "",
+      "eatSchemaTypes": {},
+      "rawKeywordCounts": {
+        "a": 0,
+        "b": 0,
+        "i": 0,
+        "p": 0,
+        "h1": 0,
+        "h2": 0,
+        "h3": 0,
+        "h4": 0,
+        "h5": 0,
+        "h6": 0,
+        "bold": 0,
+        "html": 0,
+        "h2_h3": 0,
+        "h2_h6": 0,
+        "h4_h6": 0,
+        "title": 0,
+        "strong": 0,
+        "img_alt": 0,
+        "word_count": 525,
+        "meta_keywords": 0,
+        "figure_caption": 0,
+        "image_file_names": 0,
+        "meta_description": 0,
+        "open_graph_title": 0,
+        "source_code_urls": 0,
+        "rdf_schema_format": 0,
+        "twitter_card_title": 0,
+        "json_ld_schema_format": 0,
+        "open_graph_description": 0,
+        "microdata_schema_format": 0,
+        "twitter_card_description": 0
+      },
+      "rawVariationsCounts": {
+        "a": 0,
+        "b": 0,
+        "i": 0,
+        "p": 7,
+        "h1": 0,
+        "h2": 0,
+        "h3": 0,
+        "h4": 0,
+        "h5": 0,
+        "h6": 0,
+        "bold": 0,
+        "html": 31,
+        "h2_h3": 0,
+        "h2_h6": 0,
+        "h4_h6": 0,
+        "title": 0,
+        "strong": 0,
+        "img_alt": 0,
+        "plain_text": 0,
+        "word_count": 525,
+        "meta_keywords": 0,
+        "figure_caption": 0,
+        "image_file_names": 0,
+        "meta_description": 0,
+        "open_graph_title": 0,
+        "source_code_urls": 0,
+        "rdf_schema_format": 0,
+        "twitter_card_title": 0,
+        "json_ld_schema_format": 0,
+        "open_graph_description": 0,
+        "microdata_schema_format": 0,
+        "twitter_card_description": 0
+      }
+    }
+  ],
+  "schemaTypes": [],
+  "exactKeyword": [
+    {
+      "signal": "Keyword in Main URL",
+      "target": "",
+      "comment": "It is recommended that you have your target keyword in your URL 1 time, when possible",
+      "editedCount": 0,
+      "competitorsAvg": "",
+      "keywordsTrueMax": "",
+      "keywordsTrueMin": "",
+      "targetKeywordCnt": 0,
+      "featuredCompetitorsComment": "It is recommended that you have your target keyword in your URL 1 time, when possible",
+      "featuredCompetitorsKeywordAvg": "",
+      "keywordsTrueMaxRecommendations": ""
+    },
+    {
+      "signal": "Meta Title",
+      "target": 1,
+      "comment": "Add 1 exact keyword in your title tag of the page",
+      "editedCount": 0,
+      "competitorsAvg": 1,
+      "keywordsTrueMax": "",
+      "keywordsTrueMin": "",
+      "targetKeywordCnt": 0,
+      "featuredCompetitorsComment": "",
+      "featuredCompetitorsKeywordAvg": "",
+      "featuredCompetitorsKeywordMax": "",
+      "featuredCompetitorsKeywordMin": "",
+      "keywordsTrueMaxRecommendations": ""
+    },
+    {
+      "signal": "H1",
+      "target": 1,
+      "comment": "Add 1 exact keyword in your H1 of the page",
+      "editedCount": 0,
+      "competitorsAvg": 1,
+      "keywordsTrueMax": "",
+      "keywordsTrueMin": "",
+      "targetKeywordCnt": 0,
+      "featuredCompetitorsComment": "",
+      "featuredCompetitorsKeywordAvg": "",
+      "featuredCompetitorsKeywordMax": "",
+      "featuredCompetitorsKeywordMin": "",
+      "keywordsTrueMaxRecommendations": ""
+    }
+  ],
+  "gCompetitors": [
+    {
+      "url": "https://www.mayoclinic.org/drugs-supplements-vitamin-d/art-20363792",
+      "title": "Vitamin D",
+      "source": "",
+      "summary": {},
+      "validated": false,
+      "description": "Vitamin D supplements treat adults with extreme vitamin D deficiency that results in this softening of the bones. Osteoporosis. Studies suggest ..."
+    },
+    {
+      "url": "https://ods.od.nih.gov/factsheets/VitaminD-HealthProfessional/",
+      "title": "Vitamin D - Health Professional Fact Sheet",
+      "source": "",
+      "summary": {},
+      "validated": false,
+      "description": "Dietary supplements. Vitamin D is present in dietary supplements as either vitamin D2 or vitamin D3. Both can raise the serum level of 25(OH)D."
+    },
+    {
+      "url": "https://www.naturemade.com/collections/vitamin-d?srsltid=AfmBOooiNG7hbDsLg0F-DLze3wM17X1yqmiPeNXb8I27zbO_aq2CvnG5",
+      "title": "Buy Vitamin D Supplements Online",
+      "source": "",
+      "summary": {},
+      "validated": false,
+      "description": "Vitamin D is important for healthy bones, muscles, and immune health. Shop Vitamin D supplements from Nature Made® to jump start healthy habits today!†"
+    },
+    {
+      "url": "https://www.health.harvard.edu/staying-healthy/taking-too-much-vitamin-d-can-cloud-its-benefits-and-create-health-risks",
+      "title": "Taking too much vitamin D can cloud its benefits and ...",
+      "source": "",
+      "summary": {},
+      "validated": false,
+      "description": "If you're taking a vitamin D supplement, you probably don't need more than 600 to 800 IU per day, which is adequate for most people. Some people ..."
+    },
+    {
+      "url": "https://www.nhs.uk/conditions/vitamins-and-minerals/vitamin-d/",
+      "title": "Vitamin D",
+      "source": "",
+      "summary": {},
+      "validated": false,
+      "description": "Vitamin D helps regulate the amount of calcium and phosphate in the body. These nutrients are needed to keep bones, teeth and muscles healthy."
+    },
+    {
+      "url": "https://my.clevelandclinic.org/health/diseases/15050-vitamin-d-vitamin-d-deficiency",
+      "title": "Vitamin D Deficiency: Causes, Symptoms & Treatment",
+      "source": "",
+      "summary": {},
+      "validated": false,
+      "description": "You need a prescription to get D2. D3, however, is available over the counter. Your body more easily absorbs D3 than D2. Work with your ..."
+    },
+    {
+      "url": "https://www.nordic.com/products/vitamin-d3-k2/?srsltid=AfmBOoq7mYiGU426URgyEZssyb1fUmXm2wJFlb1_9Uv9czReFaBT8hff",
+      "title": "D3+K2 Soft Gel Vitamins",
+      "source": "",
+      "summary": {},
+      "validated": false,
+      "description": "Vitamin D3+K2 · 2000 IU vitamin D3 + 90 mcg vitamin K2 (MK-7) · Supports healthy bone metabolism and immune health* · Supports healthy cardiovascular function ..."
+    },
+    {
+      "url": "https://www.cvs.com/shop/vitamins/letter-vitamins/vitamin-d",
+      "title": "Vitamin D - CVS Pharmacy",
+      "source": "",
+      "summary": {},
+      "validated": false,
+      "description": "Shop Vitamin D Pills and Supplements at CVS Pharmacy. Get your questions answered like what does Vitamin D do? How much Vitamin D should I take? and more."
+    }
+  ],
+  "lsaVariations": [
+    {
+      "phrase": "calcium",
+      "weight": 0.37403051610557725,
+      "targetCount": 0,
+      "averageCount": 33,
+      "isSecondaryKeyword": false
+    },
+    {
+      "phrase": "supplements",
+      "weight": 0.14452806739125978,
+      "targetCount": 0,
+      "averageCount": 20,
+      "isSecondaryKeyword": false
+    },
+    {
+      "phrase": "body",
+      "weight": 0.1417002959291096,
+      "targetCount": 0,
+      "averageCount": 10,
+      "isSecondaryKeyword": false
+    },
+    {
+      "phrase": "phosphate",
+      "weight": 0.11489296283182486,
+      "targetCount": 0,
+      "averageCount": 2,
+      "isSecondaryKeyword": false
+    },
+    {
+      "phrase": "amount",
+      "weight": 0.10595718513272995,
+      "targetCount": 0,
+      "averageCount": 4,
+      "isSecondaryKeyword": false
+    },
+    {
+      "phrase": "counter",
+      "weight": 0.10297859256636498,
+      "targetCount": 0,
+      "averageCount": 0,
+      "isSecondaryKeyword": false
+    },
+    {
+      "phrase": "healthy immune response",
+      "weight": 0.1,
+      "targetCount": 0,
+      "averageCount": 0,
+      "isSecondaryKeyword": false
+    },
+    {
+      "phrase": "vitamin d helps regulate",
+      "weight": 0.1,
+      "targetCount": 0,
+      "averageCount": 0,
+      "isSecondaryKeyword": false
+    },
+    {
+      "phrase": "immune health",
+      "weight": 0.1,
+      "targetCount": 0,
+      "averageCount": 1,
+      "isSecondaryKeyword": false
+    },
+    {
+      "phrase": "dietary supplements",
+      "weight": 0.1,
+      "targetCount": 0,
+      "averageCount": 4,
+      "isSecondaryKeyword": false
+    },
+    {
+      "phrase": "vitamin d supplements treat adults",
+      "weight": 0.1,
+      "targetCount": 0,
+      "averageCount": 0,
+      "isSecondaryKeyword": false
+    },
+    {
+      "phrase": "vitamin d is",
+      "weight": 0.1,
+      "targetCount": 0,
+      "averageCount": 5,
+      "isSecondaryKeyword": false
+    },
+    {
+      "phrase": "extreme vitamin d deficiency",
+      "weight": 0.1,
+      "targetCount": 0,
+      "averageCount": 0,
+      "isSecondaryKeyword": false
+    },
+    {
+      "phrase": "vitamin d is present",
+      "weight": 0.1,
+      "targetCount": 0,
+      "averageCount": 0,
+      "isSecondaryKeyword": false
+    },
+    {
+      "phrase": "essential nutrient that helps support",
+      "weight": 0.1,
+      "targetCount": 0,
+      "averageCount": 0,
+      "isSecondaryKeyword": false
+    },
+    {
+      "phrase": "cvs pharmacy",
+      "weight": 0.1,
+      "targetCount": 0,
+      "averageCount": 0,
+      "isSecondaryKeyword": false
+    },
+    {
+      "phrase": "vitamin d is important",
+      "weight": 0.1,
+      "targetCount": 0,
+      "averageCount": 0,
+      "isSecondaryKeyword": false
+    },
+    {
+      "phrase": "shop vitamin d pills",
+      "weight": 0.1,
+      "targetCount": 0,
+      "averageCount": 0,
+      "isSecondaryKeyword": false
+    }
+  ],
+  "pageStructure": [
+    {
+      "max": 1,
+      "min": 1,
+      "mean": 1.0,
+      "type": 2,
+      "notes": [],
+      "signal": "H1 Tag Total",
+      "comment": "Use 1 H1 Tag in your page",
+      "current": 0,
+      "dispType": "",
+      "tagLabel": "H1 Tag Total",
+      "signalCnt": 0,
+      "isArchived": 0,
+      "checklistId": 0,
+      "isCompleted": 0,
+      "strategyMax": 1,
+      "strategyMin": 1,
+      "isAutoChecklist": false
+    },
+    {
+      "max": 22,
+      "min": 7,
+      "mean": 11.57,
+      "type": 2,
+      "notes": [],
+      "signal": "H2 Tag Total",
+      "comment": "Use 12 H2 Tag in your page",
+      "current": 0,
+      "dispType": "",
+      "tagLabel": "H2 Tag Total",
+      "signalCnt": 0,
+      "isArchived": 0,
+      "checklistId": 0,
+      "isCompleted": 0,
+      "strategyMax": 22,
+      "strategyMin": 7,
+      "isAutoChecklist": false
+    },
+    {
+      "max": 22,
+      "min": 6,
+      "mean": 16.0,
+      "type": 2,
+      "notes": [],
+      "signal": "H3 Tag Total",
+      "comment": "Use 16 H3 Tag in your page",
+      "current": 0,
+      "dispType": "",
+      "tagLabel": "H3 Tag Total",
+      "signalCnt": 0,
+      "isArchived": 0,
+      "checklistId": 0,
+      "isCompleted": 0,
+      "strategyMax": 22,
+      "strategyMin": 6,
+      "isAutoChecklist": false
+    },
+    {
+      "max": 9,
+      "min": 2,
+      "mean": 5.5,
+      "type": 2,
+      "notes": [],
+      "signal": "H4 Tag Total",
+      "comment": "Use 6 H4 Tag in your page",
+      "current": 0,
+      "dispType": "",
+      "tagLabel": "H4 Tag Total",
+      "signalCnt": 0,
+      "isArchived": 0,
+      "checklistId": 0,
+      "isCompleted": 0,
+      "strategyMax": 9,
+      "strategyMin": 2,
+      "isAutoChecklist": false
+    },
+    {
+      "max": 0,
+      "min": 0,
+      "mean": 0.0,
+      "type": 2,
+      "notes": [],
+      "signal": "H5 Tag Total",
+      "comment": "Do not use any H5 Tag in your page",
+      "current": 0,
+      "dispType": "",
+      "tagLabel": "H5 Tag Total",
+      "signalCnt": 0,
+      "isArchived": 0,
+      "checklistId": 0,
+      "isCompleted": 0,
+      "strategyMax": 0,
+      "strategyMin": 0,
+      "isAutoChecklist": false
+    }
+  ],
+  "googleLocation": "United States",
+  "relatedSearches": [
+    {
+      "link": "https://www.google.com/search?sca_esv=7e23b67cda9c6a45&gl=us&q=How+much+vitamin+D3+should+I+take+daily&sa=X&ved=2ahUKEwi_sdX66MWSAxWccPUHHRgqNfwQ1QJ6BAhqEAE",
+      "query": "How much vitamin D3 should I take daily",
+      "serpapi_link": "https://serpapi.com/search.json?device=desktop&engine=google&gl=us&google_domain=google.com&location=United+States&num=20&q=How+much+vitamin+D3+should+I+take+daily",
+      "block_position": 1
+    },
+    {
+      "link": "https://www.google.com/search?sca_esv=7e23b67cda9c6a45&gl=us&q=Vitamin+D+supplement+benefits&sa=X&ved=2ahUKEwi_sdX66MWSAxWccPUHHRgqNfwQ1QJ6BAhuEAE",
+      "query": "Vitamin D supplement benefits",
+      "serpapi_link": "https://serpapi.com/search.json?device=desktop&engine=google&gl=us&google_domain=google.com&location=United+States&num=20&q=Vitamin+D+supplement+benefits",
+      "block_position": 1
+    },
+    {
+      "link": "https://www.google.com/search?sca_esv=7e23b67cda9c6a45&gl=us&q=Vitamin+D+foods&sa=X&ved=2ahUKEwi_sdX66MWSAxWccPUHHRgqNfwQ1QJ6BAhtEAE",
+      "query": "Vitamin D foods",
+      "serpapi_link": "https://serpapi.com/search.json?device=desktop&engine=google&gl=us&google_domain=google.com&location=United+States&num=20&q=Vitamin+D+foods",
+      "block_position": 1
+    },
+    {
+      "link": "https://www.google.com/search?sca_esv=7e23b67cda9c6a45&gl=us&q=How+much+vitamin+D3+per+day+for+a+woman&sa=X&ved=2ahUKEwi_sdX66MWSAxWccPUHHRgqNfwQ1QJ6BAhsEAE",
+      "query": "How much vitamin D3 per day for a woman",
+      "serpapi_link": "https://serpapi.com/search.json?device=desktop&engine=google&gl=us&google_domain=google.com&location=United+States&num=20&q=How+much+vitamin+D3+per+day+for+a+woman",
+      "block_position": 1
+    },
+    {
+      "link": "https://www.google.com/search?sca_esv=7e23b67cda9c6a45&gl=us&q=How+much+vitamin+D3+per+day+for+a+man&sa=X&ved=2ahUKEwi_sdX66MWSAxWccPUHHRgqNfwQ1QJ6BAhoEAE",
+      "query": "How much vitamin D3 per day for a man",
+      "serpapi_link": "https://serpapi.com/search.json?device=desktop&engine=google&gl=us&google_domain=google.com&location=United+States&num=20&q=How+much+vitamin+D3+per+day+for+a+man",
+      "block_position": 1
+    },
+    {
+      "link": "https://www.google.com/search?sca_esv=7e23b67cda9c6a45&gl=us&q=Vitamin+D+fruits&sa=X&ved=2ahUKEwi_sdX66MWSAxWccPUHHRgqNfwQ1QJ6BAhrEAE",
+      "query": "Vitamin D fruits",
+      "serpapi_link": "https://serpapi.com/search.json?device=desktop&engine=google&gl=us&google_domain=google.com&location=United+States&num=20&q=Vitamin+D+fruits",
+      "block_position": 1
+    },
+    {
+      "link": "https://www.google.com/search?sca_esv=7e23b67cda9c6a45&gl=us&q=Vitamin+D3+dosage+for+adults+per+day&sa=X&ved=2ahUKEwi_sdX66MWSAxWccPUHHRgqNfwQ1QJ6BAhpEAE",
+      "query": "Vitamin D3 dosage for adults per day",
+      "serpapi_link": "https://serpapi.com/search.json?device=desktop&engine=google&gl=us&google_domain=google.com&location=United+States&num=20&q=Vitamin+D3+dosage+for+adults+per+day",
+      "block_position": 1
+    },
+    {
+      "link": "https://www.google.com/search?sca_esv=7e23b67cda9c6a45&gl=us&q=Vitamin+D+deficiency&sa=X&ved=2ahUKEwi_sdX66MWSAxWccPUHHRgqNfwQ1QJ6BAhnEAE",
+      "query": "Vitamin D deficiency",
+      "serpapi_link": "https://serpapi.com/search.json?device=desktop&engine=google&gl=us&google_domain=google.com&location=United+States&num=20&q=Vitamin+D+deficiency",
+      "block_position": 1
+    }
+  ],
+  "aiGenSchemaTypes": [],
+  "relatedQuestions": [
+    {
+      "type": "ai_overview",
+      "question": "Is vitamin D3 ok to take daily?",
+      "references": [
+        {
+          "link": "https://www.mayoclinic.org/drugs-supplements-vitamin-d/art-20363792#:~:text=People%20who%20don't%20get,Kidney%20stones%20and%20kidney%20damage.",
+          "index": 0,
+          "title": "Vitamin D - Mayo Clinic",
+          "source": "Mayo Clinic",
+          "snippet": "Mar 21, 2025 — People who don't get enough vitamin D from sunlight or diet may need vitamin D supplements. Safety and side effects. T..."
+        },
+        {
+          "link": "https://www.nhs.uk/conditions/vitamins-and-minerals/vitamin-d/#:~:text=Advice%20for%20adults%20and%20children,throughout%20the%20year%20if%20they:",
+          "index": 1,
+          "title": "Vitamin D - NHS",
+          "source": "nhs.uk",
+          "snippet": "Advice for adults and children over 4 years old. During the autumn and winter, you need to get vitamin D from your diet because th..."
+        },
+        {
+          "link": "https://www.health.harvard.edu/staying-healthy/taking-too-much-vitamin-d-can-cloud-its-benefits-and-create-health-risks#:~:text=Watch%20your%20numbers.,is%20appropriate%20for%20your%20needs.",
+          "index": 2,
+          "title": "Taking too much vitamin D can cloud its benefits and create health risks",
+          "source": "Harvard Health",
+          "snippet": "Apr 7, 2022 — Watch your numbers. If you're taking a vitamin D supplement, you probably don't need more than 600 to 800 IU per day, w..."
+        },
+        {
+          "link": "https://ods.od.nih.gov/factsheets/VitaminD-Consumer/#:~:text=Yes%2C%20getting%20too%20much%20vitamin,medications%20or%20other%20dietary%20supplements?",
+          "index": 3,
+          "title": "Vitamin D - Consumer - NIH Office of Dietary Supplements",
+          "source": "National Institutes of Health (NIH) | (.gov)",
+          "snippet": "Nov 8, 2022 — Yes, getting too much vitamin D can be harmful. Very high levels of vitamin D in your blood (greater than 375 nmol/L or..."
+        },
+        {
+          "link": "https://www.webmd.com/vitamins/ai/ingredientmono-929/vitamin-d#:~:text=When%20taken%20by%20mouth:%20Vitamin,of%20calcium%20in%20the%20blood.",
+          "index": 4,
+          "title": "Vitamin D - Uses, Side Effects, and More - WebMD",
+          "source": "WebMD",
+          "snippet": "When taken by mouth: Vitamin D is likely safe when taken in recommended amounts. Most people don't experience side effects with vi..."
+        },
+        {
+          "link": "https://www.mayoclinic.org/healthy-lifestyle/nutrition-and-healthy-eating/expert-answers/vitamin-d-toxicity/faq-20058108#:~:text=Health%20effects%20of%20vitamin%20D,troubles%20such%20as%20kidney%20stones.",
+          "index": 5,
+          "title": "Vitamin D toxicity: What if you get too much? - Mayo Clinic",
+          "source": "Mayo Clinic",
+          "snippet": "Health effects of vitamin D toxicity The main concern of vitamin D toxicity is a buildup of calcium in the blood. This is called h..."
+        },
+        {
+          "link": "https://www.healthline.com/nutrition/how-much-vitamin-d-is-too-much#:~:text=Take%2Dhome%20message,101%20%E2%80%94%20A%20Detailed%20Beginner's%20Guide.",
+          "index": 6,
+          "title": "Vitamin D Overdose: How Much is Too Much? - Healthline",
+          "source": "Healthline",
+          "snippet": "Sep 23, 2024 — Take-home message. There is some debate regarding safe levels of supplemental vitamin D. Vitamin D toxicity can have d..."
+        }
+      ],
+      "text_blocks": [
+        {
+          "type": "paragraph",
+          "snippet": "Yes, you can take Vitamin D3 daily, and it's generally safe in recommended amounts (around 600-800 IU for most adults), but exceeding the upper limit of 4,000 IU daily without a doctor's guidance can be harmful, potentially causing calcium buildup (hypercalcemia) and issues like kidney stones or weakness. Many people need supplementation, especially in winter, but consult your doctor to determine the right dose for you, as needs vary, and high doses are sometimes used for deficiency.",
+          "snippet_links": [
+            {
+              "link": "https://www.google.com/search?sca_esv=7e23b67cda9c6a45&gl=us&q=upper+limit+of+4,000+IU+daily&sa=X&ved=2ahUKEwi_sdX66MWSAxWccPUHHRgqNfwQxccNegUIjAEQAg",
+              "text": "upper limit of 4,000 IU daily"
+            }
+          ],
+          "reference_indexes": [
+            0,
+            1,
+            2,
+            3,
+            6
+          ],
+          "snippet_highlighted_words": [
+            "Yes, you can take Vitamin D3 daily"
+          ]
+        },
+        {
+          "type": "paragraph",
+          "snippet": "Recommended Daily Intake"
+        },
+        {
+          "list": [
+            {
+              "snippet": "Standard: 600-800 IU (International Units) for most adults.",
+              "reference_indexes": [
+                2,
+                6
+              ]
+            },
+            {
+              "snippet": "Upper Limit: 4,000 IU (100 mcg) daily for adults, above which risks increase.",
+              "reference_indexes": [
+                0,
+                2,
+                3
+              ]
+            }
+          ],
+          "type": "list"
+        },
+        {
+          "type": "paragraph",
+          "snippet": "When You Might Need More (Under Doctor's Guidance)"
+        },
+        {
+          "list": [
+            {
+              "snippet": "You have a bone health disorder."
+            },
+            {
+              "snippet": "You have a condition affecting vitamin D absorption."
+            },
+            {
+              "snippet": "You have a diagnosed deficiency, which may require higher, temporary doses.",
+              "reference_indexes": [
+                2,
+                6
+              ]
+            }
+          ],
+          "type": "list"
+        },
+        {
+          "type": "paragraph",
+          "snippet": "Risks of Too Much Vitamin D"
+        },
+        {
+          "type": "heading",
+          "snippet": "Taking excessive amounts over time can lead to:",
+          "reference_indexes": [
+            0,
+            3,
+            4,
+            5
+          ]
+        },
+        {
+          "list": [
+            {
+              "snippet": "Nausea, vomiting, poor appetite, weight loss."
+            },
+            {
+              "snippet": "Muscle weakness, confusion."
+            },
+            {
+              "snippet": "Kidney stones and kidney damage."
+            },
+            {
+              "snippet": "Heart rhythm problems."
+            }
+          ],
+          "type": "list"
+        },
+        {
+          "type": "paragraph",
+          "snippet": "Key Takeaway"
+        },
+        {
+          "type": "paragraph",
+          "snippet": "It's best to talk to your healthcare provider to get a blood test and determine your specific needs, rather than self-prescribing high doses, as more isn't always better and can be risky.",
+          "reference_indexes": [
+            2,
+            6
+          ]
+        }
+      ],
+      "serpapi_link": "https://serpapi.com/search.json?device=desktop&engine=google_related_questions&google_domain=google.com&next_page_token=eyJvbnMiOiIxMDA0MSIsImZjIjoiRXFFQkNtSkJUVzR6TFhsU1VrRmxaMDVFUXpCb1dUSTFXbnA0ZVZsbmRVbE1NRlZWY1cxWFZGZ3RWR3REV25GU1JtaDJNMnBVTlhReGJXUTFhMmQwVGpBeU5YZFhSbm8xWTBzMFpWbGhVRk4wTFRGc05sRktPSGMwYzNrMGFVZGFXWG81V0doTFFSSVhabFkyUjJGbVh5MVBXbnBvTVdVNFVHMU9WRlUwVVRnYUlrRktTMHhHYlVzemFISnBiRWwwWmtNMGFuSTVOVEJJZW0xaWJWUXdWMUZJYjFFIiwiZmN2IjoiMyIsImVpIjoiZlY2R2FmXy1PWnpoMWU4UG1OVFU0UTgiLCJxYyI6IkNoWjJhWFJoYldsdUlHUXpJSE4xY0hCc1pXMWxiblJ6RUFCOWwzTTJQdyIsInF1ZXN0aW9uIjoiSXMgdml0YW1pbiBEMyBvayB0byB0YWtlIGRhaWx5PyIsImxrIjoiR2g1cGN5QjJhWFJoYldsdUlHUXpJRzlySUhSdklIUmhhMlVnWkdGcGJIayIsImJzIjoiYzQzT0lRX0NNQkFGNEdCUGtSQk1CWndDRXNCMENsVUJCbzJZUWhSNlc1dHQ3YkoyTFB2M3dCSkNFeWFRZF9udTNZTWpMTThlSHliSXlsZzhKZWdLREE2RExBaVZOR1V2T0xLRi1STDFTLUFBbUdvWjhNV0Nwamd0ZDA1aDVockI1MndXUlh6MmNJVmRxczFkdjRjS1hSWWYtN2F1UzZySURzazM4a0h3UGR0Mm8xNk5lYmpBZW1nbUd4cXFlWk5iajcxcjBSS3A2Sm5nRzdicV9xQXFtVTZlIiwiaWQiOiJmY19mVjZHYWZfLU9aemgxZThQbU5UVTRROF8xIn0%3D",
+      "next_page_token": "eyJvbnMiOiIxMDA0MSIsImZjIjoiRXFFQkNtSkJUVzR6TFhsU1VrRmxaMDVFUXpCb1dUSTFXbnA0ZVZsbmRVbE1NRlZWY1cxWFZGZ3RWR3REV25GU1JtaDJNMnBVTlhReGJXUTFhMmQwVGpBeU5YZFhSbm8xWTBzMFpWbGhVRk4wTFRGc05sRktPSGMwYzNrMGFVZGFXWG81V0doTFFSSVhabFkyUjJGbVh5MVBXbnBvTVdVNFVHMU9WRlUwVVRnYUlrRktTMHhHYlVzemFISnBiRWwwWmtNMGFuSTVOVEJJZW0xaWJWUXdWMUZJYjFFIiwiZmN2IjoiMyIsImVpIjoiZlY2R2FmXy1PWnpoMWU4UG1OVFU0UTgiLCJxYyI6IkNoWjJhWFJoYldsdUlHUXpJSE4xY0hCc1pXMWxiblJ6RUFCOWwzTTJQdyIsInF1ZXN0aW9uIjoiSXMgdml0YW1pbiBEMyBvayB0byB0YWtlIGRhaWx5PyIsImxrIjoiR2g1cGN5QjJhWFJoYldsdUlHUXpJRzlySUhSdklIUmhhMlVnWkdGcGJIayIsImJzIjoiYzQzT0lRX0NNQkFGNEdCUGtSQk1CWndDRXNCMENsVUJCbzJZUWhSNlc1dHQ3YkoyTFB2M3dCSkNFeWFRZF9udTNZTWpMTThlSHliSXlsZzhKZWdLREE2RExBaVZOR1V2T0xLRi1STDFTLUFBbUdvWjhNV0Nwamd0ZDA1aDVockI1MndXUlh6MmNJVmRxczFkdjRjS1hSWWYtN2F1UzZySURzazM4a0h3UGR0Mm8xNk5lYmpBZW1nbUd4cXFlWk5iajcxcjBSS3A2Sm5nRzdicV9xQXFtVTZlIiwiaWQiOiJmY19mVjZHYWZfLU9aemgxZThQbU5UVTRROF8xIn0="
+    },
+    {
+      "type": "ai_overview",
+      "question": "What is the vitamin D3 good for?",
+      "references": [
+        {
+          "link": "https://medlineplus.gov/druginfo/meds/a620058.html#:~:text=Cholecalciferol%20(vitamin%20D3)%20is,found%20in%20foods%20or%20supplements.",
+          "index": 0,
+          "title": "Cholecalciferol (Vitamin D3): MedlinePlus Drug Information",
+          "source": "MedlinePlus (.gov)",
+          "snippet": "Oct 15, 2020 — Cholecalciferol (vitamin D3) is used as a dietary supplement when the amount of vitamin D in the diet is not enough. P..."
+        },
+        {
+          "link": "https://www.mayoclinic.org/drugs-supplements-vitamin-d/art-20363792#:~:text=Cancer.,type%20psoriasis%20in%20some%20people.",
+          "index": 1,
+          "title": "Vitamin D - Mayo Clinic",
+          "source": "Mayo Clinic",
+          "snippet": "Mar 21, 2025 — Cancer. Findings on whether vitamin D can help prevent cancer are mixed. More studies are needed to find out whether v..."
+        },
+        {
+          "link": "https://www.health.harvard.edu/staying-healthy/taking-too-much-vitamin-d-can-cloud-its-benefits-and-create-health-risks#:~:text=Vitamin%20D%20and%20your%20health,conditions%20began%20to%20expand%20rapidly.",
+          "index": 2,
+          "title": "Taking too much vitamin D can cloud its benefits and create health risks",
+          "source": "Harvard Health",
+          "snippet": "Apr 7, 2022 — Vitamin D and your health. Vitamin D, nicknamed \"the sunshine vitamin\" because your body produces it after sun exposure..."
+        },
+        {
+          "link": "https://www.health.com/vitamin-d3-benefits-11710006#:~:text=Vitamin%20D3%20helps%20your%20body,strength%20and%20mental%20well%2Dbeing.",
+          "index": 3,
+          "title": "Vitamin D3: Benefits, Uses, Side Effects, and More - Health",
+          "source": "Health: Trusted and Empathetic Health and Wellness Information",
+          "snippet": "Oct 30, 2025 — Vitamin D3 helps your body absorb calcium, which is essential for healthy bones. Direct sunlight and foods like fatty ..."
+        },
+        {
+          "link": "https://www.verywellhealth.com/vitamin-d3-5082500",
+          "index": 4,
+          "title": "15 Ways Vitamin D Supercharges Your Health",
+          "source": "Verywell Health",
+          "snippet": "Vitamin D3 is beneficial for weight management because it: * Helps regulate hormones, like leptin, that are involved in stimulati..."
+        },
+        {
+          "link": "https://www.nhs.uk/conditions/vitamins-and-minerals/vitamin-d/#:~:text=Vitamin%20D%20helps%20regulate%20the,prevent%20or%20treat%20COVID%2D19.",
+          "index": 5,
+          "title": "Vitamin D - NHS",
+          "source": "nhs.uk",
+          "snippet": "Vitamin D helps regulate the amount of calcium and phosphate in the body. These nutrients are needed to keep bones, teeth and musc..."
+        },
+        {
+          "link": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3696135/",
+          "index": 6,
+          "title": "The Emerging Role of Vitamin D3 in Women’s Health - PMC",
+          "source": "National Institutes of Health (NIH) | (.gov)",
+          "snippet": "* Traditional Role. Traditionally, Vit D3, Cholecalceferol, and Calcitriol (1, 25(OH)2D3) had a role in only calcium metabolism a..."
+        },
+        {
+          "link": "https://www.parashospitals.com/blogs/vitamin-D3-benefits-symptoms-dosage-complete-guide#:~:text=to%2Dunderstand%20way.-,What%20Is%20Vitamin%20D3?,Supplements",
+          "index": 7,
+          "title": "Why Vitamin D3 Matters: Signs, Benefits & Daily Needs",
+          "source": "Paras Hospital",
+          "snippet": "Dec 1, 2025 — What Is Vitamin D3? Vitamin D3 (also called cholecalciferol, Vit D3, or simply Vitamin D) is a fat-soluble vitamin that..."
+        },
+        {
+          "link": "https://www.today.com/health/diet-fitness/vitamin-d3-rcna145117#:~:text=Vitamin%20D3%20is%20a%20fat%2Dsoluble%20vitamin%20that,(UVB)%20rays%20from%20sunlight%20hit%20uncovered%20skin.",
+          "index": 8,
+          "title": "What is Vitamin D3? Discover its benefits, sources and side effects",
+          "source": "TODAY.com",
+          "snippet": "Mar 21, 2025 — Vitamin D3 is a fat-soluble vitamin that plays a role in many bodily functions. It helps the body: * Promote bone heal..."
+        },
+        {
+          "link": "https://corconinternational.com/vitamin-d3-what-we-need-where-we-find-what-we-take/#:~:text=Benefits%20of%20vitamin%20D3,disorders%20such%20as%20seasonal%20depression.",
+          "index": 9,
+          "title": "Vitamin D3: what it is used for, where it is and how to take it",
+          "source": "Cor.Con. International",
+          "snippet": "Benefits of vitamin D3 Vitamin D3 is not only the vitamin of calcium, but a true ally for our health. It contributes to the normal..."
+        },
+        {
+          "link": "https://www.youtube.com/watch?v=S6N50ZsTnfs",
+          "index": 10,
+          "title": "Vitamin D benefits you should know about",
+          "source": "YouTube · WCNC",
+          "snippet": "Jan 17, 2023 — and as we head into the middle of winter sunny days are in short supply. today definitely that's the case that means a..."
+        },
+        {
+          "link": "https://www.kazidomi.com/en/blog/health/vitamin-d3-benefits#:~:text=Kazidomi%20offers%20Vitamin%20D3%20supplements.%20Vitamin%20D3,to%201000%20IU%20per%20day%20during%20winter",
+          "index": 11,
+          "title": "Vitamin D3 benefits | Blog organic Kazidomi",
+          "source": "Kazidomi",
+          "snippet": "Oct 2, 2025 — Kazidomi offers Vitamin D3 supplements. Vitamin D3 is an essential hormone that plays a role in bone health and immune ..."
+        },
+        {
+          "link": "https://www.medicoverhospitals.in/articles/vitamin-d3-affects-on-health#:~:text=Your%20medical%20provider%20can%20give%20guidance%20on,health**%20*%20**Heart%20health**%20*%20**Cancer%20prevention**",
+          "index": 12,
+          "title": "Vitamin D3: Benefits, Foods & Safe Daily Dose",
+          "source": "Medicover Hospitals",
+          "snippet": "Your medical provider can give guidance on what is best for your situation. This information does not constitute medical advice or..."
+        },
+        {
+          "link": "https://www.1mg.com/drugs/d3-must-60k-tablet-orange-sugar-free-966483#:~:text=D3%20Must%2060K%20Tablet%20Orange%20Sugar%20Free%20is%20used%20in,does%20not%20provide%20enough%20calcium.",
+          "index": 13,
+          "title": "D3 Must 60K Tablet Orange Sugar Free - 1mg",
+          "source": "1mg",
+          "snippet": "Dec 15, 2025 — D3 Must 60K Tablet Orange Sugar Free is used in the treatment of vitamin D deficiency and osteoporosis. It helps the b..."
+        }
+      ],
+      "text_blocks": [
+        {
+          "type": "paragraph",
+          "snippet": "Vitamin D3 benefits include supporting strong bones by helping absorb calcium and phosphorus, boosting immune function, improving muscle strength, aiding mood regulation, and potentially reducing risks for certain diseases like MS, osteoporosis, and some cancers, though more research is needed for some conditions. It's essential for overall health, acting like a hormone to help regulate many bodily processes, from cell growth to inflammation.",
+          "reference_indexes": [
+            0,
+            1,
+            3,
+            6,
+            7,
+            8
+          ]
+        },
+        {
+          "type": "paragraph",
+          "snippet": "Key Benefits"
+        },
+        {
+          "list": [
+            {
+              "snippet": "Bone Health: Crucial for absorbing calcium and phosphorus, preventing bone diseases like rickets, osteomalacia, and osteoporosis, and reducing fractures.",
+              "reference_indexes": [
+                0,
+                1,
+                2,
+                5,
+                13
+              ]
+            },
+            {
+              "snippet": "Immune System Support: Helps protect against infections and autoimmune conditions.",
+              "reference_indexes": [
+                0,
+                8,
+                9
+              ]
+            },
+            {
+              "snippet": "Muscle Function: Supports muscle strength and function, potentially helping with weight management by increasing metabolism.",
+              "reference_indexes": [
+                4,
+                7,
+                8
+              ]
+            },
+            {
+              "snippet": "Mood & Cognitive Health: Linked to mood regulation and can help prevent seasonal depression; low levels are associated with cognitive decline.",
+              "reference_indexes": [
+                1,
+                7,
+                8,
+                9
+              ]
+            },
+            {
+              "snippet": "Heart Health: Supports cardiovascular health.",
+              "reference_indexes": [
+                3,
+                10,
+                12
+              ]
+            },
+            {
+              "snippet": "Cell Regulation: Plays a role in cell differentiation and proliferation.",
+              "reference_indexes": [
+                6
+              ]
+            }
+          ],
+          "type": "list"
+        },
+        {
+          "type": "paragraph",
+          "snippet": "Sources of Vitamin D3"
+        },
+        {
+          "list": [
+            {
+              "snippet": "Sunlight: The body produces it when skin is exposed to UVB rays.",
+              "reference_indexes": [
+                2,
+                8
+              ]
+            },
+            {
+              "snippet": "Food: Fatty fish, egg yolks, fortified milk, cereals, and juices.",
+              "reference_indexes": [
+                8,
+                11
+              ]
+            },
+            {
+              "snippet": "Supplements: A common way to ensure adequate intake, especially for those with limited sun exposure.",
+              "reference_indexes": [
+                0,
+                7
+              ]
+            }
+          ],
+          "type": "list"
+        },
+        {
+          "type": "paragraph",
+          "snippet": "Who Needs More?"
+        },
+        {
+          "type": "paragraph",
+          "snippet": "Older adults, breastfed infants, people with dark skin, obese individuals, and those with certain digestive conditions are at higher risk for deficiency.",
+          "reference_indexes": [
+            0
+          ]
+        },
+        {
+          "type": "paragraph",
+          "snippet": "Important Note"
+        },
+        {
+          "type": "paragraph",
+          "snippet": "While research points to many benefits, consult a healthcare provider to determine if you need a supplement and the right dosage, as taking too much can have risks.",
+          "reference_indexes": [
+            2,
+            12
+          ]
+        }
+      ],
+      "serpapi_link": "https://serpapi.com/search.json?device=desktop&engine=google_related_questions&google_domain=google.com&next_page_token=eyJvbnMiOiIxMDA0MSIsImZjIjoiRXFFQkNtSkJUVzR6TFhsU1VrRmxaMDVFUXpCb1dUSTFXbnA0ZVZsbmRVbE1NRlZWY1cxWFZGZ3RWR3REV25GU1JtaDJNMnBVTlhReGJXUTFhMmQwVGpBeU5YZFhSbm8xWTBzMFpWbGhVRk4wTFRGc05sRktPSGMwYzNrMGFVZGFXWG81V0doTFFSSVhabFkyUjJGbVh5MVBXbnBvTVdVNFVHMU9WRlUwVVRnYUlrRktTMHhHYlVzemFISnBiRWwwWmtNMGFuSTVOVEJJZW0xaWJWUXdWMUZJYjFFIiwiZmN2IjoiMyIsImVpIjoiZlY2R2FmXy1PWnpoMWU4UG1OVFU0UTgiLCJxYyI6IkNoWjJhWFJoYldsdUlHUXpJSE4xY0hCc1pXMWxiblJ6RUFCOWwzTTJQdyIsInF1ZXN0aW9uIjoiV2hhdCBpcyB0aGUgdml0YW1pbiBEMyBnb29kIGZvcj8iLCJsayI6IkdoTjJhWFJoYldsdUlHUXpJR2R2YjJRZ1ptOXkiLCJicyI6ImM0M09JUV9DTUJBRjRHQlBrUkJNQlp3Q0VzQjBDbFVCQm8yWVFoUjZXNXR0N2JKMkxQdjN3QkpDRXlhUWRfbnUzWU1qTE04ZUh5Ykl5bGc4SmVnS0RBNkRMQWlWTkdVdk9MS0YtUkwxUy1BQW1Hb1o4TVdDcGpndGQwNWg1aHJCNTJ3V1JYejJjSVZkcXMxZHY0Y0tYUllmLTdhdVM2cklEc2szOGtId1BkdDJvMTZOZWJqQWVtZ21HeHFxZVpOYmo3MXIwUktwNkpuZ0c3YnFfcUFxbVU2ZSIsImlkIjoiZmNfZlY2R2FmXy1PWnpoMWU4UG1OVFU0UThfMSJ9",
+      "next_page_token": "eyJvbnMiOiIxMDA0MSIsImZjIjoiRXFFQkNtSkJUVzR6TFhsU1VrRmxaMDVFUXpCb1dUSTFXbnA0ZVZsbmRVbE1NRlZWY1cxWFZGZ3RWR3REV25GU1JtaDJNMnBVTlhReGJXUTFhMmQwVGpBeU5YZFhSbm8xWTBzMFpWbGhVRk4wTFRGc05sRktPSGMwYzNrMGFVZGFXWG81V0doTFFSSVhabFkyUjJGbVh5MVBXbnBvTVdVNFVHMU9WRlUwVVRnYUlrRktTMHhHYlVzemFISnBiRWwwWmtNMGFuSTVOVEJJZW0xaWJWUXdWMUZJYjFFIiwiZmN2IjoiMyIsImVpIjoiZlY2R2FmXy1PWnpoMWU4UG1OVFU0UTgiLCJxYyI6IkNoWjJhWFJoYldsdUlHUXpJSE4xY0hCc1pXMWxiblJ6RUFCOWwzTTJQdyIsInF1ZXN0aW9uIjoiV2hhdCBpcyB0aGUgdml0YW1pbiBEMyBnb29kIGZvcj8iLCJsayI6IkdoTjJhWFJoYldsdUlHUXpJR2R2YjJRZ1ptOXkiLCJicyI6ImM0M09JUV9DTUJBRjRHQlBrUkJNQlp3Q0VzQjBDbFVCQm8yWVFoUjZXNXR0N2JKMkxQdjN3QkpDRXlhUWRfbnUzWU1qTE04ZUh5Ykl5bGc4SmVnS0RBNkRMQWlWTkdVdk9MS0YtUkwxUy1BQW1Hb1o4TVdDcGpndGQwNWg1aHJCNTJ3V1JYejJjSVZkcXMxZHY0Y0tYUllmLTdhdVM2cklEc2szOGtId1BkdDJvMTZOZWJqQWVtZ21HeHFxZVpOYmo3MXIwUktwNkpuZ0c3YnFfcUFxbVU2ZSIsImlkIjoiZmNfZlY2R2FmXy1PWnpoMWU4UG1OVFU0UThfMSJ9"
+    },
+    {
+      "type": "ai_overview",
+      "question": "Which form of vitamin D3 supplement is best?",
+      "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQeADtjlj49Ep4k9PitLV-lLSuKJmi49eQDv1b22Kg8Dsy1YADIKWU7mtKPiw&s",
+      "references": [
+        {
+          "link": "https://www.menshealthboston.com/the-sunshine-vitamin-part-2-choosing-the-right-vitamin-d-supplement/#:~:text=D3.,D%20from%20a%20tanning%20bed?",
+          "index": 0,
+          "title": "Choosing the Right Vitamin D Supplement | Men's Health Boston",
+          "source": "Men's Health Boston",
+          "snippet": "Apr 26, 2023 — D3. D2 is plant-based and is often the form of Vitamin D used to fortify foods. It is sourced mainly from fungi (such ..."
+        },
+        {
+          "link": "https://www.goodrx.com/well-being/supplements-herbs/vitamin-d2-vs-vitamin-d3-whats-the-difference",
+          "index": 1,
+          "title": "Vitamin D2 vs. Vitamin D3: Key Differences and Which to Choose",
+          "source": "GoodRx"
+        },
+        {
+          "link": "https://www.kelley-ross.com/a-helpful-guide-to-vitamin-d-supplements-how-to-choose-the-best-option-for-you/#:~:text=Delivery%20Forms%20%E2%80%93%20Which%20One%20to,made%20from%20seaweed%20or%20starch.",
+          "index": 2,
+          "title": "A Helpful Guide to Vitamin D Supplements: How to Choose the Best ...",
+          "source": "Kelley-Ross Pharmacy Group",
+          "snippet": "Delivery Forms – Which One to Choose? Vitamin D is a fat-soluble vitamin, which means it needs to be dissolved in fat to be absorb..."
+        },
+        {
+          "link": "https://www.ithrive.shop/blogs/essential-insights/best-vitamin-d-liquid-vs-softgel-vs-capsule#:~:text=Softgels%20Vitamin%20D3,likely%20low%20on%20Vitamin%20D.",
+          "index": 3,
+          "title": "Best Vitamin D: Liquid vs Softgel vs Capsule Comparison",
+          "source": "iThrive Essentials",
+          "snippet": "Apr 29, 2025 — Softgels Vitamin D3. Softgels can be better than capsules when it comes to Vitamin D supplements. They often contain V..."
+        },
+        {
+          "link": "https://www.youtube.com/watch?v=EwNiD5-jqHA&t=282",
+          "index": 4,
+          "title": "What's the Perfect Vitamin D Dose?",
+          "source": "YouTube · Dr Brad Stanfield",
+          "snippet": "May 7, 2024 — on the assumption that people receive minimal sun exposure. so for older adults over 70 years old they suggest 800 inte..."
+        },
+        {
+          "link": "https://aidp.com/2023/02/24/tips-for-choosing-the-right-vitamin-d/",
+          "index": 5,
+          "title": "Tips for Choosing the Right Vitamin D – AIDP",
+          "source": "aidp.com",
+          "snippet": "Feb 24, 2023 — PhytoD3 is a vegan certified vitamin D3 supplement. It is sourced from non-GMO phytosterol-rich plant oil. PhytoD3 is ..."
+        },
+        {
+          "link": "https://www.hollandandbarrett.ie/the-health-hub/vitamins-and-supplements/vitamins/vitamin-d/best-vitamin-d-supplements/#:~:text=There's%20no%20clear%20evidence%20that%20one%20form,for%20supporting%20bones%2C%20teeth%2C%20muscles%2C%20and%20immunity.",
+          "index": 6,
+          "title": "12 Of The Best Vitamin D Supplements | Holland & Barrett",
+          "source": "Holland & Barrett",
+          "snippet": "Jan 4, 2026 — There's no clear evidence that one form is more effective than another. The best vitamin D is the one that fits your li..."
+        },
+        {
+          "link": "https://journaljpri.com/index.php/JPRI/article/view/5877#:~:text=A%20study%20compared%20the%20effectiveness%2C%20safety%2C%20and,**Cost%2Deffectiveness**%20*%20**Ease%20of%20use**%20*%20**Palatability**",
+          "index": 7,
+          "title": "Evaluating the Effectiveness of Various Vitamin D Formulations after Treatment",
+          "source": "Journal of Pharmaceutical Research International",
+          "snippet": "Jan 25, 2022 — A study compared the effectiveness, safety, and tolerability of three vitamin D3 products: * **Soft gelatin capsule**"
+        }
+      ],
+      "text_blocks": [
+        {
+          "type": "paragraph",
+          "snippet": "The best form of Vitamin D3 for absorption is often a liquid or softgel dissolved in oil, as D3 is fat-soluble, improving uptake, especially when taken with a meal containing fat. While D2 (plant-based) is an option, D3 is superior for boosting blood levels, and D3 in chewable tablets or sprays can also be very effective and convenient. The \"best\" ultimately depends on personal preference and digestive needs, but look for D3 (cholecalciferol) in an oil base for optimal absorption.",
+          "snippet_links": [
+            {
+              "link": "https://www.google.com/search?sca_esv=7e23b67cda9c6a45&gl=us&q=softgel&sa=X&ved=2ahUKEwi_sdX66MWSAxWccPUHHRgqNfwQxccNegUIoAIQAQ",
+              "text": "softgel"
+            },
+            {
+              "link": "https://www.google.com/search?sca_esv=7e23b67cda9c6a45&gl=us&q=chewable+tablets&sa=X&ved=2ahUKEwi_sdX66MWSAxWccPUHHRgqNfwQxccNegUIowIQAQ",
+              "text": "chewable tablets"
+            },
+            {
+              "link": "https://www.google.com/search?sca_esv=7e23b67cda9c6a45&gl=us&q=sprays&sa=X&ved=2ahUKEwi_sdX66MWSAxWccPUHHRgqNfwQxccNegUIowIQAg",
+              "text": "sprays"
+            }
+          ],
+          "reference_indexes": [
+            1,
+            2,
+            3,
+            4,
+            7
+          ]
+        },
+        {
+          "type": "heading",
+          "snippet": "Delivery Forms Explained:"
+        },
+        {
+          "list": [
+            {
+              "link": "https://www.google.com/search?sca_esv=7e23b67cda9c6a45&gl=us&q=Liquid+D3&sa=X&ved=2ahUKEwi_sdX66MWSAxWccPUHHRgqNfwQxccNegUIgAIQAQ",
+              "title": "Liquid D3:",
+              "snippet": "Often considered the most effective because the vitamin is already dissolved in oil (like olive or MCT oil), requiring less digestive work and ensuring better absorption, notes iThrive Essentials.",
+              "snippet_links": [
+                {
+                  "link": "https://www.ithrive.shop/blogs/essential-insights/best-vitamin-d-liquid-vs-softgel-vs-capsule",
+                  "text": "iThrive Essentials"
+                }
+              ],
+              "reference_indexes": [
+                2,
+                3
+              ]
+            },
+            {
+              "link": "https://www.google.com/search?sca_esv=7e23b67cda9c6a45&gl=us&q=Softgels&sa=X&ved=2ahUKEwi_sdX66MWSAxWccPUHHRgqNfwQxccNegUInAIQAQ",
+              "title": "Softgels:",
+              "snippet": "A good choice as they contain D3 in oil, but they still need to break down in the stomach, which can be an issue for those with poor digestion, according to iThrive Essentials.",
+              "reference_indexes": [
+                2,
+                3
+              ]
+            },
+            {
+              "link": "https://www.google.com/search?sca_esv=7e23b67cda9c6a45&gl=us&q=Gummies&sa=X&ved=2ahUKEwi_sdX66MWSAxWccPUHHRgqNfwQxccNegUIxgIQAQ",
+              "title": "Chewable Tablets/Gummies:",
+              "snippet": "Can be highly effective and palatable, with some studies showing chewables performing very well in raising vitamin D levels, notes Holland & Barrett and the Journal of Pharmaceutical Research International.",
+              "snippet_links": [
+                {
+                  "link": "https://journaljpri.com/index.php/JPRI/article/view/5877",
+                  "text": "Journal of Pharmaceutical Research International"
+                }
+              ],
+              "reference_indexes": [
+                6,
+                7
+              ]
+            },
+            {
+              "title": "Capsules (Powder):",
+              "snippet": "Less ideal if they contain powdered D3, as they require more effort to break down and absorb, especially with poor gut health, says iThrive Essentials.",
+              "reference_indexes": [
+                3
+              ]
+            },
+            {
+              "title": "Oral Sprays:",
+              "snippet": "Offer a convenient, fast-absorbing option, notes Holland & Barrett.",
+              "reference_indexes": [
+                6
+              ]
+            }
+          ],
+          "type": "list"
+        },
+        {
+          "type": "heading",
+          "snippet": "Key Considerations:"
+        },
+        {
+          "list": [
+            {
+              "link": "https://www.google.com/search?sca_esv=7e23b67cda9c6a45&gl=us&q=D3+vs.+D2&sa=X&ved=2ahUKEwi_sdX66MWSAxWccPUHHRgqNfwQxccNegUI-gIQAw",
+              "title": "D3 vs. D2:",
+              "snippet": "D3 (cholecalciferol) is generally preferred over D2 (ergocalciferol) for significantly boosting blood vitamin D levels, according to GoodRx and Men's Health Boston.",
+              "snippet_links": [
+                {
+                  "link": "https://www.goodrx.com/well-being/supplements-herbs/vitamin-d2-vs-vitamin-d3-whats-the-difference",
+                  "text": "GoodRx"
+                },
+                {
+                  "link": "https://www.menshealthboston.com/the-sunshine-vitamin-part-2-choosing-the-right-vitamin-d-supplement/",
+                  "text": "Men's Health Boston"
+                }
+              ],
+              "reference_indexes": [
+                0,
+                1,
+                4
+              ]
+            },
+            {
+              "link": "https://www.google.com/search?sca_esv=7e23b67cda9c6a45&gl=us&q=Take+with+Fat&sa=X&ved=2ahUKEwi_sdX66MWSAxWccPUHHRgqNfwQxccNegUI9gIQAw",
+              "title": "Take with Fat:",
+              "snippet": "Always take your supplement with a meal that includes healthy fats (like avocado, nuts, or fatty fish) for better absorption, as D3 is fat-soluble, say Kelley-Ross Pharmacy Group.",
+              "reference_indexes": [
+                2
+              ]
+            },
+            {
+              "link": "https://www.google.com/search?sca_esv=7e23b67cda9c6a45&gl=us&q=Source&sa=X&ved=2ahUKEwi_sdX66MWSAxWccPUHHRgqNfwQxccNegUIiAMQAw",
+              "title": "Source:",
+              "snippet": "D3 is sourced from animal products, while D2 is plant-based; vegan D3 is available from plant sources like lichen.",
+              "reference_indexes": [
+                0,
+                1,
+                5
+              ]
+            }
+          ],
+          "type": "list"
+        },
+        {
+          "type": "paragraph",
+          "snippet": "For the best results, choose a D3 supplement in a liquid or oil-based softgel, or consider chewables/sprays for convenience, and take it with food.",
+          "reference_indexes": [
+            2,
+            3,
+            7
+          ]
+        }
+      ],
+      "serpapi_link": "https://serpapi.com/search.json?device=desktop&engine=google_related_questions&google_domain=google.com&next_page_token=eyJvbnMiOiIxMDA0MSIsImZjIjoiRXFFQkNtSkJUVzR6TFhsU1VrRmxaMDVFUXpCb1dUSTFXbnA0ZVZsbmRVbE1NRlZWY1cxWFZGZ3RWR3REV25GU1JtaDJNMnBVTlhReGJXUTFhMmQwVGpBeU5YZFhSbm8xWTBzMFpWbGhVRk4wTFRGc05sRktPSGMwYzNrMGFVZGFXWG81V0doTFFSSVhabFkyUjJGbVh5MVBXbnBvTVdVNFVHMU9WRlUwVVRnYUlrRktTMHhHYlVzemFISnBiRWwwWmtNMGFuSTVOVEJJZW0xaWJWUXdWMUZJYjFFIiwiZmN2IjoiMyIsImVpIjoiZlY2R2FmXy1PWnpoMWU4UG1OVFU0UTgiLCJxYyI6IkNoWjJhWFJoYldsdUlHUXpJSE4xY0hCc1pXMWxiblJ6RUFCOWwzTTJQdyIsInF1ZXN0aW9uIjoiV2hpY2ggZm9ybSBvZiB2aXRhbWluIEQzIHN1cHBsZW1lbnQgaXMgYmVzdD8iLCJsayI6IkdpdDNhR2xqYUNCbWIzSnRJRzltSUhacGRHRnRhVzRnWkRNZ2MzVndjR3hsYldWdWRDQnBjeUJpWlhOMCIsImJzIjoiYzQzT0lRX0NNQkFGNEdCUGtSQk1CWndDRXNCMENsVUJCbzJZUWhSNlc1dHQ3YkoyTFB2M3dCSkNFeWFRZF9udTNZTWpMTThlSHliSXlsZzhKZWdLREE2RExBaVZOR1V2T0xLRi1STDFTLUFBbUdvWjhNV0Nwamd0ZDA1aDVockI1MndXUlh6MmNJVmRxczFkdjRjS1hSWWYtN2F1UzZySURzazM4a0h3UGR0Mm8xNk5lYmpBZW1nbUd4cXFlWk5iajcxcjBSS3A2Sm5nRzdicV9xQXFtVTZlIiwiaWQiOiJmY19mVjZHYWZfLU9aemgxZThQbU5UVTRROF8xIn0%3D",
+      "next_page_token": "eyJvbnMiOiIxMDA0MSIsImZjIjoiRXFFQkNtSkJUVzR6TFhsU1VrRmxaMDVFUXpCb1dUSTFXbnA0ZVZsbmRVbE1NRlZWY1cxWFZGZ3RWR3REV25GU1JtaDJNMnBVTlhReGJXUTFhMmQwVGpBeU5YZFhSbm8xWTBzMFpWbGhVRk4wTFRGc05sRktPSGMwYzNrMGFVZGFXWG81V0doTFFSSVhabFkyUjJGbVh5MVBXbnBvTVdVNFVHMU9WRlUwVVRnYUlrRktTMHhHYlVzemFISnBiRWwwWmtNMGFuSTVOVEJJZW0xaWJWUXdWMUZJYjFFIiwiZmN2IjoiMyIsImVpIjoiZlY2R2FmXy1PWnpoMWU4UG1OVFU0UTgiLCJxYyI6IkNoWjJhWFJoYldsdUlHUXpJSE4xY0hCc1pXMWxiblJ6RUFCOWwzTTJQdyIsInF1ZXN0aW9uIjoiV2hpY2ggZm9ybSBvZiB2aXRhbWluIEQzIHN1cHBsZW1lbnQgaXMgYmVzdD8iLCJsayI6IkdpdDNhR2xqYUNCbWIzSnRJRzltSUhacGRHRnRhVzRnWkRNZ2MzVndjR3hsYldWdWRDQnBjeUJpWlhOMCIsImJzIjoiYzQzT0lRX0NNQkFGNEdCUGtSQk1CWndDRXNCMENsVUJCbzJZUWhSNlc1dHQ3YkoyTFB2M3dCSkNFeWFRZF9udTNZTWpMTThlSHliSXlsZzhKZWdLREE2RExBaVZOR1V2T0xLRi1STDFTLUFBbUdvWjhNV0Nwamd0ZDA1aDVockI1MndXUlh6MmNJVmRxczFkdjRjS1hSWWYtN2F1UzZySURzazM4a0h3UGR0Mm8xNk5lYmpBZW1nbUd4cXFlWk5iajcxcjBSS3A2Sm5nRzdicV9xQXFtVTZlIiwiaWQiOiJmY19mVjZHYWZfLU9aemgxZThQbU5UVTRROF8xIn0="
+    },
+    {
+      "type": "ai_overview",
+      "question": "What are the signs you need vitamin D3?",
+      "references": [
+        {
+          "link": "https://my.clevelandclinic.org/health/diseases/15050-vitamin-d-vitamin-d-deficiency#:~:text=Fatigue.,Mood%20changes%2C%20like%20depression.",
+          "index": 0,
+          "title": "Vitamin D Deficiency: Causes, Symptoms & Treatment",
+          "source": "Cleveland Clinic",
+          "snippet": "Aug 2, 2022 — Fatigue. Bone pain. Muscle weakness, muscle aches or muscle cramps. Mood changes, like depression."
+        },
+        {
+          "link": "https://www.yalemedicine.org/conditions/vitamin-d-deficiency#:~:text=It%20has%20been%20suggested%20that,routinely%20ordered%20for%20all%20patients.",
+          "index": 1,
+          "title": "Vitamin D Deficiency | Fact Sheets - Yale Medicine",
+          "source": "Yale Medicine",
+          "snippet": "It has been suggested that vitamin D deficiency may play a role in certain conditions, such as fibromyalgia, chronic fatigue syndr..."
+        },
+        {
+          "link": "https://www.unitypoint.org/news-and-articles/how-to-spot-a-vitamin-d-deficiency#:~:text=How%20Can%20I%20Test%20for,Ropte%20says.",
+          "index": 2,
+          "title": "How to Spot a Vitamin D Deficiency - UnityPoint Health",
+          "source": "UnityPoint Health",
+          "snippet": "How Can I Test for Vitamin D Deficiency? To check for a deficiency, a simple blood test does the trick. Talk to your doctor about ..."
+        },
+        {
+          "link": "https://ods.od.nih.gov/factsheets/VitaminD-Consumer/#:~:text=Because%20you%20get%20vitamin%20D,trouble%20getting%20enough%20vitamin%20D:",
+          "index": 3,
+          "title": "Vitamin D - Consumer - NIH Office of Dietary Supplements",
+          "source": "National Institutes of Health (NIH) | (.gov)",
+          "snippet": "Nov 8, 2022 — Because you get vitamin D from food, sunshine, and dietary supplements, one way to know if you're getting enough is a b..."
+        },
+        {
+          "link": "https://medlineplus.gov/lab-tests/vitamin-d-test/#:~:text=Before%20your%20body%20can%20use,vitamin%20D%20test%20if%20you:",
+          "index": 4,
+          "title": "Vitamin D Test: MedlinePlus Medical Test",
+          "source": "MedlinePlus (.gov)",
+          "snippet": "Dec 4, 2024 — Before your body can use vitamin D, your liver must change it into another form called 25 hydroxyvitamin D, or 25(OH)D."
+        },
+        {
+          "link": "https://www.cuimc.columbia.edu/news/whats-deal-vitamin-d#:~:text=How%20do%20you%20know%20if,D%20deficiency%20appears%20as%20rickets.",
+          "index": 5,
+          "title": "What’s the Deal with Vitamin D?",
+          "source": "Columbia University Irving Medical Center",
+          "snippet": "Aug 24, 2022 — How do you know if you're vitamin D-deficient? Measuring the form of vitamin D made in the liver, called 25-hydroxyvit..."
+        },
+        {
+          "link": "https://www.healthline.com/nutrition/vitamin-d-deficiency-symptoms#:~:text=Common%20Symptoms%20of%20Vitamin%20D%20Deficiency%20and%20How%20to%20Treat%20Them&text=Symptoms%20of%20vitamin%20D%20deficiency%20may%20include%20fatigue%2C%20frequent%20illness,multiple%20sclerosis",
+          "index": 6,
+          "title": "Vitamin D Deficiency: Symptoms, Treatments, and Causes - Healthline",
+          "source": "Healthline",
+          "snippet": "Jan 2, 2023 — Common Symptoms of Vitamin D Deficiency and How to Treat Them. ... Symptoms of vitamin D deficiency may include fatigue..."
+        },
+        {
+          "link": "https://www.avancecare.com/signs-and-symptoms-of-vitamin-d-deficiency-and-what-you-should-do/",
+          "index": 7,
+          "title": "Signs and Symptoms of Vitamin D Deficiency, and What You Should ...",
+          "source": "Avance Care",
+          "snippet": "Dec 20, 2024 — Common Signs and Symptoms of Vitamin D Deficiency * Fatigue and Tiredness. Persistent fatigue is one of the most over..."
+        },
+        {
+          "link": "https://www.webmd.com/diet/vitamin-d-deficiency",
+          "index": 8,
+          "title": "Vitamin D Deficiency: Symptoms, Causes, and Health Risks",
+          "source": "WebMD",
+          "snippet": "Apr 10, 2024 — Fatigue; Bone and joint pain (especially in your back); Bone loss; Muscle weakness, aches, or cramps; Mood changes, su..."
+        },
+        {
+          "link": "https://www.bswhealth.com/blog/7-signs-you-may-be-vitamin-d-deficient",
+          "index": 9,
+          "title": "Time to soak up the sun? 8 signs of low vitamin D",
+          "source": "Baylor Scott & White Health",
+          "snippet": "Apr 22, 2025 — What are the 8 signs of low vitamin D? * Bone pain and lower back pain. People of all ages can have worsening bone he..."
+        },
+        {
+          "link": "https://www.better2know.co.uk/blog/how-do-i-know-if-im-low-on-vitamin-d/#:~:text=Symptoms%20of%20a%20vitamin%20D%20deficiency%20include:,hyperparathyroidism%20*%20Wearing%20too%20much%20sunscreen%20outdoors",
+          "index": 10,
+          "title": "How do I know if I’m low on Vitamin D?",
+          "source": "Better2Know",
+          "snippet": "Symptoms of a vitamin D deficiency include: * Frequent illness * Fatigue * Bone pain, muscle pain, and joint pain * Depression * H..."
+        }
+      ],
+      "text_blocks": [
+        {
+          "type": "paragraph",
+          "snippet": "You know you might need Vitamin D3 if you experience fatigue, bone/back pain, muscle weakness/cramps, frequent illnesses, or mood changes like depression, but the only definitive way to know for sure is a doctor-ordered 25-hydroxyvitamin D blood test; many people with deficiencies have no symptoms, while others have vague signs, so talking to your doctor about testing is key, especially if you have risk factors like limited sun exposure or darker skin.",
+          "reference_indexes": [
+            0,
+            1,
+            2,
+            5,
+            7,
+            10
+          ],
+          "snippet_highlighted_words": [
+            "if you experience fatigue, bone/back pain, muscle weakness/cramps, frequent illnesses, or mood changes like depression"
+          ]
+        },
+        {
+          "type": "paragraph",
+          "snippet": "Common Signs & Symptoms (But Not Definitive)"
+        },
+        {
+          "list": [
+            {
+              "snippet": "Fatigue/Tiredness: Feeling unusually drained.",
+              "snippet_links": [
+                {
+                  "link": "https://www.google.com/search?sca_esv=7e23b67cda9c6a45&gl=us&q=Fatigue&sa=X&ved=2ahUKEwi_sdX66MWSAxWccPUHHRgqNfwQxccNegUIhwEQAQ",
+                  "text": "Fatigue"
+                }
+              ]
+            },
+            {
+              "snippet": "Bone & Back Pain: Vitamin D is crucial for calcium absorption, so low levels can affect bones.",
+              "snippet_links": [
+                {
+                  "link": "https://www.google.com/search?sca_esv=7e23b67cda9c6a45&gl=us&q=Bone+%26+Back+Pain&sa=X&ved=2ahUKEwi_sdX66MWSAxWccPUHHRgqNfwQxccNegUIkwEQAQ",
+                  "text": "Bone & Back Pain"
+                }
+              ]
+            },
+            {
+              "snippet": "Muscle Issues: Weakness, aches, cramps, or even a waddling gait.",
+              "snippet_links": [
+                {
+                  "link": "https://www.google.com/search?sca_esv=7e23b67cda9c6a45&gl=us&q=Muscle+Issues&sa=X&ved=2ahUKEwi_sdX66MWSAxWccPUHHRgqNfwQxccNegUInAEQAQ",
+                  "text": "Muscle Issues"
+                }
+              ]
+            },
+            {
+              "snippet": "Mood Changes: Linked to depression or anxiety.",
+              "snippet_links": [
+                {
+                  "link": "https://www.google.com/search?sca_esv=7e23b67cda9c6a45&gl=us&q=Mood+Changes&sa=X&ved=2ahUKEwi_sdX66MWSAxWccPUHHRgqNfwQxccNegUIqAEQAQ",
+                  "text": "Mood Changes"
+                }
+              ]
+            },
+            {
+              "snippet": "Frequent Illness: A weakened immune system can lead to more infections.",
+              "snippet_links": [
+                {
+                  "link": "https://www.google.com/search?sca_esv=7e23b67cda9c6a45&gl=us&q=Frequent+Illness&sa=X&ved=2ahUKEwi_sdX66MWSAxWccPUHHRgqNfwQxccNegUInwEQAQ",
+                  "text": "Frequent Illness"
+                }
+              ]
+            },
+            {
+              "snippet": "Slow Wound Healing: Cuts and bruises taking longer to heal.",
+              "snippet_links": [
+                {
+                  "link": "https://www.google.com/search?sca_esv=7e23b67cda9c6a45&gl=us&q=Slow+Wound+Healing&sa=X&ved=2ahUKEwi_sdX66MWSAxWccPUHHRgqNfwQxccNegUIogEQAQ",
+                  "text": "Slow Wound Healing"
+                }
+              ]
+            },
+            {
+              "snippet": "Hair Loss: Severe hair loss can be a sign.",
+              "snippet_links": [
+                {
+                  "link": "https://www.google.com/search?sca_esv=7e23b67cda9c6a45&gl=us&q=Hair+Loss&sa=X&ved=2ahUKEwi_sdX66MWSAxWccPUHHRgqNfwQxccNegUIrAEQAQ",
+                  "text": "Hair Loss"
+                }
+              ],
+              "reference_indexes": [
+                0,
+                1,
+                6,
+                7,
+                8,
+                9,
+                10
+              ]
+            }
+          ],
+          "type": "list"
+        },
+        {
+          "type": "paragraph",
+          "snippet": "Who's At Higher Risk?"
+        },
+        {
+          "list": [
+            {
+              "snippet": "People who work indoors or night shifts."
+            },
+            {
+              "snippet": "Those with darker skin (melanin reduces D production)."
+            },
+            {
+              "snippet": "People living far from the equator with less sunlight."
+            },
+            {
+              "snippet": "Individuals with obesity or certain chronic diseases (Crohn's, celiac).",
+              "reference_indexes": [
+                10
+              ]
+            }
+          ],
+          "type": "list"
+        },
+        {
+          "type": "paragraph",
+          "snippet": "The Definitive Answer: A Blood Test"
+        },
+        {
+          "list": [
+            {
+              "snippet": "A 25-hydroxyvitamin D blood test is the most accurate method.",
+              "reference_indexes": [
+                2,
+                4,
+                5
+              ]
+            },
+            {
+              "snippet": "Your doctor can order this test to check your levels (measured in ng/mL or nmol/L).",
+              "reference_indexes": [
+                2,
+                3
+              ]
+            },
+            {
+              "snippet": "Levels below 20 ng/mL (50 nmol/L) are often considered deficient, while levels above 50 ng/mL (125 nmol/L) might be too high.",
+              "reference_indexes": [
+                2,
+                3
+              ]
+            }
+          ],
+          "type": "list"
+        },
+        {
+          "type": "paragraph",
+          "snippet": "Bottom Line: If you suspect a deficiency due to symptoms or risk factors, consult your healthcare provider to discuss getting a blood test for a proper diagnosis and personalized advice.",
+          "reference_indexes": [
+            2,
+            4,
+            5
+          ]
+        }
+      ],
+      "serpapi_link": "https://serpapi.com/search.json?device=desktop&engine=google_related_questions&google_domain=google.com&next_page_token=eyJvbnMiOiIxMDA0MSIsImZjIjoiRXFFQkNtSkJUVzR6TFhsU1VrRmxaMDVFUXpCb1dUSTFXbnA0ZVZsbmRVbE1NRlZWY1cxWFZGZ3RWR3REV25GU1JtaDJNMnBVTlhReGJXUTFhMmQwVGpBeU5YZFhSbm8xWTBzMFpWbGhVRk4wTFRGc05sRktPSGMwYzNrMGFVZGFXWG81V0doTFFSSVhabFkyUjJGbVh5MVBXbnBvTVdVNFVHMU9WRlUwVVRnYUlrRktTMHhHYlVzemFISnBiRWwwWmtNMGFuSTVOVEJJZW0xaWJWUXdWMUZJYjFFIiwiZmN2IjoiMyIsImVpIjoiZlY2R2FmXy1PWnpoMWU4UG1OVFU0UTgiLCJxYyI6IkNoWjJhWFJoYldsdUlHUXpJSE4xY0hCc1pXMWxiblJ6RUFCOWwzTTJQdyIsInF1ZXN0aW9uIjoiV2hhdCBhcmUgdGhlIHNpZ25zIHlvdSBuZWVkIHZpdGFtaW4gRDM%2FIiwibGsiOiJHaVozYUdGMElHRnlaU0IwYUdVZ2MybG5ibk1nZVc5MUlHNWxaV1FnZG1sMFlXMXBiaUJrTXciLCJicyI6ImM0M09JUV9DTUJBRjRHQlBrUkJNQlp3Q0VzQjBDbFVCQm8yWVFoUjZXNXR0N2JKMkxQdjN3QkpDRXlhUWRfbnUzWU1qTE04ZUh5Ykl5bGc4SmVnS0RBNkRMQWlWTkdVdk9MS0YtUkwxUy1BQW1Hb1o4TVdDcGpndGQwNWg1aHJCNTJ3V1JYejJjSVZkcXMxZHY0Y0tYUllmLTdhdVM2cklEc2szOGtId1BkdDJvMTZOZWJqQWVtZ21HeHFxZVpOYmo3MXIwUktwNkpuZ0c3YnFfcUFxbVU2ZSIsImlkIjoiZmNfZlY2R2FmXy1PWnpoMWU4UG1OVFU0UThfMSJ9",
+      "next_page_token": "eyJvbnMiOiIxMDA0MSIsImZjIjoiRXFFQkNtSkJUVzR6TFhsU1VrRmxaMDVFUXpCb1dUSTFXbnA0ZVZsbmRVbE1NRlZWY1cxWFZGZ3RWR3REV25GU1JtaDJNMnBVTlhReGJXUTFhMmQwVGpBeU5YZFhSbm8xWTBzMFpWbGhVRk4wTFRGc05sRktPSGMwYzNrMGFVZGFXWG81V0doTFFSSVhabFkyUjJGbVh5MVBXbnBvTVdVNFVHMU9WRlUwVVRnYUlrRktTMHhHYlVzemFISnBiRWwwWmtNMGFuSTVOVEJJZW0xaWJWUXdWMUZJYjFFIiwiZmN2IjoiMyIsImVpIjoiZlY2R2FmXy1PWnpoMWU4UG1OVFU0UTgiLCJxYyI6IkNoWjJhWFJoYldsdUlHUXpJSE4xY0hCc1pXMWxiblJ6RUFCOWwzTTJQdyIsInF1ZXN0aW9uIjoiV2hhdCBhcmUgdGhlIHNpZ25zIHlvdSBuZWVkIHZpdGFtaW4gRDM/IiwibGsiOiJHaVozYUdGMElHRnlaU0IwYUdVZ2MybG5ibk1nZVc5MUlHNWxaV1FnZG1sMFlXMXBiaUJrTXciLCJicyI6ImM0M09JUV9DTUJBRjRHQlBrUkJNQlp3Q0VzQjBDbFVCQm8yWVFoUjZXNXR0N2JKMkxQdjN3QkpDRXlhUWRfbnUzWU1qTE04ZUh5Ykl5bGc4SmVnS0RBNkRMQWlWTkdVdk9MS0YtUkwxUy1BQW1Hb1o4TVdDcGpndGQwNWg1aHJCNTJ3V1JYejJjSVZkcXMxZHY0Y0tYUllmLTdhdVM2cklEc2szOGtId1BkdDJvMTZOZWJqQWVtZ21HeHFxZVpOYmo3MXIwUktwNkpuZ0c3YnFfcUFxbVU2ZSIsImlkIjoiZmNfZlY2R2FmXy1PWnpoMWU4UG1OVFU0UThfMSJ9"
+    }
+  ],
+  "subHeadingsCount": 13,
+  "secondaryKeywords": [],
+  "_keyword_variations": [
+    "healthy immune response",
+    "vitamin d helps regulate",
+    "immune health",
+    "counter",
+    "dietary supplements",
+    "vitamin d supplements treat adults",
+    "vitamin d is",
+    "extreme vitamin d deficiency",
+    "phosphate",
+    "supplements",
+    "amount",
+    "vitamin d is present",
+    "essential nutrient that helps support",
+    "cvs pharmacy",
+    "calcium",
+    "body",
+    "vitamin d is important",
+    "shop vitamin d pills"
+  ],
+  "cleanedContentBrief": {
+    "p": [
+      {
+        "term": {
+          "type": "variation",
+          "phrase": "vitamin d supplements treat adults",
+          "weight": 0.1
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      },
+      {
+        "term": {
+          "type": "variation",
+          "phrase": "vitamin d helps regulate",
+          "weight": 0.1
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      },
+      {
+        "term": {
+          "type": "variation",
+          "phrase": "extreme vitamin d deficiency",
+          "weight": 0.1
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      },
+      {
+        "term": {
+          "type": "variation",
+          "phrase": "vitamin d is present",
+          "weight": 0.1
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      },
+      {
+        "term": {
+          "type": "keyword",
+          "phrase": "vitamin d3 supplements",
+          "weight": 1
+        },
+        "contentBrief": {
+          "target": 0,
+          "current": 0
+        }
+      },
+      {
+        "term": {
+          "type": "variation",
+          "phrase": "vitamin d is",
+          "weight": 0.1
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 2,
+          "targetMin": 2
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "dose vitamin",
+          "weight": 1.9999568170248194
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "vitamin deficiency",
+          "weight": 1.999819583392244
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "immune system",
+          "weight": 1.999587446951887
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "high doses",
+          "weight": 1.9993488949979394
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "taking vitamin",
+          "weight": 1.999212983096456
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 2,
+          "targetMin": 1
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "food sources",
+          "weight": 1.9991967324362745
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "supports healthy",
+          "weight": 1.9989022664833562
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "supplements vitamin",
+          "weight": 1.9985695699823451
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      },
+      {
+        "term": {
+          "type": "variation",
+          "phrase": "immune health",
+          "weight": 0.1
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      },
+      {
+        "term": {
+          "type": "variation",
+          "phrase": "dietary supplements",
+          "weight": 0.1
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 1
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "vitamin d3",
+          "weight": 0.1301051056878032
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "vitamin",
+          "weight": 1.999705978914181
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 60,
+          "targetMin": 24
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "deficiency",
+          "weight": 1.999514502667736
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 2,
+          "targetMin": 1
+        }
+      },
+      {
+        "term": {
+          "type": "variation",
+          "phrase": "calcium",
+          "weight": 0.37403051610557725
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 6,
+          "targetMin": 2
+        }
+      },
+      {
+        "term": {
+          "type": "variation",
+          "phrase": "supplements",
+          "weight": 0.14452806739125978
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 8,
+          "targetMin": 5
+        }
+      },
+      {
+        "term": {
+          "type": "variation",
+          "phrase": "body",
+          "weight": 0.1417002959291096
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 8,
+          "targetMin": 6
+        }
+      },
+      {
+        "term": {
+          "type": "variation",
+          "phrase": "phosphate",
+          "weight": 0.11489296283182486
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 2,
+          "targetMin": 1
+        }
+      },
+      {
+        "term": {
+          "type": "variation",
+          "phrase": "amount",
+          "weight": 0.10595718513272995
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 2,
+          "targetMin": 1
+        }
+      },
+      {
+        "term": {
+          "type": "variation",
+          "phrase": "counter",
+          "weight": 0.10297859256636498
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "product",
+          "weight": 0.08306643142475885
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "symptoms",
+          "weight": 0.07409957033476465
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "buy",
+          "weight": 0.07153585814025419
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "levels",
+          "weight": 0.0712843955496558
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 8,
+          "targetMin": 2
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "omega",
+          "weight": 0.07111032386653279
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 2,
+          "targetMin": 1
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "risk",
+          "weight": 0.06877669605741642
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 6,
+          "targetMin": 2
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "supplementation",
+          "weight": 0.06787963894501053
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 2,
+          "targetMin": 1
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "medicine",
+          "weight": 0.06753793434702829
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "taking",
+          "weight": 0.06412945888058345
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 6,
+          "targetMin": 2
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "skin",
+          "weight": 0.0627051015549507
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 6,
+          "targetMin": 3
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "cancer",
+          "weight": 0.05627569847141481
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 2,
+          "targetMin": 1
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "bones",
+          "weight": 0.03618279186254422
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 2,
+          "targetMin": 1
+        }
+      }
+    ],
+    "title": [
+      {
+        "term": {
+          "type": "keyword",
+          "phrase": "vitamin d3 supplements",
+          "weight": 1
+        },
+        "contentBrief": {
+          "target": 1,
+          "current": 0
+        }
+      },
+      {
+        "term": {
+          "type": "variation",
+          "phrase": "supplements",
+          "weight": 0.14452806739125978
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      }
+    ],
+    "pTotal": {
+      "max": 145,
+      "min": 87,
+      "current": 0
+    },
+    "approach": "",
+    "strategy": "",
+    "pageScore": {
+      "pageScore": 3.06,
+      "pageScoreValue": ""
+    },
+    "pageTitle": [
+      {
+        "term": {
+          "type": "keyword",
+          "phrase": "vitamin d3 supplements",
+          "weight": 1
+        },
+        "contentBrief": {
+          "target": 1,
+          "current": 0
+        }
+      },
+      {
+        "term": {
+          "type": "variation",
+          "phrase": "supplements",
+          "weight": 0.14452806739125978
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      }
+    ],
+    "titleTotal": {
+      "max": 2,
+      "min": 1,
+      "current": 0
+    },
+    "subHeadings": [
+      {
+        "term": {
+          "type": "keyword",
+          "phrase": "vitamin d3 supplements",
+          "weight": 1
+        },
+        "contentBrief": {
+          "target": 0,
+          "current": 0
+        }
+      },
+      {
+        "term": {
+          "type": "variation",
+          "phrase": "dietary supplements",
+          "weight": 0.1
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "vitamin",
+          "weight": 1.999705978914181
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 2,
+          "targetMin": 1
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "deficiency",
+          "weight": 1.999514502667736
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      },
+      {
+        "term": {
+          "type": "variation",
+          "phrase": "supplements",
+          "weight": 0.14452806739125978
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "symptoms",
+          "weight": 0.07409957033476465
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "risk",
+          "weight": 0.06877669605741642
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      },
+      {
+        "term": {
+          "type": "lsi",
+          "phrase": "skin",
+          "weight": 0.0627051015549507
+        },
+        "contentBrief": {
+          "current": 0,
+          "targetMax": 1,
+          "targetMin": 0
+        }
+      }
+    ],
+    "dashboardType": "contentBrief",
+    "pageTitleTotal": {
+      "max": 2,
+      "min": 1,
+      "current": 0
+    },
+    "subHeadingsTotal": {
+      "max": 8,
+      "min": 4,
+      "current": 0
+    }
+  },
+  "contentBriefDataFile": {}
+}

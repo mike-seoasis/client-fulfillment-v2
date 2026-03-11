@@ -9,6 +9,7 @@ import { VocabularyEditor } from './VocabularyEditor';
 import { TrustElementsEditor } from './TrustElementsEditor';
 import { CompetitorContextEditor } from './CompetitorContextEditor';
 import { AIPromptEditor } from './AIPromptEditor';
+import { ContentLimitsEditor } from './ContentLimitsEditor';
 import type {
   BrandFoundationData,
   TargetAudienceData,
@@ -19,6 +20,7 @@ import type {
   TrustElementsData,
   CompetitorContextData,
   AIPromptSnippetData,
+  ContentLimitsData,
 } from '../types';
 
 /**
@@ -33,7 +35,8 @@ export type SectionKey =
   | 'vocabulary'
   | 'trust_elements'
   | 'competitor_context'
-  | 'ai_prompt_snippet';
+  | 'ai_prompt_snippet'
+  | 'content_limits';
 
 /**
  * Union type of all section data types.
@@ -47,7 +50,8 @@ export type SectionData =
   | VocabularyData
   | TrustElementsData
   | CompetitorContextData
-  | AIPromptSnippetData;
+  | AIPromptSnippetData
+  | ContentLimitsData;
 
 export interface SectionEditorSwitchProps {
   /** The section key identifying which editor to render */
@@ -158,6 +162,16 @@ export function SectionEditorSwitch({
       return (
         <AIPromptEditor
           data={data as AIPromptSnippetData | undefined}
+          isSaving={isSaving}
+          onSave={onSave}
+          onCancel={onCancel}
+        />
+      );
+
+    case 'content_limits':
+      return (
+        <ContentLimitsEditor
+          data={data as ContentLimitsData | undefined}
           isSaving={isSaving}
           onSave={onSave}
           onCancel={onCancel}

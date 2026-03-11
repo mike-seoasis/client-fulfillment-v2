@@ -17,6 +17,7 @@ import {
 } from '@/components/content-editor/HighlightToggleControls';
 import { generateVariations } from '@/lib/keyword-variations';
 import { Button } from '@/components/ui';
+import { QualityPanel, type QaResults } from '@/components/quality';
 
 // ---------------------------------------------------------------------------
 // Utility helpers
@@ -48,92 +49,6 @@ function CharCounter({ value, max }: { value: number; max: number }) {
   );
 }
 
-interface QaIssue {
-  type: string;
-  field: string;
-  description: string;
-  context: string;
-}
-
-interface QaResults {
-  passed: boolean;
-  issues: QaIssue[];
-  checked_at?: string;
-}
-
-function QualityStatusCard({ qaResults }: { qaResults: QaResults | null }) {
-  if (!qaResults) return null;
-
-  const issueCount = qaResults.issues?.length ?? 0;
-  const passed = qaResults.passed;
-
-  const checkTypes = [
-    'banned_word',
-    'em_dash',
-    'ai_pattern',
-    'triplet_excess',
-    'rhetorical_excess',
-    'tier1_ai_word',
-    'tier2_ai_excess',
-    'negation_contrast',
-    'competitor_name',
-  ];
-  const checkLabels: Record<string, string> = {
-    banned_word: 'Banned Words',
-    em_dash: 'Em Dashes',
-    ai_pattern: 'AI Openers',
-    triplet_excess: 'Triplet Lists',
-    rhetorical_excess: 'Rhetorical Questions',
-    tier1_ai_word: 'Tier 1 AI Words',
-    tier2_ai_excess: 'Tier 2 AI Words',
-    negation_contrast: 'Negation Contrast',
-    competitor_name: 'Competitor Names',
-  };
-
-  const issuesByType: Record<string, number> = {};
-  for (const issue of qaResults.issues ?? []) {
-    issuesByType[issue.type] = (issuesByType[issue.type] ?? 0) + 1;
-  }
-
-  return (
-    <div className="bg-white rounded-sm border border-sand-400/60 overflow-hidden">
-      <div className={`px-4 py-3 border-b ${passed ? 'bg-palm-50 border-palm-100' : 'bg-coral-50 border-coral-100'}`}>
-        <div className="flex items-center gap-2">
-          <div className={`w-5 h-5 rounded-full flex items-center justify-center ${passed ? 'bg-palm-100' : 'bg-coral-100'}`}>
-            {passed ? (
-              <svg className="w-3 h-3 text-palm-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-              </svg>
-            ) : (
-              <svg className="w-3 h-3 text-coral-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-              </svg>
-            )}
-          </div>
-          <span className={`text-sm font-semibold ${passed ? 'text-palm-800' : 'text-coral-800'}`}>
-            {passed ? 'All Checks Passed' : `${issueCount} Issue${issueCount !== 1 ? 's' : ''} Found`}
-          </span>
-        </div>
-      </div>
-
-      <div className="p-4 space-y-2">
-        {checkTypes.map((type) => {
-          const count = issuesByType[type] ?? 0;
-          return (
-            <div key={type} className="flex items-center justify-between text-xs">
-              <span className="text-warm-600">{checkLabels[type] ?? type}</span>
-              {count > 0 ? (
-                <span className="text-coral-600 font-medium">{count} found</span>
-              ) : (
-                <span className="text-palm-600 font-medium">Pass</span>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 function countParagraphs(html: string | null | undefined): number {
   if (!html) return 0;
@@ -501,6 +416,42 @@ export default function BlogContentEditorPage() {
     }
   }, []);
 
+  // Jump to flagged passage in the Lexical editor (was missing — bug fix)
+  const handleJumpTo = useCallback((context: string) => {
+    const container = editorContainerRef.current;
+    if (!container) return;
+
+    const cleaned = cleanContext(context);
+    const searchText = cleaned.slice(0, 40);
+    if (!searchText) return;
+
+    const tropeSpans = Array.from(container.querySelectorAll('.hl-trope'));
+    let target: HTMLElement | null = null;
+    for (const span of tropeSpans) {
+      if (span.textContent && span.textContent.includes(searchText)) {
+        target = span as HTMLElement;
+        break;
+      }
+    }
+
+    if (!target) {
+      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+      let node: Node | null;
+      while ((node = walker.nextNode())) {
+        if (node.textContent && node.textContent.includes(searchText)) {
+          target = node.parentElement;
+          break;
+        }
+      }
+    }
+
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target.classList.add('violation-pulse');
+      setTimeout(() => target!.classList.remove('violation-pulse'), 1500);
+    }
+  }, [cleanContext]);
+
   const handleJumpToHeading = useCallback((text: string, level: string) => {
     const container = editorContainerRef.current;
     if (!container) return;
@@ -639,6 +590,11 @@ export default function BlogContentEditorPage() {
   }, [projectId, blogId, postId, pageTitle, metaDescription, contentHtml, updateContent, recheckContent]);
 
   const qaResults = post?.qa_results as QaResults | null;
+  const currentFields = useMemo(() => ({
+    title: pageTitle,
+    meta_description: metaDescription,
+    content: contentHtml,
+  }), [pageTitle, metaDescription, contentHtml]);
   const hlClasses = highlightVisibilityClasses(hlVisibility);
 
   // Loading state
@@ -776,7 +732,7 @@ export default function BlogContentEditorPage() {
 
         {/* Right Sidebar (~35%) */}
         <div className="w-[340px] flex-shrink-0 space-y-4 sticky top-[72px] max-h-[calc(100vh-140px)] overflow-y-auto pb-4 sidebar-scroll">
-          <QualityStatusCard qaResults={qaResults} />
+          <QualityPanel qaResults={qaResults} onJumpTo={handleJumpTo} currentFields={currentFields} />
           <ContentStatsCard
             wordCount={totalWordCount}
             headings={headingCounts}

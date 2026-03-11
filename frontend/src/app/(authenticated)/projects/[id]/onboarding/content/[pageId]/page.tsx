@@ -9,6 +9,7 @@ import {
   useUpdatePageContent,
   useApprovePageContent,
   useRecheckPageContent,
+  useReviseOutline,
 } from '@/hooks/useContentGeneration';
 import { ContentEditorWithSource } from '@/components/content-editor/ContentEditorWithSource';
 import {
@@ -20,6 +21,7 @@ import { generateVariations } from '@/lib/keyword-variations';
 import { Button } from '@/components/ui';
 import { useBrandConfig } from '@/hooks/useBrandConfig';
 import { OutlineEditor } from '@/components/OutlineEditor';
+import { QualityPanel, type QaResults } from '@/components/quality';
 
 // ---------------------------------------------------------------------------
 // Utility helpers
@@ -55,190 +57,6 @@ function WordCounter({ count }: { count: number }) {
   return <span className="text-xs font-mono text-warm-500">{count} words</span>;
 }
 
-interface QaIssue {
-  type: string;
-  field: string;
-  description: string;
-  context: string;
-}
-
-interface QaResults {
-  passed: boolean;
-  issues: QaIssue[];
-  checked_at?: string;
-}
-
-function QualityStatusCard({ qaResults }: { qaResults: QaResults | null }) {
-  if (!qaResults) return null;
-
-  const issueCount = qaResults.issues?.length ?? 0;
-  const passed = qaResults.passed;
-
-  // Build check result summary — group by type to show pass/fail per check category
-  const checkTypes = [
-    'banned_word',
-    'em_dash',
-    'ai_pattern',
-    'triplet_excess',
-    'rhetorical_excess',
-    'tier1_ai_word',
-    'tier2_ai_excess',
-    'negation_contrast',
-    'competitor_name',
-  ];
-  const checkLabels: Record<string, string> = {
-    banned_word: 'Banned Words',
-    em_dash: 'Em Dashes',
-    ai_pattern: 'AI Openers',
-    triplet_excess: 'Triplet Lists',
-    rhetorical_excess: 'Rhetorical Questions',
-    tier1_ai_word: 'Tier 1 AI Words',
-    tier2_ai_excess: 'Tier 2 AI Words',
-    negation_contrast: 'Negation Contrast',
-    competitor_name: 'Competitor Names',
-  };
-
-  const issuesByType: Record<string, number> = {};
-  for (const issue of qaResults.issues ?? []) {
-    issuesByType[issue.type] = (issuesByType[issue.type] ?? 0) + 1;
-  }
-
-  return (
-    <div className="bg-white rounded-sm border border-sand-400/60 overflow-hidden">
-      <div className={`px-4 py-3 border-b ${passed ? 'bg-palm-50 border-palm-100' : 'bg-coral-50 border-coral-100'}`}>
-        <div className="flex items-center gap-2">
-          <div className={`w-5 h-5 rounded-full flex items-center justify-center ${passed ? 'bg-palm-100' : 'bg-coral-100'}`}>
-            {passed ? (
-              <svg className="w-3 h-3 text-palm-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-              </svg>
-            ) : (
-              <svg className="w-3 h-3 text-coral-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-              </svg>
-            )}
-          </div>
-          <span className={`text-sm font-semibold ${passed ? 'text-palm-800' : 'text-coral-800'}`}>
-            {passed ? 'All Checks Passed' : `${issueCount} Issue${issueCount !== 1 ? 's' : ''} Found`}
-          </span>
-        </div>
-      </div>
-
-      <div className="p-4 space-y-2">
-        {checkTypes.map((type) => {
-          const count = issuesByType[type] ?? 0;
-          return (
-            <div key={type} className="flex items-center justify-between text-xs">
-              <span className="text-warm-600">{checkLabels[type] ?? type}</span>
-              {count > 0 ? (
-                <span className="text-coral-600 font-medium">{count} found</span>
-              ) : (
-                <span className="text-palm-600 font-medium">Pass</span>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-const ISSUE_TYPE_LABELS: Record<string, string> = {
-  banned_word: 'Banned Words',
-  em_dash: 'Em Dashes',
-  ai_pattern: 'AI Openers',
-  triplet_excess: 'Triplet Lists',
-  rhetorical_excess: 'Rhetorical Questions',
-  tier1_ai_word: 'Tier 1 AI Words',
-  tier2_ai_excess: 'Tier 2 AI Words',
-  negation_contrast: 'Negation/Contrast',
-  competitor_name: 'Competitor Names',
-};
-
-const FIELD_LABELS: Record<string, string> = {
-  page_title: 'title',
-  meta_description: 'meta',
-  top_description: 'top',
-  bottom_description: 'body',
-};
-
-function FlaggedPassagesCard({
-  issues,
-  onJumpTo,
-}: {
-  issues: QaIssue[];
-  onJumpTo?: (context: string) => void;
-}) {
-  if (!issues || issues.length === 0) return null;
-
-  // Group issues by type
-  const groups: { type: string; label: string; items: QaIssue[] }[] = [];
-  const seen = new Set<string>();
-  for (const issue of issues) {
-    if (!seen.has(issue.type)) {
-      seen.add(issue.type);
-      groups.push({
-        type: issue.type,
-        label: ISSUE_TYPE_LABELS[issue.type] ?? issue.type,
-        items: issues.filter((i) => i.type === issue.type),
-      });
-    }
-  }
-
-  // Clean context for display: strip "..." wrappers
-  const displayContext = (ctx: string) =>
-    ctx.replace(/^\.{3}/, '').replace(/\.{3}$/, '').trim();
-
-  return (
-    <div className="bg-white rounded-sm border border-sand-400/60 overflow-hidden">
-      <div className="px-4 py-3 border-b border-sand-200">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-semibold text-warm-700 uppercase tracking-wider">Flagged Passages</h3>
-          <span className="text-xs font-mono text-coral-600">{issues.length}</span>
-        </div>
-      </div>
-      <div className="divide-y divide-sand-100">
-        {groups.map((group) => (
-          <div key={group.type} className="px-4 py-3">
-            {/* Group header */}
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-xs font-semibold text-warm-800">{group.label}</span>
-              <span className="text-xs font-mono text-coral-500 bg-coral-50 px-1.5 py-0.5 rounded-sm">
-                {group.items.length}
-              </span>
-            </div>
-            {/* Individual instances */}
-            <div className="space-y-1.5">
-              {group.items.map((issue, idx) => {
-                const ctx = displayContext(issue.context);
-                const canJump = onJumpTo && issue.field === 'bottom_description';
-                return (
-                  <div
-                    key={idx}
-                    className={`flex items-start gap-2 text-xs py-1 px-2 rounded-sm ${canJump ? 'hover:bg-sand-50 cursor-pointer group' : ''}`}
-                    onClick={canJump ? () => onJumpTo(issue.context) : undefined}
-                  >
-                    <span className="text-warm-400 font-mono flex-shrink-0 mt-px">
-                      {FIELD_LABELS[issue.field] ?? issue.field}
-                    </span>
-                    <span className="text-warm-600 leading-relaxed min-w-0 truncate" title={ctx}>
-                      {ctx}
-                    </span>
-                    {canJump && (
-                      <span className="text-lagoon-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-px">
-                        &darr;
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 function countParagraphs(html: string | null | undefined): number {
   if (!html) return 0;
@@ -480,6 +298,7 @@ export default function ContentEditorPage() {
   const updateContent = useUpdatePageContent();
   const approveContent = useApprovePageContent();
   const recheckContent = useRecheckPageContent();
+  const reviseOutlineMutation = useReviseOutline();
   const { data: brandConfig } = useBrandConfig(projectId);
 
   // Find this page's metadata from the status endpoint
@@ -809,7 +628,48 @@ export default function ContentEditorPage() {
     );
   }, [projectId, pageId, pageTitle, metaDescription, topDescription, bottomDescription, updateContent, recheckContent]);
 
+  // Restore original content from before auto-rewrite
+  const handleRestoreOriginal = useCallback(() => {
+    const versions = (content?.qa_results as QaResults | null)?.versions;
+    if (!versions?.original?.content_snapshot) return;
+
+    const snapshot = versions.original.content_snapshot;
+    const restoreData: Record<string, string | null> = {};
+    if (snapshot.page_title !== undefined) { setPageTitle(snapshot.page_title); restoreData.page_title = snapshot.page_title; }
+    if (snapshot.meta_description !== undefined) { setMetaDescription(snapshot.meta_description); restoreData.meta_description = snapshot.meta_description; }
+    if (snapshot.top_description !== undefined) { setTopDescription(snapshot.top_description); restoreData.top_description = snapshot.top_description; }
+    if (snapshot.bottom_description !== undefined) { setBottomDescription(snapshot.bottom_description); restoreData.bottom_description = snapshot.bottom_description; }
+
+    // Save restored content and trigger recheck
+    setSaveStatus({ state: 'saving' });
+    updateContent.mutate(
+      { projectId, pageId, data: restoreData },
+      {
+        onSuccess: () => {
+          // Use snapshot values directly to avoid stale closure over current state
+          lastSavedRef.current = {
+            page_title: snapshot.page_title ?? lastSavedRef.current.page_title,
+            meta_description: snapshot.meta_description ?? lastSavedRef.current.meta_description,
+            top_description: snapshot.top_description ?? lastSavedRef.current.top_description,
+            bottom_description: snapshot.bottom_description ?? lastSavedRef.current.bottom_description,
+          };
+          setSaveStatus({ state: 'saved', at: Date.now() });
+          recheckContent.mutate({ projectId, pageId });
+        },
+        onError: () => {
+          setSaveStatus({ state: 'failed', error: 'Restore failed — click to retry' });
+        },
+      },
+    );
+  }, [content?.qa_results, projectId, pageId, updateContent, recheckContent]);
+
   const qaResults = content?.qa_results as QaResults | null;
+  const currentFields = useMemo(() => ({
+    page_title: pageTitle,
+    meta_description: metaDescription,
+    top_description: topDescription,
+    bottom_description: bottomDescription,
+  }), [pageTitle, metaDescription, topDescription, bottomDescription]);
   const hlClasses = highlightVisibilityClasses(hlVisibility);
 
   // Loading state
@@ -844,10 +704,10 @@ export default function ContentEditorPage() {
 
   if (!content) return null;
 
-  // Show outline editor when outline_status is 'draft' or 'approved',
-  // but NOT if full content has already been generated (status='complete' with content)
-  const hasGeneratedContent = content.status === 'complete' && (content.top_description || content.bottom_description);
-  if ((content.outline_status === 'draft' || content.outline_status === 'approved') && !hasGeneratedContent) {
+  // Show outline editor when outline_status is 'draft' or 'approved'
+  const hasGeneratedContent = content.status === 'complete' && !!(content.top_description || content.bottom_description);
+  const isRevising = (content.outline_status === 'draft' || content.outline_status === 'approved') && hasGeneratedContent;
+  if (content.outline_status === 'draft' || content.outline_status === 'approved') {
     return (
       <OutlineEditor
         content={content}
@@ -856,6 +716,7 @@ export default function ContentEditorPage() {
         pageInfo={pageInfo}
         backUrl={`/projects/${projectId}/onboarding/content`}
         onGenerateRedirectUrl={`/projects/${projectId}/onboarding/content`}
+        isRevising={isRevising}
       />
     );
   }
@@ -978,8 +839,12 @@ export default function ContentEditorPage() {
 
         {/* Right Sidebar (~35%) */}
         <div className="w-[340px] flex-shrink-0 space-y-4 sticky top-[72px] max-h-[calc(100vh-140px)] overflow-y-auto pb-4 sidebar-scroll">
-          <QualityStatusCard qaResults={qaResults} />
-          <FlaggedPassagesCard issues={qaResults?.issues ?? []} onJumpTo={handleJumpTo} />
+          <QualityPanel
+            qaResults={qaResults}
+            onJumpTo={handleJumpTo}
+            currentFields={currentFields}
+            onRestoreOriginal={handleRestoreOriginal}
+          />
           <ContentStatsCard
             wordCount={totalWordCount}
             headings={headings}
@@ -1027,6 +892,19 @@ export default function ContentEditorPage() {
 
           {/* Right: Actions */}
           <div className="flex items-center gap-3">
+            {content.outline_json && (content.outline_status === 'used' || content.outline_status === null) && (
+              <button
+                type="button"
+                onClick={() => reviseOutlineMutation.mutate({ projectId, pageId })}
+                disabled={reviseOutlineMutation.isPending}
+                className="px-4 py-2 text-sm font-medium text-lagoon-600 bg-lagoon-50 hover:bg-lagoon-100 border border-lagoon-200 rounded-sm transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                {reviseOutlineMutation.isPending ? 'Opening...' : 'Revise Outline'}
+              </button>
+            )}
             <button
               type="button"
               onClick={handleRecheck}

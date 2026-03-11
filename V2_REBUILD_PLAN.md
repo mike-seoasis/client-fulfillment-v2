@@ -8,10 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Phase** | WP2 - Batched Onboarding — **COMPLETE** |
-| **Slice** | WP2: Added onboarding_batch column, batch assignment on upload, ?batch=N filter on 7 endpoints, batches summary endpoint, full frontend batch threading |
-| **Last Session** | 2026-02-28 |
-| **Next Action** | Phase 13 (Polish), 15 (GEO) — user to decide |
+| **Phase** | Phase 18 - Content Quality Pipeline — **PLANNING COMPLETE** |
+| **Slice** | 18a: Bible Data Layer (next to build) |
+| **Last Session** | 2026-03-06 |
+| **Next Action** | Phase 18a: Bible model, migration, service, API endpoints |
 | **Auth Decision** | Neon Auth (free tier, 60K MAU, Better Auth SDK) — see Phase 12 |
 | **Backup Decision** | Neon free tier (PITR) + Railway pg_dump template → Cloudflare R2 — see Phase 10 |
 | **Database** | Neon PostgreSQL (project: `spring-fog-49733273`, region: `aws-us-east-1`) |
@@ -58,6 +58,7 @@
 | 2026-02-19 | Phase 12 complete (S12-001 through S12-017): Neon Auth SDK installed (`@neondatabase/auth`), server auth instance (`lib/auth/server.ts` via `createNeonAuth`), client auth instance (`lib/auth/client.ts` via `createAuthClient`), catch-all auth API route (`/api/auth/[...path]`), Next.js middleware for route protection (redirect unauthenticated → `/auth/sign-in`, redirect authenticated away from sign-in), route group layout restructure (`(authenticated)/` with Header vs `auth/` without), Google OAuth sign-in page, Header updated with real session data + sign-out + user avatar, AuthTokenSync component (syncs session token to module-level store), API client Authorization header injection (all `apiClient.*` + raw `fetch()` calls), `AUTH_REQUIRED` backend setting, `get_current_user` FastAPI dependency (validates Bearer token against `neon_auth.session`/`neon_auth."user"`, dev bypass when `AUTH_REQUIRED=false`), router-level auth on `api_v1_router`, CrowdReply webhook moved outside auth to `/webhooks/crowdreply`, auto-reset for stale "submitting" comments (prevents stuck state after backend restart), V2_REBUILD_PLAN.md updated. **Deferred to later:** Google Cloud OAuth credentials (currently using Neon shared dev creds), Railway env vars for production, RLS/per-user data isolation, `created_by` column on projects. | Phase 13 (Polish), 15 (GEO), or 16 (Migration) |
 | 2026-02-19 | Phase 16 complete: V1 data migration — `execution/migrate_v1_to_v2.py` (sync psycopg2, deterministic uuid5 IDs, ON CONFLICT DO NOTHING idempotency, per-project transactions, dry-run default). Migrated 2 projects from `.tmp/v1-export/` JSON files to Neon: Planetary Design (36 pages, 36 keywords, 335 PAA, 32 content) + Bronson (90 pages, 90 keywords, 635 PAA, 37 content). Brand configs migrated with v2_schema section renames (foundation→brand_foundation, personas→target_audience, etc). Verification passed: no duplicate URLs, brand_foundation key present, all row counts match. Idempotent re-run confirmed (0 inserts, all skipped). | Phase 13 (Polish) or 15 (GEO) |
 | 2026-02-28 | WP2 Batched Onboarding complete: `onboarding_batch` column on CrawledPage (migration 0031, nullable Integer, indexed, backfilled to 1), auto-assign next batch on URL upload, `?batch=N` filter on 7 endpoints (crawl-status, pages-with-keywords, generate-primary-keywords, approve-all-keywords, content-generation-status, generate-content, bulk-approve-content), new `GET /onboarding-batches` summary endpoint, cross-batch keyword uniqueness (seeds used keywords from all batches). Frontend: batch param threading through api.ts (7 functions + getOnboardingBatches), useOnboardingBatches hook, StepIndicator batch prop, 4 hook updates (useKeywordGeneration, usePagesWithKeywords, useKeywordMutations, useContentGeneration), all 5 onboarding pages read/pass batch via URL search params, project detail batch management UI (batch pills, "Continue Onboarding" to latest incomplete batch, "Add More Pages" button). Fixed pre-existing test failures (3 project detail test files + 2 keywords test files). | Phase 13 (Polish) or 15 (GEO) |
+| 2026-03-06 | Phase 18 planning complete: Content Quality Pipeline. 12 research agents evaluated DeepEval (REJECTED — 7 transitive deps + telemetry), Guardrails AI framework (REJECTED — pre-1.0, 25+ deps, REASK black box), Google Check Grounding (CUT from MVP — NLI fails on negation, false positives). Architecture: 7-step pipeline (Tier 1 deterministic → Tier 1b bible checks → short-circuit → Tier 2 LLM judge GPT-5.4 → score 0-100 → auto-rewrite if <70 → store). Vertical Knowledge Bibles system for domain-specific prompt injection + QA rules. 8 subphases planned (18a-18h). Full plan with wireframes at `openspec/changes/phase-18-quality-pipeline/QUALITY_PIPELINE_PLAN.md`. | Phase 18a: Bible Data Layer |
 
 ---
 
@@ -126,7 +127,7 @@
 
 ## MVP Features (Must Work Perfectly)
 
-> **Full spec:** See `FEATURE_SPEC.md` for complete details
+> **Full spec:** See `docs/FEATURE_SPEC.md` for complete details
 
 ### App Structure
 1. **Main Dashboard** — Grid of client project cards with metrics
@@ -528,6 +529,79 @@
 
 #### New deps for Phase 16
 None — uses existing SQLAlchemy models, Alembic, asyncpg, boto3 (S3).
+
+### Phase 18: Content Quality Pipeline
+
+> **Decision (2026-03-06):** 12 research agents evaluated DeepEval, Guardrails AI, and Google Check Grounding for content quality. All 3 frameworks/tools rejected for MVP — DIY approach with GPT-5.4 as LLM judge, deterministic bible checks for domain knowledge, auto-rewrite for low-scoring content. Full plan at `openspec/changes/phase-18-quality-pipeline/QUALITY_PIPELINE_PLAN.md`.
+>
+> **Architecture:** 7-step pipeline — Tier 1 (existing 13 regex checks, free) → Tier 1b (bible rule checks, free) → short-circuit on critical failures → Tier 2 (GPT-5.4 LLM judge, ~$0.035/article) → composite score 0-100 → auto-rewrite if score < 70 (~$0.02/fix) → store in existing qa_results JSONB.
+>
+> **Key decisions:** Guardrails AI framework rejected (12/12 agents — pre-1.0, 25+ deps). DeepEval library rejected (8/12 — telemetry, dependency bloat). Google Check Grounding cut from MVP (9/12 — NLI negation failures, false positives). GPT-5.4 chosen for LLM judge (cross-model avoids self-preference bias). Bible regex checks cover 80% of domain-specific quality value.
+
+**Build order (each subphase is independently testable):**
+
+```
+  18a  Bible Data Layer ──── Model, migration, service, API
+   |
+   v
+  18b  Bible Pipeline ───── Prompt injection + QA checks
+   |
+   +───────┐
+   |       |
+   v       v
+  18c     18d
+  Bible   Quality Panel ─── Shared component, score badge,
+  Frontend                   grouped checks (eliminates 3-file duplication)
+   |       |
+   |       v
+   |      18e  LLM Judge ── GPT-5.4 scoring, pipeline orchestrator
+   |       |
+   |       v
+   |      18f  Auto-Rewrite  Score < 70 auto-fix, versioning
+   |       |
+   |       v
+   |      18g  LLM + Rewrite FE  Display scores + rewrite status
+   |
+   v
+  18h  Transcript Generator  AI-assisted bible creation
+```
+
+- [ ] **18a:** Bible Data Layer — `VerticalBible` model + migration (0033), Pydantic schemas, CRUD service with `match_bibles()`, REST API (CRUD + import/export), tests
+- [ ] **18b:** Bible Pipeline Integration — `_build_domain_knowledge_section()` in `content_writing.py`, `_check_bible_rules()` in `content_quality.py`, load bibles + pass through in `content_generation.py` + `blog_content_generation.py` + recheck endpoint, tests
+- [ ] **18c:** Bible Frontend — Bible list page, 4-tab editor (Overview/Content/QA Rules/Preview), `use-bibles.ts` hooks, API functions, "Knowledge Bibles" card on project detail
+- [ ] **18d:** Quality Panel Upgrade — Extract shared `QualityPanel` component (eliminates duplication across 3 content pages), composite score badge (0-100), grouped check sections (Content/Domain/AI), updated flagged passages with bible explanations
+- [ ] **18e:** LLM Judge — DIY `llm_judge.py` (~200 lines, GPT-5.4 via httpx), `quality_pipeline.py` orchestrator (~150 lines) with short-circuiting + scoring formula, feature-flagged OFF by default, config settings
+- [ ] **18f:** Auto-Rewrite — `quality_fixer.py` (~100 lines), fixable issue filtering, targeted rewrite prompt, re-run pipeline on fixed content, version tracking (original + fixed in qa_results), max 1 retry, feature-flagged OFF by default
+- [ ] **18g:** LLM + Rewrite Frontend — AI Evaluation section with score bars, auto-rewrite banner with progress visualization, View Original / View Diff buttons, version comparison modal
+- [ ] **18h:** Transcript Generator — `generate-from-transcript` endpoint (Claude extraction), frontend generate page, draft-first flow (AI generates → user reviews/edits → save)
+- [ ] **Verify:** Create bible from transcript, generate content with bible-augmented prompt, verify QA catches domain errors, verify auto-rewrite fixes low-scoring content, verify LLM judge scores appear, run existing test suite with no regressions
+
+#### New deps for Phase 18
+| Subphase | Package | Purpose |
+|----------|---------|---------|
+| 18a-18d | None | Bible system is pure Python + existing deps |
+| 18e | `openai` (or raw `httpx`) | GPT-5.4 LLM judge API calls |
+
+#### New config for Phase 18
+```
+QUALITY_TIER2_ENABLED=false          # Feature flag for LLM judge (18e)
+QUALITY_AUTO_REWRITE_ENABLED=false   # Feature flag for auto-rewrite (18f)
+QUALITY_JUDGE_MODEL=gpt-5.4         # Configurable judge model
+OPENAI_API_KEY=sk-...               # For LLM judge calls
+```
+
+#### New DB tables for Phase 18
+| Table | Added in | Columns |
+|-------|----------|---------|
+| `vertical_bibles` | 18a (migration 0033) | id, project_id (FK), name, slug, content_md, trigger_keywords (JSONB), qa_rules (JSONB), sort_order, is_active, created_at, updated_at |
+
+#### New frontend pages for Phase 18
+| Page | Added in |
+|------|----------|
+| `/projects/{id}/settings/bibles` | 18c |
+| `/projects/{id}/settings/bibles/{bibleId}` | 18c |
+| `/projects/{id}/settings/bibles/new` | 18c |
+| `/projects/{id}/settings/bibles/generate` | 18h |
 
 #### New deps for Phase 13
 | Package | Size | Purpose |

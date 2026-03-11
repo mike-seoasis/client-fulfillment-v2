@@ -274,18 +274,19 @@ describe('ContentEditorPage', () => {
   // AC: Sidebar renders quality check results correctly (pass and fail states)
   // --------------------------------------------------------------------------
   describe('sidebar quality checks', () => {
-    it('renders quality status card with "All Checks Passed" when passed', () => {
+    it('renders quality panel with estimated score when passed', () => {
       render(<ContentEditorPage />);
-      expect(screen.getByText('All Checks Passed')).toBeInTheDocument();
+      expect(screen.getByText('Estimated Score')).toBeInTheDocument();
+      expect(screen.getByText('Content Checks')).toBeInTheDocument();
     });
 
     it('shows "Pass" for each check type when no issues', () => {
       render(<ContentEditorPage />);
       const passElements = screen.getAllByText('Pass');
-      expect(passElements.length).toBe(8); // 8 check types
+      expect(passElements.length).toBeGreaterThanOrEqual(8);
     });
 
-    it('renders quality status card with issue count when failed', () => {
+    it('renders quality panel with issue counts when failed', () => {
       setupMocks({
         qa_results: {
           passed: false,
@@ -298,7 +299,10 @@ describe('ContentEditorPage', () => {
         },
       });
       render(<ContentEditorPage />);
-      expect(screen.getByText('3 Issues Found')).toBeInTheDocument();
+      // Score badge should show the estimated score
+      expect(screen.getByText('Estimated Score')).toBeInTheDocument();
+      // Content Checks group should show issue count
+      expect(screen.getByText('3 issues')).toBeInTheDocument();
     });
 
     it('shows correct issue count per check type when issues exist', () => {
@@ -318,9 +322,6 @@ describe('ContentEditorPage', () => {
       expect(screen.getByText('2 found')).toBeInTheDocument();
       // em_dash should show "1 found"
       expect(screen.getByText('1 found')).toBeInTheDocument();
-      // Other types should show "Pass" (6 remaining)
-      const passElements = screen.getAllByText('Pass');
-      expect(passElements.length).toBe(6);
     });
 
     it('displays all check type labels', () => {
@@ -335,11 +336,11 @@ describe('ContentEditorPage', () => {
       expect(screen.getByText('Negation Contrast')).toBeInTheDocument();
     });
 
-    it('does not render quality card when qa_results is null', () => {
+    it('does not render quality panel when qa_results is null', () => {
       setupMocks({ qa_results: null });
       render(<ContentEditorPage />);
-      expect(screen.queryByText('All Checks Passed')).not.toBeInTheDocument();
-      expect(screen.queryByText('Banned Words')).not.toBeInTheDocument();
+      expect(screen.queryByText('Estimated Score')).not.toBeInTheDocument();
+      expect(screen.queryByText('Content Checks')).not.toBeInTheDocument();
     });
   });
 

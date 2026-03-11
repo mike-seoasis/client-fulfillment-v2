@@ -16,6 +16,7 @@ export const BRAND_SECTIONS = [
   { key: 'trust_elements', label: 'Trust Elements' },
   { key: 'competitor_context', label: 'Competitor Context' },
   { key: 'ai_prompt_snippet', label: 'AI Prompt' },
+  { key: 'content_limits', label: 'Content Limits' },
 ] as const;
 
 export type SectionKey = (typeof BRAND_SECTIONS)[number]['key'];

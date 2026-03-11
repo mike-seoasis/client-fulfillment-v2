@@ -18,6 +18,10 @@ from app.services.content_quality import (
     QualityResult,
     _check_ai_openers,
     _check_banned_words,
+    _check_bible_banned_claims,
+    _check_bible_preferred_terms,
+    _check_bible_term_context,
+    _check_bible_wrong_attribution,
     _check_business_jargon,
     _check_em_dashes,
     _check_empty_signposts,
@@ -28,10 +32,13 @@ from app.services.content_quality import (
     _check_tier2_ai_words,
     _check_tier3_phrases,
     _check_triplet_lists,
+    _split_sentences,
     _strip_faq_section,
+    _word_boundary_pattern,
     run_blog_quality_checks,
     run_quality_checks,
 )
+from app.services.content_generation import _match_bibles_for_keyword
 
 
 # ---------------------------------------------------------------------------
@@ -58,6 +65,24 @@ class _FakePageContent:
 def _make_page_content(**kwargs: Any) -> Any:
     """Create a fake PageContent-like object with given fields."""
     return _FakePageContent(**kwargs)
+
+
+class _FakeBible:
+    """Stand-in for VerticalBible to avoid importing the model."""
+
+    def __init__(
+        self,
+        name: str = "Test Bible",
+        qa_rules: dict[str, Any] | None = None,
+        content_md: str = "",
+        sort_order: int = 0,
+        trigger_keywords: list[str] | None = None,
+    ) -> None:
+        self.name = name
+        self.qa_rules = qa_rules or {}
+        self.content_md = content_md
+        self.sort_order = sort_order
+        self.trigger_keywords = trigger_keywords or []
 
 
 # ---------------------------------------------------------------------------
@@ -797,3 +822,563 @@ class TestRunBlogQualityChecks:
         assert "tier3_banned_phrase" in types
         assert "empty_signpost" in types
         assert "business_jargon" in types
+
+
+# ---------------------------------------------------------------------------
+# _split_sentences helper
+# ---------------------------------------------------------------------------
+
+
+class TestSplitSentences:
+    """Tests for the _split_sentences helper."""
+
+    def test_splits_on_period(self) -> None:
+        result = _split_sentences("First sentence. Second sentence.")
+        assert len(result) == 2
+        assert result[0] == "First sentence."
+        assert result[1] == "Second sentence."
+
+    def test_splits_on_exclamation_and_question(self) -> None:
+        result = _split_sentences("Wow! Is that true? Yes.")
+        assert len(result) == 3
+
+    def test_strips_html(self) -> None:
+        result = _split_sentences("<p>Hello world.</p> <p>Next one.</p>")
+        assert len(result) == 2
+        assert "<p>" not in result[0]
+
+    def test_handles_empty_string(self) -> None:
+        result = _split_sentences("")
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# Check 14: Bible Preferred Terms
+# ---------------------------------------------------------------------------
+
+
+class TestCheckBiblePreferredTerms:
+    """Tests for bible preferred term detection."""
+
+    def test_detects_deprecated_term(self) -> None:
+        fields = {"bottom_description": "Our cartridge works great with any machine."}
+        qa_rules = {
+            "preferred_terms": [
+                {"use": "needle cartridge", "instead_of": "cartridge"},
+            ]
+        }
+        issues = _check_bible_preferred_terms(fields, qa_rules, "Tattoo Bible")
+        assert len(issues) == 1
+        assert issues[0].type == "bible_preferred_term"
+        assert "needle cartridge" in issues[0].description
+        assert "Tattoo Bible" in issues[0].description
+
+    def test_passes_when_preferred_term_used(self) -> None:
+        fields = {"bottom_description": "Our needle cartridge works great."}
+        qa_rules = {
+            "preferred_terms": [
+                {"use": "needle cartridge", "instead_of": "disposable tube"},
+            ]
+        }
+        issues = _check_bible_preferred_terms(fields, qa_rules, "Bible")
+        assert len(issues) == 0
+
+    def test_case_insensitive(self) -> None:
+        fields = {"bottom_description": "Use our CARTRIDGE system."}
+        qa_rules = {
+            "preferred_terms": [
+                {"use": "needle cartridge", "instead_of": "cartridge"},
+            ]
+        }
+        issues = _check_bible_preferred_terms(fields, qa_rules, "Bible")
+        assert len(issues) == 1
+
+    def test_word_boundary(self) -> None:
+        fields = {"bottom_description": "The subcartridge unit is fine."}
+        qa_rules = {
+            "preferred_terms": [
+                {"use": "needle cartridge", "instead_of": "cartridge"},
+            ]
+        }
+        issues = _check_bible_preferred_terms(fields, qa_rules, "Bible")
+        # "cartridge" should not match inside "subcartridge"
+        assert len(issues) == 0
+
+    def test_empty_rules(self) -> None:
+        fields = {"bottom_description": "Some content."}
+        issues = _check_bible_preferred_terms(fields, {}, "Bible")
+        assert len(issues) == 0
+
+    def test_malformed_entry_skipped(self) -> None:
+        fields = {"bottom_description": "Some content."}
+        qa_rules = {"preferred_terms": [{"use": "x"}, "not a dict"]}
+        issues = _check_bible_preferred_terms(fields, qa_rules, "Bible")
+        assert len(issues) == 0
+
+
+# ---------------------------------------------------------------------------
+# Check 15: Bible Banned Claims
+# ---------------------------------------------------------------------------
+
+
+class TestCheckBibleBannedClaims:
+    """Tests for bible banned claim detection."""
+
+    def test_detects_claim_with_context_in_same_sentence(self) -> None:
+        fields = {
+            "bottom_description": "Our needles are FDA approved for tattoo use. Safe and reliable."
+        }
+        qa_rules = {
+            "banned_claims": [
+                {"claim": "FDA approved", "context": "needle", "reason": "Not FDA regulated"},
+            ]
+        }
+        issues = _check_bible_banned_claims(fields, qa_rules, "Bible")
+        assert len(issues) == 1
+        assert issues[0].type == "bible_banned_claim"
+        assert "FDA approved" in issues[0].description
+
+    def test_no_flag_when_context_in_different_sentence(self) -> None:
+        fields = {
+            "bottom_description": "Our needles are top quality. This is FDA approved equipment."
+        }
+        qa_rules = {
+            "banned_claims": [
+                {"claim": "FDA approved", "context": "needle", "reason": "Not FDA regulated"},
+            ]
+        }
+        issues = _check_bible_banned_claims(fields, qa_rules, "Bible")
+        assert len(issues) == 0
+
+    def test_flags_claim_without_context_anywhere(self) -> None:
+        fields = {"bottom_description": "Our products are FDA approved."}
+        qa_rules = {
+            "banned_claims": [
+                {"claim": "FDA approved", "context": "", "reason": "Never claim this"},
+            ]
+        }
+        issues = _check_bible_banned_claims(fields, qa_rules, "Bible")
+        assert len(issues) == 1
+
+    def test_empty_claims(self) -> None:
+        fields = {"bottom_description": "Content here."}
+        issues = _check_bible_banned_claims(fields, {}, "Bible")
+        assert len(issues) == 0
+
+
+# ---------------------------------------------------------------------------
+# Check 16: Bible Wrong Attribution
+# ---------------------------------------------------------------------------
+
+
+class TestCheckBibleWrongAttribution:
+    """Tests for bible wrong attribution detection."""
+
+    def test_detects_wrong_attribution(self) -> None:
+        fields = {
+            "bottom_description": "The motor drives the needle at high speed."
+        }
+        qa_rules = {
+            "feature_attribution": [
+                {
+                    "feature": "drives the needle",
+                    "correct_component": "cam mechanism",
+                    "wrong_components": ["motor"],
+                },
+            ]
+        }
+        issues = _check_bible_wrong_attribution(fields, qa_rules, "Bible")
+        assert len(issues) == 1
+        assert issues[0].type == "bible_wrong_attribution"
+        assert "cam mechanism" in issues[0].description
+        assert "motor" in issues[0].description
+
+    def test_passes_correct_attribution(self) -> None:
+        fields = {
+            "bottom_description": "The cam mechanism drives the needle smoothly."
+        }
+        qa_rules = {
+            "feature_attribution": [
+                {
+                    "feature": "drives the needle",
+                    "correct_component": "cam mechanism",
+                    "wrong_components": ["motor"],
+                },
+            ]
+        }
+        issues = _check_bible_wrong_attribution(fields, qa_rules, "Bible")
+        assert len(issues) == 0
+
+    def test_different_sentences_no_flag(self) -> None:
+        fields = {
+            "bottom_description": "The motor is powerful. The cam drives the needle."
+        }
+        qa_rules = {
+            "feature_attribution": [
+                {
+                    "feature": "drives the needle",
+                    "correct_component": "cam mechanism",
+                    "wrong_components": ["motor"],
+                },
+            ]
+        }
+        issues = _check_bible_wrong_attribution(fields, qa_rules, "Bible")
+        assert len(issues) == 0
+
+
+# ---------------------------------------------------------------------------
+# Check 17: Bible Term Context
+# ---------------------------------------------------------------------------
+
+
+class TestCheckBibleTermContext:
+    """Tests for bible term context detection."""
+
+    def test_detects_wrong_context(self) -> None:
+        fields = {
+            "bottom_description": "The voltage setting affects needle depth."
+        }
+        qa_rules = {
+            "term_context_rules": [
+                {
+                    "term": "voltage",
+                    "wrong_contexts": ["needle depth"],
+                    "explanation": "Voltage controls motor speed, not depth",
+                },
+            ]
+        }
+        issues = _check_bible_term_context(fields, qa_rules, "Bible")
+        assert len(issues) == 1
+        assert issues[0].type == "bible_term_context"
+        assert "voltage" in issues[0].description
+        assert "needle depth" in issues[0].description
+
+    def test_passes_correct_context(self) -> None:
+        fields = {
+            "bottom_description": "The voltage setting controls motor speed."
+        }
+        qa_rules = {
+            "term_context_rules": [
+                {
+                    "term": "voltage",
+                    "wrong_contexts": ["needle depth"],
+                    "explanation": "Voltage controls motor speed, not depth",
+                },
+            ]
+        }
+        issues = _check_bible_term_context(fields, qa_rules, "Bible")
+        assert len(issues) == 0
+
+    def test_different_sentences_no_flag(self) -> None:
+        fields = {
+            "bottom_description": "Adjust the voltage carefully. Needle depth depends on other factors."
+        }
+        qa_rules = {
+            "term_context_rules": [
+                {
+                    "term": "voltage",
+                    "wrong_contexts": ["needle depth"],
+                    "explanation": "Voltage controls motor speed, not depth",
+                },
+            ]
+        }
+        issues = _check_bible_term_context(fields, qa_rules, "Bible")
+        assert len(issues) == 0
+
+
+# ---------------------------------------------------------------------------
+# run_quality_checks with bibles
+# ---------------------------------------------------------------------------
+
+
+class TestRunQualityChecksWithBibles:
+    """Tests for run_quality_checks with matched_bibles parameter."""
+
+    def test_backward_compatible_without_bibles(self) -> None:
+        """Calling with 2 args still works (no bibles)."""
+        pc = _make_page_content(
+            page_title="Simple Title",
+            bottom_description="Simple content.",
+        )
+        result = run_quality_checks(pc, {})
+        assert result.passed is True
+        assert result.bibles_matched == []
+        # to_dict should NOT include bibles_matched when empty
+        d = result.to_dict()
+        assert "bibles_matched" not in d
+
+    def test_bible_check_failure_causes_fail(self) -> None:
+        """Bible check failures cause result.passed=False."""
+        pc = _make_page_content(
+            page_title="Cartridge Title",
+            bottom_description="Use our cartridge system for best results.",
+        )
+        bible = _FakeBible(
+            name="Tattoo Bible",
+            qa_rules={
+                "preferred_terms": [
+                    {"use": "needle cartridge", "instead_of": "cartridge"},
+                ]
+            },
+        )
+        result = run_quality_checks(pc, {}, matched_bibles=[bible])
+        assert result.passed is False
+        assert "Tattoo Bible" in result.bibles_matched
+        assert any(i.type == "bible_preferred_term" for i in result.issues)
+        # to_dict should include bibles_matched when non-empty
+        d = result.to_dict()
+        assert "bibles_matched" in d
+        assert "Tattoo Bible" in d["bibles_matched"]
+
+    def test_multiple_bibles_accumulate(self) -> None:
+        """Issues from multiple bibles are accumulated."""
+        pc = _make_page_content(
+            bottom_description="Use our cartridge. The motor drives the needle.",
+        )
+        bible1 = _FakeBible(
+            name="Bible A",
+            qa_rules={
+                "preferred_terms": [
+                    {"use": "needle cartridge", "instead_of": "cartridge"},
+                ]
+            },
+        )
+        bible2 = _FakeBible(
+            name="Bible B",
+            qa_rules={
+                "feature_attribution": [
+                    {
+                        "feature": "drives the needle",
+                        "correct_component": "cam",
+                        "wrong_components": ["motor"],
+                    },
+                ]
+            },
+        )
+        result = run_quality_checks(pc, {}, matched_bibles=[bible1, bible2])
+        assert result.passed is False
+        assert len(result.bibles_matched) == 2
+        types = {i.type for i in result.issues}
+        assert "bible_preferred_term" in types
+        assert "bible_wrong_attribution" in types
+
+
+# ---------------------------------------------------------------------------
+# run_blog_quality_checks with bibles
+# ---------------------------------------------------------------------------
+
+
+class TestRunBlogQualityChecksWithBibles:
+    """Tests for run_blog_quality_checks with matched_bibles parameter."""
+
+    def test_backward_compatible_without_bibles(self) -> None:
+        """Calling with 2 args still works (no bibles)."""
+        fields = {"content": "Simple clean content here."}
+        result = run_blog_quality_checks(fields, {})
+        assert result.passed is True
+        assert result.bibles_matched == []
+
+    def test_bible_issues_alongside_blog_checks(self) -> None:
+        """Bible issues combine with blog-specific checks."""
+        fields = {
+            "content": "In conclusion, use our cartridge system.",
+        }
+        bible = _FakeBible(
+            name="Tattoo Bible",
+            qa_rules={
+                "preferred_terms": [
+                    {"use": "needle cartridge", "instead_of": "cartridge"},
+                ]
+            },
+        )
+        result = run_blog_quality_checks(fields, {}, matched_bibles=[bible])
+        assert result.passed is False
+        types = {i.type for i in result.issues}
+        assert "tier3_banned_phrase" in types  # "In conclusion"
+        assert "bible_preferred_term" in types
+        assert "Tattoo Bible" in result.bibles_matched
+
+
+# ---------------------------------------------------------------------------
+# Adversarial review fixes: additional tests
+# ---------------------------------------------------------------------------
+
+
+class TestWordBoundaryPattern:
+    """Tests for _word_boundary_pattern with special-character terms."""
+
+    def test_plain_word(self) -> None:
+        import re
+
+        p = re.compile(_word_boundary_pattern("cartridge"), re.IGNORECASE)
+        assert p.search("our cartridge works")
+        assert not p.search("subcartridge unit")
+
+    def test_term_with_plus(self) -> None:
+        import re
+
+        p = re.compile(_word_boundary_pattern("C++"), re.IGNORECASE)
+        assert p.search("learn C++ today")
+        assert not p.search("learn C today")
+
+    def test_term_starting_with_dot(self) -> None:
+        import re
+
+        p = re.compile(_word_boundary_pattern(".NET"), re.IGNORECASE)
+        assert p.search("use .NET framework")
+        assert not p.search("use DOTNET framework")
+
+    def test_term_with_dot_inside(self) -> None:
+        import re
+
+        p = re.compile(_word_boundary_pattern("Node.js"), re.IGNORECASE)
+        assert p.search("use Node.js for backend")
+
+
+class TestSplitSentencesAbbreviations:
+    """Tests for _split_sentences handling abbreviations correctly."""
+
+    def test_dr_abbreviation(self) -> None:
+        result = _split_sentences("Dr. Smith recommends this. He is an expert.")
+        assert len(result) == 2
+        assert "Dr. Smith" in result[0]
+
+    def test_eg_abbreviation(self) -> None:
+        result = _split_sentences("Use tools, e.g. hammers. They work well.")
+        assert len(result) == 2
+        assert "e.g." in result[0]
+
+    def test_inc_abbreviation(self) -> None:
+        result = _split_sentences("Acme Inc. makes great products. Buy them now.")
+        assert len(result) == 2
+        assert "Inc." in result[0]
+
+    def test_normal_sentences_still_split(self) -> None:
+        result = _split_sentences("First sentence. Second sentence. Third one.")
+        assert len(result) == 3
+
+
+class TestCheckBiblePreferredTermsSpecialChars:
+    """Tests for bible preferred terms with special regex characters."""
+
+    def test_term_with_plus_signs(self) -> None:
+        fields = {"bottom_description": "We recommend C++ for performance."}
+        qa_rules = {
+            "preferred_terms": [
+                {"use": "Rust", "instead_of": "C++"},
+            ]
+        }
+        issues = _check_bible_preferred_terms(fields, qa_rules, "Lang Bible")
+        assert len(issues) == 1
+        assert "Rust" in issues[0].description
+
+    def test_nonstring_instead_of_skipped(self) -> None:
+        """Non-string instead_of values should be skipped, not crash."""
+        fields = {"bottom_description": "Some content here."}
+        qa_rules = {
+            "preferred_terms": [
+                {"use": "foo", "instead_of": 42},
+            ]
+        }
+        issues = _check_bible_preferred_terms(fields, qa_rules, "Bible")
+        assert len(issues) == 0
+
+
+class TestCheckBibleBannedClaimsContextMatching:
+    """Test context_word matching behavior in banned claims."""
+
+    def test_context_matches_plural_form(self) -> None:
+        """'needle' should match 'needles' (plural) in context matching."""
+        fields = {
+            "bottom_description": "Our needles are FDA approved for tattoo use."
+        }
+        qa_rules = {
+            "banned_claims": [
+                {"claim": "FDA approved", "context": "needle", "reason": "test"},
+            ]
+        }
+        issues = _check_bible_banned_claims(fields, qa_rules, "Bible")
+        assert len(issues) == 1
+
+    def test_nonstring_claim_skipped(self) -> None:
+        """Non-string claim values should be skipped, not crash."""
+        fields = {"bottom_description": "Some content here."}
+        qa_rules = {
+            "banned_claims": [
+                {"claim": 42, "context": "needle"},
+            ]
+        }
+        issues = _check_bible_banned_claims(fields, qa_rules, "Bible")
+        assert len(issues) == 0
+
+
+class TestMatchBiblesForKeyword:
+    """Tests for _match_bibles_for_keyword matching logic."""
+
+    def test_basic_match(self) -> None:
+        bible = _FakeBible(name="Ink Bible", trigger_keywords=["tattoo ink"])
+        result = _match_bibles_for_keyword([bible], "best tattoo ink brands")
+        assert len(result) == 1
+
+    def test_no_match(self) -> None:
+        bible = _FakeBible(name="Ink Bible", trigger_keywords=["tattoo ink"])
+        result = _match_bibles_for_keyword([bible], "running shoes")
+        assert len(result) == 0
+
+    def test_short_trigger_skipped(self) -> None:
+        """Triggers shorter than 3 chars should be skipped to prevent false matches."""
+        bible = _FakeBible(name="Bad Bible", trigger_keywords=["a", "in"])
+        result = _match_bibles_for_keyword([bible], "tattoo ink brands")
+        assert len(result) == 0
+
+    def test_empty_keyword_returns_empty(self) -> None:
+        bible = _FakeBible(name="Bible", trigger_keywords=["tattoo"])
+        result = _match_bibles_for_keyword([bible], "")
+        assert len(result) == 0
+
+    def test_bidirectional_match(self) -> None:
+        """Keyword can also be substring of trigger."""
+        bible = _FakeBible(name="Ink Bible", trigger_keywords=["tattoo ink supplies"])
+        result = _match_bibles_for_keyword([bible], "ink")
+        assert len(result) == 1
+
+    def test_preserves_sort_order(self) -> None:
+        bible_a = _FakeBible(name="A", trigger_keywords=["tattoo"], sort_order=2)
+        bible_b = _FakeBible(name="B", trigger_keywords=["tattoo"], sort_order=1)
+        result = _match_bibles_for_keyword([bible_a, bible_b], "tattoo needles")
+        assert len(result) == 2
+        assert result[0].name == "A"  # Order from input list preserved
+
+
+class TestEmptyQaRulesBible:
+    """Test that a bible with empty qa_rules is NOT added to bibles_matched."""
+
+    def test_empty_qa_rules_not_in_matched(self) -> None:
+        pc = _make_page_content(bottom_description="Clean content.")
+        bible = _FakeBible(name="Empty Bible", qa_rules={})
+        result = run_quality_checks(pc, {}, matched_bibles=[bible])
+        assert result.passed is True
+        assert "Empty Bible" not in result.bibles_matched
+
+    def test_nonempty_qa_rules_in_matched(self) -> None:
+        pc = _make_page_content(bottom_description="Clean content.")
+        bible = _FakeBible(
+            name="Real Bible",
+            qa_rules={"preferred_terms": [{"use": "X", "instead_of": "nonexistent_term_xyz"}]},
+        )
+        result = run_quality_checks(pc, {}, matched_bibles=[bible])
+        assert "Real Bible" in result.bibles_matched
+
+
+class TestQualityResultToDictDirect:
+    """Direct tests for QualityResult.to_dict() bibles_matched behavior."""
+
+    def test_empty_bibles_matched_excluded(self) -> None:
+        result = QualityResult(passed=True, bibles_matched=[])
+        d = result.to_dict()
+        assert "bibles_matched" not in d
+
+    def test_nonempty_bibles_matched_included(self) -> None:
+        result = QualityResult(passed=True, bibles_matched=["Bible A"])
+        d = result.to_dict()
+        assert d["bibles_matched"] == ["Bible A"]

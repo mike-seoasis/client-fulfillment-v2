@@ -617,6 +617,32 @@ export function generateFromOutline(
 }
 
 /**
+ * Revise an outline — resets outline_status to 'draft' so the user can
+ * edit and re-approve before regenerating content.
+ */
+export function reviseOutline(
+  projectId: string,
+  pageId: string
+): Promise<PageContentResponse> {
+  return apiClient.post<PageContentResponse>(
+    `/projects/${projectId}/pages/${pageId}/revise-outline`
+  );
+}
+
+/**
+ * Cancel an outline revision — resets outline_status back to null so the
+ * user can view their previously generated content without regenerating.
+ */
+export function cancelOutlineRevision(
+  projectId: string,
+  pageId: string
+): Promise<PageContentResponse> {
+  return apiClient.post<PageContentResponse>(
+    `/projects/${projectId}/pages/${pageId}/cancel-outline-revision`
+  );
+}
+
+/**
  * Export an outline to a formatted Google Doc.
  * Idempotent — returns existing doc URL if already exported.
  * Pass force=true to re-export (creates a new doc).
@@ -2509,5 +2535,174 @@ export function resetOnboarding(
 ): Promise<{ deleted_count: number }> {
   return apiClient.post<{ deleted_count: number }>(
     `/projects/${projectId}/onboarding/reset`
+  );
+}
+
+// =============================================================================
+// VERTICAL BIBLE TYPES
+// =============================================================================
+
+export interface BiblePreferredTerm {
+  use: string;
+  instead_of: string;
+}
+
+export interface BibleBannedClaim {
+  claim: string;
+  context: string;
+  reason: string;
+}
+
+export interface BibleFeatureAttribution {
+  feature: string;
+  correct_component: string;
+  wrong_components: string[];
+}
+
+export interface BibleTermContext {
+  term: string;
+  correct_context: string[];
+  wrong_contexts: string[];
+  explanation: string;
+}
+
+export interface BibleQARules {
+  preferred_terms: BiblePreferredTerm[];
+  banned_claims: BibleBannedClaim[];
+  feature_attribution: BibleFeatureAttribution[];
+  term_context_rules: BibleTermContext[];
+}
+
+export interface VerticalBible {
+  id: string;
+  project_id: string;
+  name: string;
+  slug: string;
+  content_md: string;
+  trigger_keywords: string[];
+  qa_rules: BibleQARules;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VerticalBibleListResponse {
+  items: VerticalBible[];
+  total: number;
+}
+
+export interface BibleCreate {
+  name: string;
+  slug?: string;
+  content_md?: string;
+  trigger_keywords?: string[];
+  qa_rules?: BibleQARules;
+  sort_order?: number;
+  is_active?: boolean;
+}
+
+export interface BibleUpdate {
+  name?: string;
+  slug?: string;
+  content_md?: string;
+  trigger_keywords?: string[];
+  qa_rules?: BibleQARules;
+  sort_order?: number;
+  is_active?: boolean;
+}
+
+export interface BibleExportResponse {
+  markdown: string;
+  filename: string;
+}
+
+// =============================================================================
+// VERTICAL BIBLE API FUNCTIONS
+// =============================================================================
+
+/** List all bibles for a project. */
+export function getBibles(projectId: string): Promise<VerticalBibleListResponse> {
+  return apiClient.get<VerticalBibleListResponse>(
+    `/projects/${projectId}/bibles`
+  );
+}
+
+/** Get a single bible by ID. */
+export function getBible(projectId: string, bibleId: string): Promise<VerticalBible> {
+  return apiClient.get<VerticalBible>(
+    `/projects/${projectId}/bibles/${bibleId}`
+  );
+}
+
+/** Create a new bible. */
+export function createBible(projectId: string, data: BibleCreate): Promise<VerticalBible> {
+  return apiClient.post<VerticalBible>(
+    `/projects/${projectId}/bibles`,
+    data
+  );
+}
+
+/** Update an existing bible. */
+export function updateBible(
+  projectId: string,
+  bibleId: string,
+  data: BibleUpdate
+): Promise<VerticalBible> {
+  return apiClient.put<VerticalBible>(
+    `/projects/${projectId}/bibles/${bibleId}`,
+    data
+  );
+}
+
+/** Delete a bible. */
+export function deleteBible(projectId: string, bibleId: string): Promise<void> {
+  return apiClient.delete<void>(
+    `/projects/${projectId}/bibles/${bibleId}`
+  );
+}
+
+/** Import a bible from markdown with YAML frontmatter. */
+export function importBible(
+  projectId: string,
+  markdown: string,
+  isActive?: boolean
+): Promise<VerticalBible> {
+  return apiClient.post<VerticalBible>(
+    `/projects/${projectId}/bibles/import`,
+    { markdown, is_active: isActive ?? true }
+  );
+}
+
+/** Export a bible as markdown with YAML frontmatter. */
+export function exportBible(
+  projectId: string,
+  bibleId: string
+): Promise<BibleExportResponse> {
+  return apiClient.get<BibleExportResponse>(
+    `/projects/${projectId}/bibles/${bibleId}/export`
+  );
+}
+
+export interface BiblePreviewMatchedPage {
+  page_id: string;
+  url: string;
+  keyword: string;
+  matched_trigger: string;
+}
+
+export interface BiblePreviewResponse {
+  prompt_section: string;
+  matched_pages: BiblePreviewMatchedPage[];
+  total_pages_in_project: number;
+}
+
+/** Get bible preview: prompt injection + matching pages. */
+export function getBiblePreview(
+  projectId: string,
+  bibleId: string
+): Promise<BiblePreviewResponse> {
+  return apiClient.get<BiblePreviewResponse>(
+    `/projects/${projectId}/bibles/${bibleId}/preview`
   );
 }

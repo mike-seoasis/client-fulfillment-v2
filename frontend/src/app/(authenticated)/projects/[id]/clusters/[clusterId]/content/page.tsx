@@ -78,6 +78,11 @@ function getStatusLabel(status: string, outlineStatus?: string | null): string {
   }
 }
 
+/** Whether outline_status indicates the page is still in the outline editing pipeline */
+function isOutlineInProgress(outlineStatus?: string | null): boolean {
+  return outlineStatus === 'draft' || outlineStatus === 'approved' || outlineStatus === 'generating';
+}
+
 function BackArrowIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -185,10 +190,10 @@ function NotFoundState() {
 function PipelineIndicator({ status, linkPlanningStatus, outlineStatus }: { status: string; linkPlanningStatus?: string; outlineStatus?: string | null }) {
   const contentStep = getContentStep(status);
   const isFailed = status === 'failed';
-  const isPageComplete = status === 'complete' && outlineStatus !== 'draft' && outlineStatus !== 'approved';
-  const hasOutline = !!outlineStatus;
+  const isPageComplete = status === 'complete' && !isOutlineInProgress(outlineStatus);
+  const hasActiveOutline = isOutlineInProgress(outlineStatus);
 
-  if (hasOutline) {
+  if (hasActiveOutline) {
     const steps = OUTLINE_PIPELINE_STEPS;
     return (
       <div className="flex items-center gap-1">
@@ -196,15 +201,15 @@ function PipelineIndicator({ status, linkPlanningStatus, outlineStatus }: { stat
           let isComplete = false;
           let isCurrent = false;
 
-          if (isPageComplete && !hasOutline) {
+          if (isPageComplete && !hasActiveOutline) {
             isComplete = true;
           } else if (index === 0) {
             isComplete = true; // Brief always complete once outline exists
           } else if (index === 1) {
-            isComplete = outlineStatus === 'draft' || outlineStatus === 'approved';
+            isComplete = outlineStatus === 'draft' || outlineStatus === 'approved' || outlineStatus === 'used';
             isCurrent = outlineStatus === 'generating';
           } else if (index === 2) {
-            isComplete = outlineStatus === 'approved';
+            isComplete = outlineStatus === 'approved' || outlineStatus === 'used';
             isCurrent = outlineStatus === 'draft';
           } else if (index === 3) {
             isComplete = isPageComplete;
@@ -368,7 +373,7 @@ function PageRow({
   const hasOutlineDraft = page.outline_status === 'draft';
   const hasOutlineApproved = page.outline_status === 'approved' && !isComplete && !isActivelyWriting;
   // Page is truly "content complete" only if it has no pending outline
-  const isContentComplete = isComplete && page.outline_status !== 'draft' && page.outline_status !== 'approved';
+  const isContentComplete = isComplete && page.outline_status !== 'draft' && page.outline_status !== 'approved' && page.outline_status !== 'generating';
 
   return (
     <div className={`px-4 py-3 ${isFailed ? 'bg-coral-50/50' : ''}`}>
@@ -712,7 +717,7 @@ export default function ClusterContentGenerationPage() {
   // Pages with outline_status 'draft' or 'approved' are still in the outline
   // review pipeline — don't count them as truly "completed"
   const clusterPagesCompleted = clusterPages.filter(
-    (p) => p.status === 'complete' && p.outline_status !== 'draft' && p.outline_status !== 'approved'
+    (p) => p.status === 'complete' && !isOutlineInProgress(p.outline_status)
   ).length;
   const clusterPagesFailed = clusterPages.filter((p) => p.status === 'failed').length;
   const clusterPagesApproved = clusterPages.filter((p) => p.status === 'complete' && p.is_approved).length;
@@ -726,7 +731,7 @@ export default function ClusterContentGenerationPage() {
   const hasPages = clusterPagesTotal > 0;
   // Partial: some pages done but not all, pipeline not running (e.g. 3/4 complete, 1 pending)
   const isPartial = !isGenerating && !isIdle && !isComplete && !isFailed && hasPages;
-  const hasAnyOutlines = clusterPages.some((p) => p.outline_status === 'draft' || p.outline_status === 'approved');
+  const hasAnyOutlines = clusterPages.some((p) => isOutlineInProgress(p.outline_status));
 
   const isLinkPlanning = linkStatus?.status === 'planning' || planLinksMutation.isPending;
 
