@@ -39,6 +39,7 @@ from app.models.reddit_account import AccountStatus, RedditAccount, WarmupStage
 from app.models.reddit_comment import CommentStatus, RedditComment
 from app.models.reddit_config import RedditProjectConfig
 from app.models.reddit_post import PostFilterStatus, PostIntent, RedditPost
+from app.models.shopify_page import ShopifyPage
 from app.models.vertical_bible import VerticalBible
 
 __all__ = [
@@ -79,6 +80,7 @@ __all__ = [
     "RedditPost",
     "RedditProjectConfig",
     "PromptLog",
+    "ShopifyPage",
     "VerticalBible",
     "WarmupStage",
     "WebhookConfig",
