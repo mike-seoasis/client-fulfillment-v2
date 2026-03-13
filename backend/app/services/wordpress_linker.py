@@ -343,7 +343,8 @@ async def step3_analyze(
                     )
 
                     if brief_result.success:
-                        # Auto-approve the keyword (POP primary keyword = title)
+                        # Create PageKeywords record (fetch_content_brief
+                        # only creates ContentBrief, not PageKeywords)
                         pk_stmt = select(PageKeywords).where(
                             PageKeywords.crawled_page_id == page.id
                         )
@@ -351,6 +352,13 @@ async def step3_analyze(
                         pk = pk_result.scalar_one_or_none()
                         if pk:
                             pk.is_approved = True
+                        else:
+                            pk = PageKeywords(
+                                crawled_page_id=page.id,
+                                primary_keyword=keyword,
+                                is_approved=True,
+                            )
+                            db.add(pk)
 
                         success_count += 1
                     else:
