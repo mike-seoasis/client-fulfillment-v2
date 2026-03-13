@@ -40,6 +40,11 @@ vi.mock('@/hooks/useContentGeneration', () => ({
     mutate: mockRecheckContentMutate,
     isPending: false,
   }),
+  useReviseOutline: () => ({
+    mutate: vi.fn(),
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
 }));
 
 vi.mock('@/hooks/useBrandConfig', () => ({

@@ -751,6 +751,17 @@ async def _create_silo_groups(
     Returns:
         Dict mapping label name to post count in that silo.
     """
+    # Delete any previous WordPress silo clusters for this project (idempotent re-run)
+    old_wp_clusters = await db.execute(
+        select(KeywordCluster).where(
+            KeywordCluster.project_id == project_id,
+            KeywordCluster.source == "wordpress",
+        )
+    )
+    for old_cluster in old_wp_clusters.scalars().all():
+        await db.delete(old_cluster)
+    await db.flush()
+
     # Collect primary labels
     label_pages: dict[str, list[CrawledPage]] = {}
     for page in pages:
@@ -768,6 +779,7 @@ async def _create_silo_groups(
             seed_keyword=label_name,
             name=label_name,
             status="approved",
+            source="wordpress",
         )
         db.add(cluster)
         await db.flush()
@@ -889,9 +901,10 @@ async def step5_plan_links(
         if has_collection_pages:
             logger.info("Mixed project detected — using collection-aware link planning")
 
-        # Load all clusters (silo groups) for this project
+        # Load only WordPress silo clusters (not cluster-tool clusters)
         stmt = select(KeywordCluster).where(
             KeywordCluster.project_id == project_id,
+            KeywordCluster.source == "wordpress",
         )
         result = await db.execute(stmt)
         clusters = list(result.scalars().all())
@@ -1690,9 +1703,10 @@ async def step6_get_review(
     project_id: str,
 ) -> dict[str, Any]:
     """Get link review stats grouped by silo."""
-    # Load clusters with their link counts
+    # Load WordPress silo clusters with their link counts
     clusters_stmt = select(KeywordCluster).where(
         KeywordCluster.project_id == project_id,
+        KeywordCluster.source == "wordpress",
     )
     clusters_result = await db.execute(clusters_stmt)
     clusters = list(clusters_result.scalars().all())

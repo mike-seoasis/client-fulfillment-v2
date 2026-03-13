@@ -83,6 +83,14 @@ class KeywordCluster(Base):
         nullable=False,
     )
 
+    source: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="cluster_tool",
+        server_default=text("'cluster_tool'"),
+        index=True,
+    )
+
     status: Mapped[str] = mapped_column(
         String(50),
         nullable=False,

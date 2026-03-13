@@ -69,6 +69,7 @@ class ClusterResponse(BaseModel):
     project_id: str = Field(..., description="Parent project UUID")
     seed_keyword: str = Field(..., description="Root keyword for the cluster")
     name: str = Field(..., description="Display name")
+    source: str = Field("cluster_tool", description="Origin: cluster_tool or wordpress")
     status: str = Field(..., description="Workflow status")
     generation_metadata: dict[str, Any] | None = Field(
         None, description="AI generation context"
@@ -88,6 +89,7 @@ class ClusterListResponse(BaseModel):
     id: str = Field(..., description="KeywordCluster UUID")
     seed_keyword: str = Field(..., description="Root keyword for the cluster")
     name: str = Field(..., description="Display name")
+    source: str = Field("cluster_tool", description="Origin: cluster_tool or wordpress")
     status: str = Field(..., description="Workflow status")
     page_count: int = Field(..., description="Total number of pages in cluster")
     approved_count: int = Field(..., description="Number of approved pages")

@@ -202,9 +202,10 @@ async def get_status(
             analyzed_count=analyzed_count,
         )
 
-    # Count silo groups
+    # Count silo groups (only WordPress silo clusters, not cluster-tool)
     silo_stmt = select(func.count()).where(
         KeywordCluster.project_id == project_id,
+        KeywordCluster.source == "wordpress",
     )
     silo_groups = (await db.execute(silo_stmt)).scalar() or 0
 
