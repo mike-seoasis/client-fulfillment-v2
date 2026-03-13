@@ -209,7 +209,7 @@ async def get_status(
     )
     silo_groups = (await db.execute(silo_stmt)).scalar() or 0
 
-    # Count internal links for blog scope
+    # Count internal links for blog scope (only those tied to a cluster)
     links_stmt = (
         select(func.count())
         .select_from(InternalLink)
@@ -217,6 +217,7 @@ async def get_status(
         .where(
             CrawledPage.project_id == project_id,
             CrawledPage.source == "wordpress",
+            InternalLink.cluster_id.isnot(None),
         )
     )
     links_count = (await db.execute(links_stmt)).scalar() or 0
