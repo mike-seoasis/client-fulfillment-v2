@@ -1060,6 +1060,18 @@ async def _process_single_page(
                 and page_content.outline_status in ("approved", "used")
             )
 
+            logger.info(
+                "Outline check before content generation",
+                extra={
+                    "page_id": page_id,
+                    "url": url,
+                    "has_page_content": page_content is not None,
+                    "outline_status": getattr(page_content, "outline_status", None),
+                    "has_outline_json": bool(getattr(page_content, "outline_json", None)),
+                    "has_outline": has_outline,
+                },
+            )
+
             if has_outline:
                 logger.info(
                     "Page has approved outline — using outline-aware generation",
