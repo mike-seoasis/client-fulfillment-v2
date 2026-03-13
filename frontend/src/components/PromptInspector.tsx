@@ -322,7 +322,8 @@ function groupIntoRuns(prompts: PromptLogResponse[]): Run[] {
     steps: groupByStep(currentEntries),
   });
 
-  return runs;
+  // Reverse so the latest run appears first in the UI
+  return runs.reverse();
 }
 
 // ---------------------------------------------------------------------------

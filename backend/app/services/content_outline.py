@@ -597,12 +597,14 @@ def _build_content_from_outline_prompt(
 
     sections: list[str] = []
 
-    # Task
+    # Task + Brevity Rules (shared with content_writing._build_task_section)
+    from app.services.content_writing import _build_task_section
+
+    task_section = _build_task_section(keyword)
+    # Append outline instruction to the task section
     sections.append(
-        f"## Task\n"
-        f'Generate SEO-optimized collection page content for the keyword "{keyword}". '
-        f"Follow the approved outline below as your structural blueprint. "
-        f"Produce all 4 content fields in a single JSON response."
+        task_section + "\n\n"
+        "Follow the approved outline below as your structural blueprint."
     )
 
     # Page context
