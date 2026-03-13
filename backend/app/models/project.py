@@ -145,5 +145,11 @@ class Project(Base):
         cascade="all, delete-orphan",
     )
 
+    shopify_pages: Mapped[list["ShopifyPage"]] = relationship(
+        "ShopifyPage",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+
     def __repr__(self) -> str:
         return f"<Project(id={self.id!r}, name={self.name!r}, status={self.status!r})>"
