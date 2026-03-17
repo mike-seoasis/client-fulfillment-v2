@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.crawled_page import CrawledPage
 from app.models.page_content import PageContent
@@ -67,6 +68,7 @@ class ExportService:
         "Command",
         "Handle",
         "Title",
+        "SEO Title",
         "Body (HTML)",
         "SEO Description",
         "Metafield: custom.top_description [single_line_text_field]",
@@ -105,6 +107,7 @@ class ExportService:
         stmt = (
             select(CrawledPage, PageContent)
             .join(PageContent, PageContent.crawled_page_id == CrawledPage.id)
+            .options(selectinload(CrawledPage.keywords))
             .where(
                 CrawledPage.project_id == project_id,
                 PageContent.is_approved.is_(True),
@@ -116,7 +119,7 @@ class ExportService:
             stmt = stmt.where(CrawledPage.id.in_(page_ids))
 
         result = await db.execute(stmt)
-        rows = result.all()
+        rows = result.unique().all()
 
         output = io.StringIO()
         # UTF-8 BOM for Excel compatibility
@@ -127,10 +130,13 @@ class ExportService:
 
         row_count = 0
         for page, content in rows:
+            pk = page.keywords
+            page_title = pk.primary_keyword.title() if pk and pk.primary_keyword else ""
             writer.writerow(
                 [
                     command,
                     ExportService.extract_handle(page.normalized_url),
+                    page_title,
                     content.page_title or "",
                     content.bottom_description or "",
                     content.meta_description or "",
