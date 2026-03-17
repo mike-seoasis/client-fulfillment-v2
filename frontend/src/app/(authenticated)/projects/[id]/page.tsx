@@ -17,6 +17,7 @@ import { PagesTab } from '@/components/PagesTab';
 import { KeywordsTab } from '@/components/KeywordsTab';
 import { WordPressBlogsTab } from '@/components/WordPressBlogsTab';
 import { useResetOnboarding } from '@/hooks/usePageDeletion';
+import { useAppConfig } from '@/hooks/use-app-config';
 
 function LoadingSkeleton() {
   return (
@@ -507,6 +508,8 @@ function ProjectDetailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectId = params.id as string;
+  const { data: appConfig } = useAppConfig();
+  const isLoremMode = appConfig?.content_mode === 'lorem';
 
   // Tab state from URL
   const activeTab = searchParams.get('tab') || 'tools';
@@ -724,10 +727,12 @@ function ProjectDetailContent() {
             <h1 className="text-2xl font-semibold text-warm-gray-900">
               {project.name}
             </h1>
-            <BrandConfigStatusBadge
-              status={generation.isGenerating ? 'generating' : project.brand_config_status}
-              progress={generation.isGenerating ? generation.progress : undefined}
-            />
+            {!isLoremMode && (
+              <BrandConfigStatusBadge
+                status={generation.isGenerating ? 'generating' : project.brand_config_status}
+                progress={generation.isGenerating ? generation.progress : undefined}
+              />
+            )}
           </div>
           <div className="flex items-center gap-3 text-sm">
             <a
@@ -747,39 +752,43 @@ function ProjectDetailContent() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <ButtonLink href={`/projects/${projectId}/settings/bibles`} variant="secondary">
-            Knowledge Bibles{biblesData?.length ? ` (${biblesData.length})` : ''}
-          </ButtonLink>
-          {/* Brand config action button */}
-          {project.has_brand_config ? (
-            <ButtonLink href={`/projects/${projectId}/brand-config`} variant="secondary">Brand Details</ButtonLink>
-          ) : generation.isGenerating ? (
-            <Button variant="secondary" disabled>
-              <SpinnerIcon className="w-4 h-4 mr-2" />
-              Generating...
-            </Button>
-          ) : (
-            <Button
-              variant="secondary"
-              onClick={async () => {
-                try {
-                  await startGeneration.mutateAsync(projectId);
-                } catch {
-                  setToastMessage('Failed to start brand generation');
-                  setShowToast(true);
-                }
-              }}
-              disabled={startGeneration.isPending}
-            >
-              {startGeneration.isPending ? (
-                <>
+          {!isLoremMode && (
+            <>
+              <ButtonLink href={`/projects/${projectId}/settings/bibles`} variant="secondary">
+                Knowledge Bibles{biblesData?.length ? ` (${biblesData.length})` : ''}
+              </ButtonLink>
+              {/* Brand config action button */}
+              {project.has_brand_config ? (
+                <ButtonLink href={`/projects/${projectId}/brand-config`} variant="secondary">Brand Details</ButtonLink>
+              ) : generation.isGenerating ? (
+                <Button variant="secondary" disabled>
                   <SpinnerIcon className="w-4 h-4 mr-2" />
-                  Starting...
-                </>
+                  Generating...
+                </Button>
               ) : (
-                'Generate Brand'
+                <Button
+                  variant="secondary"
+                  onClick={async () => {
+                    try {
+                      await startGeneration.mutateAsync(projectId);
+                    } catch {
+                      setToastMessage('Failed to start brand generation');
+                      setShowToast(true);
+                    }
+                  }}
+                  disabled={startGeneration.isPending}
+                >
+                  {startGeneration.isPending ? (
+                    <>
+                      <SpinnerIcon className="w-4 h-4 mr-2" />
+                      Starting...
+                    </>
+                  ) : (
+                    'Generate Brand'
+                  )}
+                </Button>
               )}
-            </Button>
+            </>
           )}
           <Button
             ref={deleteButtonRef}
@@ -809,7 +818,8 @@ function ProjectDetailContent() {
         />
       )}
 
-      {/* Tab bar */}
+      {/* Tab bar — hidden in lorem mode (only clusters + blogs matter) */}
+      {!isLoremMode && (
       <div className="flex border-b border-cream-300 mb-8">
         <button
           onClick={() => setActiveTab('tools')}
@@ -852,17 +862,19 @@ function ProjectDetailContent() {
           WordPress Blogs
         </button>
       </div>
+      )}
 
       {/* Tab content */}
-      {activeTab === 'pages' ? (
+      {!isLoremMode && activeTab === 'pages' ? (
         <PagesTab projectId={projectId} />
-      ) : activeTab === 'keywords' ? (
+      ) : !isLoremMode && activeTab === 'keywords' ? (
         <KeywordsTab projectId={projectId} />
-      ) : activeTab === 'wordpress' ? (
+      ) : !isLoremMode && activeTab === 'wordpress' ? (
         <WordPressBlogsTab projectId={projectId} />
       ) : (
       <div className="space-y-6">
-        {/* Onboarding section */}
+        {/* Onboarding section — hidden in lorem mode */}
+        {!isLoremMode && (
         <div className="bg-white rounded-sm border border-cream-500 p-6 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
@@ -1031,6 +1043,7 @@ function ProjectDetailContent() {
             )}
           </div>
         </div>
+        )}
 
         {/* New Content section */}
         <div className="bg-white rounded-sm border border-cream-500 p-6 shadow-sm">
@@ -1118,7 +1131,8 @@ function ProjectDetailContent() {
           )}
         </div>
 
-        {/* Reddit Marketing section */}
+        {/* Reddit Marketing section — hidden in lorem mode */}
+        {!isLoremMode && (
         <div className="bg-white rounded-sm border border-cream-500 p-6 shadow-sm">
           <div className="flex items-center gap-3 mb-3">
             <ChatBubbleIcon className="w-5 h-5 text-palm-500" />
@@ -1156,6 +1170,7 @@ function ProjectDetailContent() {
             </Button>
           )}
         </div>
+        )}
       </div>
       )}
     </div>

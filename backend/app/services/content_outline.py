@@ -78,13 +78,26 @@ def _build_outline_user_prompt(
     """Build user prompt for outline generation with POP brief data."""
     from app.services.content_writing import _build_domain_knowledge_section
 
+    from app.core.config import get_settings
+
+    settings = get_settings()
     sections: list[str] = []
 
     # Task
-    sections.append(
-        f"## Task\nCreate a detailed content outline for a collection page targeting "
-        f'the keyword "{keyword}". Produce a JSON response following the exact schema below.'
-    )
+    if settings.content_mode == "lorem":
+        sections.append(
+            f"## Task\nCreate a detailed content outline for a collection page targeting "
+            f'the keyword "{keyword}". Produce a JSON response following the exact schema below.\n\n'
+            f"**LOREM IPSUM MODE:** This outline will be used to generate lorem ipsum SEO test content. "
+            f"All headlines MUST contain the primary keyword or LSI term variants. "
+            f"In section_details, set each section's 'purpose' to note that body content will be "
+            f"lorem ipsum placeholder text with keywords only in headings."
+        )
+    else:
+        sections.append(
+            f"## Task\nCreate a detailed content outline for a collection page targeting "
+            f'the keyword "{keyword}". Produce a JSON response following the exact schema below.'
+        )
 
     # Page context
     context_lines = ["## Page Context"]
@@ -614,16 +627,36 @@ def _build_content_from_outline_prompt(
     sections.append("\n".join(context_lines))
 
     # Approved outline
+    from app.core.config import get_settings
+
+    settings = get_settings()
+
+    if settings.content_mode == "lorem":
+        outline_instructions = (
+            "Instructions for using the outline:\n"
+            "- Follow the page_progression order exactly\n"
+            "- Use each section_details headline as your H2/H3 heading — headings MUST contain target keywords\n"
+            "- Body paragraphs: use latin lorem ipsum text (NOT English)\n"
+            "- One sentence per section may contain a keyword to hit LSI targets\n"
+            "- Incorporate any client_notes verbatim where provided\n"
+            "- Use the keyword_reference terms in headings, not body text\n"
+            "- Address people_also_ask questions as headings (lorem ipsum body below)"
+        )
+    else:
+        outline_instructions = (
+            "Instructions for using the outline:\n"
+            "- Follow the page_progression order exactly\n"
+            "- Use each section_details headline as your H2/H3 heading\n"
+            "- Expand each key_point into 1-2 paragraphs\n"
+            "- Incorporate any client_notes verbatim where provided\n"
+            "- Use the keyword_reference terms naturally throughout the content\n"
+            "- Address people_also_ask questions within relevant sections"
+        )
+
     sections.append(
         "## Approved Outline (Follow This Structure Exactly)\n"
         f"```json\n{json.dumps(outline_json, indent=2)}\n```\n\n"
-        "Instructions for using the outline:\n"
-        "- Follow the page_progression order exactly\n"
-        "- Use each section_details headline as your H2/H3 heading\n"
-        "- Expand each key_point into 1-2 paragraphs\n"
-        "- Incorporate any client_notes verbatim where provided\n"
-        "- Use the keyword_reference terms naturally throughout the content\n"
-        "- Address people_also_ask questions within relevant sections"
+        + outline_instructions
     )
 
     # Domain Knowledge (from matched vertical bibles)

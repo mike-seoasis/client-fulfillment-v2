@@ -1,0 +1,36 @@
+# SEO Test Instance Override
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.seo-test.yml up -d
+#
+# Runs a fully isolated instance for lorem ipsum SEO testing.
+# Separate database volume, separate ports, no auth required.
+
+version: '3.8'
+
+services:
+  db:
+    container_name: seo-test-db
+    volumes:
+      - seo_test_postgres_data:/var/lib/postgresql/data
+
+  redis:
+    container_name: seo-test-redis
+
+  localstack:
+    container_name: seo-test-localstack
+
+  backend:
+    container_name: seo-test-backend
+    ports:
+      - "8001:8000"
+    env_file:
+      - .env.seo-test
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/onboarding
+      REDIS_URL: redis://redis:6379/0
+      CONTENT_MODE: lorem
+      AUTH_REQUIRED: "false"
+      APP_NAME: "Grove SEO Test"
+      DEBUG: "true"
+
+volumes:
+  seo_test_postgres_data:
