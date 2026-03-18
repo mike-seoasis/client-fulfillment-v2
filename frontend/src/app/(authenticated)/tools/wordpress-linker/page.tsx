@@ -184,6 +184,7 @@ export default function WordPressLinkerPage() {
             setActiveJobId={setActiveJobId}
             onImported={(id) => {
               setProjectId(id);
+              setActiveJobId(null);
               setStep(3);
             }}
           />
@@ -193,7 +194,7 @@ export default function WordPressLinkerPage() {
             projectId={projectId}
             activeJobId={activeJobId}
             setActiveJobId={setActiveJobId}
-            onComplete={() => setStep(4)}
+            onComplete={() => { setActiveJobId(null); setStep(4); }}
           />
         )}
         {step === 4 && projectId && (
@@ -201,7 +202,7 @@ export default function WordPressLinkerPage() {
             projectId={projectId}
             activeJobId={activeJobId}
             setActiveJobId={setActiveJobId}
-            onComplete={() => setStep(5)}
+            onComplete={() => { setActiveJobId(null); setStep(5); }}
           />
         )}
         {step === 5 && projectId && (
@@ -209,7 +210,7 @@ export default function WordPressLinkerPage() {
             projectId={projectId}
             activeJobId={activeJobId}
             setActiveJobId={setActiveJobId}
-            onComplete={() => setStep(6)}
+            onComplete={() => { setActiveJobId(null); setStep(6); }}
           />
         )}
         {step === 6 && projectId && (
