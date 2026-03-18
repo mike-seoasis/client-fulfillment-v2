@@ -1051,13 +1051,13 @@ async def _process_single_page(
                 )
 
             # Standard mode: generate content
-            # If the page already has an approved/used outline, use it as the
-            # structural blueprint instead of generating from scratch.
+            # If the page already has an outline (draft, approved, or used),
+            # use it as the structural blueprint instead of generating from scratch.
             page_content = crawled_page.page_content
             has_outline = (
                 page_content is not None
                 and page_content.outline_json
-                and page_content.outline_status in ("approved", "used")
+                and page_content.outline_status in ("draft", "approved", "used")
             )
 
             logger.info(
@@ -1074,7 +1074,7 @@ async def _process_single_page(
 
             if has_outline:
                 logger.info(
-                    "Page has approved outline — using outline-aware generation",
+                    "Page has outline — using outline-aware generation",
                     extra={"page_id": page_id, "url": url},
                 )
                 writing_result = await generate_content_from_outline(
