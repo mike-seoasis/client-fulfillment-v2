@@ -785,6 +785,47 @@ class AnchorTextSelector:
                         }
                     )
 
+        # Source 3: Subphrases of the primary keyword (partial_match)
+        # e.g. "best hydrogen water infuser" → "hydrogen water infuser",
+        # "hydrogen water", "water infuser"
+        _stop_words = {"best", "top", "most", "home", "portable", "japanese", "the", "a", "an", "for", "and", "of", "in", "to", "with"}
+        if primary_keyword:
+            pk_words = primary_keyword.lower().split()
+            # Drop leading modifier (best/top/home/etc.) if present
+            core_words = [w for w in pk_words if w not in _stop_words]
+            # Generate 2+ word windows from the core words
+            seen_anchors = {c["anchor_text"].lower() for c in candidates}
+            for window_size in range(len(core_words) - 1, 1, -1):
+                for start in range(len(core_words) - window_size + 1):
+                    subphrase = " ".join(core_words[start : start + window_size])
+                    if subphrase not in seen_anchors and subphrase != primary_keyword.lower():
+                        candidates.append(
+                            {"anchor_text": subphrase, "anchor_type": "partial_match"}
+                        )
+                        seen_anchors.add(subphrase)
+
+        # Source 4: LSI terms from ContentBrief (partial_match)
+        # Only include LSI terms that share at least half their content words
+        # with the primary keyword, so anchor text stays closely relevant.
+        if primary_keyword and content_brief and content_brief.lsi_terms:
+            pk_content_words = {w for w in primary_keyword.lower().split() if w not in _stop_words}
+            for lsi in content_brief.lsi_terms:
+                phrase = lsi.get("phrase", "") if isinstance(lsi, dict) else str(lsi)
+                if not phrase or len(phrase.split()) < 2:
+                    continue
+                phrase_words = set(phrase.lower().split())
+                overlap = phrase_words & pk_content_words
+                # Require at least half the LSI phrase words appear in the primary keyword
+                if len(overlap) < max(1, len(phrase_words) // 2 + 1):
+                    continue
+                if (
+                    phrase.lower() != primary_keyword.lower()
+                    and phrase.lower() not in {c["anchor_text"].lower() for c in candidates}
+                ):
+                    candidates.append(
+                        {"anchor_text": phrase, "anchor_type": "partial_match"}
+                    )
+
         # If no POP variations, add secondary keywords from PageKeywords as fallback
         if (
             not any(c["anchor_type"] == "partial_match" for c in candidates)
