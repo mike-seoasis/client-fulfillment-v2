@@ -149,7 +149,7 @@ export default function WordPressLinkerPage() {
       </div>
 
       {/* Step indicator */}
-      <StepIndicator currentStep={step} onStepClick={setStep} />
+      <StepIndicator currentStep={step} onStepClick={(s) => { setActiveJobId(null); setStep(s); }} />
 
       {/* Step content */}
       <div className="rounded-sm border border-sand-500 bg-white p-6 shadow-sm">
