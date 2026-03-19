@@ -1,0 +1,82 @@
+---
+title: "Onboarding Step 3: Primary Keywords — Detailed Interactions"
+---
+flowchart TD
+    %% ============================================================
+    %% STYLE DEFINITIONS
+    %% ============================================================
+    classDef screen fill:#F5F0E8,stroke:#8B7D6B,stroke-width:2px,color:#3D3229
+    classDef action fill:#E8F5E9,stroke:#5B8C5A,stroke-width:1px,color:#2E5A2E
+    classDef system fill:#E0F2F1,stroke:#4A9B8E,stroke-width:1px,color:#2B5F56
+    classDef decision fill:#FFF3E0,stroke:#D4956A,stroke-width:2px,color:#7A4A2A
+    classDef gate fill:#FCE4EC,stroke:#C97B84,stroke-width:2px,color:#7A2E3A
+    classDef error fill:#FFEBEE,stroke:#C62828,stroke-width:1px,color:#7A1A1A
+    classDef start fill:#C8E6C9,stroke:#388E3C,stroke-width:2px,color:#1B5E20
+    classDef complete fill:#C8E6C9,stroke:#388E3C,stroke-width:2px,color:#1B5E20
+
+    %% ============================================================
+    %% ENTRY
+    %% ============================================================
+    START((Enter Keywords<br/>Screen)):::start
+
+    %% ============================================================
+    %% INITIAL STATE CHECK
+    %% ============================================================
+    START --> SCREEN["/onboarding/keywords<br/>━━━━━━━━━━━━━━━━<br/>Approval summary bar<br/>Page list with keyword fields"]:::screen
+
+    SCREEN --> EXIST_CHECK{Keywords already<br/>generated?}:::decision
+    EXIST_CHECK -->|no| AUTO_GEN([Auto-trigger generation<br/>POST /generate-keywords<br/>━━━━━━━━━━━━━━━━<br/>Progress: X of Y generated]):::system
+    EXIST_CHECK -->|yes| KEYWORD_LIST
+
+    AUTO_GEN --> GEN_STATUS{Generation<br/>complete?}:::decision
+    GEN_STATUS -->|generating| GEN_PROGRESS[Progress indicator<br/>Spinner + X of Y keywords]:::screen
+    GEN_PROGRESS -.-> AUTO_GEN
+    GEN_STATUS -->|error| GEN_ERROR[Error banner<br/>Retry button]:::error
+    GEN_ERROR --> RETRY_GEN(Click Retry):::action
+    RETRY_GEN --> AUTO_GEN
+    GEN_STATUS -->|complete| KEYWORD_LIST
+
+    %% ============================================================
+    %% KEYWORD LIST
+    %% ============================================================
+    KEYWORD_LIST[Keyword Approval Table<br/>━━━━━━━━━━━━━━━━<br/>Summary: X generated / Y approved / Z pending<br/>━━━━━━━━━━━━━━━━<br/>Per page row:<br/>URL path | Page title<br/>Primary keyword field inline-editable<br/>Approve button or Already Approved badge<br/>Labels read-only]:::screen
+
+    %% ============================================================
+    %% APPROVAL ACTIONS
+    %% ============================================================
+    KEYWORD_LIST --> ACTION_CHOICE{User action?}:::decision
+
+    %% Individual edit
+    ACTION_CHOICE -->|edit keyword| INLINE_EDIT(Click keyword field<br/>type new keyword):::action
+    INLINE_EDIT --> SAVE_EDIT([PUT /pages/pageId/keywords<br/>Update primary_keyword]):::system
+    SAVE_EDIT --> KEYWORD_LIST
+
+    %% Individual approve
+    ACTION_CHOICE -->|approve one| APPROVE_ONE(Click Approve<br/>on page row):::action
+    APPROVE_ONE --> APPROVE_API([PUT /pages/pageId/keywords<br/>Set is_approved = true]):::system
+    APPROVE_API --> UPDATE_SUMMARY[Update summary bar<br/>Approved count +1<br/>Badge changes to<br/>Already Approved]:::screen
+    UPDATE_SUMMARY --> KEYWORD_LIST
+
+    %% Bulk approve
+    ACTION_CHOICE -->|approve all| BULK_APPROVE(Click Approve All<br/>button):::action
+    BULK_APPROVE --> BULK_API([POST /keywords/approve-all<br/>Mark all pending as approved]):::system
+    BULK_API --> ALL_APPROVED[Summary: 100% approved<br/>All badges green]:::screen
+    ALL_APPROVED --> GATE_CHECK
+
+    %% Edit then approve
+    ACTION_CHOICE -->|edit + approve| INLINE_EDIT
+
+    %% ============================================================
+    %% GATE CHECK
+    %% ============================================================
+    KEYWORD_LIST --> GATE_CHECK
+    GATE_CHECK{All keywords<br/>approved?}:::decision
+    GATE_CHECK -->|no| GATE_BLOCKED{{Continue button disabled<br/>━━━━━━━━━━━━━━━━<br/>Tooltip: Approve all X<br/>remaining keywords<br/>to continue}}:::gate
+    GATE_BLOCKED --> KEYWORD_LIST
+    GATE_CHECK -->|yes| CONTINUE_ENABLED
+
+    %% ============================================================
+    %% EXIT
+    %% ============================================================
+    CONTINUE_ENABLED(Click Continue<br/>to Content):::action
+    CONTINUE_ENABLED --> EXIT((Navigate to<br/>Content screen)):::complete

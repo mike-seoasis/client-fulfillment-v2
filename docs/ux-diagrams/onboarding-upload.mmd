@@ -1,0 +1,81 @@
+---
+title: "Onboarding Step 1: Upload URLs — Detailed Interactions"
+---
+flowchart TD
+    %% ============================================================
+    %% STYLE DEFINITIONS
+    %% ============================================================
+    classDef screen fill:#F5F0E8,stroke:#8B7D6B,stroke-width:2px,color:#3D3229
+    classDef action fill:#E8F5E9,stroke:#5B8C5A,stroke-width:1px,color:#2E5A2E
+    classDef system fill:#E0F2F1,stroke:#4A9B8E,stroke-width:1px,color:#2B5F56
+    classDef decision fill:#FFF3E0,stroke:#D4956A,stroke-width:2px,color:#7A4A2A
+    classDef error fill:#FFEBEE,stroke:#C62828,stroke-width:1px,color:#7A1A1A
+    classDef start fill:#C8E6C9,stroke:#388E3C,stroke-width:2px,color:#1B5E20
+    classDef complete fill:#C8E6C9,stroke:#388E3C,stroke-width:2px,color:#1B5E20
+
+    %% ============================================================
+    %% ENTRY
+    %% ============================================================
+    START((Enter Upload<br/>Screen)):::start
+
+    %% ============================================================
+    %% INPUT METHOD SELECTION
+    %% ============================================================
+    START --> SCREEN["/onboarding/upload<br/>━━━━━━━━━━━━━━━━<br/>Text area + CSV drop zone<br/>Placeholder: project domain"]:::screen
+
+    SCREEN --> INPUT_CHOICE{Input method?}:::decision
+    INPUT_CHOICE -->|paste| PASTE(Paste URLs<br/>one per line):::action
+    INPUT_CHOICE -->|file| CSV_DROP(Drag-drop or<br/>browse CSV file):::action
+
+    %% ============================================================
+    %% CSV PARSING
+    %% ============================================================
+    CSV_DROP --> CSV_PARSE([Parse CSV file<br/>extract URL column]):::system
+    CSV_PARSE --> CSV_CHECK{Parse OK?}:::decision
+    CSV_CHECK -->|error| CSV_ERR[Toast: Invalid CSV format<br/>Check column headers]:::error
+    CSV_ERR --> CSV_DROP
+    CSV_CHECK -->|success| URL_LIST
+
+    %% ============================================================
+    %% URL PROCESSING
+    %% ============================================================
+    PASTE --> URL_LIST[URL Preview List<br/>━━━━━━━━━━━━━━━━<br/>Live table of entered URLs<br/>Shows validity status per URL]:::screen
+
+    URL_LIST --> VALIDATE([Client-side validation<br/>━━━━━━━━━━━━━━━━<br/>HTTP/HTTPS format check<br/>Normalize: lowercase, strip fragments<br/>Remove exact duplicates]):::system
+
+    VALIDATE --> DOMAIN_CHECK{URLs match<br/>project domain?}:::decision
+    DOMAIN_CHECK -->|mismatch detected| DOMAIN_WARN[Warning Banner<br/>Some URLs from different domain<br/>than project site_url]:::error
+    DOMAIN_WARN --> REVIEW_LIST
+    DOMAIN_CHECK -->|all match| REVIEW_LIST
+
+    %% ============================================================
+    %% REVIEW & EDIT
+    %% ============================================================
+    REVIEW_LIST[Validated URL List<br/>━━━━━━━━━━━━━━━━<br/>Per URL row:<br/>✓/✗ validity icon<br/>Normalized URL path<br/>✗ remove button]:::screen
+
+    REVIEW_LIST --> EDIT_CHOICE{User action?}:::decision
+    EDIT_CHOICE -->|remove URL| REMOVE(Click ✗ to remove<br/>individual URL):::action
+    REMOVE --> REVIEW_LIST
+    EDIT_CHOICE -->|add more| SCREEN
+    EDIT_CHOICE -->|submit| SUBMIT(Click Submit URLs):::action
+
+    %% ============================================================
+    %% BACKEND PROCESSING
+    %% ============================================================
+    SUBMIT --> API_CALL([POST /api/v1/projects/id/urls<br/>━━━━━━━━━━━━━━━━<br/>Send normalized URL array]):::system
+
+    API_CALL --> SERVER_VALIDATE([Server-side processing<br/>━━━━━━━━━━━━━━━━<br/>Normalize URLs again<br/>Check against existing CrawledPages<br/>Skip duplicates<br/>Auto-increment batch number]):::system
+
+    SERVER_VALIDATE --> CREATE_PAGES([Create CrawledPage records<br/>━━━━━━━━━━━━━━━━<br/>status: pending<br/>source: onboarding<br/>onboarding_batch: N]):::system
+
+    CREATE_PAGES --> SPAWN_CRAWL([Spawn background<br/>crawl task<br/>━━━━━━━━━━━━━━━━<br/>Returns task_id immediately]):::system
+
+    %% ============================================================
+    %% RESPONSE
+    %% ============================================================
+    SPAWN_CRAWL --> RESPONSE{Server response}:::decision
+    RESPONSE -->|error| SERVER_ERR[Toast: Server error<br/>Try again]:::error
+    SERVER_ERR --> SUBMIT
+    RESPONSE -->|success| TOAST_OK[Toast: Success<br/>━━━━━━━━━━━━━━━━<br/>X pages created<br/>Y duplicates skipped<br/>Batch #N]:::complete
+
+    TOAST_OK --> NAV_CRAWL((Navigate to<br/>Crawl screen<br/>?batch=N)):::complete

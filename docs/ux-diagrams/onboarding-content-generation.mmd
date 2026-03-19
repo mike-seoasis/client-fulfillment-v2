@@ -1,0 +1,99 @@
+---
+title: "Onboarding Step 4: Content Generation — Detailed Interactions"
+---
+flowchart TD
+    %% ============================================================
+    %% STYLE DEFINITIONS
+    %% ============================================================
+    classDef screen fill:#F5F0E8,stroke:#8B7D6B,stroke-width:2px,color:#3D3229
+    classDef action fill:#E8F5E9,stroke:#5B8C5A,stroke-width:1px,color:#2E5A2E
+    classDef system fill:#E0F2F1,stroke:#4A9B8E,stroke-width:1px,color:#2B5F56
+    classDef decision fill:#FFF3E0,stroke:#D4956A,stroke-width:2px,color:#7A4A2A
+    classDef error fill:#FFEBEE,stroke:#C62828,stroke-width:1px,color:#7A1A1A
+    classDef start fill:#C8E6C9,stroke:#388E3C,stroke-width:2px,color:#1B5E20
+    classDef complete fill:#C8E6C9,stroke:#388E3C,stroke-width:2px,color:#1B5E20
+
+    %% ============================================================
+    %% ENTRY
+    %% ============================================================
+    START((Enter Content<br/>Generation)):::start
+
+    %% ============================================================
+    %% MAIN SCREEN
+    %% ============================================================
+    START --> SCREEN["/onboarding/content<br/>━━━━━━━━━━━━━━━━<br/>Progress: X of Y pages<br/>Pipeline status per page<br/>Two tabs: Needs Review | Approved"]:::screen
+
+    SCREEN --> GEN_TRIGGER([POST /generate-content<br/>━━━━━━━━━━━━━━━━<br/>Queues all approved-keyword pages<br/>Returns task_id]):::system
+
+    %% ============================================================
+    %% PER-PAGE PIPELINE (runs for each page)
+    %% ============================================================
+    GEN_TRIGGER --> PIPELINE_START[Per-Page Pipeline View<br/>━━━━━━━━━━━━━━━━<br/>● Brief  ● Write  ● Check  ● Links  ● Done<br/>Status: Queued]:::screen
+
+    %% Phase 1: POP Brief
+    PIPELINE_START --> P1_BRIEF([Phase 1: POP Content Brief<br/>━━━━━━━━━━━━━━━━<br/>1. GET pop.api/get-terms → LSI terms<br/>2. POST pop.api/create-report → SERP analysis<br/>3. POST pop.api/get-custom-recommendations<br/>   → heading targets, word count guidance<br/>━━━━━━━━━━━━━━━━<br/>Cached in PageContent.pop_brief]):::system
+
+    P1_BRIEF --> P1_CHECK{Brief OK?}:::decision
+    P1_CHECK -->|error| P1_FAIL[Pipeline indicator:<br/>Brief step = red ✗<br/>Status: Failed]:::error
+    P1_FAIL --> P1_RETRY{Retry?}:::decision
+    P1_RETRY -->|yes| P1_BRIEF
+    P1_RETRY -->|skip page| PIPELINE_START
+    P1_CHECK -->|success| P1_DONE[Pipeline: ● Brief ✓<br/>Status: Writing...]:::screen
+
+    %% Phase 2: Write Content
+    P1_DONE --> P2_WRITE([Phase 2: Claude Sonnet Writes Copy<br/>━━━━━━━━━━━━━━━━<br/>System prompt:<br/>  Brand config + voice + tone<br/>  AI trope avoidance rules<br/>  Writing style rules<br/>━━━━━━━━━━━━━━━━<br/>User prompt:<br/>  URL + title + keyword<br/>  POP brief data<br/>  Page labels for context<br/>━━━━━━━━━━━━━━━━<br/>Output JSON:<br/>  page_title<br/>  meta_description<br/>  top_description<br/>  bottom_description HTML]):::system
+
+    P2_WRITE --> P2_CHECK{Write OK?}:::decision
+    P2_CHECK -->|parse error| P2_RETRY([Retry with strict<br/>JSON prompt]):::system
+    P2_RETRY --> P2_CHECK
+    P2_CHECK -->|error| P2_FAIL[Pipeline: Write = red ✗<br/>Status: Failed]:::error
+    P2_FAIL --> INSPECT_PROMPT
+    P2_CHECK -->|success| P2_DONE[Pipeline: ● Brief ✓ ● Write ✓<br/>Status: Checking...]:::screen
+
+    %% Phase 3: QA Checks
+    P2_DONE --> P3_QA([Phase 3: Quality Checks<br/>━━━━━━━━━━━━━━━━<br/>1. Tier 1 banned words scan<br/>   delve, unlock, unleash, truly...<br/>2. Tier 2 words: max 1 per piece<br/>   indeed, furthermore, robust...<br/>3. Em-dash — detection<br/>4. Triplet pattern check<br/>5. Whether you're... pattern<br/>6. Negation/contrast: max 1<br/>━━━━━━━━━━━━━━━━<br/>Results → qa_results JSON<br/>Sets qa_passed boolean]):::system
+
+    P3_QA --> P3_RESULT{QA passed?}:::decision
+    P3_RESULT -->|failed| P3_ISSUES[Pipeline: Check = orange ⚠<br/>Status: QA issues found<br/>━━━━━━━━━━━━━━━━<br/>Issue count badge visible<br/>Still proceeds to links]:::screen
+    P3_RESULT -->|passed| P3_DONE[Pipeline: ● Brief ✓ ● Write ✓ ● Check ✓<br/>Status: Planning links...]:::screen
+
+    P3_ISSUES --> P4_LINKS
+    P3_DONE --> P4_LINKS
+
+    %% Phase 4: Link Planning
+    P4_LINKS([Phase 4: SiloLinkPlanner<br/>━━━━━━━━━━━━━━━━<br/>Build relationship graph<br/>Calculate label overlap scores<br/>Apply priority page weighting<br/>Generate 3-6 links per page<br/>Create anchor text variations<br/>━━━━━━━━━━━━━━━━<br/>Creates InternalLink records<br/>Injects links into HTML]):::system
+
+    P4_LINKS --> P4_CHECK{Links OK?}:::decision
+    P4_CHECK -->|error| P4_FAIL[Pipeline: Links = red ✗<br/>Re-plan button visible]:::error
+    P4_CHECK -->|success| PAGE_COMPLETE[Pipeline: All ✓<br/>Status: Complete<br/>━━━━━━━━━━━━━━━━<br/>Review link visible<br/>Inspect link visible]:::complete
+
+    %% ============================================================
+    %% INSPECT PROMPTS (debugging)
+    %% ============================================================
+    INSPECT_PROMPT(Click Inspect<br/>on any page):::action
+    INSPECT_PROMPT --> PROMPT_LOG[Prompt Log Viewer<br/>━━━━━━━━━━━━━━━━<br/>System prompt sent<br/>User prompt sent<br/>Raw response received<br/>Token usage stats]:::screen
+    PROMPT_LOG --> SCREEN
+
+    %% ============================================================
+    %% PROGRESS MONITORING
+    %% ============================================================
+    PAGE_COMPLETE --> ALL_CHECK{All pages<br/>complete?}:::decision
+    ALL_CHECK -->|no| PIPELINE_START
+    ALL_CHECK -->|yes| ALL_DONE
+
+    %% ============================================================
+    %% COMPLETION STATE
+    %% ============================================================
+    ALL_DONE[All Pages Complete<br/>━━━━━━━━━━━━━━━━<br/>Summary: X complete, Y QA passed<br/>Tab: Needs Review shows QA-failed<br/>Tab: Approved shows QA-passed<br/>Bulk Approve button visible]:::screen
+
+    ALL_DONE --> NEXT_CHOICE{User action?}:::decision
+    NEXT_CHOICE -->|review page| REVIEW(Click Review<br/>on a page row):::action
+    REVIEW --> EXIT_REVIEW((Navigate to<br/>Content Review<br/>/content/pageId)):::complete
+
+    NEXT_CHOICE -->|bulk approve| BULK(Click Bulk Approve<br/>all QA-passed pages):::action
+    BULK --> BULK_API([POST /content/bulk-approve<br/>Approve all qa_passed pages]):::system
+    BULK_API --> ALL_DONE
+
+    NEXT_CHOICE -->|inspect| INSPECT_PROMPT
+
+    NEXT_CHOICE -->|continue to export| EXIT_EXPORT((Navigate to<br/>Export screen)):::complete

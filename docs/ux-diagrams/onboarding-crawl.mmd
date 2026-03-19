@@ -1,0 +1,85 @@
+---
+title: "Onboarding Step 2: Crawl & Label — Detailed Interactions"
+---
+flowchart TD
+    %% ============================================================
+    %% STYLE DEFINITIONS
+    %% ============================================================
+    classDef screen fill:#F5F0E8,stroke:#8B7D6B,stroke-width:2px,color:#3D3229
+    classDef action fill:#E8F5E9,stroke:#5B8C5A,stroke-width:1px,color:#2E5A2E
+    classDef system fill:#E0F2F1,stroke:#4A9B8E,stroke-width:1px,color:#2B5F56
+    classDef decision fill:#FFF3E0,stroke:#D4956A,stroke-width:2px,color:#7A4A2A
+    classDef error fill:#FFEBEE,stroke:#C62828,stroke-width:1px,color:#7A1A1A
+    classDef start fill:#C8E6C9,stroke:#388E3C,stroke-width:2px,color:#1B5E20
+    classDef complete fill:#C8E6C9,stroke:#388E3C,stroke-width:2px,color:#1B5E20
+
+    %% ============================================================
+    %% ENTRY
+    %% ============================================================
+    START((Enter Crawl<br/>Screen)):::start
+
+    %% ============================================================
+    %% MAIN SCREEN
+    %% ============================================================
+    START --> SCREEN["/onboarding/crawl?batch=N<br/>━━━━━━━━━━━━━━━━<br/>Progress bar: X of Y pages<br/>Status text: Crawling pages...<br/>Scrollable per-page status list"]:::screen
+
+    %% ============================================================
+    %% POLLING LOOP
+    %% ============================================================
+    SCREEN --> POLL_START([Start polling<br/>GET /crawl-status?batch=N<br/>every 2 seconds]):::system
+
+    POLL_START --> POLL_RESPONSE{Poll response}:::decision
+
+    %% ============================================================
+    %% PER-PAGE STATUS UPDATES
+    %% ============================================================
+    POLL_RESPONSE -->|pages updating| PAGE_STATUS[Per-Page Status List<br/>━━━━━━━━━━━━━━━━<br/>✓ Completed - title, word count<br/>⟳ Crawling - spinner<br/>✗ Failed - error message<br/>○ Pending - waiting]:::screen
+
+    PAGE_STATUS --> PAGE_CHECK{Any page<br/>failed?}:::decision
+    PAGE_CHECK -->|yes| FAILED_PAGE[Page Row: Failed<br/>━━━━━━━━━━━━━━━━<br/>URL path + error msg<br/>Retry button visible]:::error
+    FAILED_PAGE --> RETRY_CHOICE{User retries?}:::decision
+    RETRY_CHOICE -->|yes| RETRY(Click Retry on<br/>failed page):::action
+    RETRY --> RETRY_API([POST /crawl/retry/pageId<br/>Re-crawl single page]):::system
+    RETRY_API --> POLL_START
+    RETRY_CHOICE -->|no, skip| PAGE_CHECK
+    PAGE_CHECK -->|no failures| POLL_CONTINUE
+
+    %% ============================================================
+    %% CRAWLING IN PROGRESS (backend)
+    %% ============================================================
+    POLL_CONTINUE[Progress Bar Updates<br/>━━━━━━━━━━━━━━━━<br/>X of Y complete<br/>Percentage bar fills]:::screen
+
+    POLL_CONTINUE --> CRAWL_BACKEND([Crawl4AI per page<br/>━━━━━━━━━━━━━━━━<br/>Fetch HTML<br/>Extract: title, meta desc<br/>Parse: H1/H2/H3 hierarchy<br/>Count: words, products<br/>Store in CrawledPage]):::system
+
+    CRAWL_BACKEND --> ALL_DONE{All pages<br/>crawled?}:::decision
+    ALL_DONE -->|no| POLL_START
+    ALL_DONE -->|yes| LABELING_PHASE
+
+    %% ============================================================
+    %% AUTO-LABELING PHASE
+    %% ============================================================
+    LABELING_PHASE[Status text changes:<br/>Assigning labels...]:::screen
+
+    LABELING_PHASE --> TAXONOMY([Claude Haiku<br/>analyzes all pages together<br/>━━━━━━━━━━━━━━━━<br/>Generate taxonomy<br/>Create label definitions<br/>Assign 2-5 labels per page]):::system
+
+    TAXONOMY --> LABEL_DONE[Status: Complete<br/>━━━━━━━━━━━━━━━━<br/>Crawled X pages<br/>Labels assigned<br/>Stop polling]:::complete
+
+    %% ============================================================
+    %% LABEL EDITING
+    %% ============================================================
+    LABEL_DONE --> LABEL_REVIEW[Page List with Labels<br/>━━━━━━━━━━━━━━━━<br/>Each page shows:<br/>URL path | Title<br/>Word count | H2 count<br/>Labels as colored badges<br/>Edit button per page]:::screen
+
+    LABEL_REVIEW --> EDIT_CHOICE{Edit labels?}:::decision
+    EDIT_CHOICE -->|yes| EDIT_LABELS(Click Edit on a page):::action
+    EDIT_LABELS --> LABEL_DROPDOWN[Label Dropdown<br/>━━━━━━━━━━━━━━━━<br/>Checkboxes for each<br/>taxonomy label<br/>Select / deselect]:::screen
+    LABEL_DROPDOWN --> SAVE_LABELS(Save label changes):::action
+    SAVE_LABELS --> LABEL_API([PUT /pages/pageId/labels<br/>Update label array]):::system
+    LABEL_API --> LABEL_REVIEW
+
+    EDIT_CHOICE -->|no, continue| NAV_KEYWORDS
+
+    %% ============================================================
+    %% EXIT
+    %% ============================================================
+    NAV_KEYWORDS(Click Continue<br/>to Keywords):::action
+    NAV_KEYWORDS --> EXIT((Navigate to<br/>Keywords screen)):::complete

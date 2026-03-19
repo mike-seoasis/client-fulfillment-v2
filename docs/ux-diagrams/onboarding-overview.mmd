@@ -1,0 +1,126 @@
+---
+title: "Collection Page Onboarding — Screen Flow Overview"
+---
+flowchart LR
+    %% ============================================================
+    %% STYLE DEFINITIONS
+    %% ============================================================
+    classDef screen fill:#F5F0E8,stroke:#8B7D6B,stroke-width:2px,color:#3D3229
+    classDef action fill:#E8F5E9,stroke:#5B8C5A,stroke-width:1px,color:#2E5A2E
+    classDef system fill:#E0F2F1,stroke:#4A9B8E,stroke-width:1px,color:#2B5F56
+    classDef decision fill:#FFF3E0,stroke:#D4956A,stroke-width:2px,color:#7A4A2A
+    classDef gate fill:#FCE4EC,stroke:#C97B84,stroke-width:2px,color:#7A2E3A
+    classDef start fill:#C8E6C9,stroke:#388E3C,stroke-width:2px,color:#1B5E20
+    classDef complete fill:#C8E6C9,stroke:#388E3C,stroke-width:2px,color:#1B5E20
+
+    %% ============================================================
+    %% ENTRY POINT
+    %% ============================================================
+    START((Project<br/>Dashboard)):::start
+
+    %% ============================================================
+    %% STEP 1: UPLOAD
+    %% ============================================================
+    subgraph S1["Step 1: Upload URLs"]
+        direction TB
+        S1_SCREEN["/onboarding/upload<br/>━━━━━━━━━━━━━━━━<br/>Paste URLs or Upload CSV<br/>URL validation + dedup<br/>Domain mismatch warnings"]:::screen
+        S1_ACTION(Submit URLs):::action
+        S1_SYSTEM([Create CrawledPage records<br/>Spawn background crawl]):::system
+        S1_SCREEN --> S1_ACTION --> S1_SYSTEM
+    end
+
+    %% ============================================================
+    %% STEP 2: CRAWL
+    %% ============================================================
+    subgraph S2["Step 2: Crawl & Label"]
+        direction TB
+        S2_SCREEN["/onboarding/crawl<br/>━━━━━━━━━━━━━━━━<br/>Live progress bar<br/>Per-page status list<br/>Retry failed pages"]:::screen
+        S2_SYSTEM([Crawl4AI extracts content<br/>Title, headings, word count<br/>Product count]):::system
+        S2_LABEL([Claude Haiku<br/>auto-generates labels]):::system
+        S2_EDIT(Edit labels per page):::action
+        S2_SCREEN -.-> S2_SYSTEM -.-> S2_LABEL
+        S2_LABEL --> S2_EDIT
+    end
+
+    %% ============================================================
+    %% STEP 3: KEYWORDS
+    %% ============================================================
+    subgraph S3["Step 3: Primary Keywords"]
+        direction TB
+        S3_SCREEN["/onboarding/keywords<br/>━━━━━━━━━━━━━━━━<br/>Keyword per page<br/>Inline edit + approve<br/>Approve All button"]:::screen
+        S3_SYSTEM([Claude Haiku<br/>generates keyword<br/>per page]):::system
+        S3_APPROVE(Approve / Edit keywords):::action
+        S3_GATE{{All keywords approved}}:::gate
+        S3_SCREEN -.-> S3_SYSTEM
+        S3_SYSTEM --> S3_APPROVE --> S3_GATE
+    end
+
+    %% ============================================================
+    %% STEP 4: CONTENT
+    %% ============================================================
+    subgraph S4["Step 4: Content Generation"]
+        direction TB
+        S4_SCREEN["/onboarding/content<br/>━━━━━━━━━━━━━━━━<br/>Pipeline progress view<br/>Brief → Write → Check → Links<br/>Per-page status"]:::screen
+        S4_POP([POP API<br/>content brief]):::system
+        S4_WRITE([Claude Sonnet<br/>writes copy]):::system
+        S4_QA([QA checks<br/>AI tropes + banned words]):::system
+        S4_LINKS([Link planner<br/>auto-assigns links]):::system
+        S4_SCREEN -.-> S4_POP -.-> S4_WRITE -.-> S4_QA -.-> S4_LINKS
+    end
+
+    %% ============================================================
+    %% STEP 5: REVIEW
+    %% ============================================================
+    subgraph S5["Step 5: Content Review"]
+        direction TB
+        S5_SCREEN["/onboarding/content/pageId<br/>━━━━━━━━━━━━━━━━<br/>Rich editor + QA sidebar<br/>Keyword highlighting<br/>HTML toggle"]:::screen
+        S5_EDIT(Edit content fields):::action
+        S5_RECHECK([Re-run QA checks]):::system
+        S5_DECIDE{QA passed?}:::decision
+        S5_APPROVE(Approve page):::action
+        S5_SCREEN --> S5_EDIT --> S5_RECHECK
+        S5_RECHECK --> S5_DECIDE
+        S5_DECIDE -->|yes| S5_APPROVE
+        S5_DECIDE -->|no| S5_EDIT
+    end
+
+    %% ============================================================
+    %% STEP 6: LINK MAP (optional view)
+    %% ============================================================
+    subgraph S6["Link Map (Optional)"]
+        direction TB
+        S6_SCREEN["/links/map<br/>━━━━━━━━━━━━━━━━<br/>Visual link architecture<br/>Pages grouped by label<br/>Inbound + outbound links"]:::screen
+        S6_ADJUST(Adjust links):::action
+        S6_SCREEN --> S6_ADJUST
+    end
+
+    %% ============================================================
+    %% STEP 7: EXPORT
+    %% ============================================================
+    subgraph S7["Step 6: Export"]
+        direction TB
+        S7_SCREEN["/onboarding/export<br/>━━━━━━━━━━━━━━━━<br/>Select pages to export<br/>Pre-selects approved pages<br/>Matrixify CSV format"]:::screen
+        S7_ACTION(Download CSV):::action
+        S7_SYSTEM([Generate Matrixify CSV<br/>Shopify-ready format]):::system
+        S7_SCREEN --> S7_ACTION --> S7_SYSTEM
+    end
+
+    DONE((Export<br/>Complete)):::complete
+
+    %% ============================================================
+    %% MAIN FLOW CONNECTIONS
+    %% ============================================================
+    START ==> S1_SCREEN
+    S1_SYSTEM ==> S2_SCREEN
+    S2_EDIT ==> S3_SCREEN
+    S3_GATE ==>|all approved| S4_SCREEN
+    S4_LINKS ==> S5_SCREEN
+    S5_APPROVE ==> S7_SCREEN
+    S5_SCREEN -.->|view link map| S6_SCREEN
+    S6_ADJUST -.->|back to review| S5_SCREEN
+    S7_SYSTEM ==> DONE
+
+    %% ============================================================
+    %% BATCH RE-ENTRY (secondary flow)
+    %% ============================================================
+    DONE -.->|upload more URLs| S1_SCREEN

@@ -1,0 +1,106 @@
+---
+title: "Onboarding Step 5: Content Review & Editing — Detailed Interactions"
+---
+flowchart TD
+    %% ============================================================
+    %% STYLE DEFINITIONS
+    %% ============================================================
+    classDef screen fill:#F5F0E8,stroke:#8B7D6B,stroke-width:2px,color:#3D3229
+    classDef action fill:#E8F5E9,stroke:#5B8C5A,stroke-width:1px,color:#2E5A2E
+    classDef system fill:#E0F2F1,stroke:#4A9B8E,stroke-width:1px,color:#2B5F56
+    classDef decision fill:#FFF3E0,stroke:#D4956A,stroke-width:2px,color:#7A4A2A
+    classDef error fill:#FFEBEE,stroke:#C62828,stroke-width:1px,color:#7A1A1A
+    classDef start fill:#C8E6C9,stroke:#388E3C,stroke-width:2px,color:#1B5E20
+    classDef complete fill:#C8E6C9,stroke:#388E3C,stroke-width:2px,color:#1B5E20
+
+    %% ============================================================
+    %% ENTRY
+    %% ============================================================
+    START((Enter Content<br/>Review)):::start
+
+    %% ============================================================
+    %% MAIN EDITOR LAYOUT
+    %% ============================================================
+    START --> EDITOR["/onboarding/content/pageId<br/>━━━━━━━━━━━━━━━━<br/>Header: URL path, Primary Keyword<br/>Two-column layout:<br/>LEFT: Content editor fields<br/>RIGHT: Quality sidebar"]:::screen
+
+    %% ============================================================
+    %% QUALITY SIDEBAR (right panel)
+    %% ============================================================
+    EDITOR --> SIDEBAR[Quality Sidebar<br/>━━━━━━━━━━━━━━━━<br/>POP Score: 70-100 numeric<br/>QA Results: pass/fail badges<br/>Word count stats<br/>Keyword density % exact match<br/>Related questions from POP<br/>Internal links assigned]:::screen
+
+    %% ============================================================
+    %% CONTENT FIELDS (left panel)
+    %% ============================================================
+    EDITOR --> FIELDS[Editable Content Fields<br/>━━━━━━━━━━━━━━━━<br/>1. Page Title<br/>   5-10 words, char counter <60<br/>2. Meta Description<br/>   150-160 char counter, live validation<br/>3. Top Description<br/>   1-2 sentences, plain text<br/>4. Bottom Description<br/>   Rich HTML editor]:::screen
+
+    %% ============================================================
+    %% RICH EDITOR INTERACTIONS
+    %% ============================================================
+    FIELDS --> EDITOR_ACTIONS{Editor action?}:::decision
+
+    %% HTML Toggle
+    EDITOR_ACTIONS -->|toggle view| HTML_TOGGLE(Click HTML/Rendered<br/>toggle button):::action
+    HTML_TOGGLE --> VIEW_SWITCH{Current mode?}:::decision
+    VIEW_SWITCH -->|rendered| HTML_VIEW[HTML Source View<br/>Raw markup visible<br/>Syntax highlighted]:::screen
+    VIEW_SWITCH -->|source| RENDERED_VIEW[Rendered Preview<br/>WYSIWYG display<br/>Links clickable]:::screen
+    HTML_VIEW --> FIELDS
+    RENDERED_VIEW --> FIELDS
+
+    %% Keyword Highlighting
+    EDITOR_ACTIONS -->|view highlights| HIGHLIGHTS[Keyword Highlighting Active<br/>━━━━━━━━━━━━━━━━<br/>Primary keyword: green highlight<br/>LSI terms from POP: blue highlight<br/>Related questions: orange highlight<br/>━━━━━━━━━━━━━━━━<br/>Visual density feedback]:::screen
+    HIGHLIGHTS --> FIELDS
+
+    %% Edit content
+    EDITOR_ACTIONS -->|edit text| EDIT_CONTENT(Type in any<br/>content field):::action
+    EDIT_CONTENT --> SAVE([Auto-save on blur<br/>PUT /content/pageId<br/>Update field values]):::system
+    SAVE --> CHAR_UPDATE[Character/word counters<br/>update in real-time]:::screen
+    CHAR_UPDATE --> FIELDS
+
+    %% Format toolbar
+    EDITOR_ACTIONS -->|format| FORMAT(Use toolbar:<br/>Bold, Italic, H2/H3<br/>Undo, Redo):::action
+    FORMAT --> FIELDS
+
+    %% ============================================================
+    %% QA RE-CHECK
+    %% ============================================================
+    EDITOR_ACTIONS -->|re-check quality| RECHECK(Click Re-check<br/>Quality button):::action
+    RECHECK --> QA_RUN([Run QA pipeline<br/>━━━━━━━━━━━━━━━━<br/>Tier 1 banned words<br/>Tier 2 word count<br/>Em-dash check<br/>Triplet pattern<br/>Negation count]):::system
+    QA_RUN --> QA_RESULT{QA result?}:::decision
+    QA_RESULT -->|passed| QA_PASS[Sidebar updates:<br/>All checks green ✓<br/>qa_passed = true]:::complete
+    QA_RESULT -->|failed| QA_FAIL[Sidebar updates:<br/>Failed checks red ✗<br/>━━━━━━━━━━━━━━━━<br/>Issue details shown:<br/>Line number + violation<br/>Suggested fix]:::error
+    QA_PASS --> APPROVE_READY
+    QA_FAIL --> FIX_ISSUES
+
+    %% ============================================================
+    %% FIX QA ISSUES LOOP
+    %% ============================================================
+    FIX_ISSUES(Edit content to<br/>fix flagged issues):::action
+    FIX_ISSUES --> EDIT_CONTENT
+
+    %% ============================================================
+    %% INTERNAL LINKS
+    %% ============================================================
+    EDITOR_ACTIONS -->|view links| LINK_DISPLAY[Internal Links Panel<br/>━━━━━━━━━━━━━━━━<br/>Outbound: pages this links to<br/>  anchor text + target URL<br/>Inbound: pages linking here<br/>  source URL + anchor text<br/>━━━━━━━━━━━━━━━━<br/>Links visible in content<br/>as highlighted anchors]:::screen
+    LINK_DISPLAY --> LINK_MAP_NAV{View full map?}:::decision
+    LINK_MAP_NAV -->|yes| LINK_MAP(Navigate to<br/>/links/map):::action
+    LINK_MAP --> LINK_MAP_SCREEN[Link Map Viewer<br/>━━━━━━━━━━━━━━━━<br/>Pages grouped by label<br/>Color-coded groups<br/>Inbound + outbound per page<br/>Hover for relationship type]:::screen
+    LINK_MAP_SCREEN --> EDITOR
+    LINK_MAP_NAV -->|no| FIELDS
+
+    %% ============================================================
+    %% APPROVAL
+    %% ============================================================
+    APPROVE_READY[Approve Button Active<br/>qa_passed = true]:::screen
+    APPROVE_READY --> APPROVE(Click Approve):::action
+    APPROVE --> APPROVE_API([PUT /content/pageId/approve<br/>Set is_approved = true]):::system
+    APPROVE_API --> APPROVED_STATE[Page Approved<br/>━━━━━━━━━━━━━━━━<br/>Green approved badge<br/>Content locked from editing<br/>unless un-approved]:::complete
+
+    %% ============================================================
+    %% NAVIGATION
+    %% ============================================================
+    APPROVED_STATE --> NAV{Navigate?}:::decision
+    NAV -->|next page| NEXT(Click Next Page<br/>in review queue):::action
+    NEXT --> START
+    NAV -->|back to list| BACK(Click Back to<br/>Content list):::action
+    BACK --> EXIT_LIST((Return to<br/>Content list)):::complete
+    NAV -->|export| EXIT_EXPORT((Navigate to<br/>Export)):::complete

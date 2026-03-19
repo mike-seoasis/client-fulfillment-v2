@@ -1,0 +1,87 @@
+---
+title: "Onboarding Step 6: Export — Detailed Interactions"
+---
+flowchart TD
+    %% ============================================================
+    %% STYLE DEFINITIONS
+    %% ============================================================
+    classDef screen fill:#F5F0E8,stroke:#8B7D6B,stroke-width:2px,color:#3D3229
+    classDef action fill:#E8F5E9,stroke:#5B8C5A,stroke-width:1px,color:#2E5A2E
+    classDef system fill:#E0F2F1,stroke:#4A9B8E,stroke-width:1px,color:#2B5F56
+    classDef decision fill:#FFF3E0,stroke:#D4956A,stroke-width:2px,color:#7A4A2A
+    classDef error fill:#FFEBEE,stroke:#C62828,stroke-width:1px,color:#7A1A1A
+    classDef start fill:#C8E6C9,stroke:#388E3C,stroke-width:2px,color:#1B5E20
+    classDef complete fill:#C8E6C9,stroke:#388E3C,stroke-width:2px,color:#1B5E20
+
+    %% ============================================================
+    %% ENTRY
+    %% ============================================================
+    START((Enter Export<br/>Screen)):::start
+
+    %% ============================================================
+    %% MAIN SCREEN
+    %% ============================================================
+    START --> SCREEN["/onboarding/export<br/>━━━━━━━━━━━━━━━━<br/>Export summary bar<br/>Page selection table<br/>Download button"]:::screen
+
+    %% ============================================================
+    %% SUMMARY BAR
+    %% ============================================================
+    SCREEN --> SUMMARY[Export Summary<br/>━━━━━━━━━━━━━━━━<br/>Total pages: X<br/>Approved: Y ready for export<br/>Pending approval: Z<br/>━━━━━━━━━━━━━━━━<br/>Warning if Z > 0:<br/>Some pages not yet approved]:::screen
+
+    %% ============================================================
+    %% EMPTY STATE
+    %% ============================================================
+    SUMMARY --> APPROVED_CHECK{Any pages<br/>approved?}:::decision
+    APPROVED_CHECK -->|none| EMPTY_STATE[Empty State<br/>━━━━━━━━━━━━━━━━<br/>No pages ready for export<br/>Go back to review and<br/>approve content first<br/>━━━━━━━━━━━━━━━━<br/>Back to Review button]:::error
+    EMPTY_STATE --> BACK_REVIEW(Click Back to Review):::action
+    BACK_REVIEW --> EXIT_REVIEW((Navigate to<br/>Content screen)):::start
+    APPROVED_CHECK -->|has approved| PAGE_TABLE
+
+    %% ============================================================
+    %% PAGE SELECTION TABLE
+    %% ============================================================
+    PAGE_TABLE[Page Selection Table<br/>━━━━━━━━━━━━━━━━<br/>☐ Select All / Deselect All<br/>━━━━━━━━━━━━━━━━<br/>Per page row:<br/>☑ Checkbox pre-selected if approved<br/>URL path<br/>Page title<br/>Primary keyword<br/>QA status badge<br/>Approval status badge]:::screen
+
+    PAGE_TABLE --> SELECT_ACTION{Selection action?}:::decision
+
+    %% Toggle individual
+    SELECT_ACTION -->|toggle page| TOGGLE(Check/uncheck<br/>individual page):::action
+    TOGGLE --> UPDATE_COUNT[Update selection count<br/>X of Y selected]:::screen
+    UPDATE_COUNT --> PAGE_TABLE
+
+    %% Select all
+    SELECT_ACTION -->|select all| SELECT_ALL(Click Select All<br/>checkbox):::action
+    SELECT_ALL --> ALL_SELECTED[All approved pages<br/>checked]:::screen
+    ALL_SELECTED --> PAGE_TABLE
+
+    %% Deselect all
+    SELECT_ACTION -->|deselect all| DESELECT(Click Deselect All):::action
+    DESELECT --> NONE_SELECTED[No pages selected<br/>Download disabled]:::screen
+    NONE_SELECTED --> PAGE_TABLE
+
+    %% ============================================================
+    %% DOWNLOAD
+    %% ============================================================
+    SELECT_ACTION -->|download| DL_CHECK{Pages selected?}:::decision
+    DL_CHECK -->|none| DL_DISABLED[Download button disabled<br/>Select at least 1 page]:::error
+    DL_DISABLED --> PAGE_TABLE
+
+    DL_CHECK -->|has selection| DOWNLOAD(Click Download<br/>Matrixify CSV):::action
+
+    DOWNLOAD --> GENERATE([POST /projects/id/export<br/>━━━━━━━━━━━━━━━━<br/>Selected page IDs sent<br/>━━━━━━━━━━━━━━━━<br/>Backend generates CSV:<br/>Handle from URL slug<br/>Title: page_title<br/>Body HTML: bottom_description<br/>Meta Description: meta_description<br/>Vendor, Type, Collection, Tags<br/>━━━━━━━━━━━━━━━━<br/>UTF-8 encoding<br/>HTML properly escaped]):::system
+
+    GENERATE --> GEN_CHECK{Export OK?}:::decision
+    GEN_CHECK -->|error| EXPORT_ERR[Toast: Export failed<br/>Check server logs]:::error
+    EXPORT_ERR --> PAGE_TABLE
+
+    GEN_CHECK -->|success| FILE_DOWNLOAD([Content-Disposition: attachment<br/>━━━━━━━━━━━━━━━━<br/>Browser downloads file:<br/>projectName_content_export.csv]):::system
+
+    FILE_DOWNLOAD --> DONE[Export Complete<br/>━━━━━━━━━━━━━━━━<br/>Toast: Downloaded X pages<br/>File saved to local machine<br/>━━━━━━━━━━━━━━━━<br/>Ready for Shopify<br/>Matrixify import]:::complete
+
+    %% ============================================================
+    %% POST-EXPORT OPTIONS
+    %% ============================================================
+    DONE --> POST_CHOICE{Next action?}:::decision
+    POST_CHOICE -->|export more| PAGE_TABLE
+    POST_CHOICE -->|upload more URLs| NEW_BATCH((Navigate to<br/>Upload screen<br/>New batch)):::start
+    POST_CHOICE -->|done| DASHBOARD((Return to<br/>Project Dashboard)):::complete
