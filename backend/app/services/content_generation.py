@@ -657,7 +657,7 @@ async def _load_approved_pages(
     if batch is not None:
         stmt = stmt.where(CrawledPage.onboarding_batch == batch)
     result = await db.execute(stmt)
-    pages = result.scalars().all()
+    pages = result.unique().scalars().all()
 
     pages_data: list[dict[str, Any]] = []
     for page in pages:
