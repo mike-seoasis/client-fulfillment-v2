@@ -197,8 +197,26 @@ async def step2_import(
             db.add(project)
             await db.flush()
 
-        # Create CrawledPage + PageContent for each post
-        for i, post in enumerate(posts):
+        # Load existing WP page URLs for this project to skip duplicates
+        existing_stmt = select(CrawledPage.normalized_url).where(
+            CrawledPage.project_id == project.id,
+            CrawledPage.source == "wordpress",
+        )
+        existing_result = await db.execute(existing_stmt)
+        existing_urls: set[str] = {row[0] for row in existing_result.all()}
+
+        new_posts = [p for p in posts if p.url not in existing_urls]
+        skipped = len(posts) - len(new_posts)
+
+        if skipped > 0:
+            logger.info(
+                f"Skipping {skipped} already-imported posts, importing {len(new_posts)} new"
+            )
+
+        progress["total"] = len(new_posts)
+
+        # Create CrawledPage + PageContent for each NEW post
+        for i, post in enumerate(new_posts):
             page = CrawledPage(
                 project_id=project.id,
                 normalized_url=post.url,
@@ -228,13 +246,21 @@ async def step2_import(
 
         await db.commit()
 
-        result = {"project_id": project.id, "posts_imported": len(posts)}
+        result = {
+            "project_id": project.id,
+            "posts_imported": len(new_posts),
+            "posts_skipped": skipped,
+        }
         progress["status"] = "complete"
         progress["result"] = result
 
         logger.info(
             "WordPress import complete",
-            extra={"project_id": project.id, "posts": len(posts)},
+            extra={
+                "project_id": project.id,
+                "imported": len(new_posts),
+                "skipped": skipped,
+            },
         )
         return result
 
@@ -266,13 +292,35 @@ async def step3_analyze(
     _wp_progress[job_id] = progress
 
     try:
-        # Load all pages for the project
-        stmt = select(CrawledPage).where(
-            CrawledPage.project_id == project_id,
-            CrawledPage.source == "wordpress",
+        # Load WP pages that DON'T already have keyword data (skip re-analysis)
+        stmt = (
+            select(CrawledPage)
+            .outerjoin(PageKeywords, PageKeywords.crawled_page_id == CrawledPage.id)
+            .where(
+                CrawledPage.project_id == project_id,
+                CrawledPage.source == "wordpress",
+                PageKeywords.id.is_(None),  # No keyword record yet
+            )
         )
         result = await db.execute(stmt)
         pages = list(result.scalars().all())
+
+        # Count already-analyzed for reporting
+        total_stmt = select(func.count()).where(
+            CrawledPage.project_id == project_id,
+            CrawledPage.source == "wordpress",
+        )
+        total_count = (await db.execute(total_stmt)).scalar() or 0
+        already_done = total_count - len(pages)
+
+        if already_done > 0:
+            logger.info(f"Skipping {already_done} already-analyzed pages, analyzing {len(pages)} new")
+
+        if not pages:
+            progress["status"] = "complete"
+            progress["result"] = {"analyzed": 0, "skipped": already_done, "total": total_count}
+            return cast(dict[str, Any], progress["result"])
+
         progress["total"] = len(pages)
 
         semaphore = asyncio.Semaphore(POP_SEMAPHORE_LIMIT)
@@ -295,7 +343,8 @@ async def step3_analyze(
                     )
 
                     if brief_result.success:
-                        # Auto-approve the keyword (POP primary keyword = title)
+                        # Create PageKeywords record (fetch_content_brief
+                        # only creates ContentBrief, not PageKeywords)
                         pk_stmt = select(PageKeywords).where(
                             PageKeywords.crawled_page_id == page.id
                         )
@@ -303,6 +352,13 @@ async def step3_analyze(
                         pk = pk_result.scalar_one_or_none()
                         if pk:
                             pk.is_approved = True
+                        else:
+                            pk = PageKeywords(
+                                crawled_page_id=page.id,
+                                primary_keyword=keyword,
+                                is_approved=True,
+                            )
+                            db.add(pk)
 
                         success_count += 1
                     else:
@@ -490,12 +546,21 @@ async def _generate_blog_taxonomy(
             if op.labels:
                 existing_labels.update(op.labels)
         if existing_labels:
+            sorted_labels = sorted(existing_labels)
+            labels_json = json.dumps(
+                [
+                    {"name": label, "description": "Existing collection/product page label — INCLUDE VERBATIM"}
+                    for label in sorted_labels
+                ],
+                indent=2,
+            )
             onboarding_labels_section = f"""
 
-IMPORTANT: This blog exists alongside collection/product pages that already use these labels:
-{", ".join(sorted(existing_labels))}
+REQUIRED EXISTING LABELS — you MUST include ALL of the following labels in your taxonomy output exactly as written (same spelling, same casing). These labels are already used by collection/product pages. Including them verbatim enables cross-linking between blog posts and collection pages.
 
-You MUST reuse these existing labels where they are topically relevant to blog posts. This creates label overlap between blog posts and collection pages, which enables cross-linking. You may also create new labels for blog topics not covered by existing labels."""
+{labels_json}
+
+Your output MUST contain every label listed above. You MAY add additional new labels for blog topics not covered by the existing labels, but the existing labels above must appear in your output word-for-word."""
 
     user_prompt = f"""Analyze these {len(pages)} blog posts and generate a taxonomy of topic labels for internal linking silos:
 
@@ -694,6 +759,17 @@ async def _create_silo_groups(
     Returns:
         Dict mapping label name to post count in that silo.
     """
+    # Delete any previous WordPress silo clusters for this project (idempotent re-run)
+    old_wp_clusters = await db.execute(
+        select(KeywordCluster).where(
+            KeywordCluster.project_id == project_id,
+            KeywordCluster.source == "wordpress",
+        )
+    )
+    for old_cluster in old_wp_clusters.scalars().all():
+        await db.delete(old_cluster)
+    await db.flush()
+
     # Collect primary labels
     label_pages: dict[str, list[CrawledPage]] = {}
     for page in pages:
@@ -711,6 +787,7 @@ async def _create_silo_groups(
             seed_keyword=label_name,
             name=label_name,
             status="approved",
+            source="wordpress",
         )
         db.add(cluster)
         await db.flush()
@@ -763,6 +840,52 @@ async def step5_plan_links(
     _wp_progress[job_id] = progress
 
     try:
+        # Clear existing WP blog links before re-planning to avoid duplicates
+        delete_stmt = (
+            InternalLink.__table__.delete()
+            .where(
+                InternalLink.source_page_id.in_(
+                    select(CrawledPage.id).where(
+                        CrawledPage.project_id == project_id,
+                        CrawledPage.source == "wordpress",
+                    )
+                )
+            )
+        )
+        del_result = await db.execute(delete_stmt)
+        if del_result.rowcount:  # type: ignore[union-attr]
+            logger.info(f"Cleared {del_result.rowcount} old WP blog links before re-planning")  # type: ignore[union-attr]
+
+        # Also reset page_content.bottom_description for WP pages so fresh
+        # content gets generated with new links
+        reset_content_stmt = (
+            PageContent.__table__.update()
+            .where(
+                PageContent.crawled_page_id.in_(
+                    select(CrawledPage.id).where(
+                        CrawledPage.project_id == project_id,
+                        CrawledPage.source == "wordpress",
+                    )
+                )
+            )
+            .values(bottom_description=CrawledPage.__table__.c.body_content)
+        )
+        # Simpler approach: reload original content from body_content
+        wp_pages_stmt = select(CrawledPage.id, CrawledPage.body_content).where(
+            CrawledPage.project_id == project_id,
+            CrawledPage.source == "wordpress",
+        )
+        wp_pages_for_reset = (await db.execute(wp_pages_stmt)).all()
+        for page_id_val, body in wp_pages_for_reset:
+            content_update = (
+                PageContent.__table__.update()
+                .where(PageContent.crawled_page_id == page_id_val)
+                .values(bottom_description=body)
+            )
+            await db.execute(content_update)
+
+        await db.flush()
+
         # Detect whether project has collection pages
         # (onboarding pages + cluster pages with approved content)
         coll_count_stmt = (
@@ -786,9 +909,10 @@ async def step5_plan_links(
         if has_collection_pages:
             logger.info("Mixed project detected — using collection-aware link planning")
 
-        # Load all clusters (silo groups) for this project
+        # Load only WordPress silo clusters (not cluster-tool clusters)
         stmt = select(KeywordCluster).where(
             KeywordCluster.project_id == project_id,
+            KeywordCluster.source == "wordpress",
         )
         result = await db.execute(stmt)
         clusters = list(result.scalars().all())
@@ -1112,28 +1236,58 @@ def _build_silo_graph_with_collections(
             }
         )
 
-    # Find collection pages that share labels with this silo's WP posts
+    # Include ALL collection pages in every silo graph. Every blog post
+    # should have the opportunity to link to store/product pages regardless
+    # of silo topic. Relevance is handled by edge weights (label overlap
+    # and keyword similarity), not by inclusion/exclusion.
     silo_labels: set[str] = set()
     for node in wp_nodes:
         silo_labels.update(node.get("labels", []))
 
+    # Build keyword tokens from silo labels for edge weight scoring
+    silo_keywords: set[str] = set()
+    for label in silo_labels:
+        silo_keywords.update(label.lower().replace("-", " ").split())
+    silo_keywords -= {"products", "the", "and", "for", "with", "best", "top"}
+
     coll_nodes: list[dict[str, Any]] = []
     for coll_page in collection_pages:
         page_labels = set(coll_page.labels or [])
-        if page_labels & silo_labels:  # Only include if there's label overlap
-            coll_nodes.append(
-                {
-                    "page_id": coll_page.id,
-                    "keyword": coll_page.title or coll_page.normalized_url,
-                    "url": coll_page.normalized_url,
-                    "labels": coll_page.labels or [],
-                    "is_priority": bool(
-                        coll_page.category
-                        and coll_page.category.lower() in ("collection", "product")
-                    ),
-                    "source": "collection",
-                }
+        has_label_overlap = bool(page_labels & silo_labels)
+
+        # Keyword relevance: how many silo keywords appear in page title/URL
+        keyword_hits = 0
+        if silo_keywords:
+            page_text = (
+                (coll_page.title or "").lower()
+                + " "
+                + (coll_page.normalized_url or "").lower().replace("-", " ")
             )
+            keyword_hits = sum(1 for kw in silo_keywords if kw in page_text)
+
+        coll_nodes.append(
+            {
+                "page_id": coll_page.id,
+                "keyword": coll_page.title or coll_page.normalized_url,
+                "url": coll_page.normalized_url,
+                "labels": coll_page.labels or [],
+                "is_priority": bool(
+                    coll_page.category
+                    and coll_page.category.lower() in ("collection", "product")
+                ),
+                "source": "collection",
+                "_label_overlap": len(page_labels & silo_labels),
+                "_keyword_hits": keyword_hits,
+            }
+        )
+
+    label_matched = sum(1 for n in coll_nodes if n["_label_overlap"] > 0)
+    keyword_matched = sum(1 for n in coll_nodes if n["_label_overlap"] == 0 and n["_keyword_hits"] >= 2)
+    logger.info(
+        f"Silo '{silo_labels}' includes {len(coll_nodes)} collection pages "
+        f"({label_matched} label overlap, {keyword_matched} keyword match, "
+        f"{len(coll_nodes) - label_matched - keyword_matched} baseline)"
+    )
 
     all_nodes = wp_nodes + coll_nodes
 
@@ -1153,20 +1307,32 @@ def _build_silo_graph_with_collections(
             }
         )
 
-    # WP → collection edges (one-directional)
+    # WP → collection edges (one-directional, ALL collection pages included)
+    # Weight hierarchy:
+    #   - Label overlap count (strongest — direct silo match)
+    #   - Keyword hits >= 2: weight=2 (topically relevant by title/URL)
+    #   - Baseline: weight=1 (every collection page is reachable)
     for wp_node in wp_nodes:
         wp_labels = set(wp_node.get("labels", []))
         for coll_node in coll_nodes:
             coll_labels = set(coll_node.get("labels", []))
-            overlap = len(wp_labels & coll_labels)
-            if overlap > 0:
-                edges.append(
-                    {
-                        "source": wp_node["page_id"],
-                        "target": coll_node["page_id"],
-                        "weight": overlap,
-                    }
-                )
+            label_overlap = len(wp_labels & coll_labels)
+            keyword_hits = coll_node.get("_keyword_hits", 0)
+
+            if label_overlap > 0:
+                weight = label_overlap + 1  # label match is strongest
+            elif keyword_hits >= 2:
+                weight = 2  # keyword relevance
+            else:
+                weight = 1  # baseline — still reachable
+
+            edges.append(
+                {
+                    "source": wp_node["page_id"],
+                    "target": coll_node["page_id"],
+                    "weight": weight,
+                }
+            )
 
     return {"pages": all_nodes, "edges": edges}
 
@@ -1220,11 +1386,15 @@ def select_targets_wp_with_collections(
             result[page_id] = []
             continue
 
-        # Split budget: reserve slots for collection targets
+        # Guarantee at least 1 collection link per blog post (the whole point
+        # is driving traffic from blog → store). Use up to half the budget.
         collection_targets_available = [
             tid for tid in neighbors if pages_by_id[tid].get("source") == "collection"
         ]
-        collection_budget = min(len(collection_targets_available), max(1, budget // 2))
+        collection_budget = min(
+            len(collection_targets_available),
+            max(1, budget // 2),
+        ) if collection_targets_available else 0
 
         total_inbound = sum(inbound_counts.values())
         page_count = len(graph["pages"])
@@ -1240,11 +1410,13 @@ def select_targets_wp_with_collections(
             diversity_penalty = max(0.0, excess_inbound * 0.5)
 
             if target_page.get("source") == "collection":
-                # Collection page — boost score
+                # Collection page — boost score. Use reduced diversity penalty
+                # since collection pages are *supposed* to accumulate many inbound links.
+                coll_diversity_penalty = max(0.0, excess_inbound * 0.1)
                 priority_bonus = (
                     PRIORITY_BONUS if target_page.get("is_priority") else 0.0
                 )
-                score = overlap + COLLECTION_BONUS + priority_bonus - diversity_penalty
+                score = overlap + COLLECTION_BONUS + priority_bonus - coll_diversity_penalty
                 scored_collection.append((score, target_id))
             else:
                 # Sibling blog post
@@ -1292,6 +1464,28 @@ def select_targets_wp_with_collections(
                 }
             )
             inbound_counts[target_id] += 1
+
+        # Intra-silo guarantee: if no sibling blog links were selected
+        # and there are available blog targets, force at least one
+        has_blog_target = any(t.get("source") == "wordpress" for t in targets)
+        if not has_blog_target and scored_blog:
+            _, best_blog_id = scored_blog[0]
+            # Check it wasn't already added (shouldn't be, but safety check)
+            already_added = {t["page_id"] for t in targets}
+            if best_blog_id not in already_added:
+                best_blog_page = pages_by_id[best_blog_id]
+                targets.append(
+                    {
+                        "page_id": best_blog_id,
+                        "keyword": best_blog_page["keyword"],
+                        "url": best_blog_page["url"],
+                        "is_priority": best_blog_page.get("is_priority", False),
+                        "label_overlap": neighbors[best_blog_id],
+                        "score": scored_blog[0][0],
+                        "source": "wordpress",
+                    }
+                )
+                inbound_counts[best_blog_id] += 1
 
         result[page_id] = targets
 
@@ -1517,9 +1711,10 @@ async def step6_get_review(
     project_id: str,
 ) -> dict[str, Any]:
     """Get link review stats grouped by silo."""
-    # Load clusters with their link counts
+    # Load WordPress silo clusters with their link counts
     clusters_stmt = select(KeywordCluster).where(
         KeywordCluster.project_id == project_id,
+        KeywordCluster.source == "wordpress",
     )
     clusters_result = await db.execute(clusters_stmt)
     clusters = list(clusters_result.scalars().all())
@@ -1639,6 +1834,7 @@ async def step7_export(
     username: str,
     app_password: str,
     job_id: str,
+    page_ids: list[str] | None = None,
     title_filter: list[str] | None = None,
 ) -> dict[str, Any]:
     """Push updated content back to WordPress."""
@@ -1664,8 +1860,11 @@ async def step7_export(
         result = await db.execute(stmt)
         pages = list(result.unique().scalars().all())
 
-        # Apply title filter
-        if title_filter:
+        # Apply page_ids filter (preferred) or title filter (legacy)
+        if page_ids:
+            page_id_set = set(page_ids)
+            pages = [p for p in pages if p.id in page_id_set]
+        elif title_filter:
             pages = [
                 p
                 for p in pages

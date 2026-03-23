@@ -186,6 +186,11 @@ async def lifespan(app: FastAPI) -> Any:
         },
     )
 
+    if settings.content_mode == "lorem":
+        logger.warning(
+            "Content mode: LOREM IPSUM — body text will be placeholder"
+        )
+
     # Initialize database
     try:
         db_manager.init_db()
@@ -386,6 +391,15 @@ def create_app() -> FastAPI:
                 "request_id": request_id,
             },
         )
+
+    # App config endpoint (exposes non-sensitive settings to frontend)
+    @app.get("/api/v1/config", tags=["Config"])
+    async def app_config() -> dict[str, str]:
+        """Return non-sensitive app configuration for the frontend."""
+        return {
+            "content_mode": settings.content_mode,
+            "app_name": settings.app_name,
+        }
 
     # Health check endpoint for Railway
     @app.get("/health", tags=["Health"])

@@ -130,6 +130,7 @@ app/services/outline_export.py
 app/services/pop_content_brief.py
 app/services/primary_keyword.py
 app/services/project.py
+app/services/quality_fixer.py
 app/services/quality_pipeline.py
 app/services/reddit_comment_generation.py
 app/services/reddit_discovery.py

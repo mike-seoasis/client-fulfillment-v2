@@ -657,7 +657,7 @@ async def _load_approved_pages(
     if batch is not None:
         stmt = stmt.where(CrawledPage.onboarding_batch == batch)
     result = await db.execute(stmt)
-    pages = result.scalars().all()
+    pages = result.unique().scalars().all()
 
     pages_data: list[dict[str, Any]] = []
     for page in pages:
@@ -1051,14 +1051,50 @@ async def _process_single_page(
                 )
 
             # Standard mode: generate content
-            writing_result = await generate_content(
-                db=db,
-                crawled_page=crawled_page,
-                content_brief=content_brief,
-                brand_config=brand_config,
-                keyword=keyword,
-                matched_bibles=matched_bibles,
+            # If the page already has an outline (draft, approved, or used),
+            # use it as the structural blueprint instead of generating from scratch.
+            page_content = crawled_page.page_content
+            has_outline = (
+                page_content is not None
+                and page_content.outline_json
+                and page_content.outline_status in ("draft", "approved", "used")
             )
+
+            logger.info(
+                "Outline check before content generation",
+                extra={
+                    "page_id": page_id,
+                    "url": url,
+                    "has_page_content": page_content is not None,
+                    "outline_status": getattr(page_content, "outline_status", None),
+                    "has_outline_json": bool(getattr(page_content, "outline_json", None)),
+                    "has_outline": has_outline,
+                },
+            )
+
+            if has_outline:
+                logger.info(
+                    "Page has outline — using outline-aware generation",
+                    extra={"page_id": page_id, "url": url},
+                )
+                writing_result = await generate_content_from_outline(
+                    db=db,
+                    crawled_page=crawled_page,
+                    content_brief=content_brief,
+                    brand_config=brand_config,
+                    keyword=keyword,
+                    outline_json=page_content.outline_json,
+                    matched_bibles=matched_bibles,
+                )
+            else:
+                writing_result = await generate_content(
+                    db=db,
+                    crawled_page=crawled_page,
+                    content_brief=content_brief,
+                    brand_config=brand_config,
+                    keyword=keyword,
+                    matched_bibles=matched_bibles,
+                )
 
             if not writing_result.success:
                 # generate_content already marks PageContent as failed
@@ -1080,6 +1116,10 @@ async def _process_single_page(
                     success=False,
                     error="No PageContent after writing",
                 )
+
+            # Mark outline as 'used' if we generated from one
+            if has_outline and written_content.outline_status == "approved":
+                written_content.outline_status = "used"
 
             written_content.status = ContentStatus.CHECKING.value
             await db.commit()

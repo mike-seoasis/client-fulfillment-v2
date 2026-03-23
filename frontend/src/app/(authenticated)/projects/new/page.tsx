@@ -14,11 +14,110 @@ import {
 } from '@/hooks/useBrandConfigGeneration';
 import { useUpsertRedditConfig } from '@/hooks/useReddit';
 import { upsertRedditConfig } from '@/lib/api';
-import { Button } from '@/components/ui';
+import { useAppConfig } from '@/hooks/use-app-config';
+import { Button, Input } from '@/components/ui';
 
 type WizardStep = 1 | 2;
 
+/**
+ * Simplified project creation for SEO test mode.
+ * Just name + domain, no brand config, no file uploads.
+ */
+function SeoTestCreateProject() {
+  const router = useRouter();
+  const createProject = useCreateProject();
+  const [error, setError] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const [siteUrl, setSiteUrl] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim() || !siteUrl.trim()) return;
+
+    setError(null);
+    setIsSubmitting(true);
+
+    try {
+      const project = await createProject.mutateAsync({
+        name: name.trim(),
+        site_url: siteUrl.trim(),
+      });
+      router.push(`/projects/${project.id}`);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to create project.'
+      );
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div>
+      <Link
+        href="/"
+        className="inline-flex items-center text-warm-gray-600 hover:text-warm-gray-900 mb-6 text-sm"
+      >
+        <svg className="w-4 h-4 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M19 12H5M12 19l-7-7 7-7" />
+        </svg>
+        Back to Dashboard
+      </Link>
+
+      <div className="max-w-xl mx-auto">
+        <div className="bg-white rounded-sm border border-cream-500 p-8 shadow-sm">
+          <h1 className="text-2xl font-semibold text-warm-gray-900 mb-6">
+            Create SEO Test Site
+          </h1>
+
+          {error && (
+            <div className="rounded-sm bg-coral-50 border border-coral-200 p-4 text-coral-700 mb-6">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <Input
+              label="Site Name"
+              placeholder="e.g. Crossbody Water Bottle Bag"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+
+            <Input
+              label="Domain"
+              type="url"
+              placeholder="https://crossbodywaterbottlebag.shop"
+              value={siteUrl}
+              onChange={(e) => setSiteUrl(e.target.value)}
+              required
+            />
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-cream-200">
+              <Link href="/">
+                <Button variant="ghost" type="button">Cancel</Button>
+              </Link>
+              <Button type="submit" disabled={isSubmitting || !name.trim() || !siteUrl.trim()}>
+                {isSubmitting ? 'Creating...' : 'Create Site'}
+              </Button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CreateProjectPage() {
+  const { data: appConfig } = useAppConfig();
+  const isLoremMode = appConfig?.content_mode === 'lorem';
+
+  // In lorem mode, use the simplified form
+  if (isLoremMode) {
+    return <SeoTestCreateProject />;
+  }
+
   return (
     <Suspense
       fallback={

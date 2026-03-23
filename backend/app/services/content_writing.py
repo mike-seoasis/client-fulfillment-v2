@@ -460,14 +460,43 @@ def _build_blog_user_prompt(
         ## Domain Knowledge, ## Freshness, ## Entity Association, ## Brand Voice,
         and ## Output Format sections.
     """
+    from app.core.config import get_settings
+
+    settings = get_settings()
     sections: list[str] = []
 
     # ## Task
-    sections.append(
-        f"## Task\n"
-        f"Generate an SEO-optimized blog article targeting the keyword "
-        f'"{keyword}". Produce all 3 content fields in a single JSON response.'
-    )
+    if settings.content_mode == "lorem":
+        sections.append(
+            f"## Task\n"
+            f"Generate an SEO-structured blog article targeting the keyword "
+            f'"{keyword}". Produce all 3 content fields in a single JSON response.\n'
+            f"\n"
+            f"## Lorem Ipsum SEO Mode\n"
+            f"This is a lorem ipsum SEO test. Place target keywords ONLY in "
+            f"SEO-critical positions. All body paragraph text must be latin "
+            f"lorem ipsum placeholder text.\n"
+            f"\n"
+            f"**Keywords MUST appear in:**\n"
+            f"- Every <h2> and <h3> heading (primary keyword or LSI variants)\n"
+            f"- The page_title and meta_description (real, natural English)\n"
+            f"- The lead/intro paragraph (one natural sentence with keyword, rest lorem ipsum)\n"
+            f"\n"
+            f"**Lead paragraph format:**\n"
+            f'- Start with: <p class="text-xl font-medium text-slate-900 dark:text-white mb-10 leading-relaxed italic">\n'
+            f"- First sentence: natural English containing the primary keyword\n"
+            f"- Remaining text: lorem ipsum\n"
+            f"\n"
+            f"**All other <p> text = latin lorem ipsum only.**\n"
+            f"Vary the lorem ipsum length across paragraphs. Use actual latin text, "
+            f"not English filler."
+        )
+    else:
+        sections.append(
+            f"## Task\n"
+            f"Generate an SEO-optimized blog article targeting the keyword "
+            f'"{keyword}". Produce all 3 content fields in a single JSON response.'
+        )
 
     # ## Blog Context
     sections.append(_build_blog_context_section(blog_post))
@@ -645,10 +674,50 @@ def _build_blog_output_format_section(
 
     Adapts article structure based on detected content type from the keyword.
     """
+    from app.core.config import get_settings
+
+    settings = get_settings()
+
     # Determine FAQ questions from content brief
     faq_questions: list[str] = []
     if content_brief is not None:
         faq_questions = content_brief.related_questions or []
+
+    # Lorem ipsum mode: simplified blog output format
+    if settings.content_mode == "lorem":
+        lorem_lines = [
+            "## Output Format",
+            "Respond with ONLY a valid JSON object (no markdown fencing) with these 3 keys:",
+            "",
+            "```",
+            "{",
+            '  "page_title": "...",',
+            '  "meta_description": "...",',
+            '  "content": "..."',
+            "}",
+            "```",
+            "",
+            "**Field specifications:**",
+            "- **page_title**: Include primary keyword, under 60 chars, Title Case.",
+            "- **meta_description**: 150-160 chars, include primary keyword, natural English.",
+            "- **content** (full article HTML):",
+            "",
+            '  - Lead paragraph: <p class="text-xl font-medium text-slate-900 '
+            'dark:text-white mb-10 leading-relaxed italic">One sentence with keyword + lorem ipsum</p>',
+            "  - H2 headings: MUST contain primary keyword or LSI terms",
+            "  - H3 subheadings: MUST contain primary keyword or LSI terms",
+            "  - All <p> body text: latin lorem ipsum only",
+        ]
+        if faq_questions:
+            lorem_lines.append("  - FAQ section: use these as H3 headings (lorem ipsum answers):")
+            for q in faq_questions[:8]:
+                lorem_lines.append(f"    - {q}")
+        lorem_lines.append("")
+        lorem_lines.append(
+            "Use semantic HTML only (h2, h3, p, ul, li tags). No inline styles. No div wrappers. "
+            "No class attributes except on the lead paragraph."
+        )
+        return "\n".join(lorem_lines)
 
     # Detect content type for structure adaptation
     content_type = _detect_content_type(keyword) if keyword else "guide"
@@ -760,7 +829,47 @@ def _build_blog_output_format_section(
 
 
 def _build_task_section(keyword: str) -> str:
-    """Build the ## Task + ## Brevity Rules section."""
+    """Build the ## Task + ## Brevity Rules section.
+
+    In lorem mode (CONTENT_MODE=lorem), instructs Claude to place keywords
+    only in SEO-critical positions and fill body paragraphs with lorem ipsum.
+    """
+    from app.core.config import get_settings
+
+    settings = get_settings()
+
+    if settings.content_mode == "lorem":
+        return (
+            f"## Task\n"
+            f"Generate SEO-structured content for a collection page targeting "
+            f'the keyword "{keyword}". Produce all 4 content fields in a single '
+            f"JSON response.\n"
+            f"\n"
+            f"## Lorem Ipsum SEO Mode\n"
+            f"This is a lorem ipsum SEO test. The goal is to place target keywords "
+            f"ONLY in SEO-critical positions while filling all body text with latin "
+            f"lorem ipsum placeholder text.\n"
+            f"\n"
+            f"**Keywords MUST appear in:**\n"
+            f"- Every <h2> and <h3> heading (use the primary keyword or LSI variants)\n"
+            f"- The page_title and meta_description (real, natural English)\n"
+            f"- The first sentence of top_description (keyword in a natural sentence)\n"
+            f"- At least one sentence per section in bottom_description that contains a target keyword\n"
+            f"\n"
+            f"**All other text MUST be lorem ipsum:**\n"
+            f"- All <p> paragraph text between keyword sentences = standard latin lorem ipsum\n"
+            f"  (e.g., 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. "
+            f"Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.')\n"
+            f"- Vary the lorem ipsum length and phrasing across paragraphs\n"
+            f"- Do NOT use English filler — use actual latin lorem ipsum text only\n"
+            f"\n"
+            f"**Structure rules:**\n"
+            f"- Use all LSI terms from the SEO Targets section in headings or keyword sentences\n"
+            f"- Hit the heading tag count targets from the POP brief\n"
+            f"- Include related questions as H2/H3 headings where specified\n"
+            f"- Aim for 300-500 words in bottom_description to match typical page length"
+        )
+
     return (
         f"## Task\n"
         f"Generate SEO-optimized content for a collection page targeting "
@@ -1220,6 +1329,36 @@ def _build_bottom_description_spec(
                 h2_count = min(max(1, h.get("min", 3)), H2_CAP)
             elif "h3 tag total" in tag:
                 h3_count = min(max(1, h.get("min", 4)), H3_CAP)
+
+    from app.core.config import get_settings
+
+    settings = get_settings()
+
+    if settings.content_mode == "lorem":
+        lines = [
+            "- **bottom_description** (HTML)",
+            "",
+            "  Structure your content with approximately:",
+            f"  - {h2_count} H2 sections (each heading MUST contain the primary keyword or an LSI term)",
+            f"  - {h3_count} H3 subsections (each heading MUST contain the primary keyword or an LSI term)",
+            "",
+            "  Follow this pattern:",
+            "",
+            '  <h2>[Keyword-Rich Heading, e.g., "Best [primary keyword] for Your Needs"]</h2>',
+            "  <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. "
+            "Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>",
+            "",
+            '  <h3>[Keyword-Rich Subheading, e.g., "How to Choose a [primary keyword]"]</h3>',
+            "  <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris "
+            "nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor.</p>",
+            "",
+            "  ...repeat pattern for all sections...",
+            "",
+            "  IMPORTANT: Headings contain REAL keywords. Paragraphs contain ONLY latin lorem ipsum.",
+            "  The only exception: one sentence per section may contain a target keyword if needed",
+            "  to hit LSI term count targets.",
+        ]
+        return "\n".join(lines)
 
     # Resolve word limit
     max_words = (

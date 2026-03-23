@@ -477,6 +477,12 @@ class Settings(BaseSettings):
         description="Global max word count for blog post content field",
     )
 
+    # Content generation mode
+    content_mode: str = Field(
+        default="real",
+        description="Content generation mode: 'real' for natural copy, 'lorem' for lorem ipsum body with keywords in SEO signals only",
+    )
+
     # Content generation pipeline
     content_generation_concurrency: int = Field(
         default=1,

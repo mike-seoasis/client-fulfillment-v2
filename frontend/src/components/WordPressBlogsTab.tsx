@@ -12,7 +12,6 @@ import {
   useWPReview,
   useWPDownloadCsv,
   useWPExportablePosts,
-  useWPLinkableProjects,
   useWPStatus,
 } from "@/hooks/useWordPressLinker";
 
@@ -27,9 +26,6 @@ const STEPS = [
   { id: 7, label: "Export" },
 ] as const;
 
-// Persistent storage key (localStorage survives tab close)
-const WP_STORAGE_KEY = "wp-linker-state";
-
 interface WPPersistedState {
   siteUrl: string;
   username: string;
@@ -38,96 +34,93 @@ interface WPPersistedState {
   totalPosts: number;
   titleFilter: string;
   postStatus: string;
-  existingProjectId: string | null;
 }
 
-function savePersisted(state: WPPersistedState) {
+function savePersisted(key: string, state: WPPersistedState) {
   try {
-    localStorage.setItem(WP_STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(key, JSON.stringify(state));
   } catch {
     // localStorage unavailable
   }
 }
 
-function loadPersisted(): WPPersistedState | null {
+function loadPersisted(key: string): WPPersistedState | null {
   try {
-    const raw = localStorage.getItem(WP_STORAGE_KEY);
+    const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 }
 
-export default function WordPressLinkerPage() {
-  const [step, setStep] = useState(1);
+// =============================================================================
+// MAIN COMPONENT
+// =============================================================================
 
-  // Credentials (persisted in localStorage — survives tab close)
+export function WordPressBlogsTab({ projectId }: { projectId: string }) {
+  const storageKey = `wp-linker-state-${projectId}`;
+
+  const [step, setStep] = useState(1);
   const [siteUrl, setSiteUrl] = useState("");
   const [username, setUsername] = useState("");
   const [appPassword, setAppPassword] = useState("");
-
-  // State flowing between steps
-  const [projectId, setProjectId] = useState<string | null>(null);
+  const [wpProjectId, setWpProjectId] = useState<string | null>(null);
   const [, setSiteName] = useState("");
   const [totalPosts, setTotalPosts] = useState(0);
   const [titleFilter, setTitleFilter] = useState("");
   const [postStatus, setPostStatus] = useState("publish");
-  const [existingProjectId, setExistingProjectId] = useState<string | null>(null);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [restored, setRestored] = useState(false);
 
   // Restore persisted state on mount
   useEffect(() => {
-    const saved = loadPersisted();
+    const saved = loadPersisted(storageKey);
     if (saved) {
       setSiteUrl(saved.siteUrl);
       setUsername(saved.username);
       setAppPassword(saved.appPassword);
-      setProjectId(saved.projectId);
+      setWpProjectId(saved.projectId);
       setTotalPosts(saved.totalPosts);
       setTitleFilter(saved.titleFilter);
       setPostStatus(saved.postStatus);
-      setExistingProjectId(saved.existingProjectId ?? null);
     }
     setRestored(true);
-  }, []);
+  }, [storageKey]);
 
   // Auto-detect step from database on initial load only
   const [initialStepSet, setInitialStepSet] = useState(false);
-  const status = useWPStatus(projectId, restored && !!projectId && !initialStepSet);
+  const status = useWPStatus(wpProjectId, restored && !!wpProjectId && !initialStepSet);
 
   useEffect(() => {
     if (initialStepSet) return;
     if (status.data && restored) {
       setStep(status.data.current_step);
       setInitialStepSet(true);
-    } else if (restored && !projectId) {
+    } else if (restored && !wpProjectId) {
       setStep(1);
       setInitialStepSet(true);
     }
-  }, [status.data, restored, projectId, initialStepSet]);
+  }, [status.data, restored, wpProjectId, initialStepSet]);
 
   // Persist state on changes (step is NOT persisted — derived from DB)
   const persistState = useCallback(() => {
     if (!restored) return;
-    savePersisted({
+    savePersisted(storageKey, {
       siteUrl,
       username,
       appPassword,
-      projectId,
+      projectId: wpProjectId,
       totalPosts,
       titleFilter,
       postStatus,
-      existingProjectId,
     });
-  }, [restored, siteUrl, username, appPassword, projectId, totalPosts, titleFilter, postStatus, existingProjectId]);
+  }, [restored, storageKey, siteUrl, username, appPassword, wpProjectId, totalPosts, titleFilter, postStatus]);
 
   useEffect(() => {
     persistState();
   }, [persistState]);
 
-  // Don't render until state is restored and status is resolved
-  if (!restored || (projectId && status.isLoading)) {
+  if (!restored || (wpProjectId && status.isLoading)) {
     return (
       <div className="flex items-center gap-2 py-12 text-sm text-warm-gray-500">
         <div className="h-4 w-4 animate-spin rounded-full border-2 border-palm-500 border-t-transparent" />
@@ -137,21 +130,9 @@ export default function WordPressLinkerPage() {
   }
 
   return (
-    <div className="space-y-8">
-      {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-warm-gray-900">
-          WordPress Blog Linker
-        </h1>
-        <p className="mt-1 text-sm text-warm-gray-500">
-          Internal linking tool for WordPress blog posts
-        </p>
-      </div>
+    <div className="space-y-6">
+      <StepIndicator currentStep={step} onStepClick={setStep} />
 
-      {/* Step indicator */}
-      <StepIndicator currentStep={step} onStepClick={(s) => { setActiveJobId(null); setStep(s); }} />
-
-      {/* Step content */}
       <div className="rounded-sm border border-sand-500 bg-white p-6 shadow-sm">
         {step === 1 && (
           <ConnectStep
@@ -178,49 +159,47 @@ export default function WordPressLinkerPage() {
             setTitleFilter={setTitleFilter}
             postStatus={postStatus}
             setPostStatus={setPostStatus}
-            existingProjectId={existingProjectId}
-            setExistingProjectId={setExistingProjectId}
+            existingProjectId={projectId}
             activeJobId={activeJobId}
             setActiveJobId={setActiveJobId}
             onImported={(id) => {
-              setProjectId(id);
-              setActiveJobId(null);
+              setWpProjectId(id);
               setStep(3);
             }}
           />
         )}
-        {step === 3 && projectId && (
+        {step === 3 && wpProjectId && (
           <AnalyzeStep
-            projectId={projectId}
+            projectId={wpProjectId}
             activeJobId={activeJobId}
             setActiveJobId={setActiveJobId}
-            onComplete={() => { setActiveJobId(null); setStep(4); }}
+            onComplete={() => setStep(4)}
           />
         )}
-        {step === 4 && projectId && (
+        {step === 4 && wpProjectId && (
           <LabelStep
-            projectId={projectId}
+            projectId={wpProjectId}
             activeJobId={activeJobId}
             setActiveJobId={setActiveJobId}
-            onComplete={() => { setActiveJobId(null); setStep(5); }}
+            onComplete={() => setStep(5)}
           />
         )}
-        {step === 5 && projectId && (
+        {step === 5 && wpProjectId && (
           <PlanStep
-            projectId={projectId}
+            projectId={wpProjectId}
             activeJobId={activeJobId}
             setActiveJobId={setActiveJobId}
-            onComplete={() => { setActiveJobId(null); setStep(6); }}
+            onComplete={() => setStep(6)}
           />
         )}
-        {step === 6 && projectId && (
+        {step === 6 && wpProjectId && (
           <ReviewStep
-            projectId={projectId}
+            projectId={wpProjectId}
             onContinue={() => setStep(7)}
           />
         )}
-        {step === 7 && projectId && (
-          <ExportStep projectId={projectId} />
+        {step === 7 && wpProjectId && (
+          <ExportStep projectId={wpProjectId} />
         )}
       </div>
     </div>
@@ -318,9 +297,7 @@ function ProgressBar({
           />
         )}
       </div>
-      {error && (
-        <p className="text-xs text-coral-600">{error}</p>
-      )}
+      {error && <p className="text-xs text-coral-600">{error}</p>}
     </div>
   );
 }
@@ -441,7 +418,7 @@ function ConnectStep({
 }
 
 // =============================================================================
-// STEP 2: IMPORT
+// STEP 2: IMPORT (project picker removed — auto-linked to parent project)
 // =============================================================================
 
 function ImportStep({
@@ -454,7 +431,6 @@ function ImportStep({
   postStatus,
   setPostStatus,
   existingProjectId,
-  setExistingProjectId,
   activeJobId,
   setActiveJobId,
   onImported,
@@ -467,18 +443,15 @@ function ImportStep({
   setTitleFilter: (v: string) => void;
   postStatus: string;
   setPostStatus: (v: string) => void;
-  existingProjectId: string | null;
-  setExistingProjectId: (v: string | null) => void;
+  existingProjectId: string;
   activeJobId: string | null;
   setActiveJobId: (v: string | null) => void;
   onImported: (projectId: string) => void;
 }) {
   const importMutation = useWPImport();
   const progress = useWPProgress(activeJobId);
-  const linkableProjects = useWPLinkableProjects();
   const [importError, setImportError] = useState<string | null>(null);
 
-  // Watch for completion or failure
   useEffect(() => {
     if (!progress.data) return;
 
@@ -515,7 +488,7 @@ function ImportStep({
       );
       setActiveJobId(null);
     }
-  }, [progress.data?.status, progress.data?.result, progress.data?.error, onImported, setActiveJobId, titleFilter]);
+  }, [progress.data?.status, progress.data?.result, progress.data?.error, onImported, setActiveJobId]);
 
   const handleImport = () => {
     setImportError(null);
@@ -543,34 +516,19 @@ function ImportStep({
         </h2>
         <p className="mt-1 text-sm text-warm-gray-500">
           {totalPosts} published posts found. Import all or filter by title.
+          Posts will be linked to this project&apos;s collection pages.
         </p>
       </div>
 
       <div className="max-w-md space-y-4">
-        {/* Project picker — link to existing project with collection pages */}
-        {linkableProjects.data && linkableProjects.data.length > 0 && (
-          <div>
-            <label className="block text-sm font-medium text-warm-gray-700">
-              Link to Existing Project
-            </label>
-            <select
-              value={existingProjectId || ""}
-              onChange={(e) => setExistingProjectId(e.target.value || null)}
-              disabled={isRunning}
-              className="mt-1 w-full rounded-sm border border-sand-500 bg-white px-3 py-2 text-sm text-warm-gray-900 focus:outline-none focus:ring-2 focus:ring-palm-400 disabled:opacity-50"
-            >
-              <option value="">None — standalone WP project</option>
-              {linkableProjects.data.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} ({p.collection_page_count} collection pages)
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-warm-gray-400">
-              Select a project to create blog &rarr; collection page links. Leave empty for blog-only linking.
-            </p>
-          </div>
-        )}
+        {/* Info callout — posts auto-linked to this project */}
+        <div className="rounded-sm border border-palm-200 bg-palm-50 p-3">
+          <p className="text-sm text-palm-700">
+            Blog posts will be imported into this project. Link planning will
+            automatically include your onboarding and cluster pages as
+            collection link targets.
+          </p>
+        </div>
 
         <div>
           <label className="block text-sm font-medium text-warm-gray-700">
@@ -771,10 +729,8 @@ function LabelStep({
         </div>
       )}
 
-      {/* Label review */}
       {isComplete && labels.data && (
         <div className="space-y-6">
-          {/* Taxonomy */}
           <div>
             <h3 className="text-sm font-medium text-warm-gray-700">
               Generated Taxonomy ({labels.data.taxonomy.length} labels,{" "}
@@ -794,7 +750,6 @@ function LabelStep({
             </div>
           </div>
 
-          {/* Post assignments table */}
           <div>
             <h3 className="text-sm font-medium text-warm-gray-700">
               Post Assignments ({labels.data.assignments.length} posts)
@@ -933,7 +888,7 @@ function PlanStep({
 }
 
 // =============================================================================
-// STEP 6: REVIEW
+// STEP 6: REVIEW (with collection link callout)
 // =============================================================================
 
 function ReviewStep({
@@ -959,6 +914,8 @@ function ReviewStep({
   }
 
   const data = review.data;
+  const totalCollectionLinks = data.groups.reduce((sum, g) => sum + g.collection_link_count, 0);
+  const hasCollectionLinks = totalCollectionLinks > 0;
 
   return (
     <div className="space-y-6">
@@ -971,96 +928,96 @@ function ReviewStep({
         </p>
       </div>
 
+      {/* Collection link callout */}
+      {hasCollectionLinks && (
+        <div className="rounded-sm border border-palm-200 bg-palm-50 p-3">
+          <p className="text-sm text-palm-700">
+            <span className="font-medium">{totalCollectionLinks} collection links</span>{" "}
+            point to your onboarding and cluster pages. These help blog posts
+            drive authority to your main collection pages.
+          </p>
+        </div>
+      )}
+
       {/* Summary stats */}
-      {(() => {
-        const totalCollectionLinks = data.groups.reduce((sum, g) => sum + g.collection_link_count, 0);
-        const hasCollectionLinks = totalCollectionLinks > 0;
-        return (
-          <div className={`grid gap-4 ${hasCollectionLinks ? "grid-cols-5" : "grid-cols-4"}`}>
-            <StatCard label="Total Posts" value={data.total_posts} />
-            <StatCard label="Total Links" value={data.total_links} />
-            <StatCard
-              label="Avg Links/Post"
-              value={data.avg_links_per_post.toFixed(1)}
-            />
-            {hasCollectionLinks && (
-              <StatCard
-                label="Collection Links"
-                value={totalCollectionLinks}
-                accent
-              />
-            )}
-            <StatCard
-              label="Validation"
-              value={`${data.validation_pass_rate}%`}
-              accent={data.validation_pass_rate >= 90}
-            />
-          </div>
-        );
-      })()}
+      <div className={`grid gap-4 ${hasCollectionLinks ? "grid-cols-5" : "grid-cols-4"}`}>
+        <StatCard label="Total Posts" value={data.total_posts} />
+        <StatCard label="Total Links" value={data.total_links} />
+        <StatCard
+          label="Avg Links/Post"
+          value={data.avg_links_per_post.toFixed(1)}
+        />
+        {hasCollectionLinks && (
+          <StatCard
+            label="Collection Links"
+            value={totalCollectionLinks}
+            accent
+          />
+        )}
+        <StatCard
+          label="Validation"
+          value={`${data.validation_pass_rate}%`}
+          accent={data.validation_pass_rate >= 90}
+        />
+      </div>
 
       {/* Per-group table */}
-      {(() => {
-        const hasCollectionLinks = data.groups.some((g) => g.collection_link_count > 0);
-        return (
-          <div className="rounded-sm border border-sand-500">
-            <table className="w-full text-sm">
-              <thead className="bg-sand-100">
-                <tr>
-                  <th className="px-4 py-2 text-left font-medium text-warm-gray-600">
-                    Silo Group
-                  </th>
-                  <th className="px-4 py-2 text-right font-medium text-warm-gray-600">
-                    Posts
-                  </th>
-                  <th className="px-4 py-2 text-right font-medium text-warm-gray-600">
-                    Links
-                  </th>
-                  {hasCollectionLinks && (
-                    <th className="px-4 py-2 text-right font-medium text-warm-gray-600">
-                      Collection Links
-                    </th>
-                  )}
-                  <th className="px-4 py-2 text-right font-medium text-warm-gray-600">
-                    Avg/Post
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.groups.map((g) => (
-                  <tr key={g.group_name} className="border-t border-sand-200">
-                    <td className="px-4 py-2 font-medium text-warm-gray-900">
-                      <span className="rounded-sm bg-palm-50 px-2 py-0.5 text-xs text-palm-700">
-                        {g.group_name}
+      <div className="rounded-sm border border-sand-500">
+        <table className="w-full text-sm">
+          <thead className="bg-sand-100">
+            <tr>
+              <th className="px-4 py-2 text-left font-medium text-warm-gray-600">
+                Silo Group
+              </th>
+              <th className="px-4 py-2 text-right font-medium text-warm-gray-600">
+                Posts
+              </th>
+              <th className="px-4 py-2 text-right font-medium text-warm-gray-600">
+                Links
+              </th>
+              {hasCollectionLinks && (
+                <th className="px-4 py-2 text-right font-medium text-warm-gray-600">
+                  Collection Links
+                </th>
+              )}
+              <th className="px-4 py-2 text-right font-medium text-warm-gray-600">
+                Avg/Post
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.groups.map((g) => (
+              <tr key={g.group_name} className="border-t border-sand-200">
+                <td className="px-4 py-2 font-medium text-warm-gray-900">
+                  <span className="rounded-sm bg-palm-50 px-2 py-0.5 text-xs text-palm-700">
+                    {g.group_name}
+                  </span>
+                </td>
+                <td className="px-4 py-2 text-right text-warm-gray-700">
+                  {g.post_count}
+                </td>
+                <td className="px-4 py-2 text-right text-warm-gray-700">
+                  {g.link_count}
+                </td>
+                {hasCollectionLinks && (
+                  <td className="px-4 py-2 text-right text-warm-gray-700">
+                    {g.collection_link_count > 0 ? (
+                      <span className="font-medium text-palm-600">
+                        {g.collection_link_count}
                       </span>
-                    </td>
-                    <td className="px-4 py-2 text-right text-warm-gray-700">
-                      {g.post_count}
-                    </td>
-                    <td className="px-4 py-2 text-right text-warm-gray-700">
-                      {g.link_count}
-                    </td>
-                    {hasCollectionLinks && (
-                      <td className="px-4 py-2 text-right text-warm-gray-700">
-                        {g.collection_link_count > 0 ? (
-                          <span className="font-medium text-palm-600">
-                            {g.collection_link_count}
-                          </span>
-                        ) : (
-                          <span className="text-warm-gray-400">0</span>
-                        )}
-                      </td>
+                    ) : (
+                      <span className="text-warm-gray-400">0</span>
                     )}
-                    <td className="px-4 py-2 text-right text-warm-gray-700">
-                      {g.avg_links_per_post.toFixed(1)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        );
-      })()}
+                  </td>
+                )}
+                <td className="px-4 py-2 text-right text-warm-gray-700">
+                  {g.avg_links_per_post.toFixed(1)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       <button
         onClick={onContinue}

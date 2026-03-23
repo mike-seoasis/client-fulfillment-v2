@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prompt Testing Lab</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+  :root{
+    --palm-500:#6B8F71;
+    --palm-600:#5A7D60;
+    --palm-700:#4A6B50;
+    --palm-100:#E8F0E9;
+    --sand-50:#FAF6F1;
+    --sand-100:#F5EDE3;
+    --sand-200:#EDE5D8;
+    --sand-300:#E0D5C5;
+    --sand-500:#C4B8A8;
+    --coral-500:#E07A5F;
+    --coral-600:#C96A52;
+    --coral-100:#FBEAE5;
+    --lagoon-500:#4A9B8E;
+    --lagoon-600:#3D8A7E;
+    --lagoon-100:#E2F3F0;
+    --warm-gray-900:#4A4543;
+    --warm-gray-600:#7A7572;
+    --warm-gray-400:#A8A3A0;
+    --warm-gray-200:#D4D0CD;
+    --white:#FFFFFF;
+    --radius:0.25rem;
+    --shadow-sm:0 1px 3px rgba(74,69,67,0.08);
+    --shadow-md:0 4px 12px rgba(74,69,67,0.1);
+    --shadow-lg:0 8px 24px rgba(74,69,67,0.12);
+    --transition:150ms ease;
+  }
+
+  html{font-size:15px}
+  body{
+    font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    background:var(--sand-50);
+    color:var(--warm-gray-900);
+    line-height:1.6;
+    min-height:100vh;
+  }
+
+  /* ---- Toast ---- */
+  #toast-container{
+    position:fixed;top:1.25rem;right:1.25rem;z-index:9999;
+    display:flex;flex-direction:column;gap:0.5rem;
+  }
+  .toast{
+    padding:0.75rem 1.25rem;border-radius:var(--radius);
+    background:var(--palm-500);color:var(--white);
+    font-size:0.875rem;font-weight:500;
+    box-shadow:var(--shadow-md);
+    animation:toastIn 250ms ease,toastOut 250ms ease 2.75s forwards;
+  }
+  .toast--error{background:var(--coral-500)}
+  @keyframes toastIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes toastOut{from{opacity:1}to{opacity:0;transform:translateY(-8px)}}
+
+  /* ---- Modal ---- */
+  .modal-backdrop{
+    position:fixed;inset:0;background:rgba(74,69,67,0.45);
+    z-index:1000;display:none;align-items:center;justify-content:center;
+    padding:2rem;
+  }
+  .modal-backdrop.open{display:flex}
+  .modal{
+    background:var(--white);border-radius:var(--radius);
+    max-width:800px;width:100%;max-height:80vh;
+    display:flex;flex-direction:column;box-shadow:var(--shadow-lg);
+  }
+  .modal-header{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:1rem 1.5rem;border-bottom:1px solid var(--sand-200);
+  }
+  .modal-header h3{font-size:1rem;font-weight:600}
+  .modal-body{padding:1.5rem;overflow-y:auto;flex:1}
+  .modal-body pre{
+    white-space:pre-wrap;word-break:break-word;
+    font-size:0.8125rem;line-height:1.7;
+    font-family:'SF Mono',Menlo,Consolas,monospace;
+    color:var(--warm-gray-900);
+  }
+  .modal-close{
+    background:none;border:none;font-size:1.25rem;cursor:pointer;
+    color:var(--warm-gray-600);padding:0.25rem;line-height:1;
+  }
+  .modal-close:hover{color:var(--warm-gray-900)}
+
+  /* ---- Layout ---- */
+  .page-wrapper{max-width:1440px;margin:0 auto;padding:2rem 2.5rem 4rem}
+
+  /* ---- Header ---- */
+  .header{margin-bottom:2rem}
+  .header-top{display:flex;align-items:center;gap:1rem;margin-bottom:0.375rem;flex-wrap:wrap}
+  .header h1{font-size:1.5rem;font-weight:700;letter-spacing:-0.02em}
+  .badge{
+    display:inline-flex;align-items:center;
+    font-size:0.6875rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;
+    padding:0.2rem 0.6rem;border-radius:var(--radius);
+    background:var(--lagoon-100);color:var(--lagoon-600);
+  }
+  .header-subtitle{font-size:0.9375rem;color:var(--warm-gray-600)}
+  .header-subtitle strong{color:var(--warm-gray-900);font-weight:600}
+
+  /* ---- Collapsible panels ---- */
+  .collapsible{
+    background:var(--white);border:1px solid var(--sand-200);
+    border-radius:var(--radius);margin-bottom:1rem;box-shadow:var(--shadow-sm);
+  }
+  .collapsible-trigger{
+    width:100%;display:flex;align-items:center;justify-content:space-between;
+    padding:0.875rem 1.25rem;background:none;border:none;cursor:pointer;
+    font:inherit;font-size:0.9375rem;font-weight:600;color:var(--warm-gray-900);
+    text-align:left;
+  }
+  .collapsible-trigger:hover{background:var(--sand-50)}
+  .collapsible-chevron{
+    font-size:0.75rem;color:var(--warm-gray-400);transition:transform var(--transition);
+  }
+  .collapsible.open .collapsible-chevron{transform:rotate(180deg)}
+  .collapsible-body{
+    display:none;padding:0 1.25rem 1.25rem;
+  }
+  .collapsible.open .collapsible-body{display:block}
+  .collapsible-body pre{
+    background:var(--sand-100);border:1px solid var(--sand-200);border-radius:var(--radius);
+    padding:1rem;font-size:0.8125rem;line-height:1.65;overflow-x:auto;
+    white-space:pre-wrap;word-break:break-word;
+    font-family:'SF Mono',Menlo,Consolas,monospace;
+    color:var(--warm-gray-900);max-height:400px;overflow-y:auto;
+  }
+
+  /* Brief summary specific */
+  .brief-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+  @media(max-width:640px){.brief-grid{grid-template-columns:1fr}}
+  .brief-section h4{
+    font-size:0.75rem;font-weight:600;text-transform:uppercase;
+    letter-spacing:0.06em;color:var(--warm-gray-600);margin-bottom:0.5rem;
+  }
+  .brief-section{
+    background:var(--sand-50);border:1px solid var(--sand-200);
+    border-radius:var(--radius);padding:1rem;
+  }
+  .brief-section ul{list-style:none;padding:0;font-size:0.8125rem}
+  .brief-section li{padding:0.2rem 0;color:var(--warm-gray-900)}
+  .brief-section li .weight{
+    display:inline-block;background:var(--palm-100);color:var(--palm-600);
+    font-size:0.6875rem;font-weight:600;padding:0.1rem 0.4rem;
+    border-radius:var(--radius);margin-left:0.35rem;
+  }
+  .brief-section .value{font-size:0.9375rem;font-weight:600;color:var(--warm-gray-900)}
+
+  /* ---- Generate All ---- */
+  .generate-all-bar{
+    display:flex;align-items:center;justify-content:space-between;
+    margin:1.5rem 0 1rem;flex-wrap:wrap;gap:0.75rem;
+  }
+  .btn{
+    display:inline-flex;align-items:center;gap:0.5rem;
+    padding:0.625rem 1.25rem;border:none;border-radius:var(--radius);
+    font:inherit;font-size:0.875rem;font-weight:600;cursor:pointer;
+    transition:background var(--transition),opacity var(--transition);
+  }
+  .btn:disabled{opacity:0.55;cursor:not-allowed}
+  .btn-primary{background:var(--palm-500);color:var(--white)}
+  .btn-primary:hover:not(:disabled){background:var(--palm-600)}
+  .btn-secondary{background:var(--sand-200);color:var(--warm-gray-900)}
+  .btn-secondary:hover:not(:disabled){background:var(--sand-300)}
+  .btn-danger{background:var(--coral-500);color:var(--white)}
+  .btn-danger:hover:not(:disabled){background:var(--coral-600)}
+  .btn-sm{padding:0.4rem 0.875rem;font-size:0.8125rem}
+  .btn-lg{padding:0.75rem 2rem;font-size:1rem}
+
+  /* ---- Variant panels ---- */
+  .variants-grid{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:1.25rem;
+    margin-bottom:2.5rem;
+  }
+  @media(max-width:1024px){.variants-grid{grid-template-columns:1fr}}
+
+  .variant-panel{
+    background:var(--white);border:1px solid var(--sand-200);
+    border-radius:var(--radius);box-shadow:var(--shadow-sm);
+    display:flex;flex-direction:column;transition:opacity var(--transition);
+  }
+  .variant-panel.generating{opacity:0.6;pointer-events:none}
+  .variant-panel-header{
+    padding:1rem 1.25rem 0.75rem;
+    border-bottom:1px solid var(--sand-200);
+  }
+  .variant-label-row{display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem}
+  .variant-label-input{
+    flex:1;padding:0.5rem 0.75rem;border:1px solid var(--sand-200);
+    border-radius:var(--radius);font:inherit;font-size:0.875rem;
+    font-weight:600;color:var(--warm-gray-900);background:var(--sand-50);
+  }
+  .variant-label-input:focus{outline:none;border-color:var(--palm-500);box-shadow:0 0 0 2px rgba(107,143,113,0.2)}
+
+  .variant-textarea{
+    width:100%;min-height:220px;resize:vertical;
+    padding:0.875rem;border:1px solid var(--sand-200);border-radius:var(--radius);
+    font-family:'SF Mono',Menlo,Consolas,monospace;font-size:0.8125rem;
+    line-height:1.6;color:var(--warm-gray-900);background:var(--white);
+  }
+  .variant-textarea:focus{outline:none;border-color:var(--palm-500);box-shadow:0 0 0 2px rgba(107,143,113,0.2)}
+
+  .variant-actions{
+    display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap;
+  }
+
+  /* ---- Results ---- */
+  .variant-results{
+    padding:1.25rem;flex:1;display:none;flex-direction:column;gap:1rem;
+  }
+  .variant-panel.has-results .variant-results{display:flex}
+
+  .spinner{
+    display:none;align-items:center;justify-content:center;padding:2rem;
+  }
+  .variant-panel.generating .spinner{display:flex}
+  .spinner-dot{
+    width:8px;height:8px;border-radius:50%;background:var(--palm-500);
+    margin:0 4px;animation:bounce 1.2s infinite ease-in-out;
+  }
+  .spinner-dot:nth-child(2){animation-delay:0.15s}
+  .spinner-dot:nth-child(3){animation-delay:0.3s}
+  @keyframes bounce{0%,80%,100%{transform:scale(0.6);opacity:0.4}40%{transform:scale(1);opacity:1}}
+
+  /* Stats bar */
+  .stats-bar{
+    display:flex;gap:1rem;flex-wrap:wrap;
+    padding:0.75rem 1rem;background:var(--sand-50);
+    border:1px solid var(--sand-200);border-radius:var(--radius);
+  }
+  .stat{display:flex;flex-direction:column;gap:0.125rem;min-width:0}
+  .stat-label{font-size:0.6875rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--warm-gray-600)}
+  .stat-value{font-size:0.9375rem;font-weight:700;color:var(--warm-gray-900)}
+  .stat-value .sub{font-weight:400;font-size:0.8125rem;color:var(--warm-gray-600)}
+  .stat-value .diff-badge{
+    display:inline-block;font-size:0.6875rem;font-weight:600;
+    padding:0.1rem 0.4rem;border-radius:var(--radius);margin-left:0.375rem;
+  }
+  .diff-badge.up{background:var(--palm-100);color:var(--palm-700)}
+  .diff-badge.down{background:var(--coral-100);color:var(--coral-600)}
+  .lsi-good{color:var(--palm-500)}
+  .lsi-ok{color:#C8963E}
+  .lsi-bad{color:var(--coral-500)}
+
+  /* Content preview */
+  .content-preview{
+    border:1px solid var(--sand-200);border-radius:var(--radius);overflow:hidden;
+  }
+  .content-preview-header{
+    padding:0.5rem 1rem;background:var(--sand-100);
+    border-bottom:1px solid var(--sand-200);
+    font-size:0.6875rem;font-weight:600;text-transform:uppercase;
+    letter-spacing:0.05em;color:var(--warm-gray-600);
+  }
+  .content-preview-body{padding:1.25rem}
+  .preview-title{font-size:1.25rem;font-weight:700;margin-bottom:0.75rem;line-height:1.3;color:var(--warm-gray-900)}
+  .preview-meta{
+    background:var(--sand-50);border:1px solid var(--sand-200);border-radius:var(--radius);
+    padding:0.625rem 0.875rem;margin-bottom:1rem;
+    font-size:0.8125rem;color:var(--warm-gray-600);line-height:1.5;
+  }
+  .preview-meta-label{font-size:0.6875rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--warm-gray-400);margin-bottom:0.2rem}
+  .preview-top-desc{margin-bottom:1.25rem;font-size:0.9375rem;line-height:1.7;color:var(--warm-gray-900)}
+  .preview-bottom-desc{
+    border-top:1px solid var(--sand-200);padding-top:1.25rem;
+    font-size:0.9375rem;line-height:1.7;color:var(--warm-gray-900);
+  }
+  .preview-bottom-desc h1,.preview-bottom-desc h2,.preview-bottom-desc h3,
+  .preview-bottom-desc h4,.preview-bottom-desc h5,.preview-bottom-desc h6{
+    margin:1rem 0 0.5rem;color:var(--warm-gray-900);line-height:1.3;
+  }
+  .preview-bottom-desc h2{font-size:1.125rem}
+  .preview-bottom-desc h3{font-size:1rem}
+  .preview-bottom-desc p{margin-bottom:0.75rem}
+  .preview-bottom-desc ul,.preview-bottom-desc ol{margin:0.5rem 0 0.75rem 1.5rem}
+  .preview-bottom-desc li{margin-bottom:0.25rem}
+
+  /* LSI scorecard */
+  .lsi-scorecard-toggle{
+    background:none;border:none;cursor:pointer;font:inherit;
+    font-size:0.8125rem;font-weight:600;color:var(--lagoon-500);
+    padding:0.25rem 0;display:flex;align-items:center;gap:0.375rem;
+  }
+  .lsi-scorecard-toggle:hover{color:var(--lagoon-600)}
+  .lsi-scorecard-toggle .chevron{
+    font-size:0.625rem;transition:transform var(--transition);
+  }
+  .lsi-scorecard-toggle.open .chevron{transform:rotate(180deg)}
+  .lsi-scorecard{display:none;flex-wrap:wrap;gap:0.375rem;margin-top:0.5rem}
+  .lsi-scorecard.open{display:flex}
+  .lsi-pill{
+    display:inline-flex;align-items:center;gap:0.3rem;
+    padding:0.25rem 0.625rem;border-radius:var(--radius);
+    font-size:0.75rem;font-weight:500;
+  }
+  .lsi-pill.hit{background:var(--palm-100);color:var(--palm-700)}
+  .lsi-pill.miss{background:var(--coral-100);color:var(--coral-600)}
+  .lsi-pill .count{font-weight:700;font-size:0.6875rem}
+
+  /* ---- Notes ---- */
+  .variant-notes{
+    padding:0 1.25rem 1.25rem;
+  }
+  .variant-notes label{
+    display:block;font-size:0.75rem;font-weight:600;text-transform:uppercase;
+    letter-spacing:0.05em;color:var(--warm-gray-600);margin-bottom:0.375rem;
+  }
+  .variant-notes textarea{
+    width:100%;min-height:60px;resize:vertical;
+    padding:0.625rem;border:1px solid var(--sand-200);border-radius:var(--radius);
+    font:inherit;font-size:0.8125rem;color:var(--warm-gray-900);
+    background:var(--sand-50);
+  }
+  .variant-notes textarea:focus{outline:none;border-color:var(--palm-500);box-shadow:0 0 0 2px rgba(107,143,113,0.2)}
+
+  /* ---- Saved variants ---- */
+  .saved-section{margin-top:2rem}
+  .saved-section h2{font-size:1.125rem;font-weight:700;margin-bottom:1rem}
+  .saved-table-wrap{
+    background:var(--white);border:1px solid var(--sand-200);
+    border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow-sm);
+  }
+  .saved-table{width:100%;border-collapse:collapse;font-size:0.875rem}
+  .saved-table th{
+    background:var(--sand-100);text-align:left;
+    padding:0.625rem 1rem;font-weight:600;font-size:0.75rem;
+    text-transform:uppercase;letter-spacing:0.05em;
+    color:var(--warm-gray-600);border-bottom:1px solid var(--sand-200);
+  }
+  .saved-table td{
+    padding:0.625rem 1rem;border-bottom:1px solid var(--sand-200);
+    vertical-align:middle;
+  }
+  .saved-table tr:last-child td{border-bottom:none}
+  .saved-table tr:hover td{background:var(--sand-50)}
+  .saved-empty{
+    padding:2rem;text-align:center;color:var(--warm-gray-400);font-size:0.875rem;
+  }
+
+  /* ---- Loading state (initial) ---- */
+  .page-loading{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:4rem 2rem;gap:1rem;
+  }
+  .page-loading p{color:var(--warm-gray-600);font-size:0.9375rem}
+
+  /* ---- Utility ---- */
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+  .mt-1{margin-top:0.75rem}
+</style>
+</head>
+<body>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<!-- Full Prompt Modal -->
+<div class="modal-backdrop" id="prompt-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Full Assembled User Prompt</h3>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <pre id="modal-prompt-text"></pre>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Delete Modal -->
+<div class="modal-backdrop" id="delete-modal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <h3>Delete Saved Variant</h3>
+      <button class="modal-close" onclick="closeDeleteModal()">&times;</button>
+    </div>
+    <div class="modal-body" style="text-align:center;padding:1.5rem 2rem">
+      <p style="margin-bottom:1.25rem;color:var(--warm-gray-600)">Are you sure you want to delete this saved variant? This cannot be undone.</p>
+      <div style="display:flex;gap:0.75rem;justify-content:center">
+        <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+        <button class="btn btn-danger" id="confirm-delete-btn">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-wrapper">
+
+  <!-- Initial loading state -->
+  <div class="page-loading" id="page-loading">
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="spinner-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--palm-500);animation:bounce 1.2s infinite ease-in-out"></span>
+      <span class="spinner-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--palm-500);animation:bounce 1.2s infinite ease-in-out 0.15s"></span>
+      <span class="spinner-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--palm-500);animation:bounce 1.2s infinite ease-in-out 0.3s"></span>
+    </div>
+    <p>Loading context&hellip;</p>
+  </div>
+
+  <!-- Main content (hidden until loaded) -->
+  <div id="main-content" style="display:none">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="header-top">
+        <h1>Prompt Testing Lab</h1>
+        <span class="badge" id="brand-badge">Dr. Brandt</span>
+      </div>
+      <p class="header-subtitle">
+        Keyword: <strong id="header-keyword"></strong>
+        &nbsp;&middot;&nbsp;
+        <a id="header-url" href="#" target="_blank" style="color:var(--lagoon-500);text-decoration:none;font-weight:500"></a>
+      </p>
+    </header>
+
+    <!-- Brief Summary (collapsible, starts collapsed) -->
+    <div class="collapsible" id="brief-panel">
+      <button class="collapsible-trigger" onclick="toggleCollapsible('brief-panel')">
+        <span>Brief Summary</span>
+        <span class="collapsible-chevron">&#9660;</span>
+      </button>
+      <div class="collapsible-body">
+        <div class="brief-grid" id="brief-grid">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- System Prompt (collapsible, starts collapsed) -->
+    <div class="collapsible" id="system-prompt-panel">
+      <button class="collapsible-trigger" onclick="toggleCollapsible('system-prompt-panel')">
+        <span>System Prompt</span>
+        <span class="collapsible-chevron">&#9660;</span>
+      </button>
+      <div class="collapsible-body">
+        <pre id="system-prompt-text"></pre>
+      </div>
+    </div>
+
+    <!-- Fixed User Prompt (collapsible, starts collapsed) -->
+    <div class="collapsible" id="fixed-prompt-panel">
+      <button class="collapsible-trigger" onclick="toggleCollapsible('fixed-prompt-panel')">
+        <span>Fixed User Prompt (Page Context, SEO Targets, Brand Voice, Output Format)</span>
+        <span class="collapsible-chevron">&#9660;</span>
+      </button>
+      <div class="collapsible-body">
+        <pre id="fixed-prompt-text"></pre>
+      </div>
+    </div>
+
+    <!-- Generate All Bar -->
+    <div class="generate-all-bar">
+      <button class="btn btn-primary btn-lg" id="generate-all-btn" onclick="generateAll()">
+        Generate All Variants (10x each)
+      </button>
+      <div style="font-size:0.8125rem;color:var(--warm-gray-600)">
+        Each variant runs 10 generations. Stats show averages; preview shows shortest &amp; longest.
+      </div>
+    </div>
+
+    <!-- Three Variant Panels -->
+    <div class="variants-grid" id="variants-grid">
+      <!-- Panels built by JS -->
+    </div>
+
+    <!-- Saved Variants -->
+    <div class="saved-section">
+      <h2>Saved Variants</h2>
+      <div class="saved-table-wrap">
+        <table class="saved-table" id="saved-table">
+          <thead>
+            <tr>
+              <th>Label</th>
+              <th>Saved</th>
+              <th>Words</th>
+              <th>LSI Score</th>
+              <th style="text-align:right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="saved-tbody">
+            <tr><td colspan="5" class="saved-empty">No saved variants yet. Generate and save results above.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /main-content -->
+</div><!-- /page-wrapper -->
+
+<script>
+(function(){
+  'use strict';
+
+  /* ======== State ======== */
+  let ctx = null;               // context from /api/context
+  let variantResults = [null, null, null]; // results per panel
+  let savedVariants = [];       // from /api/variants
+
+  const PANEL_LABELS = ['Variant A', 'Variant B', 'Variant C'];
+
+  /* ======== Init ======== */
+  document.addEventListener('DOMContentLoaded', async () => {
+    buildVariantPanels();
+    try {
+      await Promise.all([loadContext(), loadSavedVariants()]);
+    } catch(e) {
+      toast('Failed to load initial data: ' + e.message, true);
+    }
+  });
+
+  /* ======== API Helpers ======== */
+  async function api(method, path, body) {
+    const opts = { method, headers: {} };
+    if (body !== undefined) {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify(body);
+    }
+    const res = await fetch(path, opts);
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      throw new Error(txt || res.statusText);
+    }
+    if (res.status === 204) return null;
+    return res.json();
+  }
+
+  /* ======== Load context ======== */
+  async function loadContext() {
+    ctx = await api('GET', '/api/context');
+    document.getElementById('page-loading').style.display = 'none';
+    document.getElementById('main-content').style.display = '';
+
+    // Header
+    document.getElementById('header-keyword').textContent = ctx.keyword;
+    const urlEl = document.getElementById('header-url');
+    urlEl.href = ctx.page.url;
+    urlEl.textContent = ctx.page.url;
+
+    // Brief summary
+    renderBrief(ctx.brief_summary);
+
+    // System prompt
+    document.getElementById('system-prompt-text').textContent = ctx.system_prompt;
+
+    // Fixed user prompt
+    document.getElementById('fixed-prompt-text').textContent = ctx.fixed_user_prompt;
+
+    // Pre-fill textareas with default variants (each panel gets a different variant)
+    if (ctx.default_variants && ctx.default_variants.length) {
+      for (let i = 0; i < 3; i++) {
+        const v = ctx.default_variants[i] || ctx.default_variants[0];
+        document.getElementById('textarea-' + i).value = v.text;
+        document.getElementById('label-' + i).value = v.label;
+      }
+    }
+  }
+
+  /* ======== Render brief ======== */
+  function renderBrief(b) {
+    const grid = document.getElementById('brief-grid');
+    let html = '';
+
+    // LSI Terms
+    html += '<div class="brief-section" style="grid-column:1/-1"><h4>LSI Terms</h4><ul>';
+    if (b.lsi_terms && b.lsi_terms.length) {
+      b.lsi_terms.forEach(t => {
+        html += '<li>' + esc(t.phrase) + ' <span class="weight">w:' + t.weight + '</span> <span class="weight">&times;' + t.targetCount + '</span></li>';
+      });
+    }
+    html += '</ul></div>';
+
+    // Heading targets
+    html += '<div class="brief-section"><h4>Heading Targets</h4><ul>';
+    if (b.heading_targets && b.heading_targets.length) {
+      b.heading_targets.forEach(h => { html += '<li>' + esc(typeof h === 'string' ? h : JSON.stringify(h)) + '</li>'; });
+    } else { html += '<li style="color:var(--warm-gray-400)">None specified</li>'; }
+    html += '</ul></div>';
+
+    // Word count
+    html += '<div class="brief-section"><h4>Word Count Target</h4>';
+    html += '<div class="value">' + b.word_count_target + ' words</div>';
+    if (b.word_count_range) html += '<div style="font-size:0.8125rem;color:var(--warm-gray-600);margin-top:0.25rem">Range: ' + b.word_count_range[0] + ' &ndash; ' + b.word_count_range[1] + '</div>';
+    html += '</div>';
+
+    // Related questions
+    html += '<div class="brief-section"><h4>Related Questions</h4><ul>';
+    if (b.related_questions && b.related_questions.length) {
+      b.related_questions.forEach(q => { html += '<li>' + esc(q) + '</li>'; });
+    } else { html += '<li style="color:var(--warm-gray-400)">None</li>'; }
+    html += '</ul></div>';
+
+    // Related searches
+    html += '<div class="brief-section"><h4>Related Searches</h4><ul>';
+    if (b.related_searches && b.related_searches.length) {
+      b.related_searches.forEach(s => { html += '<li>' + esc(s) + '</li>'; });
+    } else { html += '<li style="color:var(--warm-gray-400)">None</li>'; }
+    html += '</ul></div>';
+
+    grid.innerHTML = html;
+  }
+
+  /* ======== Build variant panels ======== */
+  function buildVariantPanels() {
+    const grid = document.getElementById('variants-grid');
+    let html = '';
+    for (let i = 0; i < 3; i++) {
+      html += `
+      <div class="variant-panel" id="panel-${i}">
+        <div class="variant-panel-header">
+          <div class="variant-label-row">
+            <input type="text" class="variant-label-input" id="label-${i}" value="${PANEL_LABELS[i]}" placeholder="Label this variant">
+          </div>
+          <textarea class="variant-textarea" id="textarea-${i}" rows="15" placeholder="Task &amp; brevity instructions will appear here..."></textarea>
+          <div class="variant-actions">
+            <button class="btn btn-primary btn-sm" id="gen-btn-${i}" onclick="generateVariant(${i})">Generate (10x)</button>
+            <button class="btn btn-secondary btn-sm" onclick="copyPrompt(${i})">Copy Prompt</button>
+            <button class="btn btn-secondary btn-sm" onclick="viewFullPrompt(${i})">View Full Prompt</button>
+            <button class="btn btn-secondary btn-sm" id="save-btn-${i}" onclick="saveVariant(${i})" style="display:none">Save</button>
+          </div>
+        </div>
+
+        <!-- Spinner -->
+        <div class="spinner" id="spinner-${i}">
+          <span class="spinner-dot"></span>
+          <span class="spinner-dot"></span>
+          <span class="spinner-dot"></span>
+          <div style="margin-left:0.5rem;font-size:0.8125rem;color:var(--warm-gray-600)" id="spinner-status-${i}"></div>
+        </div>
+
+        <!-- Results -->
+        <div class="variant-results" id="results-${i}">
+          <!-- Aggregate stats bar -->
+          <div class="stats-bar" id="stats-${i}"></div>
+
+          <!-- Per-run table -->
+          <div id="runs-table-${i}" style="display:none"></div>
+
+          <!-- Content preview with shortest/longest toggle -->
+          <div class="content-preview">
+            <div class="content-preview-header" style="display:flex;align-items:center;justify-content:space-between">
+              <span>Content Preview</span>
+              <div id="preview-toggle-${i}" style="display:flex;gap:0.375rem"></div>
+            </div>
+            <div class="content-preview-body">
+              <div class="preview-title" id="preview-title-${i}"></div>
+              <div class="preview-meta">
+                <div class="preview-meta-label">Meta Description</div>
+                <div id="preview-meta-${i}"></div>
+              </div>
+              <div class="preview-top-desc" id="preview-top-${i}"></div>
+              <div class="preview-bottom-desc" id="preview-bottom-${i}"></div>
+            </div>
+          </div>
+
+          <!-- LSI scorecard -->
+          <div>
+            <button class="lsi-scorecard-toggle" id="lsi-toggle-${i}" onclick="toggleScorecard('lsi',${i})">
+              <span class="chevron">&#9660;</span> LSI Term Scorecard
+            </button>
+            <div class="lsi-scorecard" id="lsi-scorecard-${i}"></div>
+          </div>
+
+          <!-- Related Searches scorecard -->
+          <div>
+            <button class="lsi-scorecard-toggle" id="rs-toggle-${i}" onclick="toggleScorecard('rs',${i})">
+              <span class="chevron">&#9660;</span> Related Searches Scorecard
+            </button>
+            <div class="lsi-scorecard" id="rs-scorecard-${i}"></div>
+          </div>
+
+          <!-- Related Questions scorecard -->
+          <div>
+            <button class="lsi-scorecard-toggle" id="rq-toggle-${i}" onclick="toggleScorecard('rq',${i})">
+              <span class="chevron">&#9660;</span> Related Questions Scorecard
+            </button>
+            <div class="lsi-scorecard" id="rq-scorecard-${i}"></div>
+          </div>
+        </div>
+
+        <!-- Notes -->
+        <div class="variant-notes">
+          <label for="notes-${i}">Notes</label>
+          <textarea id="notes-${i}" placeholder="Jot down observations about this variant..."></textarea>
+        </div>
+      </div>`;
+    }
+    grid.innerHTML = html;
+  }
+
+  /* ======== Generate ======== */
+  window.generateVariant = async function(i) {
+    const panel = document.getElementById('panel-' + i);
+    const textarea = document.getElementById('textarea-' + i);
+    const label = document.getElementById('label-' + i).value.trim() || PANEL_LABELS[i];
+    const genBtn = document.getElementById('gen-btn-' + i);
+    const statusEl = document.getElementById('spinner-status-' + i);
+
+    panel.classList.add('generating');
+    panel.classList.remove('has-results');
+    genBtn.disabled = true;
+    genBtn.textContent = 'Generating...';
+    statusEl.textContent = 'Running 10 generations...';
+
+    try {
+      const result = await api('POST', '/api/generate', {
+        task_section_text: textarea.value,
+        variant_label: label,
+        num_runs: 10
+      });
+      variantResults[i] = result;
+      renderResult(i, result);
+      panel.classList.add('has-results');
+      document.getElementById('save-btn-' + i).style.display = '';
+    } catch(e) {
+      toast('Generation failed for ' + label + ': ' + e.message, true);
+    } finally {
+      panel.classList.remove('generating');
+      genBtn.disabled = false;
+      genBtn.textContent = 'Generate (10x)';
+      statusEl.textContent = '';
+    }
+  };
+
+  window.generateAll = async function() {
+    const btn = document.getElementById('generate-all-btn');
+    btn.disabled = true;
+    btn.textContent = 'Generating All (10x each)...';
+    await Promise.allSettled([
+      generateVariant(0),
+      generateVariant(1),
+      generateVariant(2)
+    ]);
+    btn.disabled = false;
+    btn.textContent = 'Generate All Variants';
+  };
+
+  /* ======== Render result (multi-run) ======== */
+  function renderResult(i, r) {
+    const statsEl = document.getElementById('stats-' + i);
+    const pct = r.avg_lsi_coverage.pct;
+    const lsiClass = pct > 80 ? 'lsi-good' : pct >= 60 ? 'lsi-ok' : 'lsi-bad';
+
+    // Word count diff vs variant A
+    let wordDiffHtml = '';
+    if (i > 0 && variantResults[0]) {
+      const baseWords = variantResults[0].avg_word_count.total;
+      const thisWords = r.avg_word_count.total;
+      if (baseWords > 0) {
+        const diffPct = Math.round(((thisWords - baseWords) / baseWords) * 100);
+        if (diffPct !== 0) {
+          const sign = diffPct > 0 ? '+' : '';
+          const cls = diffPct > 0 ? 'up' : 'down';
+          const arrow = diffPct > 0 ? '&uarr;' : '&darr;';
+          wordDiffHtml = ' <span class="diff-badge ' + cls + '">' + arrow + ' ' + sign + diffPct + '% vs A</span>';
+        }
+      }
+    }
+
+    // Range from all_runs
+    const wordMin = Math.min(...r.all_runs.map(x => x.total_words));
+    const wordMax = Math.max(...r.all_runs.map(x => x.total_words));
+    const lsiMin = Math.min(...r.all_runs.map(x => x.terms_hit));
+    const lsiMax = Math.max(...r.all_runs.map(x => x.terms_hit));
+
+    // Related searches stats
+    const rs = r.avg_related_searches || {total:0,hit:0,pct:0};
+    const rsClass = rs.pct > 80 ? 'lsi-good' : rs.pct >= 60 ? 'lsi-ok' : 'lsi-bad';
+    const rsMin = r.all_runs.length ? Math.min(...r.all_runs.map(x => x.rs_hit || 0)) : 0;
+    const rsMax = r.all_runs.length ? Math.max(...r.all_runs.map(x => x.rs_hit || 0)) : 0;
+
+    // Related questions stats
+    const rq = r.avg_related_questions || {total:0,hit:0,pct:0};
+    const rqClass = rq.pct > 80 ? 'lsi-good' : rq.pct >= 60 ? 'lsi-ok' : 'lsi-bad';
+    const rqMin = r.all_runs.length ? Math.min(...r.all_runs.map(x => x.rq_hit || 0)) : 0;
+    const rqMax = r.all_runs.length ? Math.max(...r.all_runs.map(x => x.rq_hit || 0)) : 0;
+
+    statsEl.innerHTML = `
+      <div class="stat">
+        <span class="stat-label">Avg Word Count (${r.successful_runs} runs)</span>
+        <span class="stat-value">${r.avg_word_count.total}${wordDiffHtml} <span class="sub">(body: ${r.avg_word_count.bottom_description})</span></span>
+        <span class="stat-label" style="margin-top:0.125rem">Range: ${wordMin} &ndash; ${wordMax}</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Avg LSI Coverage</span>
+        <span class="stat-value ${lsiClass}">${r.avg_lsi_coverage.terms_hit}/${r.avg_lsi_coverage.total_terms} terms (${pct}%)</span>
+        <span class="stat-label" style="margin-top:0.125rem">Range: ${lsiMin} &ndash; ${lsiMax} terms</span>
+      </div>
+      ${rs.total > 0 ? `<div class="stat">
+        <span class="stat-label">Avg Related Searches</span>
+        <span class="stat-value ${rsClass}">${rs.hit}/${rs.total} (${rs.pct}%)</span>
+        <span class="stat-label" style="margin-top:0.125rem">Range: ${rsMin} &ndash; ${rsMax}</span>
+      </div>` : ''}
+      ${rq.total > 0 ? `<div class="stat">
+        <span class="stat-label">Avg Related Questions</span>
+        <span class="stat-value ${rqClass}">${rq.hit}/${rq.total} (${rq.pct}%)</span>
+        <span class="stat-label" style="margin-top:0.125rem">Range: ${rqMin} &ndash; ${rqMax}</span>
+      </div>` : ''}
+      ${r.failed_runs > 0 ? '<div class="stat"><span class="stat-label">Failed</span><span class="stat-value" style="color:var(--coral-500)">' + r.failed_runs + ' runs</span></div>' : ''}
+    `;
+
+    // Per-run summary table (collapsible)
+    const runsEl = document.getElementById('runs-table-' + i);
+    let runsHtml = '<button class="lsi-scorecard-toggle" onclick="this.nextElementSibling.classList.toggle(\'open\');this.classList.toggle(\'open\')"><span class="chevron">&#9660;</span> Per-Run Breakdown</button>';
+    runsHtml += '<div class="lsi-scorecard" style="flex-direction:column;gap:0">';
+    runsHtml += '<table style="width:100%;font-size:0.8125rem;border-collapse:collapse">';
+    runsHtml += '<tr style="text-align:left;color:var(--warm-gray-600)"><th style="padding:0.25rem 0.5rem">#</th><th style="padding:0.25rem 0.5rem">Words</th><th style="padding:0.25rem 0.5rem">Body</th><th style="padding:0.25rem 0.5rem">LSI</th><th style="padding:0.25rem 0.5rem">Searches</th><th style="padding:0.25rem 0.5rem">Questions</th></tr>';
+    r.all_runs.forEach(run => {
+      const runPct = run.terms_total > 0 ? Math.round(run.terms_hit / run.terms_total * 100) : 0;
+      const isMin = run.total_words === wordMin;
+      const isMax = run.total_words === wordMax;
+      const tag = isMin ? ' <span style="color:var(--palm-500);font-weight:600">shortest</span>' : isMax ? ' <span style="color:var(--coral-500);font-weight:600">longest</span>' : '';
+      const rsCell = run.rs_total > 0 ? run.rs_hit + '/' + run.rs_total : '-';
+      const rqCell = run.rq_total > 0 ? run.rq_hit + '/' + run.rq_total : '-';
+      runsHtml += '<tr style="border-top:1px solid var(--sand-200)"><td style="padding:0.25rem 0.5rem">' + run.run + '</td><td style="padding:0.25rem 0.5rem">' + run.total_words + tag + '</td><td style="padding:0.25rem 0.5rem">' + run.bottom_words + '</td><td style="padding:0.25rem 0.5rem">' + run.terms_hit + '/' + run.terms_total + ' (' + runPct + '%)</td><td style="padding:0.25rem 0.5rem">' + rsCell + '</td><td style="padding:0.25rem 0.5rem">' + rqCell + '</td></tr>';
+    });
+    runsHtml += '</table></div>';
+    runsEl.innerHTML = runsHtml;
+    runsEl.style.display = '';
+
+    // Content preview toggle: shortest vs longest
+    const toggleEl = document.getElementById('preview-toggle-' + i);
+    toggleEl.innerHTML = `
+      <button class="btn btn-sm btn-secondary" id="btn-shortest-${i}" onclick="showPreview(${i},'shortest')" style="font-size:0.6875rem;padding:0.2rem 0.625rem">Shortest (${r.shortest.word_count.total}w)</button>
+      <button class="btn btn-sm btn-primary" id="btn-longest-${i}" onclick="showPreview(${i},'longest')" style="font-size:0.6875rem;padding:0.2rem 0.625rem">Longest (${r.longest.word_count.total}w)</button>
+    `;
+
+    // Default to showing shortest
+    showPreviewContent(i, r.shortest);
+    document.getElementById('btn-shortest-' + i).classList.add('btn-primary');
+    document.getElementById('btn-shortest-' + i).classList.remove('btn-secondary');
+    document.getElementById('btn-longest-' + i).classList.add('btn-secondary');
+    document.getElementById('btn-longest-' + i).classList.remove('btn-primary');
+
+    // Scorecards from shortest (the more challenging case)
+    renderLsiScorecard(i, r.shortest.lsi_coverage.details);
+    renderRelatedSearchesScorecard(i, r.shortest.related_searches_coverage ? r.shortest.related_searches_coverage.details : []);
+    renderRelatedQuestionsScorecard(i, r.shortest.related_questions_coverage ? r.shortest.related_questions_coverage.details : []);
+  }
+
+  window.showPreview = function(i, which) {
+    const r = variantResults[i];
+    if (!r) return;
+    const data = which === 'shortest' ? r.shortest : r.longest;
+    showPreviewContent(i, data);
+    renderLsiScorecard(i, data.lsi_coverage.details);
+    renderRelatedSearchesScorecard(i, data.related_searches_coverage ? data.related_searches_coverage.details : []);
+    renderRelatedQuestionsScorecard(i, data.related_questions_coverage ? data.related_questions_coverage.details : []);
+    // Toggle button styles
+    const sBtn = document.getElementById('btn-shortest-' + i);
+    const lBtn = document.getElementById('btn-longest-' + i);
+    if (which === 'shortest') {
+      sBtn.classList.add('btn-primary'); sBtn.classList.remove('btn-secondary');
+      lBtn.classList.add('btn-secondary'); lBtn.classList.remove('btn-primary');
+    } else {
+      lBtn.classList.add('btn-primary'); lBtn.classList.remove('btn-secondary');
+      sBtn.classList.add('btn-secondary'); sBtn.classList.remove('btn-primary');
+    }
+  };
+
+  function showPreviewContent(i, data) {
+    document.getElementById('preview-title-' + i).textContent = data.content.page_title;
+    document.getElementById('preview-meta-' + i).textContent = data.content.meta_description;
+    document.getElementById('preview-top-' + i).textContent = data.content.top_description;
+    document.getElementById('preview-bottom-' + i).innerHTML = data.content.bottom_description;
+  }
+
+  function renderLsiScorecard(i, details) {
+    if (!details || !details.length) return;
+    const el = document.getElementById('lsi-scorecard-' + i);
+    // Sort: missing first, then by weight descending
+    const sorted = [...details].sort((a, b) => {
+      if (a.found !== b.found) return a.found ? 1 : -1;
+      return (b.weight || 0) - (a.weight || 0);
+    });
+    el.innerHTML = sorted.map(d => {
+      const cls = d.found ? 'hit' : 'miss';
+      const countLabel = d.found ? d.count : 0;
+      return '<span class="lsi-pill ' + cls + '">' + esc(d.phrase) + ' <span class="count">' + countLabel + '&times;</span></span>';
+    }).join('');
+  }
+
+  /* ======== Toggle scorecards ======== */
+  window.toggleScorecard = function(prefix, i) {
+    const toggle = document.getElementById(prefix + '-toggle-' + i);
+    const card = document.getElementById(prefix + '-scorecard-' + i);
+    toggle.classList.toggle('open');
+    card.classList.toggle('open');
+  };
+
+  /* ======== Related Searches scorecard ======== */
+  function renderRelatedSearchesScorecard(i, details) {
+    const el = document.getElementById('rs-scorecard-' + i);
+    if (!details || !details.length) { el.innerHTML = '<span style="font-size:0.8125rem;color:var(--warm-gray-400)">No related searches in brief</span>'; return; }
+    const sorted = [...details].sort((a, b) => a.found === b.found ? 0 : a.found ? 1 : -1);
+    el.innerHTML = sorted.map(d => {
+      const cls = d.found ? 'hit' : 'miss';
+      return '<span class="lsi-pill ' + cls + '">' + esc(d.phrase) + '</span>';
+    }).join('');
+  }
+
+  /* ======== Related Questions scorecard ======== */
+  function renderRelatedQuestionsScorecard(i, details) {
+    const el = document.getElementById('rq-scorecard-' + i);
+    if (!details || !details.length) { el.innerHTML = '<span style="font-size:0.8125rem;color:var(--warm-gray-400)">No related questions in brief</span>'; return; }
+    const sorted = [...details].sort((a, b) => a.found === b.found ? 0 : a.found ? 1 : -1);
+    el.innerHTML = sorted.map(d => {
+      const cls = d.found ? 'hit' : 'miss';
+      const ratio = d.match_ratio !== undefined ? ' <span class="count">' + Math.round(d.match_ratio * 100) + '%</span>' : '';
+      return '<span class="lsi-pill ' + cls + '" style="max-width:100%;white-space:normal;line-height:1.4">' + esc(d.question) + ratio + '</span>';
+    }).join('');
+  }
+
+  /* ======== Copy / View prompt ======== */
+  window.copyPrompt = function(i) {
+    const text = document.getElementById('textarea-' + i).value;
+    navigator.clipboard.writeText(text).then(
+      () => toast('Task section copied to clipboard'),
+      () => toast('Failed to copy', true)
+    );
+  };
+
+  window.viewFullPrompt = function(i) {
+    const r = variantResults[i];
+    const modal = document.getElementById('prompt-modal');
+    const textEl = document.getElementById('modal-prompt-text');
+
+    if (r && r.full_user_prompt) {
+      textEl.textContent = r.full_user_prompt;
+    } else {
+      // Assemble from context + textarea
+      const taskSection = document.getElementById('textarea-' + i).value;
+      textEl.textContent = taskSection + (ctx ? '\n\n' + ctx.fixed_user_prompt : '');
+    }
+    modal.classList.add('open');
+  };
+
+  window.closeModal = function() {
+    document.getElementById('prompt-modal').classList.remove('open');
+  };
+
+  // Close modals on backdrop click
+  document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('modal-backdrop')) {
+      e.target.classList.remove('open');
+    }
+  });
+
+  // Close modals on Escape
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.modal-backdrop.open').forEach(m => m.classList.remove('open'));
+    }
+  });
+
+  /* ======== Save variant ======== */
+  window.saveVariant = async function(i) {
+    const result = variantResults[i];
+    if (!result) { toast('No result to save. Generate first.', true); return; }
+
+    const label = document.getElementById('label-' + i).value.trim() || PANEL_LABELS[i];
+    const taskText = document.getElementById('textarea-' + i).value;
+    const notes = document.getElementById('notes-' + i).value;
+
+    try {
+      await api('POST', '/api/variants', {
+        label: label,
+        task_section_text: taskText,
+        result: result,
+        notes: notes
+      });
+      toast('Variant "' + label + '" saved');
+      await loadSavedVariants();
+    } catch(e) {
+      toast('Save failed: ' + e.message, true);
+    }
+  };
+
+  /* ======== Load saved variants ======== */
+  async function loadSavedVariants() {
+    try {
+      savedVariants = await api('GET', '/api/variants');
+      renderSavedVariants();
+    } catch(e) {
+      /* silent on initial load if no variants endpoint yet */
+    }
+  }
+
+  function renderSavedVariants() {
+    const tbody = document.getElementById('saved-tbody');
+    if (!savedVariants || !savedVariants.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="saved-empty">No saved variants yet. Generate and save results above.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = savedVariants.map((v, idx) => {
+      const pct = v.result && v.result.avg_lsi_coverage
+        ? v.result.avg_lsi_coverage.pct
+        : (v.result && v.result.lsi_coverage && v.result.lsi_coverage.total_terms > 0
+          ? Math.round(v.result.lsi_coverage.terms_hit / v.result.lsi_coverage.total_terms * 100)
+          : 0);
+      const lsiClass = pct > 80 ? 'lsi-good' : pct >= 60 ? 'lsi-ok' : 'lsi-bad';
+      const wc = v.result && v.result.avg_word_count ? v.result.avg_word_count.total : (v.result && v.result.word_count ? v.result.word_count.total : '?');
+      const runs = v.result && v.result.successful_runs ? v.result.successful_runs + ' runs' : '1 run';
+      const ts = v.timestamp ? new Date(v.timestamp).toLocaleString() : 'N/A';
+      const vid = v.id || idx;
+      return `<tr>
+        <td style="font-weight:600">${esc(v.label)}</td>
+        <td style="color:var(--warm-gray-600);font-size:0.8125rem">${ts}</td>
+        <td>${wc} <span style="color:var(--warm-gray-400);font-size:0.75rem">(${runs})</span></td>
+        <td class="${lsiClass}" style="font-weight:600">${pct}%</td>
+        <td style="text-align:right">
+          <button class="btn btn-secondary btn-sm" onclick="loadVariant(${idx})">Load</button>
+          <button class="btn btn-danger btn-sm" onclick="confirmDelete('${vid}')" style="margin-left:0.25rem">Delete</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  /* ======== Load variant into a panel ======== */
+  window.loadVariant = function(idx) {
+    const v = savedVariants[idx];
+    if (!v) return;
+    // Find first panel without results, or use panel 2 (C) as default
+    let target = 2;
+    for (let i = 0; i < 3; i++) {
+      if (!variantResults[i]) { target = i; break; }
+    }
+    document.getElementById('label-' + target).value = v.label;
+    document.getElementById('textarea-' + target).value = v.task_section_text || '';
+    document.getElementById('notes-' + target).value = v.notes || '';
+    if (v.result) {
+      variantResults[target] = v.result;
+      renderResult(target, v.result);
+      document.getElementById('panel-' + target).classList.add('has-results');
+      document.getElementById('save-btn-' + target).style.display = '';
+    }
+    toast('Loaded "' + v.label + '" into ' + PANEL_LABELS[target]);
+    // Scroll to the panel
+    document.getElementById('panel-' + target).scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  /* ======== Delete variant ======== */
+  let pendingDeleteId = null;
+
+  window.confirmDelete = function(id) {
+    pendingDeleteId = id;
+    document.getElementById('delete-modal').classList.add('open');
+    document.getElementById('confirm-delete-btn').onclick = async function() {
+      await deleteVariant(pendingDeleteId);
+      closeDeleteModal();
+    };
+  };
+
+  window.closeDeleteModal = function() {
+    document.getElementById('delete-modal').classList.remove('open');
+    pendingDeleteId = null;
+  };
+
+  async function deleteVariant(id) {
+    try {
+      await api('DELETE', '/api/variants/' + id);
+      toast('Variant deleted');
+      await loadSavedVariants();
+    } catch(e) {
+      toast('Delete failed: ' + e.message, true);
+    }
+  }
+
+  /* ======== Collapsible toggle ======== */
+  window.toggleCollapsible = function(id) {
+    document.getElementById(id).classList.toggle('open');
+  };
+
+  /* ======== Toast ======== */
+  function toast(message, isError) {
+    const container = document.getElementById('toast-container');
+    const el = document.createElement('div');
+    el.className = 'toast' + (isError ? ' toast--error' : '');
+    el.textContent = message;
+    container.appendChild(el);
+    setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 3100);
+  }
+
+  /* ======== Escape HTML ======== */
+  function esc(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+})();
+</script>
+</body>
+</html>

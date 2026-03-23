@@ -211,9 +211,17 @@ export default function UrlUploadPage() {
         { urls: validUrls.map((u) => u.url) }
       );
 
-      // Navigate to crawl progress page on success, passing batch number
-      const batchParam = response.batch ? `?batch=${response.batch}` : '';
-      router.push(`/projects/${projectId}/onboarding/crawl${batchParam}`);
+      if (response.pages_created === 0 && response.pages_skipped > 0) {
+        // All URLs already exist — show existing data without batch filter
+        setToastMessage(`All ${response.pages_skipped} URLs have already been crawled`);
+        setToastVariant('success');
+        setShowToast(true);
+        router.push(`/projects/${projectId}/onboarding/crawl`);
+      } else {
+        // Navigate to crawl progress page for the new batch
+        const batchParam = response.batch ? `?batch=${response.batch}` : '';
+        router.push(`/projects/${projectId}/onboarding/crawl${batchParam}`);
+      }
     } catch (err) {
       // Show user-friendly error message
       const message = getErrorMessage(err);

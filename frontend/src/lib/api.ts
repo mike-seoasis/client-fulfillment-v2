@@ -1815,6 +1815,23 @@ export interface WPReviewResponse {
   validation_pass_rate: number;
 }
 
+export interface WPExportablePost {
+  page_id: string;
+  title: string;
+  url: string;
+  link_count: number;
+}
+
+export interface WPStatusResponse {
+  project_id: string;
+  current_step: number;
+  wp_posts_count: number;
+  analyzed_count: number;
+  labeled_count: number;
+  links_count: number;
+  silo_groups: number;
+}
+
 // =============================================================================
 // REDDIT PROJECT DASHBOARD TYPES
 // =============================================================================
@@ -2335,6 +2352,11 @@ export function wpListLinkableProjects(): Promise<WPProjectOption[]> {
   return apiClient.get<WPProjectOption[]>("/wordpress/projects");
 }
 
+/** Get wizard status for a project (auto-detect completed steps). */
+export function wpGetStatus(projectId: string): Promise<WPStatusResponse> {
+  return apiClient.get<WPStatusResponse>(`/wordpress/status/${projectId}`);
+}
+
 /** Import WP posts (returns 202 with job_id). */
 export function wpImport(
   siteUrl: string,
@@ -2392,20 +2414,57 @@ export function wpGetReview(projectId: string): Promise<WPReviewResponse> {
   return apiClient.get<WPReviewResponse>(`/wordpress/review/${projectId}`);
 }
 
+/** Get list of posts eligible for export. */
+export function wpGetExportablePosts(
+  projectId: string
+): Promise<WPExportablePost[]> {
+  return apiClient.get<WPExportablePost[]>(
+    `/wordpress/exportable/${projectId}`
+  );
+}
+
+/** Download CSV for WP All Import. Triggers browser file download. */
+export async function wpDownloadCsv(
+  projectId: string,
+  pageIds?: string[]
+): Promise<void> {
+  const params = new URLSearchParams();
+  if (pageIds && pageIds.length > 0) {
+    params.set("page_ids", pageIds.join(","));
+  }
+  const qs = params.toString() ? `?${params.toString()}` : "";
+  const url = `${API_BASE_URL}/wordpress/export-csv/${projectId}${qs}`;
+
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    throw new Error(`Export failed: ${resp.status}`);
+  }
+
+  const blob = await resp.blob();
+  const downloadUrl = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = downloadUrl;
+  a.download = `wp-export-${projectId.slice(0, 8)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(downloadUrl);
+}
+
 /** Start export to WordPress (returns 202 with job_id). */
 export function wpExport(
   projectId: string,
   siteUrl: string,
   username: string,
   appPassword: string,
-  titleFilter?: string[]
+  pageIds?: string[]
 ): Promise<WPProgressResponse> {
   return apiClient.post<WPProgressResponse>("/wordpress/export", {
     project_id: projectId,
     site_url: siteUrl,
     username,
     app_password: appPassword,
-    title_filter: titleFilter || null,
+    page_ids: pageIds || null,
   });
 }
 

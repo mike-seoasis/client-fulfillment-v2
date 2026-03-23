@@ -156,7 +156,10 @@ async def list_clusters(
             ).label("approved_count"),
         )
         .outerjoin(ClusterPage, ClusterPage.cluster_id == KeywordCluster.id)
-        .where(KeywordCluster.project_id == project_id)
+        .where(
+            KeywordCluster.project_id == project_id,
+            KeywordCluster.source != "wordpress",
+        )
         .group_by(KeywordCluster.id)
         .order_by(KeywordCluster.created_at.desc())
     )

@@ -165,6 +165,15 @@ class WPReviewResponse(BaseModel):
 # =============================================================================
 
 
+class WPExportablePost(BaseModel):
+    """A post eligible for export (has updated content with links)."""
+
+    page_id: str = Field(..., description="CrawledPage UUID")
+    title: str = Field(..., description="Post title")
+    url: str = Field(..., description="Post URL")
+    link_count: int = Field(0, description="Number of links injected into this post")
+
+
 class WPExportRequest(BaseModel):
     """Request to export modified content back to WordPress."""
 
@@ -172,9 +181,13 @@ class WPExportRequest(BaseModel):
     site_url: str = Field(..., description="WordPress site URL")
     username: str = Field(..., description="WordPress username")
     app_password: str = Field(..., description="WordPress application password")
+    page_ids: list[str] | None = Field(
+        None,
+        description="Optional list of page IDs to export (if None, exports all)",
+    )
     title_filter: list[str] | None = Field(
         None,
-        description="Optional title filter to export only specific posts",
+        description="Optional title filter to export only specific posts (deprecated, use page_ids)",
     )
 
 
@@ -192,6 +205,25 @@ class WPProjectOption(BaseModel):
     collection_page_count: int = Field(
         ..., description="Number of onboarding collection pages"
     )
+
+
+# =============================================================================
+# STATUS (wizard step detection)
+# =============================================================================
+
+
+class WPStatusResponse(BaseModel):
+    """Current wizard progress for a project, based on database state."""
+
+    project_id: str = Field(..., description="Project UUID")
+    current_step: int = Field(
+        1, description="Furthest completed step + 1 (where to resume)"
+    )
+    wp_posts_count: int = Field(0, description="Number of WordPress posts imported")
+    analyzed_count: int = Field(0, description="Posts with POP keyword data")
+    labeled_count: int = Field(0, description="Posts with labels assigned")
+    links_count: int = Field(0, description="Internal links planned")
+    silo_groups: int = Field(0, description="Number of silo groups")
 
 
 # =============================================================================

@@ -4,12 +4,15 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { authClient } from '@/lib/auth/client';
+import { useAppConfig } from '@/hooks/use-app-config';
 
 export function Header() {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { data: appConfig } = useAppConfig();
+  const isLoremMode = appConfig?.content_mode === 'lorem';
 
   const navLinks = [
     { href: '/', label: 'AI SEO', isActive: pathname === '/' || pathname.startsWith('/projects') },
@@ -44,6 +47,11 @@ export function Header() {
                 alt="Grove"
                 className="h-16 w-auto"
               />
+              {isLoremMode && (
+                <span className="inline-flex items-center rounded-sm bg-coral-100 px-2 py-0.5 text-xs font-medium text-coral-700 border border-coral-200">
+                  SEO Test Mode
+                </span>
+              )}
             </div>
 
             {/* Navigation links */}

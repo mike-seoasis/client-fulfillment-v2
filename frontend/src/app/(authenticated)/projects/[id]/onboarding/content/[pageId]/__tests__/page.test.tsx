@@ -8,6 +8,7 @@ import ContentEditorPage from '../page';
 // ============================================================================
 vi.mock('next/navigation', () => ({
   useParams: () => ({ id: 'proj-1', pageId: 'page-1' }),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
 }));
 
 vi.mock('next/link', () => ({
@@ -38,6 +39,11 @@ vi.mock('@/hooks/useContentGeneration', () => ({
   }),
   useRecheckPageContent: () => ({
     mutate: mockRecheckContentMutate,
+    isPending: false,
+  }),
+  useReviseOutline: () => ({
+    mutate: vi.fn(),
+    mutateAsync: vi.fn(),
     isPending: false,
   }),
 }));

@@ -4,9 +4,13 @@ REST endpoints for the 7-step WordPress linking wizard:
 Connect → Import → Analyze → Label → Plan → Review → Export.
 """
 
+import csv
+import io
+from typing import Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import db_manager, get_session
@@ -15,6 +19,7 @@ from app.schemas.wordpress import (
     WPAnalyzeRequest,
     WPConnectRequest,
     WPConnectResponse,
+    WPExportablePost,
     WPExportRequest,
     WPImportRequest,
     WPImportResponse,
@@ -26,6 +31,7 @@ from app.schemas.wordpress import (
     WPProjectOption,
     WPReviewGroup,
     WPReviewResponse,
+    WPStatusResponse,
     WPTaxonomyLabel,
 )
 from app.services.wordpress_linker import (
@@ -130,6 +136,112 @@ async def list_linkable_projects(
         )
         for row in rows
     ]
+
+
+# =============================================================================
+# STATUS (auto-detect wizard step)
+# =============================================================================
+
+
+@router.get("/status/{project_id}", response_model=WPStatusResponse)
+async def get_status(
+    project_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> WPStatusResponse:
+    """Detect which wizard step a project is at based on database state."""
+    from sqlalchemy import func, select
+
+    from app.models.crawled_page import CrawledPage
+    from app.models.internal_link import InternalLink
+    from app.models.keyword_cluster import KeywordCluster
+    from app.models.page_keywords import PageKeywords
+
+    # Count WordPress posts
+    wp_count_stmt = select(func.count()).where(
+        CrawledPage.project_id == project_id,
+        CrawledPage.source == "wordpress",
+    )
+    wp_posts_count = (await db.execute(wp_count_stmt)).scalar() or 0
+
+    if wp_posts_count == 0:
+        return WPStatusResponse(project_id=project_id, current_step=1)
+
+    # Count analyzed posts (have keyword data)
+    analyzed_stmt = (
+        select(func.count())
+        .select_from(PageKeywords)
+        .join(CrawledPage, PageKeywords.crawled_page_id == CrawledPage.id)
+        .where(
+            CrawledPage.project_id == project_id,
+            CrawledPage.source == "wordpress",
+            PageKeywords.primary_keyword.isnot(None),
+        )
+    )
+    analyzed_count = (await db.execute(analyzed_stmt)).scalar() or 0
+
+    if analyzed_count == 0:
+        return WPStatusResponse(
+            project_id=project_id,
+            current_step=3,  # Import done, analyze next
+            wp_posts_count=wp_posts_count,
+        )
+
+    # Count labeled posts
+    labeled_stmt = select(func.count()).where(
+        CrawledPage.project_id == project_id,
+        CrawledPage.source == "wordpress",
+        CrawledPage.labels.isnot(None),  # type: ignore[union-attr]
+    )
+    labeled_count = (await db.execute(labeled_stmt)).scalar() or 0
+
+    if labeled_count == 0:
+        return WPStatusResponse(
+            project_id=project_id,
+            current_step=4,  # Analyze done, label next
+            wp_posts_count=wp_posts_count,
+            analyzed_count=analyzed_count,
+        )
+
+    # Count silo groups (only WordPress silo clusters, not cluster-tool)
+    silo_stmt = select(func.count()).where(
+        KeywordCluster.project_id == project_id,
+        KeywordCluster.source == "wordpress",
+    )
+    silo_groups = (await db.execute(silo_stmt)).scalar() or 0
+
+    # Count internal links for blog scope (only those tied to a cluster)
+    links_stmt = (
+        select(func.count())
+        .select_from(InternalLink)
+        .join(CrawledPage, InternalLink.source_page_id == CrawledPage.id)
+        .where(
+            CrawledPage.project_id == project_id,
+            CrawledPage.source == "wordpress",
+            InternalLink.cluster_id.isnot(None),
+        )
+    )
+    links_count = (await db.execute(links_stmt)).scalar() or 0
+
+    if links_count == 0:
+        return WPStatusResponse(
+            project_id=project_id,
+            current_step=5,  # Label done, plan next
+            wp_posts_count=wp_posts_count,
+            analyzed_count=analyzed_count,
+            labeled_count=labeled_count,
+            silo_groups=silo_groups,
+        )
+
+    # Links exist → review/export ready
+    return WPStatusResponse(
+        project_id=project_id,
+        current_step=7,  # Skip review, go to export (review is read-only)
+        wp_posts_count=wp_posts_count,
+        analyzed_count=analyzed_count,
+        labeled_count=labeled_count,
+        links_count=links_count,
+        silo_groups=silo_groups,
+    )
 
 
 # =============================================================================
@@ -405,6 +517,120 @@ async def get_review(
 # =============================================================================
 
 
+@router.get("/exportable/{project_id}", response_model=list[WPExportablePost])
+async def list_exportable_posts(
+    project_id: str,
+    db: AsyncSession = Depends(get_session),
+) -> list[WPExportablePost]:
+    """List posts eligible for export (have updated content with links)."""
+    from sqlalchemy import func, select
+
+    from app.models.crawled_page import CrawledPage
+    from app.models.internal_link import InternalLink
+    from app.models.page_content import PageContent
+
+    # Load WP pages with content
+    stmt = (
+        select(
+            CrawledPage.id,
+            CrawledPage.title,
+            CrawledPage.normalized_url,
+            func.count(InternalLink.id).label("link_count"),
+        )
+        .outerjoin(PageContent, PageContent.crawled_page_id == CrawledPage.id)
+        .outerjoin(
+            InternalLink, InternalLink.source_page_id == CrawledPage.id
+        )
+        .where(
+            CrawledPage.project_id == project_id,
+            CrawledPage.source == "wordpress",
+            CrawledPage.raw_url.isnot(None),
+            PageContent.bottom_description.isnot(None),
+        )
+        .group_by(CrawledPage.id, CrawledPage.title, CrawledPage.normalized_url)
+        .order_by(CrawledPage.title)
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    return [
+        WPExportablePost(
+            page_id=row[0],
+            title=row[1] or "Untitled",
+            url=row[2],
+            link_count=row[3],
+        )
+        for row in rows
+    ]
+
+
+@router.get("/export-csv/{project_id}")
+async def export_csv(
+    project_id: str,
+    page_ids: Optional[str] = Query(None, description="Comma-separated page IDs to export"),
+    db: AsyncSession = Depends(get_session),
+) -> StreamingResponse:
+    """Download a CSV file for WP All Import to update existing posts.
+
+    CSV columns: id (WP post ID), post_title, post_content (updated HTML with links).
+    """
+    from sqlalchemy import select
+    from sqlalchemy.orm import joinedload
+
+    from app.models.crawled_page import CrawledPage
+    from app.models.page_content import PageContent
+
+    stmt = (
+        select(CrawledPage)
+        .options(joinedload(CrawledPage.page_content))
+        .where(
+            CrawledPage.project_id == project_id,
+            CrawledPage.source == "wordpress",
+            CrawledPage.raw_url.isnot(None),
+        )
+    )
+    result = await db.execute(stmt)
+    pages = list(result.unique().scalars().all())
+
+    # Filter by page_ids if provided
+    if page_ids:
+        id_set = set(page_ids.split(","))
+        pages = [p for p in pages if p.id in id_set]
+
+    # Filter to pages with updated content
+    pages = [
+        p for p in pages
+        if p.page_content and p.page_content.bottom_description
+    ]
+
+    if not pages:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No exportable posts found",
+        )
+
+    # Build CSV in memory
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["id", "post_title", "post_content"])
+
+    for page in pages:
+        wp_post_id = page.raw_url or ""
+        title = page.title or ""
+        content = page.page_content.bottom_description or ""
+        writer.writerow([wp_post_id, title, content])
+
+    output.seek(0)
+
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="wp-export-{project_id[:8]}.csv"'
+        },
+    )
+
+
 @router.post(
     "/export",
     response_model=WPProgressResponse,
@@ -426,6 +652,7 @@ async def export_posts(
                 username=body.username,
                 app_password=body.app_password,
                 job_id=job_id,
+                page_ids=body.page_ids,
                 title_filter=body.title_filter,
             )
 
