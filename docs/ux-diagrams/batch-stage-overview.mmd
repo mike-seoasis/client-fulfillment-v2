@@ -1,0 +1,109 @@
+---
+title: "Batch UX — Stage-Based Project Overview"
+description: |
+  Detailed interaction diagram for the project overview screen.
+  This replaces per-batch navigation with a stage-based "what needs doing" view.
+  Users click into a stage to see all pages at that point, regardless of which
+  batch they came from. Batch identity is just a date label inside the list.
+---
+flowchart TD
+    %% ============================================================
+    %% STYLE DEFINITIONS
+    %% ============================================================
+    classDef screen fill:#F5F0E8,stroke:#8B7D6B,stroke-width:2px,color:#3D3229
+    classDef action fill:#E8F5E9,stroke:#5B8C5A,stroke-width:1px,color:#2E5A2E
+    classDef system fill:#E0F2F1,stroke:#4A9B8E,stroke-width:1px,color:#2B5F56
+    classDef decision fill:#FFF3E0,stroke:#D4956A,stroke-width:2px,color:#7A4A2A
+    classDef gate fill:#FCE4EC,stroke:#C97B84,stroke-width:2px,color:#7A2E3A
+    classDef start fill:#C8E6C9,stroke:#388E3C,stroke-width:2px,color:#1B5E20
+    classDef complete fill:#C8E6C9,stroke:#388E3C,stroke-width:2px,color:#1B5E20
+
+    %% ============================================================
+    %% ENTRY
+    %% ============================================================
+    START((Project<br/>Dashboard)):::start
+
+    %% ============================================================
+    %% OVERVIEW SCREEN
+    %% ============================================================
+    START ==> OVERVIEW
+
+    subgraph OVERVIEW_SECTION["Project Overview — Stage-Based"]
+        direction TB
+        OVERVIEW["Project Overview Screen<br/>━━━━━━━━━━━━━━━━━━━━━━━━━━━━<br/>47 pages total<br/><br/>Stage summary bars:<br/>• Content Review: 12 actionable<br/>• Keywords: 9 actionable<br/>• Crawling: 5 in progress<br/>• Approved: 20 done<br/>• Exported: 1 shipped<br/>━━━━━━━━━━━━━━━━━━━━━━━━━━━━<br/>+ Add More URLs button"]:::screen
+
+        OVERVIEW --> WHICH_ACTION{User clicks?}:::decision
+
+        WHICH_ACTION -->|"Review Content (12)"| CONTENT_LIST
+        WHICH_ACTION -->|"Approve Keywords (9)"| KW_LIST
+        WHICH_ACTION -->|"View Crawling (5)"| CRAWL_LIST
+        WHICH_ACTION -->|"+ Add More URLs"| UPLOAD
+    end
+
+    %% ============================================================
+    %% CONTENT REVIEW LIST (merged from all batches)
+    %% ============================================================
+    subgraph CONTENT_SECTION["Content Review — All Pages at This Stage"]
+        direction TB
+        CONTENT_LIST["Content Review List<br/>━━━━━━━━━━━━━━━━━━━━━━━━━━━━<br/>12 pages pending review<br/><br/>URL                    Added     Status<br/>───────────────────────────────────<br/>/collections/shoes     Mar 3     Pending<br/>/collections/bags      Mar 3     Pending<br/>/collections/hats      Mar 3     Pending<br/>           ── Mar 12 upload ──<br/>/blog/summer-trends    Mar 12    Pending<br/>/blog/care-guide       Mar 12    Pending<br/>━━━━━━━━━━━━━━━━━━━━━━━━━━━━<br/>Subtle date divider groups by upload.<br/>No batch selector needed."]:::screen
+
+        CONTENT_LIST --> CLICK_PAGE(Click page row):::action
+        CLICK_PAGE --> PAGE_REVIEW["Page Review Screen<br/>━━━━━━━━━━━━━━━━<br/>Same as today:<br/>Rich editor + QA sidebar<br/>Approve / Edit"]:::screen
+
+        PAGE_REVIEW --> APPROVE_CHOICE{Action?}:::decision
+        APPROVE_CHOICE -->|approve| APPROVED([Mark page approved<br/>Remove from this list]):::system
+        APPROVE_CHOICE -->|edit| PAGE_REVIEW
+        APPROVED --> CONTENT_LIST
+    end
+
+    %% ============================================================
+    %% KEYWORDS LIST (merged from all batches)
+    %% ============================================================
+    subgraph KW_SECTION["Keywords — All Pages at This Stage"]
+        direction TB
+        KW_LIST["Keywords List<br/>━━━━━━━━━━━━━━━━━━━━━━━━━━━━<br/>9 pages need keyword approval<br/><br/>Same merged list pattern:<br/>pages from any batch that<br/>have reached keyword stage<br/>but aren't approved yet.<br/>━━━━━━━━━━━━━━━━━━━━━━━━━━━━<br/>Generate / Approve All actions"]:::screen
+
+        KW_LIST --> KW_ACTION{Action?}:::decision
+        KW_ACTION -->|approve all| KW_APPROVE([Approve all keywords<br/>Pages advance to Content Gen]):::system
+        KW_ACTION -->|edit individual| KW_EDIT(Edit keyword inline):::action
+        KW_EDIT --> KW_LIST
+        KW_APPROVE --> KW_ADVANCE([Pages move to Content stage<br/>Appear in Content Review<br/>once generation completes]):::system
+    end
+
+    %% ============================================================
+    %% CRAWL PROGRESS (only in-flight pages)
+    %% ============================================================
+    subgraph CRAWL_SECTION["Crawling — In-Progress Pages"]
+        direction TB
+        CRAWL_LIST["Crawl Progress<br/>━━━━━━━━━━━━━━━━━━━━━━━━━━━━<br/>5 pages currently crawling<br/><br/>Live progress indicators<br/>Retry failed pages<br/>━━━━━━━━━━━━━━━━━━━━━━━━━━━━<br/>Auto-advances completed pages<br/>to Keywords stage"]:::screen
+
+        CRAWL_LIST -.-> CRAWL_DONE([Crawl completes<br/>Pages move to Keywords list]):::system
+    end
+
+    %% ============================================================
+    %% ADD MORE URLS
+    %% ============================================================
+    subgraph UPLOAD_SECTION["Add More URLs"]
+        direction TB
+        UPLOAD["/onboarding/upload<br/>━━━━━━━━━━━━━━━━<br/>Same upload flow as today<br/>Creates new batch (N+1)<br/>Dedupes against all<br/>existing pages"]:::screen
+
+        UPLOAD --> SUBMIT(Submit URLs):::action
+        SUBMIT --> CREATE([Create pages with<br/>batch = N+1<br/>Start crawling]):::system
+        CREATE --> RETURN(Return to<br/>Project Overview):::action
+    end
+
+    %% ============================================================
+    %% RETURN FLOWS
+    %% ============================================================
+    APPROVED -.->|"all content approved"| EXPORT
+    RETURN --> OVERVIEW
+
+    EXPORT["Export Screen<br/>━━━━━━━━━━━━━━━━<br/>Shows all approved pages<br/>across all batches<br/>Select and download"]:::screen
+
+    EXPORT --> DOWNLOAD(Download CSV):::action
+    DOWNLOAD --> DONE((Export<br/>Complete)):::complete
+
+    %% ============================================================
+    %% KEY: RE-ENTRY AFTER EXPORT
+    %% ============================================================
+    DONE -.->|"still have unapproved pages"| OVERVIEW

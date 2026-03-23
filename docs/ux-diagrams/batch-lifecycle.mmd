@@ -1,0 +1,90 @@
+---
+title: "Batch Lifecycle — How Uploads Flow Through the Pipeline"
+description: |
+  Shows how multiple URL uploads (batches) move through pipeline stages
+  independently, then merge into a unified stage-based view for the user.
+  Batches are transient metadata, not permanent navigation concepts.
+---
+flowchart TD
+    %% ============================================================
+    %% STYLE DEFINITIONS
+    %% ============================================================
+    classDef screen fill:#F5F0E8,stroke:#8B7D6B,stroke-width:2px,color:#3D3229
+    classDef action fill:#E8F5E9,stroke:#5B8C5A,stroke-width:1px,color:#2E5A2E
+    classDef system fill:#E0F2F1,stroke:#4A9B8E,stroke-width:1px,color:#2B5F56
+    classDef decision fill:#FFF3E0,stroke:#D4956A,stroke-width:2px,color:#7A4A2A
+    classDef gate fill:#FCE4EC,stroke:#C97B84,stroke-width:2px,color:#7A2E3A
+    classDef start fill:#C8E6C9,stroke:#388E3C,stroke-width:2px,color:#1B5E20
+    classDef complete fill:#C8E6C9,stroke:#388E3C,stroke-width:2px,color:#1B5E20
+    classDef batch1 fill:#E8F5E9,stroke:#5B8C5A,stroke-width:2px,color:#2E5A2E
+    classDef batch2 fill:#E0F2F1,stroke:#4A9B8E,stroke-width:2px,color:#2B5F56
+    classDef batch3 fill:#FFF3E0,stroke:#D4956A,stroke-width:2px,color:#7A4A2A
+    classDef pool fill:#F5F0E8,stroke:#8B7D6B,stroke-width:3px,color:#3D3229
+
+    %% ============================================================
+    %% BATCH CREATION
+    %% ============================================================
+    subgraph UPLOADS["Uploads Over Time"]
+        direction TB
+        U1["Mar 3: Upload 32 URLs<br/>→ Batch 1"]:::batch1
+        U2["Mar 12: Upload 15 URLs<br/>→ Batch 2"]:::batch2
+        U3["Mar 18: Upload 10 URLs<br/>→ Batch 3"]:::batch3
+    end
+
+    %% ============================================================
+    %% INDEPENDENT PIPELINE PROGRESS
+    %% ============================================================
+    subgraph PIPELINE["Each Batch Moves Independently"]
+        direction TB
+
+        subgraph B1["Batch 1 (32 pages)"]
+            direction LR
+            B1_CRAWL["Crawl ✓"]:::complete
+            B1_KW["Keywords ✓"]:::complete
+            B1_CONTENT["Content<br/>20 approved<br/>12 pending"]:::screen
+            B1_CRAWL --> B1_KW --> B1_CONTENT
+        end
+
+        subgraph B2["Batch 2 (15 pages)"]
+            direction LR
+            B2_CRAWL["Crawl ✓"]:::complete
+            B2_KW["Keywords<br/>9 ready"]:::screen
+            B2_CRAWL --> B2_KW
+        end
+
+        subgraph B3["Batch 3 (10 pages)"]
+            direction LR
+            B3_CRAWL["Crawling<br/>5/10 done"]:::system
+        end
+    end
+
+    U1 --> B1_CRAWL
+    U2 --> B2_CRAWL
+    U3 --> B3_CRAWL
+
+    %% ============================================================
+    %% STAGE-BASED VIEW (what user actually sees)
+    %% ============================================================
+    subgraph UX["What the User Sees — Stage-Based Overview"]
+        direction TB
+        OVERVIEW["Project Overview<br/>━━━━━━━━━━━━━━━━━━━━━━━━<br/>57 pages total<br/><br/>▓▓▓▓▓▓▓▓▓▓░░░░ Content Review: 12 pages<br/>▓▓▓▓░░░░░░░░░░ Keywords: 9 pages<br/>▓▓░░░░░░░░░░░░ Crawling: 5 pages<br/>▓▓▓▓▓▓▓▓▓▓▓▓▓▓ Done: 20 pages<br/>━━━━━━━━━━━━━━━━━━━━━━━━<br/>Biggest action item first"]:::screen
+
+        OVERVIEW --> ACTION1(Review Content — 12 pages):::action
+        OVERVIEW --> ACTION2(Approve Keywords — 9 pages):::action
+        OVERVIEW --> ACTION3(View Crawl Progress — 5 pages):::action
+    end
+
+    B1_CONTENT -.->|"12 pending pages"| ACTION1
+    B2_KW -.->|"9 pages at keywords"| ACTION2
+    B3_CRAWL -.->|"5 pages crawling"| ACTION3
+
+    %% ============================================================
+    %% KEY INSIGHT
+    %% ============================================================
+    subgraph MERGE["Convergence"]
+        direction TB
+        NOTE["When Batch 2 reaches Content stage,<br/>its 15 pages join Batch 1's 12 pending<br/>= 27 pages in one Content Review list.<br/><br/>Batch identity dissolves into the work."]:::system
+    end
+
+    ACTION1 -.-> MERGE
+    ACTION2 -.->|"batch 2 pages eventually<br/>reach content"| MERGE

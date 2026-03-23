@@ -1,0 +1,88 @@
+---
+title: "Add More URLs — Mid-Flow Interaction"
+description: |
+  Shows exactly what happens when a user adds more URLs while existing
+  batches are at different pipeline stages. The new pages enter the pipeline
+  at the beginning (crawl) while existing pages stay where they are.
+  The overview updates to reflect the new totals.
+---
+flowchart TD
+    %% ============================================================
+    %% STYLE DEFINITIONS
+    %% ============================================================
+    classDef screen fill:#F5F0E8,stroke:#8B7D6B,stroke-width:2px,color:#3D3229
+    classDef action fill:#E8F5E9,stroke:#5B8C5A,stroke-width:1px,color:#2E5A2E
+    classDef system fill:#E0F2F1,stroke:#4A9B8E,stroke-width:1px,color:#2B5F56
+    classDef decision fill:#FFF3E0,stroke:#D4956A,stroke-width:2px,color:#7A4A2A
+    classDef gate fill:#FCE4EC,stroke:#C97B84,stroke-width:2px,color:#7A2E3A
+    classDef start fill:#C8E6C9,stroke:#388E3C,stroke-width:2px,color:#1B5E20
+    classDef complete fill:#C8E6C9,stroke:#388E3C,stroke-width:2px,color:#1B5E20
+
+    %% ============================================================
+    %% STARTING STATE
+    %% ============================================================
+    subgraph BEFORE["Before: User's Current View"]
+        direction TB
+        OVERVIEW_BEFORE["Project Overview<br/>━━━━━━━━━━━━━━━━━━━━━━<br/>32 pages total<br/><br/>Content Review: 12 pending<br/>Approved: 20 done<br/>━━━━━━━━━━━━━━━━━━━━━━<br/>All from batch 1"]:::screen
+    end
+
+    %% ============================================================
+    %% USER ADDS MORE URLS
+    %% ============================================================
+    OVERVIEW_BEFORE ==> ADD_CLICK(Click + Add More URLs):::action
+
+    ADD_CLICK ==> UPLOAD["Upload Screen<br/>━━━━━━━━━━━━━━━━━━━━━━<br/>Paste 15 new URLs<br/><br/>Info banner:<br/>You have 32 existing pages.<br/>12 still need content review."]:::screen
+
+    UPLOAD ==> SUBMIT(Submit 15 URLs):::action
+
+    %% ============================================================
+    %% BACKEND PROCESSING
+    %% ============================================================
+    SUBMIT ==> BACKEND([Backend Processing<br/>━━━━━━━━━━━━━━━━━━━━━━<br/>1. Dedupe against all 32 existing<br/>2. Assign batch = 2<br/>3. Create CrawledPage records<br/>4. Start background crawl<br/>5. Return to overview]):::system
+
+    %% ============================================================
+    %% AFTER STATE
+    %% ============================================================
+    BACKEND ==> OVERVIEW_AFTER
+
+    subgraph AFTER["After: Updated Overview"]
+        direction TB
+        OVERVIEW_AFTER["Project Overview<br/>━━━━━━━━━━━━━━━━━━━━━━<br/>47 pages total (+15 new)<br/><br/>Content Review: 12 pending<br/>Crawling: 15 in progress ← NEW<br/>Approved: 20 done<br/>━━━━━━━━━━━━━━━━━━━━━━<br/>New crawling row appears.<br/>Existing content review unchanged.<br/>User picks what to work on."]:::screen
+
+        OVERVIEW_AFTER --> CHOICE{What does user<br/>work on?}:::decision
+    end
+
+    %% ============================================================
+    %% USER CHOICES
+    %% ============================================================
+    CHOICE -->|"continue reviewing<br/>batch 1 content"| CONTENT_WORK
+    CHOICE -->|"watch new pages crawl"| CRAWL_WORK
+    CHOICE -->|"do something else,<br/>come back later"| LEAVE
+
+    subgraph CONTENT_PATH["Continue Content Review"]
+        direction TB
+        CONTENT_WORK["Content Review List<br/>━━━━━━━━━━━━━━━━━━━━━━<br/>12 pages from batch 1<br/>still pending review<br/><br/>New batch not here yet —<br/>still crawling. Will appear<br/>once they reach this stage."]:::screen
+    end
+
+    subgraph CRAWL_PATH["Watch Crawl Progress"]
+        direction TB
+        CRAWL_WORK["Crawl Progress<br/>━━━━━━━━━━━━━━━━━━━━━━<br/>15 pages from batch 2<br/>3/15 done, 12 crawling<br/><br/>Completed pages auto-advance<br/>to keywords stage."]:::screen
+    end
+
+    subgraph LEAVE_PATH["Come Back Later"]
+        direction TB
+        LEAVE["User closes browser.<br/>━━━━━━━━━━━━━━━━━━━━━━<br/>Next visit → Overview shows<br/>current state of all pages.<br/><br/>Maybe now it's:<br/>Content Review: 27 pages<br/>(12 from batch 1 + 15 from batch 2)<br/>Approved: 20 done"]:::screen
+    end
+
+    %% ============================================================
+    %% KEY MOMENT: CONVERGENCE
+    %% ============================================================
+    subgraph CONVERGE["Key Moment: Batches Converge"]
+        direction TB
+        LATER["Hours later, batch 2 finishes<br/>crawl → keywords → content gen<br/>━━━━━━━━━━━━━━━━━━━━━━━━━━━━<br/>Overview now shows:<br/><br/>Content Review: 27 pages<br/>(12 old + 15 new — all mixed)<br/>Approved: 20 done<br/><br/>Crawling row disappears.<br/>Keywords row disappears.<br/>Everything merged at Content."]:::system
+
+        LATER --> MERGED_LIST["Content Review List<br/>━━━━━━━━━━━━━━━━━━━━━━<br/>URL                   Added<br/>─────────────────────────<br/>/collections/shoes     Mar 3<br/>/collections/bags      Mar 3<br/>        ── Mar 12 upload ──<br/>/blog/summer-trends    Mar 12<br/>/blog/care-guide       Mar 12<br/>━━━━━━━━━━━━━━━━━━━━━━<br/>Date divider is only trace<br/>of batch identity."]:::screen
+    end
+
+    CRAWL_WORK -.->|"time passes"| LATER
+    CONTENT_WORK -.->|"time passes"| LATER
