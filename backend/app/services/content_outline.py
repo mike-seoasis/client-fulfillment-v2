@@ -246,9 +246,26 @@ def _extract_json_block(text: str) -> str | None:
     return None
 
 
+def _is_valid_outline(parsed: Any) -> bool:
+    """Check if parsed JSON has expected outline keys."""
+    return isinstance(parsed, dict) and (
+        "section_details" in parsed or "page_progression" in parsed
+    )
+
+
 def _parse_outline_json(text: str) -> dict[str, Any] | None:
-    """Parse Claude's outline response as JSON."""
+    """Parse Claude's outline response as JSON.
+
+    Uses a 4-attempt strategy:
+    1. Direct parse
+    2. Extract balanced JSON block from surrounding text
+    3. Repair control characters (unescaped newlines/tabs in JSON strings)
+    4. Balanced extraction + repair combined
+    """
+    from app.services.content_writing import _repair_json_control_chars
+
     cleaned = text.strip()
+    first_error = "valid JSON but missing section_details/page_progression keys"
 
     # Strip markdown code fences (```json or ```)
     if cleaned.startswith("```"):
@@ -258,31 +275,52 @@ def _parse_outline_json(text: str) -> dict[str, Any] | None:
             lines = lines[:-1]  # drop closing fence
         cleaned = "\n".join(lines).strip()
 
-    # Try direct parse first
+    # Attempt 1: direct parse
     try:
         parsed = json.loads(cleaned)
-        if isinstance(parsed, dict) and (
-            "section_details" in parsed or "page_progression" in parsed
-        ):
+        if _is_valid_outline(parsed):
             return parsed
-    except (json.JSONDecodeError, ValueError):
-        pass
+    except (json.JSONDecodeError, ValueError) as e:
+        first_error = str(e)
 
-    # Extract balanced JSON object from surrounding text
+    # Attempt 2: extract balanced JSON block from surrounding text
     json_block = _extract_json_block(cleaned)
     if json_block:
         try:
             parsed = json.loads(json_block)
-            if isinstance(parsed, dict) and (
-                "section_details" in parsed or "page_progression" in parsed
-            ):
+            if _is_valid_outline(parsed):
+                return parsed
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # Attempt 3: repair control characters then parse
+    repaired = _repair_json_control_chars(cleaned)
+    try:
+        parsed = json.loads(repaired)
+        if _is_valid_outline(parsed):
+            return parsed
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Attempt 4: extract balanced block + repair
+    json_block = _extract_json_block(repaired)
+    if json_block:
+        try:
+            parsed = json.loads(json_block)
+            if _is_valid_outline(parsed):
                 return parsed
         except (json.JSONDecodeError, ValueError):
             pass
 
     logger.warning(
         "Failed to parse outline JSON",
-        extra={"snippet": cleaned[:300], "length": len(cleaned)},
+        extra={
+            "snippet": cleaned[:300],
+            "length": len(cleaned),
+            "first_parse_error": first_error,
+            "has_section_details": "section_details" in cleaned,
+            "has_page_progression": "page_progression" in cleaned,
+        },
     )
     return None
 
