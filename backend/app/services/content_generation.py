@@ -495,16 +495,14 @@ async def _prefetch_all_briefs(
     returned from cache when _process_single_page runs in Phase 2.
     """
     # Skip pages that will be skipped in Phase 2 (already complete).
-    # In outline_first mode, pages with complete content but no outline
-    # still need briefs (they won't be skipped in Phase 2).
+    # In outline_first mode, pages with complete content still need briefs
+    # (they won't be skipped in Phase 2) unless actively generating.
     def _needs_brief(pd: dict[str, Any]) -> bool:
         if force_refresh:
             return True
         if pd["existing_content_status"] != ContentStatus.COMPLETE.value:
             return True
-        if outline_first and pd.get("existing_outline_status") not in (
-            "draft", "approved", "generating",
-        ):
+        if outline_first and pd.get("existing_outline_status") != "generating":
             return True
         return False
 
@@ -942,13 +940,14 @@ async def _process_single_page(
     existing_outline_status: str | None = page_data.get("existing_outline_status")
 
     # Skip pages that already have complete content (unless force_refresh).
-    # In outline_first mode, don't skip pages that lack an outline — the user
-    # explicitly wants outlines generated even if full content already exists.
+    # In outline_first mode, don't skip pages unless an outline is currently
+    # being generated (to avoid conflicts). Pages with existing draft/approved
+    # outlines ARE regenerated — the user explicitly re-requested outlines.
     if not force_refresh and existing_status == ContentStatus.COMPLETE.value:
-        if outline_first and existing_outline_status not in ("draft", "approved", "generating"):
-            # Page has complete content but no outline — need to generate one
+        if outline_first and existing_outline_status != "generating":
+            # outline_first mode: regenerate outline even if one already exists
             logger.info(
-                "Page has complete content but no outline; outline_first mode will regenerate",
+                "Page has complete content; outline_first mode will regenerate outline",
                 extra={"page_id": page_id, "url": url, "outline_status": existing_outline_status},
             )
         else:
