@@ -10,6 +10,7 @@ app/api/v1/blogs.py
 app/api/v1/brand_config.py
 app/api/v1/clusters.py
 app/api/v1/content_generation.py
+app/api/v1/export.py
 app/api/v1/files.py
 app/api/v1/links.py
 app/api/v1/projects.py
@@ -121,6 +122,7 @@ app/services/content_quality.py
 app/services/content_writing.py
 app/services/crawling.py
 app/services/export.py
+app/services/export_xlsx.py
 app/services/file.py
 app/services/label_taxonomy.py
 app/services/link_injection.py
