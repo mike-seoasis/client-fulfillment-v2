@@ -195,6 +195,7 @@ async def run_content_pipeline(
         pages_data=pages_data,
         force_refresh=force_refresh,
         refresh_briefs=refresh_briefs,
+        outline_first=outline_first,
     )
 
     # --- Phase 2: Write content + quality checks (briefs are now cached) ---
@@ -482,6 +483,7 @@ async def _prefetch_all_briefs(
     pages_data: list[dict[str, Any]],
     force_refresh: bool,
     refresh_briefs: bool,
+    outline_first: bool = False,
 ) -> None:
     """Phase 1: Pre-fetch POP content briefs for all pages concurrently.
 
@@ -492,13 +494,21 @@ async def _prefetch_all_briefs(
     Brief results are stored in the database by fetch_content_brief and will be
     returned from cache when _process_single_page runs in Phase 2.
     """
-    # Skip pages that will be skipped in Phase 2 (already complete)
-    pages_needing_briefs = [
-        pd
-        for pd in pages_data
-        if force_refresh
-        or pd["existing_content_status"] != ContentStatus.COMPLETE.value
-    ]
+    # Skip pages that will be skipped in Phase 2 (already complete).
+    # In outline_first mode, pages with complete content but no outline
+    # still need briefs (they won't be skipped in Phase 2).
+    def _needs_brief(pd: dict[str, Any]) -> bool:
+        if force_refresh:
+            return True
+        if pd["existing_content_status"] != ContentStatus.COMPLETE.value:
+            return True
+        if outline_first and pd.get("existing_outline_status") not in (
+            "draft", "approved", "generating",
+        ):
+            return True
+        return False
+
+    pages_needing_briefs = [pd for pd in pages_data if _needs_brief(pd)]
 
     if not pages_needing_briefs:
         logger.info("Phase 1: All pages already complete, skipping brief pre-fetch")
@@ -657,7 +667,7 @@ async def _load_approved_pages(
     if batch is not None:
         stmt = stmt.where(CrawledPage.onboarding_batch == batch)
     result = await db.execute(stmt)
-    pages = result.scalars().all()
+    pages = result.unique().scalars().all()
 
     pages_data: list[dict[str, Any]] = []
     for page in pages:
@@ -667,8 +677,10 @@ async def _load_approved_pages(
 
         # Track existing content status for skip logic
         existing_status = None
+        existing_outline_status = None
         if page.page_content:
             existing_status = page.page_content.status
+            existing_outline_status = page.page_content.outline_status
 
         pages_data.append(
             {
@@ -676,6 +688,7 @@ async def _load_approved_pages(
                 "url": page.normalized_url,
                 "keyword": keyword,
                 "existing_content_status": existing_status,
+                "existing_outline_status": existing_outline_status,
             }
         )
 
@@ -926,19 +939,29 @@ async def _process_single_page(
     url: str = page_data["url"]
     keyword: str = page_data["keyword"]
     existing_status: str | None = page_data["existing_content_status"]
+    existing_outline_status: str | None = page_data.get("existing_outline_status")
 
-    # Skip pages that already have complete content (unless force_refresh)
+    # Skip pages that already have complete content (unless force_refresh).
+    # In outline_first mode, don't skip pages that lack an outline — the user
+    # explicitly wants outlines generated even if full content already exists.
     if not force_refresh and existing_status == ContentStatus.COMPLETE.value:
-        logger.info(
-            "Skipping page with complete content",
-            extra={"page_id": page_id, "url": url},
-        )
-        return PipelinePageResult(
-            page_id=page_id,
-            url=url,
-            success=True,
-            skipped=True,
-        )
+        if outline_first and existing_outline_status not in ("draft", "approved", "generating"):
+            # Page has complete content but no outline — need to generate one
+            logger.info(
+                "Page has complete content but no outline; outline_first mode will regenerate",
+                extra={"page_id": page_id, "url": url, "outline_status": existing_outline_status},
+            )
+        else:
+            logger.info(
+                "Skipping page with complete content",
+                extra={"page_id": page_id, "url": url},
+            )
+            return PipelinePageResult(
+                page_id=page_id,
+                url=url,
+                success=True,
+                skipped=True,
+            )
 
     logger.info(
         "Processing page through content pipeline",
