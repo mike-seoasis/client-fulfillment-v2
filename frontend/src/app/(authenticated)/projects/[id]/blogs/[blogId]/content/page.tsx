@@ -3,8 +3,10 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { useProject } from '@/hooks/use-projects';
 import {
+  blogKeys,
   useBlogCampaign,
   useBlogContentStatus,
   useTriggerBlogContentGeneration,
@@ -544,6 +546,7 @@ export default function BlogContentPage() {
     setShowToast(true);
   }, []);
 
+  const queryClient = useQueryClient();
   const { data: project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
   const { data: campaign, isLoading: isCampaignLoading, error: campaignError } = useBlogCampaign(projectId, blogId);
   const { data: contentStatus, isLoading: isStatusLoading } = useBlogContentStatus(projectId, blogId);
@@ -582,16 +585,22 @@ export default function BlogContentPage() {
   );
   const contentApprovedCount = completePosts.filter((p) => p.content_approved).length;
 
-  // Watch for generation completion to show toast
+  // Watch for generation completion to show toast and refresh campaign data
   useEffect(() => {
     const prev = prevOverallStatusRef.current;
     const curr = contentStatus?.overall_status;
     prevOverallStatusRef.current = curr;
 
-    if (prev === 'generating' && curr === 'complete') {
-      handleShowToast('Content generation complete', 'success');
+    if (prev === 'generating' && (curr === 'complete' || curr === 'failed')) {
+      // Refresh campaign detail so completePosts picks up updated content_status
+      queryClient.invalidateQueries({
+        queryKey: blogKeys.detail(projectId, blogId),
+      });
+      if (curr === 'complete') {
+        handleShowToast('Content generation complete', 'success');
+      }
     }
-  }, [contentStatus?.overall_status, handleShowToast]);
+  }, [contentStatus?.overall_status, handleShowToast, queryClient, projectId, blogId]);
 
   // Handle trigger generation
   const handleGenerate = async () => {
