@@ -1,7 +1,8 @@
 """BlogCampaign and BlogPost models for blog content management.
 
-BlogCampaign represents a blog initiative tied 1:1 to a keyword cluster:
-- cluster_id: UNIQUE FK to keyword_clusters (1:1 relationship)
+BlogCampaign represents a blog initiative tied to either a keyword cluster or a seed keyword:
+- cluster_id: Optional UNIQUE FK to keyword_clusters (1:1 when present)
+- seed_keyword: Optional user-provided keyword for standalone campaigns
 - name: Display name for the campaign
 - status: Workflow status (planning/writing/review/complete)
 - generation_metadata: JSONB for AI generation context
@@ -93,11 +94,16 @@ class BlogCampaign(Base):
         index=True,
     )
 
-    cluster_id: Mapped[str] = mapped_column(
+    cluster_id: Mapped[str | None] = mapped_column(
         UUID(as_uuid=False),
         ForeignKey("keyword_clusters.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         unique=True,
+    )
+
+    seed_keyword: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
     )
 
     name: Mapped[str] = mapped_column(

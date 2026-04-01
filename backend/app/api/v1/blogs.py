@@ -72,17 +72,19 @@ async def create_blog_campaign(
     claude: ClaudeClient = Depends(get_claude),
     dataforseo: DataForSEOClient = Depends(get_dataforseo),
 ) -> BlogCampaignResponse:
-    """Create a new blog campaign from a keyword cluster.
+    """Create a new blog campaign from a keyword cluster or a seed keyword.
 
     Runs the 4-stage topic discovery pipeline synchronously:
-    1. Extract POP seeds from approved cluster pages
+    1. Extract POP seeds from approved cluster pages (or use seed keyword)
     2. Expand seeds into blog topic candidates (Claude Haiku)
     3. Enrich with search volume (DataForSEO)
     4. Filter and rank candidates (Claude Haiku)
 
+    Either cluster_id or seed_keyword must be provided.
+
     Args:
         project_id: UUID of the project.
-        data: BlogCampaignCreate with cluster_id and optional name.
+        data: BlogCampaignCreate with cluster_id or seed_keyword, and optional name.
         db: AsyncSession for database operations.
         claude: Claude client for LLM calls.
         dataforseo: DataForSEO client for volume data.
@@ -91,49 +93,65 @@ async def create_blog_campaign(
         BlogCampaignResponse with the created campaign and its posts.
 
     Raises:
+        HTTPException: 422 if neither cluster_id nor seed_keyword provided.
         HTTPException: 404 if project or cluster not found.
         HTTPException: 409 if campaign already exists for this cluster.
         HTTPException: 422 if cluster doesn't have completed content.
         HTTPException: 504 if discovery exceeds timeout.
         HTTPException: 500 if discovery fails.
     """
+    # Validate that at least one source is provided
+    if not data.cluster_id and not data.seed_keyword:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Either cluster_id or seed_keyword must be provided.",
+        )
+
     # Verify project exists (raises 404 if not)
     await ProjectService.get_project(db, project_id)
 
-    # Verify cluster exists and belongs to this project
-    cluster_stmt = select(KeywordCluster).where(
-        KeywordCluster.id == data.cluster_id,
-        KeywordCluster.project_id == project_id,
-    )
-    cluster_result = await db.execute(cluster_stmt)
-    cluster = cluster_result.scalar_one_or_none()
-
-    if cluster is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Cluster {data.cluster_id} not found",
+    # Cluster-based path: validate cluster
+    if data.cluster_id:
+        cluster_stmt = select(KeywordCluster).where(
+            KeywordCluster.id == data.cluster_id,
+            KeywordCluster.project_id == project_id,
         )
+        cluster_result = await db.execute(cluster_stmt)
+        cluster = cluster_result.scalar_one_or_none()
 
-    # Validate cluster has completed content
-    if cluster.status not in _CLUSTER_COMPLETED_STATUSES:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=(
-                f"Cluster must be approved with completed content before creating a blog campaign. "
-                f"Current status: {cluster.status}"
-            ),
-        )
+        if cluster is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Cluster {data.cluster_id} not found",
+            )
 
-    # Check for existing campaign on this cluster (1:1 relationship)
-    existing_stmt = select(BlogCampaign).where(
-        BlogCampaign.cluster_id == data.cluster_id,
-    )
-    existing_result = await db.execute(existing_stmt)
-    if existing_result.scalar_one_or_none() is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"A blog campaign already exists for cluster {data.cluster_id}",
+        # Validate cluster has completed content
+        if cluster.status not in _CLUSTER_COMPLETED_STATUSES:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"Cluster must be approved with completed content before creating a blog campaign. "
+                    f"Current status: {cluster.status}"
+                ),
+            )
+
+        # Check for existing campaign on this cluster (1:1 relationship)
+        existing_stmt = select(BlogCampaign).where(
+            BlogCampaign.cluster_id == data.cluster_id,
         )
+        existing_result = await db.execute(existing_stmt)
+        if existing_result.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"A blog campaign already exists for cluster {data.cluster_id}",
+            )
+    else:
+        # Seed keyword path: validate the keyword is non-empty
+        if not data.seed_keyword or not data.seed_keyword.strip():
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="seed_keyword cannot be empty.",
+            )
 
     # Fetch brand config for the project
     bc_stmt = select(BrandConfig).where(BrandConfig.project_id == project_id)
@@ -148,10 +166,11 @@ async def create_blog_campaign(
     try:
         result = await asyncio.wait_for(
             service.discover_topics(
-                cluster_id=data.cluster_id,
                 project_id=project_id,
                 brand_config=brand_config,
                 db=db,
+                cluster_id=data.cluster_id,
+                seed_keyword=data.seed_keyword,
                 name=data.name,
             ),
             timeout=BLOG_DISCOVERY_TIMEOUT_SECONDS,
@@ -217,7 +236,7 @@ async def list_blog_campaigns(
             ).label("content_started_count"),
         )
         .outerjoin(BlogPost, BlogPost.campaign_id == BlogCampaign.id)
-        .join(KeywordCluster, KeywordCluster.id == BlogCampaign.cluster_id)
+        .outerjoin(KeywordCluster, KeywordCluster.id == BlogCampaign.cluster_id)
         .where(BlogCampaign.project_id == project_id)
         .group_by(BlogCampaign.id, KeywordCluster.name)
         .order_by(BlogCampaign.created_at.desc())
@@ -252,6 +271,7 @@ async def list_blog_campaigns(
             name=campaign.name,
             status=campaign.status,
             cluster_name=cluster_name,
+            seed_keyword=campaign.seed_keyword,
             post_count=post_count,
             approved_count=approved_count,
             content_complete_count=complete_counts.get(campaign.id, 0),

@@ -136,6 +136,7 @@ const createMockBlogCampaign = (
   name,
   status,
   cluster_name: clusterName,
+  seed_keyword: null,
   post_count: postCount,
   approved_count: approvedCount,
   content_complete_count: contentCompleteCount,

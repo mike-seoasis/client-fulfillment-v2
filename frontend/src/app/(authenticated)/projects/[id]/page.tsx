@@ -475,16 +475,19 @@ function BlogCampaignStatusBadge({ status }: { status: string }) {
 function BlogCampaignCard({
   campaign,
 }: {
-  campaign: { id: string; name: string; status: string; cluster_name: string; post_count: number; content_complete_count: number };
+  campaign: { id: string; name: string; status: string; cluster_name: string | null; seed_keyword?: string | null; post_count: number; content_complete_count: number };
 }) {
+  const subtitle = campaign.cluster_name || campaign.seed_keyword;
   return (
     <div className="bg-white rounded-sm border border-sand-500 p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
       <h3 className="font-medium text-warm-gray-900 mb-1 truncate">
         {campaign.name}
       </h3>
-      <p className="text-xs text-warm-gray-500 mb-2 truncate">
-        {campaign.cluster_name}
-      </p>
+      {subtitle && (
+        <p className="text-xs text-warm-gray-500 mb-2 truncate">
+          {subtitle}
+        </p>
+      )}
       <div className="flex items-center justify-between">
         <span className="text-sm text-warm-gray-600">
           {campaign.content_complete_count} of {campaign.post_count} {campaign.post_count === 1 ? 'post' : 'posts'} done

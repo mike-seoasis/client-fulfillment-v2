@@ -684,16 +684,17 @@ Example:
 
     async def discover_topics(
         self,
-        cluster_id: str,
         project_id: str,
         brand_config: dict[str, Any],
         db: AsyncSession,
+        cluster_id: str | None = None,
+        seed_keyword: str | None = None,
         name: str | None = None,
     ) -> dict[str, Any]:
         """Orchestrate topic discovery: Stage 1 → 2 → 3 → 4, then persist.
 
         Runs the four pipeline stages sequentially:
-        1. Extract POP seeds from approved cluster pages
+        1. Extract POP seeds from approved cluster pages (or use seed_keyword)
         2. Expand seeds into blog topic candidates (Claude Haiku)
         3. Enrich with search volume (DataForSEO, graceful degradation)
         4. Filter and rank candidates (Claude Haiku)
@@ -701,11 +702,14 @@ Example:
         On success, creates a BlogCampaign with status='planning' and
         BlogPost records with status='keyword_pending'.
 
+        Either cluster_id or seed_keyword must be provided.
+
         Args:
-            cluster_id: UUID of the keyword cluster to discover topics for.
             project_id: UUID of the parent project.
             brand_config: The v2_schema dict from BrandConfig model.
             db: AsyncSession for database operations.
+            cluster_id: UUID of the keyword cluster (optional if seed_keyword given).
+            seed_keyword: User-provided seed keyword (optional if cluster_id given).
             name: Optional display name for the campaign.
 
         Returns:
@@ -721,9 +725,19 @@ Example:
         # Build brand context
         brand_context = self._build_brand_context(brand_config)
 
-        # --- Stage 1: Extract POP seeds ---
+        # --- Stage 1: Extract POP seeds or use provided seed keyword ---
         t1_start = time.perf_counter()
-        seeds = await self.extract_pop_seeds(cluster_id, db)
+        if seed_keyword and not cluster_id:
+            # Standalone mode: user-provided seed keyword becomes the seed
+            seeds = [
+                {
+                    "seed": seed_keyword.strip().lower(),
+                    "source_type": "user_provided",
+                    "source_page_id": None,
+                }
+            ]
+        else:
+            seeds = await self.extract_pop_seeds(cluster_id, db)  # type: ignore[arg-type]
         t1_ms = round((time.perf_counter() - t1_start) * 1000)
 
         if not seeds:
@@ -772,13 +786,17 @@ Example:
             )
         t3_ms = round((time.perf_counter() - t3_start) * 1000)
 
-        # Resolve cluster name for Stage 4
-        cluster_result = await db.execute(
-            select(KeywordCluster).where(KeywordCluster.id == cluster_id)
-        )
-        cluster = cluster_result.scalar_one_or_none()
-        cluster_name = name or (cluster.name if cluster else "unknown")
-        campaign_name = name or f"Blog: {cluster_name}"
+        # Resolve cluster/campaign name for Stage 4
+        if cluster_id:
+            cluster_result = await db.execute(
+                select(KeywordCluster).where(KeywordCluster.id == cluster_id)
+            )
+            cluster = cluster_result.scalar_one_or_none()
+            cluster_name = name or (cluster.name if cluster else "unknown")
+            campaign_name = name or f"Blog: {cluster_name}"
+        else:
+            cluster_name = name or seed_keyword or "unknown"
+            campaign_name = name or f"Blog: {seed_keyword}"
 
         # --- Stage 4: Filter and rank ---
         t4_start = time.perf_counter()
@@ -943,6 +961,7 @@ Example:
             campaign = BlogCampaign(
                 project_id=project_id,
                 cluster_id=cluster_id,
+                seed_keyword=seed_keyword if not cluster_id else None,
                 name=campaign_name,
                 status=CampaignStatus.PLANNING.value,
                 generation_metadata=generation_metadata,

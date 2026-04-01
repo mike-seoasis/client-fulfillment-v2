@@ -18,15 +18,19 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class BlogCampaignCreate(BaseModel):
-    """Request schema for creating a blog campaign from a keyword cluster."""
+    """Request schema for creating a blog campaign from a cluster or seed keyword."""
 
-    cluster_id: str = Field(
-        ...,
+    cluster_id: str | None = Field(
+        None,
         description="UUID of the keyword cluster to create a campaign for",
+    )
+    seed_keyword: str | None = Field(
+        None,
+        description="User-provided seed keyword for standalone campaigns (no cluster required)",
     )
     name: str | None = Field(
         None,
-        description="Display name for the campaign (auto-generated from cluster if not provided)",
+        description="Display name for the campaign (auto-generated if not provided)",
     )
 
 
@@ -71,7 +75,8 @@ class BlogCampaignResponse(BaseModel):
 
     id: str = Field(..., description="BlogCampaign UUID")
     project_id: str = Field(..., description="Parent project UUID")
-    cluster_id: str = Field(..., description="Keyword cluster UUID")
+    cluster_id: str | None = Field(None, description="Keyword cluster UUID (null for seed-keyword campaigns)")
+    seed_keyword: str | None = Field(None, description="User-provided seed keyword")
     name: str = Field(..., description="Display name")
     status: str = Field(..., description="Workflow status")
     generation_metadata: dict[str, Any] | None = Field(
@@ -92,7 +97,8 @@ class BlogCampaignListItem(BaseModel):
     id: str = Field(..., description="BlogCampaign UUID")
     name: str = Field(..., description="Display name")
     status: str = Field(..., description="Workflow status")
-    cluster_name: str = Field(..., description="Name of the associated keyword cluster")
+    cluster_name: str | None = Field(None, description="Name of the associated keyword cluster (null for seed-keyword campaigns)")
+    seed_keyword: str | None = Field(None, description="User-provided seed keyword")
     post_count: int = Field(..., description="Total number of posts in campaign")
     approved_count: int = Field(..., description="Number of approved posts")
     content_complete_count: int = Field(

@@ -1130,9 +1130,10 @@ export async function exportProject(
 // BLOG CAMPAIGN API TYPES
 // =============================================================================
 
-/** Request to create a new blog campaign from a keyword cluster. */
+/** Request to create a new blog campaign from a cluster or seed keyword. */
 export interface BlogCampaignCreate {
-  cluster_id: string;
+  cluster_id?: string | null;
+  seed_keyword?: string | null;
   name?: string | null;
 }
 
@@ -1161,7 +1162,8 @@ export interface BlogPost {
 export interface BlogCampaign {
   id: string;
   project_id: string;
-  cluster_id: string;
+  cluster_id: string | null;
+  seed_keyword: string | null;
   name: string;
   status: string;
   generation_metadata: Record<string, unknown> | null;
@@ -1175,7 +1177,8 @@ export interface BlogCampaignListItem {
   id: string;
   name: string;
   status: string;
-  cluster_name: string;
+  cluster_name: string | null;
+  seed_keyword: string | null;
   post_count: number;
   approved_count: number;
   content_complete_count: number;

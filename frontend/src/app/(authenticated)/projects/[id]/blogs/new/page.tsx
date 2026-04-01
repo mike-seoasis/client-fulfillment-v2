@@ -134,7 +134,7 @@ function buildClusterOptions(
   clusters: ClusterListItem[],
   campaigns: BlogCampaignListItem[],
 ): ClusterOption[] {
-  const campaignClusterNames = new Set(campaigns.map(c => c.cluster_name));
+  const campaignClusterNames = new Set(campaigns.map(c => c.cluster_name).filter(Boolean));
 
   return clusters.map((cluster) => {
     const hasCompleted = COMPLETED_CONTENT_STATUSES.has(cluster.status);
@@ -162,14 +162,18 @@ function buildClusterOptions(
   });
 }
 
+type SourceMode = 'cluster' | 'keyword';
+
 export default function NewBlogCampaignPage() {
   const params = useParams();
   const router = useRouter();
   const projectId = params.id as string;
 
+  const [mode, setMode] = useState<SourceMode>('cluster');
   const [selectedClusterId, setSelectedClusterId] = useState('');
+  const [seedKeyword, setSeedKeyword] = useState('');
   const [campaignName, setCampaignName] = useState('');
-  const [clusterError, setClusterError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [progressStep, setProgressStep] = useState(0);
 
   const { data: project, isLoading: projectLoading, error: projectError } = useProject(projectId);
@@ -194,14 +198,20 @@ export default function NewBlogCampaignPage() {
     [clusterOptions],
   );
 
+  const canSubmit = mode === 'cluster' ? !!selectedClusterId : !!seedKeyword.trim();
+
   const validate = useCallback((): boolean => {
-    if (!selectedClusterId) {
-      setClusterError('Please select a cluster');
+    if (mode === 'cluster' && !selectedClusterId) {
+      setFormError('Please select a cluster');
       return false;
     }
-    setClusterError(null);
+    if (mode === 'keyword' && !seedKeyword.trim()) {
+      setFormError('Please enter a seed keyword');
+      return false;
+    }
+    setFormError(null);
     return true;
-  }, [selectedClusterId]);
+  }, [mode, selectedClusterId, seedKeyword]);
 
   const handleSubmit = useCallback(() => {
     if (!validate()) return;
@@ -213,20 +223,18 @@ export default function NewBlogCampaignPage() {
     const timer2 = setTimeout(() => setProgressStep(2), 9000);
     const timer3 = setTimeout(() => setProgressStep(3), 15000);
 
+    const data = mode === 'cluster'
+      ? { cluster_id: selectedClusterId, name: campaignName.trim() || undefined }
+      : { seed_keyword: seedKeyword.trim(), name: campaignName.trim() || undefined };
+
     createBlogCampaign.mutate(
+      { projectId, data },
       {
-        projectId,
-        data: {
-          cluster_id: selectedClusterId,
-          name: campaignName.trim() || undefined,
-        },
-      },
-      {
-        onSuccess: (data) => {
+        onSuccess: (result) => {
           clearTimeout(timer1);
           clearTimeout(timer2);
           clearTimeout(timer3);
-          router.push(`/projects/${projectId}/blogs/${data.id}`);
+          router.push(`/projects/${projectId}/blogs/${result.id}`);
         },
         onError: () => {
           clearTimeout(timer1);
@@ -235,7 +243,7 @@ export default function NewBlogCampaignPage() {
         },
       },
     );
-  }, [validate, selectedClusterId, campaignName, projectId, createBlogCampaign, router]);
+  }, [validate, mode, selectedClusterId, seedKeyword, campaignName, projectId, createBlogCampaign, router]);
 
   // Loading state
   if (isLoading) {
@@ -312,67 +320,135 @@ export default function NewBlogCampaignPage() {
         ) : (
           <div>
             <div className="space-y-5">
-              {/* Cluster dropdown */}
+              {/* Source mode toggle */}
               <div>
-                <label
-                  htmlFor="cluster-select"
-                  className="block text-sm font-medium text-warm-gray-700 mb-1.5"
-                >
-                  Parent Cluster <span className="text-coral-500">*</span>
+                <label className="block text-sm font-medium text-warm-gray-700 mb-2">
+                  Topic Source
                 </label>
-                <select
-                  id="cluster-select"
-                  value={selectedClusterId}
-                  onChange={(e) => {
-                    setSelectedClusterId(e.target.value);
-                    if (clusterError) setClusterError(null);
-                  }}
-                  className={`w-full rounded-sm border px-3 py-2 text-sm text-warm-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-palm-400 focus:border-palm-400 ${
-                    clusterError
-                      ? 'border-coral-400'
-                      : 'border-sand-500'
-                  }`}
-                >
-                  <option value="">Select a cluster...</option>
-                  {eligibleOptions.length > 0 && (
-                    <optgroup label="Available">
-                      {eligibleOptions.map((opt) => (
-                        <option key={opt.id} value={opt.id}>
-                          {opt.name || opt.seed_keyword}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                  {ineligibleOptions.length > 0 && (
-                    <optgroup label="Unavailable">
-                      {ineligibleOptions.map((opt) => (
-                        <option key={opt.id} value={opt.id} disabled>
-                          {opt.name || opt.seed_keyword} — {opt.reason}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                </select>
-                {clusterError && (
-                  <p className="mt-1.5 text-xs text-coral-500">{clusterError}</p>
-                )}
-                {eligibleOptions.length === 0 && !clustersLoading && (
-                  <p className="mt-1.5 text-xs text-warm-gray-500">
-                    No eligible clusters found. Clusters need approved content before creating a blog campaign.
-                  </p>
-                )}
+                <div className="flex gap-1 p-1 bg-cream-200 rounded-sm w-fit">
+                  <button
+                    type="button"
+                    onClick={() => { setMode('cluster'); setFormError(null); }}
+                    className={`px-3 py-1.5 text-sm rounded-sm transition-colors ${
+                      mode === 'cluster'
+                        ? 'bg-white text-warm-gray-900 shadow-sm font-medium'
+                        : 'text-warm-gray-600 hover:text-warm-gray-900'
+                    }`}
+                  >
+                    From Cluster
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setMode('keyword'); setFormError(null); }}
+                    className={`px-3 py-1.5 text-sm rounded-sm transition-colors ${
+                      mode === 'keyword'
+                        ? 'bg-white text-warm-gray-900 shadow-sm font-medium'
+                        : 'text-warm-gray-600 hover:text-warm-gray-900'
+                    }`}
+                  >
+                    Custom Keyword
+                  </button>
+                </div>
               </div>
+
+              {/* Cluster dropdown (cluster mode) */}
+              {mode === 'cluster' && (
+                <div>
+                  <label
+                    htmlFor="cluster-select"
+                    className="block text-sm font-medium text-warm-gray-700 mb-1.5"
+                  >
+                    Parent Cluster <span className="text-coral-500">*</span>
+                  </label>
+                  <select
+                    id="cluster-select"
+                    value={selectedClusterId}
+                    onChange={(e) => {
+                      setSelectedClusterId(e.target.value);
+                      if (formError) setFormError(null);
+                    }}
+                    className={`w-full rounded-sm border px-3 py-2 text-sm text-warm-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-palm-400 focus:border-palm-400 ${
+                      formError
+                        ? 'border-coral-400'
+                        : 'border-sand-500'
+                    }`}
+                  >
+                    <option value="">Select a cluster...</option>
+                    {eligibleOptions.length > 0 && (
+                      <optgroup label="Available">
+                        {eligibleOptions.map((opt) => (
+                          <option key={opt.id} value={opt.id}>
+                            {opt.name || opt.seed_keyword}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {ineligibleOptions.length > 0 && (
+                      <optgroup label="Unavailable">
+                        {ineligibleOptions.map((opt) => (
+                          <option key={opt.id} value={opt.id} disabled>
+                            {opt.name || opt.seed_keyword} — {opt.reason}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </select>
+                  {formError && mode === 'cluster' && (
+                    <p className="mt-1.5 text-xs text-coral-500">{formError}</p>
+                  )}
+                  {eligibleOptions.length === 0 && !clustersLoading && (
+                    <p className="mt-1.5 text-xs text-warm-gray-500">
+                      No eligible clusters found. Clusters need approved content before creating a blog campaign.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Seed keyword input (keyword mode) */}
+              {mode === 'keyword' && (
+                <div>
+                  <label
+                    htmlFor="seed-keyword-input"
+                    className="block text-sm font-medium text-warm-gray-700 mb-1.5"
+                  >
+                    Seed Keyword <span className="text-coral-500">*</span>
+                  </label>
+                  <input
+                    id="seed-keyword-input"
+                    type="text"
+                    placeholder="e.g. best running shoes for flat feet"
+                    value={seedKeyword}
+                    onChange={(e) => {
+                      setSeedKeyword(e.target.value);
+                      if (formError) setFormError(null);
+                    }}
+                    className={`w-full rounded-sm border px-3 py-2 text-sm text-warm-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-palm-400 focus:border-palm-400 ${
+                      formError && mode === 'keyword'
+                        ? 'border-coral-400'
+                        : 'border-sand-500'
+                    }`}
+                  />
+                  {formError && mode === 'keyword' && (
+                    <p className="mt-1.5 text-xs text-coral-500">{formError}</p>
+                  )}
+                  <p className="mt-1.5 text-xs text-warm-gray-500">
+                    Enter a topic or keyword to generate blog ideas from — no cluster required.
+                  </p>
+                </div>
+              )}
 
               {/* Campaign name */}
               <div>
                 <Input
                   label="Campaign Name (optional)"
-                  placeholder="Defaults to cluster name if left blank"
+                  placeholder={mode === 'cluster' ? 'Defaults to cluster name if left blank' : 'Defaults to seed keyword if left blank'}
                   value={campaignName}
                   onChange={(e) => setCampaignName(e.target.value)}
                 />
                 <p className="mt-1.5 text-xs text-warm-gray-500">
-                  Defaults to cluster name if left blank
+                  {mode === 'cluster'
+                    ? 'Defaults to cluster name if left blank'
+                    : 'Defaults to seed keyword if left blank'}
                 </p>
               </div>
             </div>
@@ -385,7 +461,7 @@ export default function NewBlogCampaignPage() {
               </Link>
               <Button
                 onClick={handleSubmit}
-                disabled={!selectedClusterId}
+                disabled={!canSubmit}
               >
                 Discover Topics
               </Button>
