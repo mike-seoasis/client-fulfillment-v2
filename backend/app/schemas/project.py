@@ -218,6 +218,25 @@ class ProjectUpdate(BaseModel):
         return v
 
 
+class ChangeDomainRequest(BaseModel):
+    """Schema for changing a project's domain."""
+
+    new_site_url: HttpUrl = Field(
+        ...,
+        description="The new domain URL for the project",
+    )
+
+
+class ChangeDomainResponse(BaseModel):
+    """Response from a domain change operation."""
+
+    old_site_url: str = Field(..., description="Previous site URL")
+    new_site_url: str = Field(..., description="Updated site URL")
+    pages_updated: int = Field(
+        ..., ge=0, description="Number of crawled page URLs rewritten"
+    )
+
+
 class PhaseStatusUpdate(BaseModel):
     """Schema for updating a single phase status."""
 

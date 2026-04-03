@@ -49,6 +49,8 @@ from app.schemas.keyword_research import (
     UpdatePrimaryKeywordRequest,
 )
 from app.schemas.project import (
+    ChangeDomainRequest,
+    ChangeDomainResponse,
     ProjectCreate,
     ProjectListResponse,
     ProjectResponse,
@@ -138,6 +140,61 @@ async def update_project(
     """
     project = await ProjectService.update_project(db, project_id, data)
     return await ProjectService.to_response(db, project)
+
+
+@router.post("/{project_id}/change-domain", response_model=ChangeDomainResponse)
+async def change_project_domain(
+    project_id: str,
+    data: ChangeDomainRequest,
+    db: AsyncSession = Depends(get_session),
+) -> ChangeDomainResponse:
+    """Change a project's domain and rewrite all crawled page URLs.
+
+    Updates the project's site_url and rewrites normalized_url on all
+    CrawledPage records whose URL starts with the old domain.
+    """
+    project = await ProjectService.get_project(db, project_id)
+    old_site_url = project.site_url or ""
+    new_site_url = str(data.new_site_url).rstrip("/")
+
+    # Update the project's site_url
+    project.site_url = new_site_url
+    await db.flush()
+
+    # Rewrite crawled page URLs that contain the old domain
+    old_base = old_site_url.rstrip("/")
+    pages_updated = 0
+
+    if old_base:
+        # Find all crawled pages with URLs starting with the old domain
+        stmt = select(CrawledPage).where(
+            CrawledPage.project_id == project_id,
+            CrawledPage.normalized_url.startswith(old_base),
+        )
+        result = await db.execute(stmt)
+        pages = result.scalars().all()
+
+        for page in pages:
+            page.normalized_url = new_site_url + page.normalized_url[len(old_base):]
+            pages_updated += 1
+
+        await db.flush()
+
+    logger.info(
+        "Domain changed for project",
+        extra={
+            "project_id": project_id,
+            "old_site_url": old_site_url,
+            "new_site_url": new_site_url,
+            "pages_updated": pages_updated,
+        },
+    )
+
+    return ChangeDomainResponse(
+        old_site_url=old_site_url,
+        new_site_url=new_site_url,
+        pages_updated=pages_updated,
+    )
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)

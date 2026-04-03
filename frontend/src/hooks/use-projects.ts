@@ -139,6 +139,40 @@ export function useUpdateProject(): UseMutationResult<
   });
 }
 
+export interface ChangeDomainInput {
+  new_site_url: string;
+}
+
+export interface ChangeDomainResponse {
+  old_site_url: string;
+  new_site_url: string;
+  pages_updated: number;
+}
+
+/**
+ * Change a project's domain and rewrite all crawled page URLs.
+ * Invalidates both the projects list and the specific project on success.
+ */
+export function useChangeDomain(): UseMutationResult<
+  ChangeDomainResponse,
+  Error,
+  { id: string; data: ChangeDomainInput }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }) =>
+      apiClient.post<ChangeDomainResponse>(
+        `/projects/${id}/change-domain`,
+        data
+      ),
+    onSuccess: (_result, { id }) => {
+      queryClient.invalidateQueries({ queryKey: projectKeys.all });
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(id) });
+    },
+  });
+}
+
 /**
  * Delete a project.
  * Uses optimistic update to remove from cache immediately.

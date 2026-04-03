@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useProject, useDeleteProject } from '@/hooks/use-projects';
+import { useProject, useDeleteProject, useChangeDomain } from '@/hooks/use-projects';
 import { useStartBrandConfigGeneration, useBrandConfigGeneration } from '@/hooks/useBrandConfigGeneration';
 import { useCrawlStatus, getOnboardingStep } from '@/hooks/use-crawl-status';
 import { useOnboardingBatches } from '@/hooks/useOnboardingBatches';
@@ -572,6 +572,12 @@ function ProjectDetailContent() {
   const [isConfirmingReset, setIsConfirmingReset] = useState(false);
   const resetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Domain editing
+  const changeDomain = useChangeDomain();
+  const [isEditingDomain, setIsEditingDomain] = useState(false);
+  const [domainInput, setDomainInput] = useState('');
+  const domainInputRef = useRef<HTMLInputElement>(null);
+
   // Two-step delete confirmation
   const [isConfirming, setIsConfirming] = useState(false);
   const [showToast, setShowToast] = useState(false);
@@ -738,14 +744,81 @@ function ProjectDetailContent() {
             )}
           </div>
           <div className="flex items-center gap-3 text-sm">
-            <a
-              href={project.site_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-warm-gray-500 hover:text-palm-600"
-            >
-              {project.site_url}
-            </a>
+            {isEditingDomain ? (
+              <form
+                className="flex items-center gap-2"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const trimmed = domainInput.trim();
+                  if (!trimmed || trimmed === project.site_url) {
+                    setIsEditingDomain(false);
+                    return;
+                  }
+                  // Ensure URL has protocol
+                  const newUrl = trimmed.startsWith('http') ? trimmed : `https://${trimmed}`;
+                  try {
+                    const result = await changeDomain.mutateAsync({
+                      id: projectId,
+                      data: { new_site_url: newUrl },
+                    });
+                    setIsEditingDomain(false);
+                    setToastMessage(`Domain updated. ${result.pages_updated} page URL${result.pages_updated === 1 ? '' : 's'} rewritten.`);
+                    setShowToast(true);
+                  } catch {
+                    setToastMessage('Failed to update domain.');
+                    setShowToast(true);
+                  }
+                }}
+              >
+                <input
+                  ref={domainInputRef}
+                  type="text"
+                  value={domainInput}
+                  onChange={(e) => setDomainInput(e.target.value)}
+                  className="border border-sand-500 rounded-sm px-2 py-0.5 text-sm text-warm-gray-700 focus:outline-none focus:ring-1 focus:ring-palm-400 w-72"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') setIsEditingDomain(false);
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={changeDomain.isPending}
+                  className="text-xs text-palm-600 hover:text-palm-700 font-medium disabled:opacity-50"
+                >
+                  {changeDomain.isPending ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingDomain(false)}
+                  className="text-xs text-warm-gray-400 hover:text-warm-gray-600"
+                >
+                  Cancel
+                </button>
+              </form>
+            ) : (
+              <span className="group flex items-center gap-1.5">
+                <a
+                  href={project.site_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-warm-gray-500 hover:text-palm-600"
+                >
+                  {project.site_url}
+                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDomainInput(project.site_url);
+                    setIsEditingDomain(true);
+                  }}
+                  className="text-warm-gray-300 hover:text-palm-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Change domain"
+                >
+                  <PencilIcon className="w-3 h-3" />
+                </button>
+              </span>
+            )}
             {project.uploaded_files_count > 0 && (
               <span className="inline-flex items-center gap-1 text-warm-gray-500">
                 <FileIcon className="w-3.5 h-3.5" />
